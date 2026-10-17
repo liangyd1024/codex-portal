@@ -114,3 +114,5 @@ python3 -m unittest discover -s test -p 'test_*.py'
 测试覆盖可配置连接路由、CSRF/Origin 防护、普通断开语义、维护确认、浏览器来源限制、并发 SQLite 备份、隔离恢复、错误密钥、损坏、错误机器、版本、路径越界、校验失败、恢复失败回退和手机配对撤销。测试只使用独立的临时目录；为遵守不批量删除的约束，测试目录保留并输出路径，需手动清理。
 
 参考：[SQLite Online Backup API](https://www.sqlite.org/backup.html)、[age](https://github.com/FiloSottile/age)、[GitHub 大文件说明](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github)。
+
+实际部署版本、测试结果和最终备份位置见 [2026-10-18 双机验收记录](docs/verification-2026-10-18.md)。
