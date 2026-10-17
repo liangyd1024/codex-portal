@@ -6,7 +6,13 @@ HOME=pathlib.Path.home();SUPPORT=HOME/'Library/Application Support/RemoteCodexMa
 DOMAIN='gui/'+str(os.getuid())
 LABELS=['local.remote-codex-manager.app-server','local.remote-codex-manager.output-relay','local.remote-codex-manager.output-relay-v2','local.remote-codex-manager.web']
 def launch(action,label):return subprocess.run(['/bin/launchctl',action,DOMAIN+'/'+label],capture_output=True,text=True)
-def start(label):b.run(['/bin/launchctl','bootstrap',DOMAIN,HOME/'Library/LaunchAgents'/(label+'.plist')])
+def start(label):
+    deadline=time.monotonic()+15
+    while True:
+        result=subprocess.run(['/bin/launchctl','bootstrap',DOMAIN,str(HOME/'Library/LaunchAgents'/(label+'.plist'))],capture_output=True,text=True)
+        if result.returncode==0:return
+        if time.monotonic()>=deadline:raise RuntimeError('服务重新注册失败：'+label+' '+result.stderr)
+        time.sleep(.25)
 def node():
     path=os.environ.get('RCM_NODE') or shutil.which('node')
     if not path:
