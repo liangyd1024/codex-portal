@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "machineId": "machine-a",
+  "defaultConnection": "local",
+  "connections": [
+    {
+      "id": "local",
+      "machineId": "machine-a",
+      "alias": "本机 A",
+      "kind": "local",
+      "user": "your-user",
+      "home": "/Users/your-user",
+      "binary": "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
+    },
+    {
+      "id": "remote-b",
+      "machineId": "machine-b",
+      "alias": "远程 B",
+      "kind": "ssh",
+      "address": "host-b.example",
+      "port": 22,
+      "user": "remote-user",
+      "home": "/Users/remote-user",
+      "identityFile": "/Users/your-user/.ssh/manager_key",
+      "binary": "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
+    }
+  ]
+}

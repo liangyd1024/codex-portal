@@ -1,3 +1,4 @@
+import {installBrowserBackup} from './browser-backup.js';
 import {installVoice} from './voice.js';
 import {installMobile} from './mobile.js';
 let voice;
@@ -6,7 +7,12 @@ import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
 import {selectConnectionStatus, mergeLiveTurns, taskNotice, claimNotice} from './connection-state.js';
 function savedHost() { try { return localStorage.getItem('rcm.connection'); } catch { return null; } }
 const requestedHost = new URL(location.href).searchParams.get('host');
-const targetHost = ['local','work-mac'].includes(requestedHost) ? requestedHost : savedHost() === 'local' ? 'local' : 'work-mac';
+const response=await fetch('/api/connections');
+if(!response.ok)throw new Error('无法读取连接配置。');
+const connectionConfig=await response.json();
+const connectionIds=connectionConfig.data.map(c=>c.id);
+const targetHost=connectionIds.includes(requestedHost)?requestedHost:connectionIds.includes(savedHost())?savedHost():connectionConfig.defaultConnection;
+document.getElementById('connection-select').replaceChildren(...connectionConfig.data.map(c=>new Option(c.host.alias,c.id)));
 function savedView() { try { return JSON.parse(sessionStorage.getItem('rcm.view.'+targetHost)||'{}'); } catch { return {}; } }
 function saveView() { try { sessionStorage.setItem('rcm.view.'+targetHost,JSON.stringify({selectedId:state.selectedId,projectId:state.projectId})); } catch {} }
 function rememberHost(host) { try { localStorage.setItem('rcm.connection',host); } catch {} }
@@ -54,7 +60,7 @@ function pretty(value) { try { return JSON.stringify(value, null, 2); } catch { 
 function messageOf(value) {
   const message=typeof value === 'string' ? value : value?.message || pretty(value);
   if(value?.code==='RPC_TIMEOUT'||/timed out after \d+ ms/.test(message)) return '目标机器响应超时，操作结果尚未确认。请先刷新会话列表，避免重复创建或发送。';
-  if(/ssh: connect to host .*Operation timed out/i.test(message)) return '无法连接 work-mac。请确认目标机器在线且网络可达，然后重新连接。';
+  if(/ssh: connect to host .*Operation timed out/i.test(message)) return '无法连接目标机器。请确认目标机器在线且网络可达，然后重新连接。';
   return message;
 }
 function typeOf(value) { return typeof value === 'string' ? value : value?.type || ''; }
@@ -206,9 +212,9 @@ function renderStatus() {
   const variant = connected() && state.transport ? 'connected' : ['connecting','reconnecting'].includes(conn) ? 'connecting' : conn === 'error' || conn === 'failed' ? 'error' : '';
   const label = connected() && !state.transport ? '实时连接中断' : stages[conn] || conn;
   document.title = (currentThread() ? threadName(currentThread()) + ' · ' : '') + 'Codex 工作台';
-  setText('host-name',h.alias || 'work-mac'); setText('breadcrumb-host',h.alias || 'work-mac');
-  setText('host-address',h.hostname || 'Marco 的目标机器机器'); setText('connection-label',label); setText('inspector-connection',label);
-  setText('detail-host',h.hostname || h.alias || 'work-mac'); setText('detail-user',h.user);
+  setText('host-name',h.alias || '目标机器'); setText('breadcrumb-host',h.alias || '目标机器');
+  setText('host-address',h.hostname || '目标机器'); setText('connection-label',label); setText('inspector-connection',label);
+  setText('detail-host',h.hostname || h.alias || '目标机器'); setText('detail-user',h.user);
   setText('detail-version', service.version || h.version); setText('detail-connected', dateTime(c.connectedAt));
   setText('transport-label', state.transport ? '实时通道已连接' : '实时通道未连接');
   ['machine-dot','inspector-dot'].forEach(id => $(id).className = 'connection-dot ' + variant);
@@ -222,7 +228,7 @@ function renderStatus() {
   else if(connected()&&service.protocolValidation?.status==='limited'){const names={create:'新建会话',takeover:'接管会话',message:'发送消息',steer:'补充要求',stop:'停止',queue:'排队输入',release:'释放控制'};const disabled=Object.entries(service.protocolValidation.features||{}).filter(([,v])=>!v.supported).map(([name])=>names[name]||name);banner.hidden=false;banner.className='connection-banner';banner.textContent='已连接。当前引擎暂不支持：'+(disabled.join('、')||'部分协议读取')+'。其他已核验功能仍可使用。详见连接诊断。';}
   else banner.hidden = true;
   const connect = $('connect-button'); clear(connect); connect.append(icon(connected()||connectionPending() ? 'close' : 'link'),el('span','',state.busy.has('disconnect') ? '正在断开…' : connectionPending()?'取消连接':connected() ? '断开本机连接' : '连接目标机器'));
-  const welcome = $('welcome-connect'); clear(welcome); welcome.append(icon(connected() ? 'plus' : 'link'),el('span','',connectionPending() ? '正在连接…' : connected() ? '新建目标机器会话' : '连接 ' + (h.alias || 'work-mac')));
+  const welcome = $('welcome-connect'); clear(welcome); welcome.append(icon(connected() ? 'plus' : 'link'),el('span','',connectionPending() ? '正在连接…' : connected() ? '新建目标机器会话' : '连接 ' + (h.alias || '目标机器')));
   setText('welcome-footnote',connected() ? '已连接。选择左侧会话，或新建目标机器会话。' : '等待连接。此页面不包含演示会话。');
   renderControlOverview();
   renderControls(); renderDiagnostics();
@@ -243,7 +249,7 @@ function renderControls() {
   $('connect-button').disabled = state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release');
   $('welcome-connect').disabled = connectionPending() || state.busy.has('connect') || state.busy.has('disconnect') || (connected() && (!ready || !state.models.length||!featureReady('create')));
   $('release-service').disabled = !ready || !featureReady('release') || !state.status?.service?.running || state.busy.has('release');
-  $('release-service').textContent = state.busy.has('release') ? '正在检查并释放…' : '释放控制，切回桌面';
+  $('release-service').textContent = state.busy.has('release') ? '正在检查并释放…' : '停止目标服务（影响所有入口）';
   $('refresh-projects').disabled = !ready || state.refreshing; $('refresh-all').disabled = state.refreshing || state.busy.has('refresh');
   $('thread-search').disabled = !connected();
   $('model-select').disabled = !ready || !state.models.length || state.loadingModels;
@@ -911,8 +917,9 @@ async function takeoverThread() {
   });
 }
 async function releaseService() {
+  if(!confirm('将停止目标机器的专用服务，影响所有入口。请确认任务已结束，且其他入口已断开。停止后需在目标机执行 maintenance resume 才能重连。'))return;
   await action('release',async () => {
-    try { await api('/api/service/release',{method:'POST'}); if (state.detail) state.detail.controlled = false; await loadStatus(); renderThread(); toast('已释放专用服务。可以在目标机器打开 Codex 桌面应用。',false,10000); }
+    try { await api('/api/service/release',{method:'POST',body:{allEntrancesDisconnected:true}}); if (state.detail) state.detail.controlled = false; await loadStatus(); renderThread(); toast('已释放专用服务。可以在目标机器打开 Codex 桌面应用。',false,10000); }
     catch (e) { if (e.status === 409) { const blockers = Array.isArray(e.details) ? e.details.map(b => (state.threads.find(t=>t.id===b.threadId)?.name || b.threadId) + '：' + b.reason).join('\n') : e.details ? pretty(e.details) : ''; throw new Error(messageOf(e) + (blockers ? '\n' + blockers : '') + '\n请先结束相关任务，再释放控制。'); } throw e; }
   });
 }
@@ -1228,11 +1235,12 @@ async function init() {
     if(detail.open)ids.delete(detail.dataset.itemId);else ids.add(detail.dataset.itemId);
     try{sessionStorage.setItem('rcm.openDetails.'+targetHost+'.'+state.selectedId,JSON.stringify([...ids]));}catch{}
   });
+  installBrowserBackup(connectionConfig,()=>{saveView();saveOutputPositions();if(state.selectedId)state.drafts.set(state.selectedId,$('message-input').value);sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));});
   const inspector=$('inspector');
   const navigation=el('nav','inspector-nav');navigation.setAttribute('aria-label','工作区详情分类');
   inspector.querySelector('.inspector-heading').after(navigation);
   const groups=[...inspector.querySelectorAll(':scope > details')];
-  const category=group=>group.id==='mobile-access'?'mobile':group.classList.contains('connection-section')||group.id==='diagnostics'||group.querySelector('#task-notifications')?'settings':'session';
+  const category=group=>group.id==='mobile-access'?'mobile':group.id==='browser-backup'||group.classList.contains('connection-section')||group.id==='diagnostics'||group.querySelector('#task-notifications')?'settings':'session';
   const views=[['session','会话'],['mobile','手机访问'],['settings','设置']];
   function showInspectorView(view){
     groups.forEach(group=>{group.hidden=category(group)!==view;if(!group.hidden&&group.id!=='diagnostics')group.open=true;});

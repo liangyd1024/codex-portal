@@ -1,11 +1,11 @@
 """Run through SSH stdin. Only this application's dedicated service is managed."""
 import json, os, pathlib, plistlib, pwd, socket, subprocess, time
 
-HOME = pathlib.Path(globals().get('SERVICE_HOME', '/Users/marco'))
+HOME = pathlib.Path(globals().get('SERVICE_HOME', str(pathlib.Path.home())))
 ROOT = HOME / '.codex/remote-codex-manager'
 SOCKET = ROOT / 'app-server.sock'
 LABEL = 'local.remote-codex-manager.app-server'
-BINARY = pathlib.Path('/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex')
+BINARY = pathlib.Path(SERVICE_BINARY)
 JOB = HOME / 'Library/LaunchAgents' / (LABEL + '.plist')
 DOMAIN = 'gui/' + str(os.getuid())
 
@@ -26,7 +26,9 @@ def ensure_relay():
     running = command(['/bin/launchctl', 'print', DOMAIN + '/' + label])
     changed = not script.exists() or script.read_text() != source or (reader_source and (not reader.exists() or reader.read_text() != reader_source))
     if changed and running.returncode == 0:
-        raise RuntimeError('输出记录服务需要更新。请先结束本工作台的运行命令，再重启输出记录服务。')
+        # Keep the existing collector running; upgrades must be deliberate.
+        return True
+    if running.returncode == 0: return True
     script.write_text(source); os.chmod(script, 0o600)
     if reader_source: reader.write_text(reader_source); os.chmod(reader, 0o600)
     if running.returncode != 0:
@@ -42,20 +44,28 @@ def ensure_relay():
 
 
 def main():
-    if pwd.getpwuid(os.getuid()).pw_name != globals().get('SERVICE_USER', 'marco') or pathlib.Path.home() != HOME:
+    if pwd.getpwuid(os.getuid()).pw_name != SERVICE_USER or pathlib.Path.home() != HOME:
         raise RuntimeError('目标身份不符。未启动服务。')
     action = globals().get('ACTION', 'ensure')
     if action == 'projects':
         import sqlite3
-        conn = sqlite3.connect('file:' + str(HOME / '.codex/state_5.sqlite') + '?mode=ro', uri=True, timeout=5)
-        try:
-            projects = conn.execute('SELECT id,name FROM projects ORDER BY position').fetchall()
-            roots = conn.execute('SELECT project_id,path FROM project_roots ORDER BY position').fetchall()
-            emit({'data': [{'id': row[0], 'name': row[1], 'roots': [r[1] for r in roots if r[0] == row[0]]} for row in projects]})
-        finally:
-            conn.close()
+        for attempt in range(3):
+            conn = None
+            try:
+                conn = sqlite3.connect((HOME / '.codex/state_5.sqlite').resolve().as_uri() + '?mode=ro', uri=True, timeout=5)
+                projects = conn.execute('SELECT id,name FROM projects ORDER BY position').fetchall()
+                roots = conn.execute('SELECT project_id,path FROM project_roots ORDER BY position').fetchall()
+                emit({'data': [{'id': row[0], 'name': row[1], 'roots': [r[1] for r in roots if r[0] == row[0]]} for row in projects]})
+                break
+            except sqlite3.OperationalError as exc:
+                if attempt == 2 or not any(text in str(exc).lower() for text in ['unable to open database file', 'database is locked']): raise
+                time.sleep([0.1, 0.25][attempt])
+            finally:
+                if conn: conn.close()
         return
     if action == 'release':
+        marker = ROOT / 'maintenance.json'
+        marker.write_text(json.dumps({'reason':'manual release','createdAt':time.time()})); os.chmod(marker,0o600)
         result = command(['/bin/launchctl', 'bootout', DOMAIN + '/' + LABEL])
         if result.returncode and 'No such process' not in result.stderr and 'Could not find service' not in result.stderr:
             raise RuntimeError('停止专用服务失败：' + result.stderr[-500:])
@@ -65,6 +75,7 @@ def main():
                 return
             time.sleep(0.2)
         raise RuntimeError('专用服务尚未退出。请勿切回桌面。')
+    if (ROOT / 'maintenance.json').exists(): raise RuntimeError('目标处于维护模式，请在目标机完成维护后恢复。')
     if not BINARY.is_file():
         raise RuntimeError('找不到远端桌面版 Codex。请检查安装路径。')
     version = command([str(BINARY), '--version']).stdout.strip().replace('codex-cli ', '')

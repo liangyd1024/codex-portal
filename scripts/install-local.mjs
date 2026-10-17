@@ -1,54 +1,45 @@
-import {mkdir,writeFile,chmod,cp} from 'node:fs/promises';
+import {mkdir,writeFile,readFile,chmod,stat} from 'node:fs/promises';
 import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
-
+import {loadConfig,supportDir} from '../lib/config.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const label='local.remote-codex-manager.web';
-const support=path.join(homedir(),'Library/Application Support/RemoteCodexManager');
-const app=path.join(support,'app');
-const runtime=path.join(support,'logs');
-const agents=path.join(homedir(),'Library/LaunchAgents');
-const job=path.join(agents,`${label}.plist`);
-const domain=`gui/${process.getuid()}`;
-const escape=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-await mkdir(support,{recursive:true,mode:0o700});await chmod(support,0o700);
-await mkdir(runtime,{recursive:true,mode:0o700});await chmod(runtime,0o700);await mkdir(agents,{recursive:true});await mkdir(app,{recursive:true,mode:0o700});
-// A login service must not depend on macOS access to the protected Documents folder.
-for(const name of ['server.mjs','package.json','lib','public','scripts'])await cp(path.join(root,name),path.join(app,name),{recursive:true,force:true});
-const plist=`<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>
-<key>Label</key><string>${label}</string>
-<key>ProgramArguments</key><array><string>${escape(process.execPath)}</string><string>${escape(path.join(app,'server.mjs'))}</string></array>
-<key>WorkingDirectory</key><string>${escape(app)}</string>
-<key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>ProcessType</key><string>Interactive</string><key>Umask</key><integer>63</integer>
-<key>StandardOutPath</key><string>${escape(path.join(runtime,'web.stdout.log'))}</string><key>StandardErrorPath</key><string>${escape(path.join(runtime,'web.stderr.log'))}</string>
-</dict></plist>\n`;
-await writeFile(job,plist,{mode:0o600});await chmod(job,0o600);
-const existing=spawnSync('/bin/launchctl',['print',`${domain}/${label}`],{encoding:'utf8'});
-const restart=existing.status===0 && (process.argv.includes('--restart')||!existing.stdout.includes(path.join(app,'server.mjs')));
-if(restart){
- const stopped=spawnSync('/bin/launchctl',['bootout',`${domain}/${label}`],{encoding:'utf8'});
- if(stopped.status!==0)throw new Error(`停止旧本机服务失败：${stopped.stderr}`);
- const stopDeadline=Date.now()+10000;
- while(Date.now()<stopDeadline){if(spawnSync('/bin/launchctl',['print',`${domain}/${label}`],{encoding:'utf8'}).status!==0)break;await new Promise(resolve=>setTimeout(resolve,200));}
+const label='local.remote-codex-manager.web',domain=`gui/${process.getuid()}`,job=path.join(homedir(),'Library/LaunchAgents',label+'.plist');
+const run=(file,args,options={})=>{const r=spawnSync(file,args,{encoding:'utf8',...options});if(r.status!==0)throw Error(`${path.basename(file)} 失败：${r.stderr||r.stdout}`);return r.stdout.trim();};
+const flag=name=>{const i=process.argv.indexOf(name);return i>=0?process.argv[i+1]:null;};
+const ref=flag('--ref')||'HEAD',config=loadConfig();
+const commit=run('git',['-C',root,'rev-parse','--verify',ref+'^{commit}']);
+if(!/^[a-f0-9]{40}$/.test(commit))throw Error('版本无效。');
+if(run('git',['-C',root,'status','--porcelain']))throw Error('开发目录有未提交修改，请提交后按版本安装。');
+const app=path.join(supportDir,'releases',commit),logs=path.join(supportDir,'logs');
+await mkdir(logs,{recursive:true,mode:0o700});await mkdir(path.dirname(job),{recursive:true});
+// Check this entrance only. Do not interrupt tasks running through another entrance.
+const existing=spawnSync('/bin/launchctl',['print',domain+'/'+label],{encoding:'utf8'}).status===0;
+if(existing){
+ const connections=await fetch('http://127.0.0.1:4317/api/connections',{signal:AbortSignal.timeout(5000)}).then(r=>{if(!r.ok)throw Error('无法核对网页服务状态');return r.json();});
+ for(const {id} of connections.data){const s=await fetch('http://127.0.0.1:4317/api/status?host='+encodeURIComponent(id),{signal:AbortSignal.timeout(5000)}).then(r=>r.json());if(s.pendingRequests?.length||s.controlledSessions?.some(t=>t.status?.type==='active')||['connecting','reconnecting'].includes(s.connection?.state))throw Error('当前入口有运行任务、待处理请求或正在连接，请空闲后再部署。');}
 }
-if(existing.status!==0||restart){
- const deadline=Date.now()+10000;let installed;
- do{
-  const present=spawnSync('/bin/launchctl',['print',`${domain}/${label}`],{encoding:'utf8'});
-  if(present.status===0){installed={status:0};break;}
-  installed=spawnSync('/bin/launchctl',['bootstrap',domain,job],{encoding:'utf8'});
-  if(installed.status===0)break;
-  await new Promise(resolve=>setTimeout(resolve,250));
- }while(Date.now()<deadline);
- if(installed.status!==0)throw new Error(`启动本机服务失败：${installed.stderr}`);
+const backup=JSON.parse(run('/usr/bin/python3',[path.join(root,'scripts/data-backup.py'),'backup']));
+console.log('部署前加密备份：'+backup.archive);
+try{await stat(app);if((await readFile(path.join(app,'VERSION'),'utf8')).trim()!==commit)throw Error('已有版本目录不完整，请手动检查：'+app);}catch(error){if(error.code!=='ENOENT')throw error;await mkdir(app,{recursive:true,mode:0o700});const archive=spawnSync('git',['-C',root,'archive',commit],{maxBuffer:64*1024*1024});if(archive.status!==0)throw Error('无法导出版本');run('/usr/bin/tar',['-xf','-','-C',app],{input:archive.stdout});await writeFile(path.join(app,'VERSION'),commit+'\n',{mode:0o600});}
+const escape=v=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+const plist=`<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array><string>${escape(process.execPath)}</string><string>${escape(path.join(app,'server.mjs'))}</string></array><key>WorkingDirectory</key><string>${escape(app)}</string><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>ProcessType</key><string>Interactive</string><key>Umask</key><integer>63</integer><key>StandardOutPath</key><string>${escape(path.join(logs,'web.stdout.log'))}</string><key>StandardErrorPath</key><string>${escape(path.join(logs,'web.stderr.log'))}</string></dict></plist>`;
+let previous=null;try{previous=await readFile(job);}catch(e){if(e.code!=='ENOENT')throw e;}
+const previousFile=path.join(supportDir,'install-history',Date.now()+'.plist');
+await mkdir(path.dirname(previousFile),{recursive:true,mode:0o700});
+if(previous)await writeFile(previousFile,previous,{mode:0o600});
+if(existing)run('/bin/launchctl',['bootout',domain+'/'+label]);
+try{
+ await writeFile(job,plist,{mode:0o600});await chmod(job,0o600);
+ run('/bin/launchctl',['bootstrap',domain,job]);
+ let healthy=false;
+ for(let i=0;i<90;i++){try{const r=await fetch('http://127.0.0.1:4317/api/version',{signal:AbortSignal.timeout(1000)});if(r.ok&&(await r.json()).version===commit){healthy=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}
+ if(!healthy)throw Error('新版本未通过健康检查。');
+ await writeFile(path.join(supportDir,'installed.json'),JSON.stringify({commit,machineId:config.machineId,app,installedAt:new Date().toISOString(),backup:backup.archive,previousPlist:previous?previousFile:null}),{mode:0o600});
+ console.log(`已部署 ${commit}，本机网页：http://127.0.0.1:4317`);
+}catch(error){
+ spawnSync('/bin/launchctl',['bootout',domain+'/'+label]);
+ if(previous){await writeFile(job,previous,{mode:0o600});if(existing)run('/bin/launchctl',['bootstrap',domain,job]);}else{await import('node:fs/promises').then(fs=>fs.rename(job,previousFile+'.failed'));}
+ throw Error('部署失败，已恢复原网页配置：'+error.message);
 }
-const deadline=Date.now()+45000;let healthy=false;
-while(Date.now()<deadline){
- try{const response=await fetch('http://127.0.0.1:4317/api/status',{signal:AbortSignal.timeout(1000)});if(response.ok){healthy=true;break;}}catch{}
- await new Promise(resolve=>setTimeout(resolve,200));
-}
-if(!healthy)throw new Error(`本机服务未就绪。请查看 ${runtime}。`);
-console.log('本机工作台：http://127.0.0.1:4317');
-console.log('服务在后台运行。关闭启动窗口不会停止服务。');

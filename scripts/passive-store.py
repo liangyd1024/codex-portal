@@ -9,7 +9,7 @@ import hashlib
 import gzip
 
 
-HOME = pathlib.Path(globals().get('STORE_HOME', '/Users/marco'))
+HOME = pathlib.Path(globals().get('STORE_HOME', str(pathlib.Path.home())))
 STORE = HOME / '.codex'
 MAX_SQLITE_INTEGER = 9223372036854775807
 THREAD_COLUMNS = (

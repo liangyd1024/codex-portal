@@ -1,9 +1,20 @@
 {
   "name": "remote-codex-manager",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "通过本机浏览器管理 Marco 的 Codex",
-  "scripts": {"start": "node server.mjs", "test": "node --test test/*.test.mjs"},
-  "engines": {"node": ">=22"}
+  "description": "通过浏览器管理本机与远程 Codex",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs && python3 -m unittest discover -s test -p \"test_*.py\"",
+    "backup": "python3 scripts/data-backup.py backup",
+    "restore": "python3 scripts/data-backup.py restore",
+    "restore:apply": "python3 scripts/restore-apply.py apply",
+    "install": "node scripts/install-local.mjs",
+    "maintenance": "python3 scripts/restore-apply.py"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "Apache-2.0"
 }
