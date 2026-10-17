@@ -1,0 +1,9 @@
+{
+  "name": "remote-codex-manager",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "通过本机浏览器管理 Marco 的 Codex",
+  "scripts": {"start": "node server.mjs", "test": "node --test test/*.test.mjs"},
+  "engines": {"node": ">=22"}
+}

@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+__pycache__/
+*.pyc
+.env
+.env.*
+config.local.json
+*.sqlite*
+*.age
+*.part-*
+*.key
+backups/
+restore-staging/
+browser-export*.json
