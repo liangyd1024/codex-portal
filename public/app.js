@@ -1255,6 +1255,7 @@ async function init() {
   catch (e) { recordError(e,'init'); const n = $('connection-banner'); n.hidden = false; n.className = 'connection-banner error'; n.textContent = messageOf(e); }
 }
 try{state.drafts=new Map(JSON.parse(sessionStorage.getItem('rcm.drafts.'+targetHost)||'[]'));}catch{}
+if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
 init();
 
 $('connection-select').value=targetHost;
