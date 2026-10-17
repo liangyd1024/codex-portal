@@ -9,12 +9,16 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import {LOCAL_HOST,localPython,localIdentity,localTunnel} from './lib/local.mjs';
+import {createLocalTransport} from './lib/local.mjs';
+import {createSshTransport} from './lib/ssh.mjs';
+import {loadConfig,publicHost} from './lib/config.mjs';
 import { Manager, AppError } from './lib/manager.mjs';
 
 const ROOT=path.dirname(fileURLToPath(import.meta.url));
-export function createApp({mobileConfig=null,access=new MobileAccess(null),manager=new Manager({titleStore:path.join(homedir(),'.codex/remote-codex-manager/web-titles-work-mac.json')}),localManager=new Manager({titleStore:path.join(homedir(),'.codex/remote-codex-manager/web-titles-local.json'),host:LOCAL_HOST,remote:localPython,identity:localIdentity,tunnelFactory:localTunnel})}={}) {
-  const managers=new Map([['work-mac',manager],['local',localManager]]);
+let BUILD_VERSION='development';try{BUILD_VERSION=(await readFile(path.join(ROOT,'VERSION'),'utf8')).trim();}catch{}
+export function createApp({mobileConfig=null,access=new MobileAccess(null),config=loadConfig(),stateDir=process.env.RCM_STATE_DIR||path.join(homedir(),'.codex/remote-codex-manager'),managers:providedManagers}={}) {
+ const managers=providedManagers||new Map(config.connections.map(host=>[host.id,new Manager({titleStore:path.join(stateDir,`web-titles-${host.id}.json`),host:publicHost(host),...(host.kind==='local'?createLocalTransport(host):createSshTransport(host))})]));
+ const manager=managers.get(config.defaultConnection);
   const broadcasts=new Map();
   const csrf=randomBytes(32).toString('hex'); const clients=new Set();
 
@@ -50,10 +54,11 @@ export function createApp({mobileConfig=null,access=new MobileAccess(null),manag
       if(p==='/api/access/status'&&req.method==='GET')return json(res,200,{local:!remote,sessionExpires:remote?access.expires(req):undefined,origins:remote?[]:mobileConfig?.origins||[]});
       if(p==='/api/access/ca'&&!remote&&req.method==='GET'&&mobileConfig){res.writeHead(200,{'Content-Type':'application/x-x509-ca-cert','Content-Disposition':'attachment; filename="Codex-Local-CA.crt"'});return res.end(await readFile(mobileConfig.ca));}
       if(p==='/api/access/qr'&&!remote&&req.method==='GET'&&mobileConfig){const name=url.searchParams.get('kind')==='tailscale'?'tailscale.png':'lan.png';res.writeHead(200,{'Content-Type':'image/png'});return res.end(await readFile(path.join(path.dirname(mobileConfig.ca),name)));}
-      const targetKey=url.searchParams.get('host')||'work-mac';
+      if(req.method==='GET'&&p==='/api/connections')return json(res,200,{machineId:config.machineId,defaultConnection:config.defaultConnection,data:[...managers].map(([id,m])=>({id,host:publicHost(m.host),connection:m.connection}))});
+      if(req.method==='GET'&&p==='/api/version')return json(res,200,{version:BUILD_VERSION,machineId:config.machineId});
+      const targetKey=url.searchParams.get('host')||config.defaultConnection;
       const manager=managers.get(targetKey);
       if(!manager)throw new AppError('未知连接。',404,'UNKNOWN_HOST');
-      if(req.method==='GET'&&p==='/api/connections')return json(res,200,{data:[...managers].map(([id,m])=>({id,host:m.host,connection:m.connection}))});
       if(req.method==='GET'&&p==='/api/csrf')return json(res,200,{token:csrf});
       if(req.method==='GET'&&p==='/api/events'){
         res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-store','Connection':'keep-alive','X-Accel-Buffering':'no'});
@@ -90,7 +95,7 @@ export function createApp({mobileConfig=null,access=new MobileAccess(null),manag
         }
         if(p==='/api/notices/ack')return json(res,200,manager.acknowledgeNotice(data.key));
         if(p==='/api/disconnect')return json(res,200,manager.disconnect());
-        if(p==='/api/service/release')return json(res,200,await manager.release());
+        if(p==='/api/service/release')return json(res,200,await manager.release(data));
         if(p==='/api/threads')return json(res,201,await manager.newThread(data));
         if(match){const[,id,action]=match;const fn={takeover:()=>manager.takeover(id),message:()=>manager.message(id,data),steer:()=>manager.steer(id,data),interrupt:()=>manager.interrupt(id)}[action];if(fn)return json(res,200,await fn());}
         const approval=p.match(/^\/api\/requests\/([^/]+)\/respond$/);
@@ -98,7 +103,7 @@ export function createApp({mobileConfig=null,access=new MobileAccess(null),manag
       }
       if(p.startsWith('/api/'))return json(res,404,{error:{message:'找不到此接口。',code:'NOT_FOUND'}});
       if(req.method!=='GET'&&req.method!=='HEAD')throw new AppError('不支持此请求方法。',405);
-      const file={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
+      const file={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
       if(!file){res.writeHead(404);res.end('Not found');return;}
       const content=await readFile(path.join(ROOT,'public',file));
       res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);
@@ -109,14 +114,14 @@ export function createApp({mobileConfig=null,access=new MobileAccess(null),manag
   const createSecureServer=options=>https.createServer(options,(req,res)=>handler(req,res,true));
   server.on('listening',()=>{for(const m of managers.values())Promise.resolve(m.restoreConnection?.()).catch(()=>{});});
   server.on('close',()=>{for(const [key,m] of managers){m.off('event',broadcasts.get(key));m.disconnect({preserveIntent:true});}for(const client of clients)client.end();});
-  return {server,manager,proxyServer,createSecureServer};
+  return {server,manager,managers,proxyServer,createSecureServer};
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   const configPath=path.join(homedir(),'Library/Application Support/RemoteCodexManager/mobile/config.json');
-  let mobileConfig=null;try{mobileConfig=JSON.parse(await readFile(configPath,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+  let mobileConfig=null;try{if(process.env.RCM_MOBILE!=='0')mobileConfig=JSON.parse(await readFile(configPath,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
   const access=new MobileAccess(path.join(homedir(),'Library/Application Support/RemoteCodexManager/mobile/sessions.json'));
-  const {server,manager,proxyServer,createSecureServer}=createApp({mobileConfig,access});
+  const {server,manager,managers,proxyServer,createSecureServer}=createApp({mobileConfig,access});
   if(mobileConfig){
     proxyServer.listen(4318,'127.0.0.1');
     const tls=createSecureServer({key:await readFile(mobileConfig.key),cert:await readFile(mobileConfig.cert)});
@@ -144,5 +149,5 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   const port=Number(process.env.RCM_PORT||4317);
   server.listen(port,'127.0.0.1',()=>console.log(`Remote Codex Manager: http://127.0.0.1:${server.address().port}`));
   server.on('error',error=>{console.error(error.message);process.exitCode=1;});
-  for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{manager.disconnect({preserveIntent:true});server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),3000).unref();});
+  for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{for(const m of managers.values())m.disconnect({preserveIntent:true});server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),3000).unref();});
 }
