@@ -1,4 +1,5 @@
 import {activitySource,activityIcon} from './activity.js';
+let scrollFollow,scrollContext;
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message-media.js';
 import {markdown, groupTurnItems} from './message-body.js';
 import {NewChatDraft} from './new-chat.js';
@@ -7,7 +8,7 @@ let attachments;
 import {Sidebar} from './sidebar.js';
 import {DraftStore, shouldSendOnEnter, coalesceRefresh} from './input-state.js';
 import {installThreadSync} from './thread-sync.js';
-import {installMobileUI, compactLayout, touchInput} from './mobile-ui.js';
+import {installMobileUI, compactLayout, touchInput, installScrollFollow} from './mobile-ui.js';
 let mobileUI, draftWritesSuspended = false;
 import {createHandoffControls} from './thread-handoff.js';
 let handoffControls;
@@ -529,7 +530,10 @@ let lastMessageShape;
 function renderMessages() {
   // Keep the jump input stable while the user types; render after blur.
   if(document.activeElement?.matches('.output-controls input')) return;
-  const scroller = $('messages-scroller'), nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
+  const scroller = $('messages-scroller');
+  const context=targetHost+':'+state.selectedId;
+  if(scrollContext!==context){scrollContext=context;scrollFollow?.reset();}
+  const nearBottom = scrollFollow?.following ?? true;
   const shape=JSON.stringify([state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],turns()],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
   if(shape===lastMessageShape){
     for(const turn of turns())for(const item of turn.items||[]){
@@ -786,7 +790,7 @@ async function selectThread(id) {
   $('message-input').value = state.drafts.get(id) || ''; resizeInput(); renderThread(); renderThreads(); if (compactLayout()) toggleSidebar(false, false);
   await restoreDetail(id,seq);
   if(seq!==state.selectionVersion)return;
-  try { await refreshSelected(); if (seq !== state.selectionVersion) return; $('messages-scroller').scrollTop = $('messages-scroller').scrollHeight; }
+  try { await refreshSelected(); if (seq !== state.selectionVersion) return; scrollFollow?.schedule(); }
   catch (e) { if (seq !== state.selectionVersion) return; state.loadingDetail = false; state.historyError = messageOf(e); recordError(e,'thread'); renderThread(); }
 }
 async function readSelectedDetail(id,isCurrent){
@@ -1216,7 +1220,7 @@ function toggleInspector(open) {
 }
 function toggleMessageDetails(show) {
   const scroller = $('messages-scroller');
-  const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
+  const atBottom = scrollFollow?.following;
   $('conversation').classList.toggle('show-message-details',show);
   $('toggle-message-details').setAttribute('aria-pressed',String(show));
   $('toggle-message-details').textContent = show ? '收起消息信息' : '显示消息信息';
@@ -1225,6 +1229,7 @@ function toggleMessageDetails(show) {
   if (atBottom) scroller.scrollTop = scroller.scrollHeight;
 }
 function wireEvents() {
+  scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
   attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady(),busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});
   composer=installComposer({host:targetHost,api,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});

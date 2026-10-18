@@ -78,3 +78,23 @@ test('explicitly named chats never auto-name',async()=>{
   await m.message('t',{text:'不同的话题'});await flush(m);
   assert.deepEqual(calls.filter(c=>c.method==='thread/name/set').map(c=>c.params.name),['手动标题']);
 });
+
+test('empty rollout during startup retries metadata only and preserves a later desktop title',async()=>{
+  for(const existing of [null,'桌面标题']){
+    let reads=0;
+    const {m,calls}=setup({read:()=>{if(++reads<3)throw Error('failed to read thread: rollout at /tmp/new.jsonl is empty');return {thread:{name:existing}};}});
+    await m.newThread({cwd:'/project'});await m.message('t',{text:'修复启动问题'});await flush(m);
+    assert.equal(reads,3);assert.equal(m.errors.length,0);
+    assert.equal(calls.filter(c=>c.method==='turn/start').length,1);
+    assert.equal(calls.filter(c=>c.method==='thread/name/set').length,existing?0:1);
+  }
+});
+test('metadata retries stop after connection changes and do not hide permanent failures',async()=>{
+  for(const mode of ['connection','permanent','exhausted']){
+    const {m,calls}=setup({read:()=>{if(mode==='connection')m.generation++;throw Error(mode==='permanent'?'permission denied':'rollout at /tmp/new.jsonl is empty');}});
+    await m.newThread({cwd:'/project'});await m.message('t',{text:'修复启动问题'});await flush(m);
+    assert.equal(calls.filter(c=>c.method==='thread/read').length,mode==='exhausted'?5:1);
+    assert.equal(calls.filter(c=>c.method==='thread/name/set').length,0);
+    assert.equal(m.errors.length,mode==='connection'?0:1);
+  }
+});

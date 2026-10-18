@@ -52,4 +52,13 @@
 .catalog-dialog .composer-catalog{max-height:45dvh}.composer-catalog-item{padding:10px 6px;border-radius:8px}.composer-catalog-item:hover{background:#f5f5f5}
 .composer-catalog-item strong{font-weight:500}.composer-catalog-item small{line-height:1.5}.composer-dialog p{line-height:1.6;color:#666}
 .composer .send-button{width:34px;height:34px}
+.composer .stop-button{display:flex;align-items:center;justify-content:center;width:34px;height:34px;flex-shrink:0;padding:0;border:0;border-radius:50%;background:#242424;color:#fff}
+.composer .stop-button span{display:none}
+.composer .stop-button .icon{width:24px;height:24px;fill:currentColor;stroke:none}
+.composer .stop-button:hover:not(:disabled){background:#444}
+.composer .stop-button:focus-visible{outline:2px solid #377cf6;outline-offset:3px}
+.latest-message-controls{height:0;flex:0 0 0;position:relative;z-index:4}
+.latest-message-button{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);width:40px;height:40px;border:1px solid #ddd;border-radius:50%;background:#fff;color:#242424;box-shadow:0 2px 8px #0002;font-size:22px;display:grid;place-items:center}
+.latest-message-button:focus-visible{outline:2px solid #377cf6;outline-offset:3px}
+@media(max-width:700px){.composer .stop-button{width:44px;height:44px}.latest-message-button{width:44px;height:44px}}
 @media(max-width:700px){.composer-options summary,.mobile-layout .composer-options summary{width:44px;min-height:44px}.composer-tools .composer-options-panel button,.composer-tools .composer-options-panel select{min-height:44px}.composer .composer-tools [role=status]{display:none}.composer .send-button{width:44px;height:44px}}

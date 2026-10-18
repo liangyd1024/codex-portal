@@ -58,12 +58,10 @@ export function installMobileUI({closeDrawers, layoutChanged}) {
   function updateViewport() {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
-      const view = window.visualViewport, scroller = byId('messages-scroller');
-      const bottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
+      const view = window.visualViewport;
       root.style.setProperty('--visual-height', (view?.height || innerHeight) + 'px');
       root.style.setProperty('--visual-top', (view?.offsetTop || 0) + 'px');
       root.style.setProperty('--visual-width', (view?.width || innerWidth) + 'px');
-      if (bottom && compactLayout()) scroller.scrollTop = scroller.scrollHeight;
       positionPanels();
     });
   }
@@ -116,4 +114,36 @@ export function installMobileUI({closeDrawers, layoutChanged}) {
   window.addEventListener('pageshow',updateViewport);
   applyLayout();
   return {syncDrawers, updateViewport};
+}
+
+// Following is a reading preference, not a distance remeasured after layout changes.
+export function installScrollFollow(scroller,content) {
+  let following=true,frame=0,touchY=null,dragging=false;
+  const controls=document.createElement('div');controls.className='latest-message-controls';
+  const button=document.createElement('button');button.type='button';button.className='latest-message-button';
+  button.textContent='↓';button.title='回到最新';button.setAttribute('aria-label','回到最新');button.hidden=true;
+  controls.append(button);scroller.after(controls);
+  const nearBottom=()=>scroller.scrollHeight-scroller.scrollTop-scroller.clientHeight<40;
+  const update=()=>{button.hidden=following||nearBottom()||!scroller.clientHeight;};
+  const schedule=()=>{
+    cancelAnimationFrame(frame);
+    frame=requestAnimationFrame(()=>{if(following)scroller.scrollTop=scroller.scrollHeight;update();});
+  };
+  const pause=()=>{following=false;cancelAnimationFrame(frame);update();};
+  const latest=()=>{following=true;schedule();};
+  button.addEventListener('click',latest);
+  scroller.addEventListener('wheel',e=>{if(e.deltaY<0)pause();},{passive:true});
+  scroller.addEventListener('touchstart',e=>{touchY=e.touches[0]?.clientY;},{passive:true});
+  scroller.addEventListener('touchmove',e=>{const y=e.touches[0]?.clientY;if(touchY!=null&&y>touchY+2)pause();touchY=y;},{passive:true});
+  scroller.addEventListener('keydown',e=>{if(['ArrowUp','PageUp','Home'].includes(e.key))pause();});
+  scroller.addEventListener('pointerdown',e=>{dragging=e.pointerType==='mouse';});
+  window.addEventListener('pointerup',()=>{dragging=false;});
+  window.addEventListener('pointercancel',()=>{dragging=false;});
+  scroller.addEventListener('scroll',()=>{
+    if(dragging)following=nearBottom();
+    else if(nearBottom())following=true;
+    update();
+  },{passive:true});
+  const observer=new ResizeObserver(schedule);observer.observe(scroller);observer.observe(content);
+  return {get following(){return following;},reset:latest,schedule};
 }
