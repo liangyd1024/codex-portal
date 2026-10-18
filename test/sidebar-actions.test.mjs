@@ -1,6 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readSidebar,sidebarAction,sidebarCapabilities,PINNED_SECTION} from '../lib/sidebar.mjs';
 import {sidebarGroups} from '../public/sidebar.js';
+import {ArchiveSync} from '../lib/archive-sync.mjs';
 function fixture(){
  const calls=[];const t={id:'t',name:'Original',revision:'r',archived:false,readRevision:'rr',sectionId:null};
  const layout={data:[t],sections:[{id:'s',revision:'sr',name:'Section'}],projects:[{id:'p'}],accountScope:'a',accountLayoutAvailable:true,preferences:{pinned:'manual'}};
@@ -94,4 +95,27 @@ test('archive timeout reconciles persisted state without replay and only then no
   assert.equal(calls.filter(([n])=>n==='thread/archive').length,1);
   assert.equal(calls.filter(([n])=>n==='desktop-notify').length,confirmed?1:0);
  }
+});
+test('sidebar refresh finishes delayed archive after an unknown result without a second engine write',async()=>{
+ const {m,input,calls,t}=fixture(),rpc=m.rpc.request,passive=m.passive;
+ m.archiveSync=new ArchiveSync(m);
+ m.passive=async(action,p)=>action==='detail'?{thread:{archived:t.archived}}:passive(action,p);
+ m.rpc.request=async(name,p)=>{if(name==='thread/archive'){calls.push([name,p]);throw Object.assign(Error('timeout'),{code:'RPC_TIMEOUT'});}return rpc(name,p);};
+ await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='OUTCOME_UNKNOWN');
+ assert.equal(m.archiveSync.pending.size,1);assert.ok(!calls.some(([n])=>n==='desktop-notify'));
+ t.archived=true;await readSidebar(m);
+ assert.equal(m.archiveSync.pending.size,0);assert.equal(calls.filter(([n])=>n==='thread/archive').length,1);
+ assert.deepEqual(calls.find(([n])=>n==='desktop-notify'),['desktop-notify',{id:'t',archived:true}]);
+});
+test('an explicit engine rejection removes intent and cannot cause a later notification',async()=>{
+ const {m,input,calls}=fixture(),rpc=m.rpc.request;m.archiveSync=new ArchiveSync(m);
+ m.rpc.request=async(name,p)=>{if(name==='thread/archive')throw Error('archive rejected');return rpc(name,p);};
+ await assert.rejects(sidebarAction(m,input('archive')),/archive rejected/);
+ await readSidebar(m);assert.equal(m.archiveSync.pending.size,0);assert.ok(!calls.some(([n])=>n==='desktop-notify'));
+});
+test('desktop writer conflict is actionable and never hides or notifies an unarchived thread',async()=>{
+ const {m,input,calls}=fixture(),rpc=m.rpc.request;m.archiveSync=new ArchiveSync(m);
+ m.rpc.request=async(name,p)=>{if(name==='thread/archive')throw Error('thread t already has an active writer');return rpc(name,p);};
+ await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='THREAD_WRITER_CONFLICT'&&e.status===409);
+ assert.equal(m.archiveSync.pending.size,0);assert.ok(!calls.some(([n])=>n==='desktop-notify'));
 });
