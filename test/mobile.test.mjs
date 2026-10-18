@@ -47,14 +47,25 @@ test('macOS LAN setup creates trusted TLS and usable QR without Tailscale or Pyt
  await fixture({mobileConfig:config},async(base,post,app)=>{
   const tls=app.createSecureServer({key:await readFile(config.key),cert:await readFile(config.cert)});await new Promise(r=>tls.listen(0,config.lanIP,r));
   const origin=config.origins[0];
-  const request=(pathname,{method='GET',cookie,body}={})=>new Promise((resolve,reject)=>{
-   const req=https.request({host:config.lanIP,port:tls.address().port,path:pathname,ca,method,headers:{host:new URL(origin).host,origin,...(cookie?{cookie}:{})}},res=>{let text='';res.on('data',c=>text+=c);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,text}));});req.on('error',reject);req.end(body&&JSON.stringify(body));
+  const request=(pathname,{method='GET',cookie,body,headers={}}={})=>new Promise((resolve,reject)=>{
+   const req=https.request({host:config.lanIP,port:tls.address().port,path:pathname,ca,method,headers:{host:new URL(origin).host,origin,...(cookie?{cookie}:{}),...headers}},res=>{let text='';res.on('data',c=>text+=c);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,text}));});req.on('error',reject);req.end(body&&JSON.stringify(body));
   });
   try{
    assert.equal((await request('/')).status,200);assert.equal((await request('/api/status')).status,401);
+   const styles=await request('/mobile-ui.css');assert.equal(styles.status,200);assert.match(styles.headers['content-type'],/text\/css/);
+   assert.equal((await request('/input-state.js')).status,401);
    const {code}=await post('/api/access/code').then(r=>r.json());const login=await request('/api/access/login',{method:'POST',body:{code}});assert.equal(login.status,200);
    const cookie=login.headers['set-cookie'][0].split(';')[0];assert.equal((await request('/api/access/status',{cookie})).status,200);
    assert.equal((await request('/api/access/login',{method:'POST',body:{code}})).status,401);
+   const {token}=JSON.parse((await request('/api/csrf',{cookie})).text),headers={'x-csrf-token':token};
+   for(const action of ['setup','code','revoke'])assert.equal((await request('/api/access/'+action,{method:'POST',cookie,headers,body:{}})).status,404);
+   assert.equal((await request('/api/access/ca',{cookie})).status,404);
+   const certificate=await fetch(base+'/api/access/ca');assert.equal(certificate.status,200);assert.match(certificate.headers.get('content-disposition'),/attachment/);assert.equal(await certificate.text(),ca.toString());
+   assert.equal((await request('/api/access/logout',{method:'POST',cookie,headers})).status,200);
+   assert.equal((await request('/api/access/status',{cookie})).status,401);
+   const next=await post('/api/access/code').then(r=>r.json()),second=await request('/api/access/login',{method:'POST',body:{code:next.code}});
+   const secondCookie=second.headers['set-cookie'][0].split(';')[0];assert.equal((await post('/api/access/revoke')).status,200);
+   assert.equal((await request('/api/access/status',{cookie:secondCookie})).status,401);
   }finally{tls.closeAllConnections();await new Promise(r=>tls.close(r));}
  });
  console.log('手机测试数据保留：'+home);

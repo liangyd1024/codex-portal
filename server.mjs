@@ -46,8 +46,8 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
         const data=await body(req);const token=access.login(data.code);res.setHeader('Set-Cookie',access.cookie(token));return json(res,200,{ok:true});
       }
       if(remote&&!access.valid(req)){
-        if(req.method==='GET'&&['/','/index.html','/login.js','/styles.css'].includes(p)){
-          const file=p==='/login.js'?'login.js':p==='/styles.css'?'styles.css':'login.html';
+        if(req.method==='GET'&&['/','/index.html','/login.js','/styles.css','/mobile-ui.css'].includes(p)){
+          const file=p==='/login.js'?'login.js':p==='/styles.css'?'styles.css':p==='/mobile-ui.css'?'mobile-ui.css':'login.html';
           res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(await readFile(path.join(ROOT,'public',file)));
         }
         throw new AppError('请先使用本机生成的配对码登录。',401,'PAIRING_REQUIRED');
@@ -108,7 +108,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       }
       if(p.startsWith('/api/'))return json(res,404,{error:{message:'找不到此接口。',code:'NOT_FOUND'}});
       if(req.method!=='GET'&&req.method!=='HEAD')throw new AppError('不支持此请求方法。',405);
-      const file={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
+      const file={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/mobile-ui.js':'mobile-ui.js','/mobile-ui.css':'mobile-ui.css','/input-state.js':'input-state.js','/thread-sync.js':'thread-sync.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
       if(!file){res.writeHead(404);res.end('Not found');return;}
       const content=await readFile(path.join(ROOT,'public',file));
       res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);

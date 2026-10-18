@@ -42,6 +42,9 @@ export class Sidebar {
     this.progress=make('span','sidebar-progress','正在更新…');this.progress.setAttribute('role','status');this.progress.hidden=true;this.toolbar.append(archive,this.progress,more);options.node.before(this.toolbar);
     document.addEventListener('pointerdown',e=>{if(this.menu&&!this.menu.contains(e.target)&&!this.menuAnchor?.contains(e.target))this.closeMenu(false);});
     document.addEventListener('keydown',e=>{if(e.key==='Escape'&&this.menu){e.preventDefault();e.stopImmediatePropagation();this.closeMenu();}},true);
+    window.addEventListener('resize',()=>this.positionMenu());
+    window.visualViewport?.addEventListener('resize',()=>this.positionMenu());
+    window.visualViewport?.addEventListener('scroll',()=>this.positionMenu());
   }
   key(){return 'rcm.sidebar.collapsed.'+this.o.host+'.'+(this.scope||'unknown');}
   save(){try{localStorage.setItem(this.key(),JSON.stringify([...this.collapsed]));}catch{}}
@@ -117,28 +120,36 @@ export class Sidebar {
   sectionMenu(s){return [this.entry('重命名分区','renameSection',()=>this.edit('renameSection',s,'重命名分区',s.name)),this.entry('删除分区','deleteSection',()=>this.confirmDelete(s)),{label:'调整分区顺序',disabled:true,reason:this.snapshot.capabilities.reorderSection.reason}];}
   openMenu(anchor,entries){
     this.closeMenu(false);this.menuAnchor=anchor;const menu=make('div','sidebar-menu');menu.setAttribute('role','menu');
-    for(const item of entries){const button=make('button','',item.label);button.type='button';button.setAttribute('role','menuitem');button.disabled=!!item.disabled;if(item.reason&&item.disabled){button.title=item.reason;button.setAttribute('aria-description',item.reason);}button.onclick=()=>{this.closeMenu(false);item.run?.();};menu.append(button);}
+    for(const [index,item] of entries.entries()){const button=make('button','',item.label);button.type='button';button.setAttribute('role','menuitem');button.disabled=!!item.disabled;if(item.reason&&item.disabled){button.title=item.reason;button.setAttribute('aria-description',item.reason);}button.onclick=()=>{this.closeMenu(false);item.run?.();};menu.append(button);if(item.reason&&item.disabled){const reason=make('span','control-reason',item.reason);reason.id='sidebar-reason-'+index;button.setAttribute('aria-describedby',reason.id);menu.append(reason);}}
     if(entries.some(e=>e.disabled&&e.reason?.includes('桌面版')))menu.append(make('p','menu-note','部分组织设置需在桌面版修改，同步后会更新。'));
-    document.body.append(menu);this.menu=menu;const rect=anchor.getBoundingClientRect();menu.style.left=Math.max(8,Math.min(rect.right-menu.offsetWidth,innerWidth-menu.offsetWidth-8))+'px';menu.style.top=Math.max(8,Math.min(rect.bottom,innerHeight-menu.offsetHeight-8))+'px';
+    document.body.append(menu);this.menu=menu;this.positionMenu();
     const focus=()=>[...menu.querySelectorAll('button:not(:disabled)')];focus()[0]?.focus();menu.onkeydown=e=>{const buttons=focus(),index=buttons.indexOf(document.activeElement);if(['ArrowDown','ArrowUp','Home','End','Tab'].includes(e.key)){e.preventDefault();const n=e.key==='Home'?0:e.key==='End'?buttons.length-1:(index+(e.key==='ArrowUp'||e.shiftKey?-1:1)+buttons.length)%buttons.length;buttons[n]?.focus();}};
   }
   closeMenu(restore=true){if(!this.menu)return;this.menu.remove();this.menu=null;if(restore)this.menuAnchor?.focus();}
+  positionMenu(){
+    if(!this.menu)return;
+    const rect=this.menuAnchor.getBoundingClientRect(),v=window.visualViewport,top=v?.offsetTop||0,height=v?.height||innerHeight;
+    this.menu.style.maxHeight=Math.max(44,height-16)+'px';
+    this.menu.style.left=Math.max(8,Math.min(rect.right-this.menu.offsetWidth,innerWidth-this.menu.offsetWidth-8))+'px';
+    this.menu.style.top=Math.max(top+8,Math.min(rect.bottom,top+height-this.menu.offsetHeight-8))+'px';
+  }
   modal(title){
     const dialog=make('dialog','sidebar-dialog'),form=make('form');form.onsubmit=e=>e.preventDefault();form.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.isComposing||e.keyCode===229))e.preventDefault();});const h=make('h2','',title);h.id='sidebar-dialog-title';dialog.setAttribute('aria-labelledby',h.id);form.append(h);dialog.append(form);document.body.append(dialog);
     const actions=make('div','sidebar-dialog-actions'),cancel=make('button','secondary-button','取消'),submit=make('button','primary-button','保存');cancel.type='button';submit.type='submit';actions.append(cancel,submit);const error=make('p','sidebar-dialog-error');error.setAttribute('role','alert');
     const close=()=>{dialog.close();dialog.remove();this.dialog=null;this.focusAnchor();};cancel.onclick=close;dialog.oncancel=e=>{if(this.pending)e.preventDefault();};dialog.addEventListener('close',()=>{if(dialog.isConnected){dialog.remove();this.dialog=null;this.focusAnchor();}});this.dialog=dialog;dialog.dataset.accountScope=this.snapshot.accountScope||'';
+    dialog.addEventListener('click',e=>{if(e.target!==dialog||this.pending)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close();});
     return {dialog,form,actions,submit,cancel,error,close,finish:()=>{form.append(error,actions);dialog.showModal();form.querySelector('input,select,button')?.focus();}};
   }
   edit(action,target,title,value=''){
     const m=this.modal(title),label=make('label','',title),input=make('input');input.value=value||'';input.required=true;input.maxLength=200;label.append(input);m.form.append(label);
-    m.form.onsubmit=async e=>{e.preventDefault();m.submit.disabled=m.cancel.disabled=true;try{await this.run(action,target,{name:input.value},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();input.select();
+    m.form.onsubmit=async e=>{e.preventDefault();if(this.pending)return;const label=m.submit.textContent;m.submit.textContent='正在处理…';m.submit.disabled=m.cancel.disabled=true;try{await this.run(action,target,{name:input.value},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.textContent=label;m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();input.select();
   }
   choose(action,target){
     const project=action==='moveProject',m=this.modal(project?'移动到项目':'移动到分区'),label=make('label','',project?'项目':'分区'),select=make('select');select.append(new Option(project?'不关联项目':'移出分区',''));
     for(const item of project?this.snapshot.projects:this.snapshot.sections)select.append(new Option(item.name,item.id));select.value=(project?target.projectId:target.sectionId)||'';label.append(select);m.form.append(label);
-    m.form.onsubmit=async e=>{e.preventDefault();m.submit.disabled=m.cancel.disabled=true;try{await this.run(action,target,{[project?'projectId':'sectionId']:select.value||null},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();
+    m.form.onsubmit=async e=>{e.preventDefault();if(this.pending)return;const label=m.submit.textContent;m.submit.textContent='正在处理…';m.submit.disabled=m.cancel.disabled=true;try{await this.run(action,target,{[project?'projectId':'sectionId']:select.value||null},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.textContent=label;m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();
   }
-  confirmDelete(section){const m=this.modal('删除分区');m.form.append(make('p','','删除“'+section.name+'”分区，其中的会话和项目会保留。'));m.submit.textContent='删除分区';m.form.onsubmit=async e=>{e.preventDefault();m.submit.disabled=m.cancel.disabled=true;try{await this.run('deleteSection',section,{},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();}
+  confirmDelete(section){const m=this.modal('删除分区');m.form.append(make('p','','删除“'+section.name+'”分区，其中的会话和项目会保留。'));m.submit.textContent='删除分区';m.form.onsubmit=async e=>{e.preventDefault();if(this.pending)return;const label=m.submit.textContent;m.submit.textContent='正在处理…';m.submit.disabled=m.cancel.disabled=true;try{await this.run('deleteSection',section,{},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.textContent=label;m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();}
   focusAnchor(){const key=this.menuAnchor?.dataset.focusKey;[...this.node.querySelectorAll('[data-focus-key]')].find(n=>n.dataset.focusKey===key)?.focus({preventScroll:true});if(!document.activeElement||document.activeElement===document.body)this.node.querySelector('button')?.focus({preventScroll:true});}
   async run(action,target,extra={},propagate=false){
     if(this.pending){if(propagate)throw Error('正在更新，请等待操作完成。');return;}if(this.dialog&&this.dialog.dataset.accountScope!==(this.snapshot.accountScope||''))throw Error('目标账号已变化，请取消后刷新；输入内容已保留。');this.pending=true;this.setBusy(true);

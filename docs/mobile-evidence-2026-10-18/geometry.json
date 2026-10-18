@@ -1,0 +1,3805 @@
+{
+  "note": "仅在验收页面临时隐藏浏览器翻译扩展悬浮层，未改扩展设置。测量中心和左右边缘；圆形按钮不以外接矩形角落作为命中点。",
+  "scenes": [
+    {
+      "width": 320,
+      "height": 720,
+      "name": "main",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "切换侧栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "切换详情栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "查看过程",
+          "w": 283,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "message-input",
+          "w": 286,
+          "h": 72,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "模型与思考档位",
+          "w": 44,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "语音输入",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "发送消息",
+          "w": 48,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 320,
+      "height": 720,
+      "name": "more",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "刷新状态与会话",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "自动刷新",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "显示消息信息",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "handoff-thread",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 320,
+      "height": 720,
+      "name": "sidebar",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "关闭侧栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "选择连接",
+          "w": 128.7421875,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-thread",
+          "w": 271,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "搜索目标机器会话",
+          "w": 231,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "toggle-projects",
+          "w": 57,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "刷新项目",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "已归档",
+          "w": 52,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "侧边栏设置",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "项目",
+          "w": 263,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "验收项目",
+          "w": 219,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：/test/project",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机验收：长标题与完整操作测试刚刚",
+          "w": 207,
+          "h": 58,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：手机验收：长标题与完整操作测试",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机验收：另一会话刚刚",
+          "w": 207,
+          "h": 58,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：手机验收：另一会话",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 320,
+      "height": 720,
+      "name": "thread-menu",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "重命名",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "置顶",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "移动到项目",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "移动到分区",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "标记未读",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "归档会话",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 320,
+      "height": 720,
+      "name": "dialog",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "关闭",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-cwd",
+          "w": 262,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-model",
+          "w": 262,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-effort",
+          "w": 262,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "cancel-new-dialog",
+          "w": 127,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "create-thread",
+          "w": 127,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 320,
+      "height": 720,
+      "name": "settings",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "收起详情",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "会话",
+          "w": 88.6640625,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机访问",
+          "w": 88.671875,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "设置",
+          "w": 88.6640625,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "目标机器连接",
+          "w": 274,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "connect-button",
+          "w": 274,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "release-service",
+          "w": 180,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "任务通知",
+          "w": 274,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "任务系统通知",
+          "w": 127,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "test-notification",
+          "w": 64,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "浏览器数据备份",
+          "w": 274,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "导出浏览器数据",
+          "w": 274,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "导入浏览器数据",
+          "w": 274,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "连接诊断",
+          "w": 274,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "width": 320,
+      "height": 720,
+      "name": "mobile-access",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "收起详情",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "会话",
+          "w": 88.6640625,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机访问",
+          "w": 88.671875,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "设置",
+          "w": 88.6640625,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "开启同一 Wi-Fi 访问",
+          "w": 244,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "重新检查",
+          "w": 88,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "Tailscale · 跨网络访问",
+          "w": 274,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "pair-code-expiry",
+          "w": 274,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "mobile-session-expiry",
+          "w": 274,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "生成配对码",
+          "w": 274,
+          "h": 48,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "撤销手机访问",
+          "w": 274,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "name": "main",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "切换侧栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "切换详情栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "查看过程",
+          "w": 343,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "message-input",
+          "w": 341,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "模型与思考档位",
+          "w": 44,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "语音输入",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "发送消息",
+          "w": 48,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "name": "more",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "刷新状态与会话",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "自动刷新",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "显示消息信息",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "handoff-thread",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "name": "sidebar",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "关闭侧栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "选择连接",
+          "w": 172.7421875,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-thread",
+          "w": 315,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "搜索目标机器会话",
+          "w": 275,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "toggle-projects",
+          "w": 57,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "刷新项目",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "已归档",
+          "w": 52,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "侧边栏设置",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "项目",
+          "w": 307,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "验收项目",
+          "w": 263,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：/test/project",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机验收：长标题与完整操作测试刚刚",
+          "w": 251,
+          "h": 58,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：手机验收：长标题与完整操作测试",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机验收：另一会话刚刚",
+          "w": 251,
+          "h": 58,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：手机验收：另一会话",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "name": "thread-menu",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "重命名",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "置顶",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "移动到项目",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "移动到分区",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "标记未读",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "归档会话",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "name": "dialog",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "关闭",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-cwd",
+          "w": 317,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-model",
+          "w": 317,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-effort",
+          "w": 317,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "cancel-new-dialog",
+          "w": 154.5,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "create-thread",
+          "w": 154.5,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "name": "settings",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "收起详情",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "会话",
+          "w": 107,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机访问",
+          "w": 107,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "设置",
+          "w": 107,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "目标机器连接",
+          "w": 329,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "connect-button",
+          "w": 329,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "release-service",
+          "w": 180,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "任务通知",
+          "w": 329,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "任务系统通知",
+          "w": 127,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "test-notification",
+          "w": 64,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "浏览器数据备份",
+          "w": 329,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "导出浏览器数据",
+          "w": 329,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "导入浏览器数据",
+          "w": 329,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "连接诊断",
+          "w": 329,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "name": "mobile-access",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "收起详情",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "会话",
+          "w": 107,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机访问",
+          "w": 107,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "设置",
+          "w": 107,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "开启同一 Wi-Fi 访问",
+          "w": 299,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "重新检查",
+          "w": 88,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "Tailscale · 跨网络访问",
+          "w": 329,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "pair-code-expiry",
+          "w": 329,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "mobile-session-expiry",
+          "w": 329,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "生成配对码",
+          "w": 329,
+          "h": 48,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "撤销手机访问",
+          "w": 329,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "name": "main",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "切换侧栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "切换详情栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "查看过程",
+          "w": 358,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "message-input",
+          "w": 356,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "模型与思考档位",
+          "w": 44,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "语音输入",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "发送消息",
+          "w": 48,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "name": "more",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "刷新状态与会话",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "自动刷新",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "显示消息信息",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "handoff-thread",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "name": "sidebar",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "关闭侧栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "选择连接",
+          "w": 172.7421875,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-thread",
+          "w": 315,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "搜索目标机器会话",
+          "w": 275,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "toggle-projects",
+          "w": 57,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "刷新项目",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "已归档",
+          "w": 52,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "侧边栏设置",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "项目",
+          "w": 307,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "验收项目",
+          "w": 263,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：/test/project",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机验收：长标题与完整操作测试刚刚",
+          "w": 251,
+          "h": 58,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：手机验收：长标题与完整操作测试",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机验收：另一会话刚刚",
+          "w": 251,
+          "h": 58,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：手机验收：另一会话",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "name": "thread-menu",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "重命名",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "置顶",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "移动到项目",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "移动到分区",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "标记未读",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "归档会话",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "name": "dialog",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "关闭",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-cwd",
+          "w": 332,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-model",
+          "w": 332,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-effort",
+          "w": 332,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "cancel-new-dialog",
+          "w": 162,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "create-thread",
+          "w": 162,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "name": "settings",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "收起详情",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "会话",
+          "w": 112,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机访问",
+          "w": 112,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "设置",
+          "w": 112,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "目标机器连接",
+          "w": 344,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "connect-button",
+          "w": 344,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "release-service",
+          "w": 180,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "任务通知",
+          "w": 344,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "任务系统通知",
+          "w": 127,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "test-notification",
+          "w": 64,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "浏览器数据备份",
+          "w": 344,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "导出浏览器数据",
+          "w": 344,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "导入浏览器数据",
+          "w": 344,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "连接诊断",
+          "w": 344,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "name": "mobile-access",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "收起详情",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "会话",
+          "w": 112,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机访问",
+          "w": 112,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "设置",
+          "w": 112,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "开启同一 Wi-Fi 访问",
+          "w": 314,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "重新检查",
+          "w": 88,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "Tailscale · 跨网络访问",
+          "w": 344,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "pair-code-expiry",
+          "w": 344,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "mobile-session-expiry",
+          "w": 344,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "生成配对码",
+          "w": 344,
+          "h": 48,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "撤销手机访问",
+          "w": 344,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "name": "main",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "切换侧栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "切换详情栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "查看过程",
+          "w": 398,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "message-input",
+          "w": 396,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "模型与思考档位",
+          "w": 44,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "语音输入",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "发送消息",
+          "w": 48,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "name": "more",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "刷新状态与会话",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "自动刷新",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "显示消息信息",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "handoff-thread",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "name": "sidebar",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "关闭侧栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "选择连接",
+          "w": 172.7421875,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-thread",
+          "w": 315,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "搜索目标机器会话",
+          "w": 275,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "toggle-projects",
+          "w": 57,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "刷新项目",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "已归档",
+          "w": 52,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "侧边栏设置",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "项目",
+          "w": 307,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "验收项目",
+          "w": 263,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：/test/project",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机验收：长标题与完整操作测试刚刚",
+          "w": 251,
+          "h": 58,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：手机验收：长标题与完整操作测试",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机验收：另一会话刚刚",
+          "w": 251,
+          "h": 58,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：手机验收：另一会话",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "name": "thread-menu",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "重命名",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "置顶",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "移动到项目",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "移动到分区",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "标记未读",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "归档会话",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "name": "dialog",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "关闭",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-cwd",
+          "w": 372,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-model",
+          "w": 372,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-effort",
+          "w": 372,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "cancel-new-dialog",
+          "w": 182,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "create-thread",
+          "w": 182,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "name": "settings",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "收起详情",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "会话",
+          "w": 114,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机访问",
+          "w": 114,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "设置",
+          "w": 114,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "目标机器连接",
+          "w": 350,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "connect-button",
+          "w": 350,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "release-service",
+          "w": 180,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "任务通知",
+          "w": 350,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "任务系统通知",
+          "w": 127,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "test-notification",
+          "w": 64,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "浏览器数据备份",
+          "w": 350,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "导出浏览器数据",
+          "w": 350,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "导入浏览器数据",
+          "w": 350,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "连接诊断",
+          "w": 350,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "name": "mobile-access",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "收起详情",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "会话",
+          "w": 114,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机访问",
+          "w": 114,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "设置",
+          "w": 114,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "开启同一 Wi-Fi 访问",
+          "w": 320,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "重新检查",
+          "w": 88,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "Tailscale · 跨网络访问",
+          "w": 350,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "pair-code-expiry",
+          "w": 350,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "mobile-session-expiry",
+          "w": 350,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "生成配对码",
+          "w": 350,
+          "h": 48,
+          "visible": false,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "撤销手机访问",
+          "w": 350,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "name": "main",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "切换侧栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "切换详情栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "查看过程",
+          "w": 807,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "message-input",
+          "w": 650,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "模型与思考档位",
+          "w": 44,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "语音输入",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "发送消息",
+          "w": 48,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "name": "more",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "刷新状态与会话",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "自动刷新",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "显示消息信息",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "handoff-thread",
+          "w": 282,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "name": "sidebar",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "关闭侧栏",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "选择连接",
+          "w": 172.7421875,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-thread",
+          "w": 315,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "搜索目标机器会话",
+          "w": 275,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "toggle-projects",
+          "w": 57,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "刷新项目",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "已归档",
+          "w": 52,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "侧边栏设置",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "项目",
+          "w": 302,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "验收项目",
+          "w": 258,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "更多操作：/test/project",
+          "w": 44,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机验收：长标题与完整操作测试刚刚",
+          "w": 246,
+          "h": 58,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "更多操作：手机验收：长标题与完整操作测试",
+          "w": 44,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "手机验收：另一会话刚刚",
+          "w": 246,
+          "h": 58,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "更多操作：手机验收：另一会话",
+          "w": 44,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "name": "thread-menu",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "重命名",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "置顶",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "移动到项目",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "移动到分区",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "标记未读",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "归档会话",
+          "w": 167,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "name": "dialog",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "关闭",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-cwd",
+          "w": 401,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-model",
+          "w": 401,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "new-effort",
+          "w": 401,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "cancel-new-dialog",
+          "w": 196.5,
+          "h": 48,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "create-thread",
+          "w": 196.5,
+          "h": 48,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "name": "settings",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "收起详情",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "会话",
+          "w": 114,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机访问",
+          "w": 114,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "设置",
+          "w": 114,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "目标机器连接",
+          "w": 350,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "connect-button",
+          "w": 350,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "release-service",
+          "w": 180,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "任务通知",
+          "w": 350,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "任务系统通知",
+          "w": 127,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "test-notification",
+          "w": 64,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "浏览器数据备份",
+          "w": 350,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "导出浏览器数据",
+          "w": 350,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "导入浏览器数据",
+          "w": 350,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "连接诊断",
+          "w": 350,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "name": "mobile-access",
+      "overflow": false,
+      "controls": [
+        {
+          "name": "收起详情",
+          "w": 44,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "会话",
+          "w": 114,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "手机访问",
+          "w": 114,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "设置",
+          "w": 114,
+          "h": 44,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "开启同一 Wi-Fi 访问",
+          "w": 320,
+          "h": 48,
+          "visible": true,
+          "hit": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "name": "重新检查",
+          "w": 88,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "Tailscale · 跨网络访问",
+          "w": 350,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "pair-code-expiry",
+          "w": 350,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "mobile-session-expiry",
+          "w": 350,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "生成配对码",
+          "w": 350,
+          "h": 48,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "撤销手机访问",
+          "w": 350,
+          "h": 44,
+          "visible": false,
+          "hit": [
+            false,
+            false,
+            false
+          ]
+        }
+      ]
+    }
+  ]
+}

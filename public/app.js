@@ -1,4 +1,8 @@
 import {Sidebar} from './sidebar.js';
+import {DraftStore, shouldSendOnEnter, coalesceRefresh} from './input-state.js';
+import {installThreadSync} from './thread-sync.js';
+import {installMobileUI, compactLayout, touchInput} from './mobile-ui.js';
+let mobileUI, draftWritesSuspended = false;
 import {createHandoffControls} from './thread-handoff.js';
 let handoffControls;
 import {installBrowserBackup} from './browser-backup.js';
@@ -24,6 +28,10 @@ const targetUrl=path=>path+(path.includes('?')?'&':'?')+'host='+targetHost;
 const retiredStatusInstances=new Set();
 function applyStatus(status){
   const next=selectConnectionStatus(state.status,status,retiredStatusInstances);
+  const previous=state.status;
+  if(previous&&(previous.instanceId!==next.instanceId||previous.connection?.state!==next.connection?.state||
+    previous.controlledThreads?.includes(state.selectedId)!==next.controlledThreads?.includes(state.selectedId)||
+    Boolean(previous.handoffs?.some(h=>h.threadId===state.selectedId))!==Boolean(next.handoffs?.some(h=>h.threadId===state.selectedId))))state.detailVersion++;
   if(state.status?.instanceId&&next.instanceId!==state.status.instanceId){
     state.csrf='';state.localRequests=[];
     if(state.detail){state.detail.controlled=false;state.detail.controlState='viewing';state.detail.pendingRequests=[];}
@@ -36,9 +44,24 @@ const state = {
   status: null, models: [], projects: [], threads: [], selectedId: savedView().selectedId || null, detail: null,
   sidebar:null, sidebarArchived:false, selectedArchived:false, projectId: savedView().projectId || null, search: '', threadCursor: null, historyCursor: null, loadedOlderHistory: false,
   model: '', effort: '', csrf: '', transport: false, busy: new Set(), loadingThreads: false, loadingModels: false, loadingProjects: false, threadListSource: null,
-  runtimeNotices: new Map(), loadingDetail: false, errors: [], localRequests: [], drafts: new Map(), selectionVersion: 0,
-  listVersion: 0, threadPageError: false, historyError: '', eventSource: null, lastSync: null, refreshScope: '', refreshMessage: '', refreshing: false, streamRender: false, requestSignature: '',
+  runtimeNotices: new Map(), loadingDetail: false, errors: [], localRequests: [], drafts: new DraftStore({storage:()=>sessionStorage,host:targetHost,onError:()=>toast('浏览器无法保存草稿，请先复制重要内容。',true)}), selectionVersion: 0,
+  listVersion: 0, detailVersion: 0, threadPageError: false, historyError: '', eventSource: null, lastSync: null, refreshScope: '', refreshMessage: '', refreshing: false, streamRender: false, requestSignature: '',
 };
+function flushDrafts() {
+  if (draftWritesSuspended) return;
+  if (state.selectedId) state.drafts.set(state.selectedId,$('message-input').value);
+  else state.drafts.persist();
+  saveView(); saveOutputPositions();
+}
+const resumeWorkspace = coalesceRefresh(async () => {
+  if (document.hidden || navigator.onLine === false) return;
+  await loadStatus();
+  if (connected()&&!state.status?.service?.releasing) {
+    // The selected conversation must not wait for slow model/project catalogs.
+    await refreshSelected();
+    if(!state.loadingThreads&&!sidebar.pending&&!sidebar.menu&&!sidebar.dialog)loadThreads();
+  }
+});
 const effortNames = {none:'无', minimal:'最低', low:'低', medium:'中', high:'高', xhigh:'超高', max:'最高', ultra:'极高'};
 const statusNames = {unknown:'状态未确认',notLoaded:'尚未加载', idle:'就绪', active:'执行中', inProgress:'执行中', in_progress:'执行中', running:'执行中', completed:'已完成', interrupted:'已停止', failed:'失败', systemError:'服务错误', pending:'等待中', declined:'已拒绝', stopped:'已停止', success:'成功'};
 const stages = {ssh:'SSH 连接', identity:'身份核验', service:'目标机器服务', protocol:'协议连接', initialize:'协议初始化', models:'模型目录', threads:'会话列表', connected:'已连接', connecting:'正在连接', disconnected:'未连接', reconnecting:'正在重连', error:'连接失败', ready:'已连接'};
@@ -131,7 +154,7 @@ function relativeTime(value) {
 let refreshNoticeTimer = null;
 function renderRefresh() {
   const n = $('refresh-status');
-  n.hidden = state.refreshing || !state.refreshMessage;
+  n.hidden = !state.refreshMessage;
   n.classList.toggle('error', !state.refreshing && state.refreshMessage.includes('失败'));
   n.setAttribute('aria-busy', String(state.refreshing));
   setText('refresh-message', state.refreshMessage);
@@ -189,7 +212,7 @@ async function api(path, options = {}) {
     let data;
     try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error('服务未返回有效数据。请查看连接诊断。'); }
     if (!response.ok) {
-      if(response.status===401&&data.error?.code==='PAIRING_REQUIRED')location.reload();
+      if(response.status===401&&data.error?.code==='PAIRING_REQUIRED'){voice?.interrupt();flushDrafts();location.reload();}
       const e = new Error(data.error?.message || data.message || '请求失败，HTTP ' + response.status);
       e.status = response.status; e.code = data.error?.code; e.details = data.error?.details; throw e;
     }
@@ -272,9 +295,20 @@ function renderControls() {
   const hasEffort = effortsFor(state.model).some(e => e.value === state.effort);
   $('send-message').disabled = Boolean(voice?.active) || !ready || !own || !featureReady(active?'steer':'message') || posting || !input.value.trim() || (!active && (!hasModel || !hasEffort));
   $('send-message').setAttribute('aria-label',active ? '补充当前轮次' : '发送消息');
+  $('message-form').setAttribute('aria-busy',String(posting));
+  $('send-message').title = posting ? '正在发送…' : active ? '补充当前轮次' : '发送消息';
   $('interrupt').hidden = !active&&!backgroundRunning(); $('interrupt').disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt');
   $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || handing || !state.selectedId;
   $('takeover').querySelector('span').textContent = switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话';
+  const availability = $('composer-availability');
+  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '正在发送…' : state.busy.has('interrupt') ? '正在请求停止，请稍候…' : voice?.active ? '' : !featureReady(active?'steer':'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !hasModel ? '请选择一个可用模型。' : own && !hasEffort ? '请选择思考档位。' : '';
+  availability.textContent = unavailable; availability.hidden = !unavailable;
+  $('new-thread').setAttribute('aria-description',!ready ? '连接恢复后可新建会话。' : !state.models.length ? '正在等待目标机器模型目录。' : creating ? '正在创建，请稍候。' : '');
+  controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
+  controlReason('takeover',!ready ? '连接恢复后可接管。' : switching ? '正在接管，请稍候。' : handing ? '交还状态正在确认，请稍候。' : '当前引擎暂不支持接管。');
+  controlReason('release-service',!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。');
+  $('interrupt').setAttribute('aria-label',state.busy.has('interrupt') ? '正在请求停止' : '停止当前轮次');
+  $('interrupt').setAttribute('aria-busy',String(state.busy.has('interrupt')));
   $('running-indicator').hidden = !active&&!backgroundRunning();
   $('running-indicator').lastElementChild.textContent=active?'正在执行':'后台命令仍在运行';
   const createReason = !ready ? '连接目标机器并恢复实时通道后才能创建。' : !featureReady('create') ? '当前引擎不支持创建会话：'+(state.status?.service?.protocolValidation?.features?.create?.reason || '请查看连接诊断') : !$('new-cwd').value ? '请先选择项目。' : !$('new-model').value || !$('new-effort').value ? '请选择可用的模型与思考档位。' : '';
@@ -291,6 +325,19 @@ function renderControls() {
   setText('composer-hint',state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
   setText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
   document.querySelectorAll('.request-card button,.request-card input,.request-card textarea').forEach(n => { n.disabled = !ready || state.busy.has('request:' + n.closest('.request-card').dataset.requestId); });
+  document.querySelectorAll('.request-card').forEach(card => {
+    const pending = state.busy.has('request:' + card.dataset.requestId);
+    card.setAttribute('aria-busy',String(pending));
+    let feedback = card.querySelector('.request-feedback');
+    if (!feedback) { feedback = el('p','request-feedback subtle'); feedback.setAttribute('role','status'); card.append(feedback); }
+    feedback.textContent = pending ? '正在提交，请稍候…' : !ready ? '连接恢复后可处理此请求，已填内容会保留。' : '';
+    feedback.hidden = !feedback.textContent;
+  });
+}
+function controlReason(id, text) {
+  const button = $(id); let note = $('reason-' + id);
+  if (!note) { note = el('p','control-reason'); note.id = 'reason-' + id; button.after(note); button.setAttribute('aria-describedby',note.id); }
+  note.textContent = text; note.hidden = !button.disabled || button.hidden;
 }
 const sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadName,relativeTime,api,toast,
   connected:usable,selectedId:()=>state.selectedId,newThread:openNewDialog,
@@ -498,7 +545,7 @@ function renderMessages() {
   // Keep the jump input stable while the user types; render after blur.
   if(document.activeElement?.matches('.output-controls input')) return;
   const scroller = $('messages-scroller'), nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
-  const shape=JSON.stringify([state.selectedId,state.loadingDetail,state.historyError,uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],turns()],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
+  const shape=JSON.stringify([state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],turns()],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
   if(shape===lastMessageShape){
     for(const turn of turns())for(const item of turn.items||[]){
       if(item.type!=='commandExecution')continue;
@@ -736,8 +783,9 @@ function saveDetailSoon(){
   },5000);
 }
 async function restoreDetail(id,seq){
+  const version=state.detailVersion;
   const cached=await readDetailCache(targetHost,id);
-  if(!cached||id!==state.selectedId||seq!==state.selectionVersion||state.detail)return;
+  if(!cached||id!==state.selectedId||seq!==state.selectionVersion||version!==state.detailVersion||state.detail)return;
   state.loadingDetail=false;applyDetail(cached,true);
 }
 function applyDetail(data, resetModels = false) {
@@ -751,17 +799,17 @@ async function selectThread(id) {
   $('messages').style.paddingBottom = '';
   if (state.selectedId) state.drafts.set(state.selectedId,$('message-input').value);
   const seq = ++state.selectionVersion; state.selectedId = id; state.detail = null; state.historyCursor = null; state.loadedOlderHistory = false; state.loadingDetail = true; state.historyError = ''; saveView();
-  $('message-input').value = state.drafts.get(id) || ''; resizeInput(); renderThread(); renderThreads(); if (window.innerWidth <= 700) toggleSidebar(false, false);
+  $('message-input').value = state.drafts.get(id) || ''; resizeInput(); renderThread(); renderThreads(); if (compactLayout()) toggleSidebar(false, false);
   await restoreDetail(id,seq);
-  try { const data = await readSelectedDetail(id); if (seq !== state.selectionVersion) return; state.loadingDetail = false; data.turns=mergeLiveTurns(turns(),data.turns||[]);applyDetail(data,true); $('messages-scroller').scrollTop = $('messages-scroller').scrollHeight; }
+  if(seq!==state.selectionVersion)return;
+  try { await refreshSelected(); if (seq !== state.selectionVersion) return; $('messages-scroller').scrollTop = $('messages-scroller').scrollHeight; }
   catch (e) { if (seq !== state.selectionVersion) return; state.loadingDetail = false; state.historyError = messageOf(e); recordError(e,'thread'); renderThread(); }
 }
-async function readSelectedDetail(id){
+async function readSelectedDetail(id,isCurrent){
   const cold=!state.detail,started=performance.now();let firstMs=null;
   if(!state.detail){
-    const seq=state.selectionVersion;
     const preview=await api('/api/threads/'+encodeURIComponent(id)+'?preview=1');
-    if(id!==state.selectedId||seq!==state.selectionVersion)return preview;
+    if(!isCurrent())return preview;
     state.loadingDetail=false;applyDetail(preview,true);firstMs=performance.now()-started;
   }
   const bases=outputBases(turns());
@@ -769,24 +817,30 @@ async function readSelectedDetail(id){
   const encoding=(typeof DecompressionStream==='function'?'?outputEncoding=gzip-base64':'?outputEncoding=plain')+(cold?'&fast=1':'');
   const response=await api('/api/threads/' + encodeURIComponent(id)+encoding,{headers:{'X-Output-Versions':JSON.stringify(versions)}}),received=performance.now();
   const result=hydrateOutputs(await decodeOutputs(response),bases);
-  if(cold&&id===state.selectedId)document.body.dataset.logRecovery=JSON.stringify({host:targetHost,id,firstMs:Math.round(firstMs),networkMs:Math.round(received-started-firstMs),decodeMs:Math.round(performance.now()-received),completeMs:Math.round(performance.now()-started)});
-  if(cold)setTimeout(()=>{if(id===state.selectedId)scheduleDetailRefresh();},1000);
+  if(cold&&isCurrent())document.body.dataset.logRecovery=JSON.stringify({host:targetHost,id,firstMs:Math.round(firstMs),networkMs:Math.round(received-started-firstMs),decodeMs:Math.round(performance.now()-received),completeMs:Math.round(performance.now()-started)});
+  if(cold)setTimeout(()=>{if(isCurrent())scheduleDetailRefresh();},1000);
   return result;
 }
 const detailReads = new Map();
 async function refreshSelected() {
   if (!state.selectedId) return;
-  const id = state.selectedId, seq = state.selectionVersion;
-  if(detailReads.has(id)) return detailReads.get(id);
+  const id = state.selectedId, seq = state.selectionVersion, version = state.detailVersion;
+  const key=JSON.stringify([id,seq,version]);
+  const isCurrent=()=>id===state.selectedId&&seq===state.selectionVersion&&version===state.detailVersion;
+  if(detailReads.has(key)) return detailReads.get(key);
   const read=(async()=>{
   if(!state.detail)await restoreDetail(id,seq);
-  const data = await readSelectedDetail(id); if (id !== state.selectedId || seq !== state.selectionVersion) return;
+  if(!isCurrent())return;
+  const resetModels=!state.detail||state.loadingDetail;
+  const data = await readSelectedDetail(id,isCurrent); if (!isCurrent()) return;
   data.turns = mergeLiveTurns(turns(), data.turns || data.thread?.turns || []);
   if (state.loadedOlderHistory) data.nextCursor = state.historyCursor;
-  applyDetail(data,!state.detail);
-  })();
-  detailReads.set(id,read);
-  try { await read; } finally { if(detailReads.get(id)===read)detailReads.delete(id); }
+  state.loadingDetail=false;
+  applyDetail(data,resetModels);
+  })().catch(error=>{if(isCurrent())throw error;});
+  detailReads.set(key,read);
+  try { await read; }
+  finally { if(detailReads.get(key)===read)detailReads.delete(key); }
 }
 async function refreshWorkspace(forceModels = false) {
   if (workspaceRefreshPromise) return workspaceRefreshPromise;
@@ -950,7 +1004,7 @@ async function createThread(e) {
       const d = await api('/api/threads',{method:'POST',body:{cwd,model:$('new-model').value,effort:$('new-effort').value}});
       state.sidebarArchived=false;state.selectedArchived=false;
       const id = d.thread?.id || d.id; if (!id) throw new Error('服务未返回新会话 ID。请刷新列表核对结果。');
-      $('new-thread-dialog').close(); if (window.innerWidth <= 700) toggleSidebar(false, false); state.model = $('new-model').value; state.effort = $('new-effort').value;
+      flushDrafts(); $('new-thread-dialog').close(); if (compactLayout()) toggleSidebar(false, false); state.model = $('new-model').value; state.effort = $('new-effort').value;
       const thread = {...d.thread,id,cwd,name:d.thread?.name || '新会话'};
       createdThreads.set(id,thread); state.threads.unshift(thread);
       const project = state.projects.find(p => p.roots?.includes(cwd));
@@ -965,16 +1019,20 @@ async function createThread(e) {
   });
 }
 async function sendMessage(e) {
-  voice?.interrupt();
-  e?.preventDefault(); const text = $('message-input').value.trim(), id = state.selectedId;
+  e?.preventDefault();
+  if (voice?.active || $('send-message').disabled) return;
+  const text = $('message-input').value.trim(), id = state.selectedId;
   if (!text || !id || !usable() || !controlled() || state.busy.has('message')) return;
-  const active = running();
+  const active = running(), selection = state.selectionVersion;
+  const sent = state.drafts.capture(id,$('message-input').value);
   await action('message',async () => {
     const payload = active ? {text} : {text,model:state.model,effort:state.effort};
     const d = await api('/api/threads/' + encodeURIComponent(id) + (active ? '/steer' : '/message'),{method:'POST',body:payload});
-    state.drafts.delete(id); if (id === state.selectedId) { $('message-input').value = ''; resizeInput(); if (d.turn) { upsertTurn(d.turn); const t = ensureTurn(d.turn.id); if (!t.items.some(item => item.type === 'userMessage' && contentText(item.content) === text)) t.items.unshift({id:'accepted-'+d.turn.id,type:'userMessage',content:[{type:'text',text}],localAccepted:true}); } renderThread(); }
+    const cleared = state.drafts.acknowledge(sent);
+    if (id === state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }
+    if (id === state.selectedId && selection === state.selectionVersion) { if (d.turn) { upsertTurn(d.turn); const t = ensureTurn(d.turn.id); if (!t.items.some(item => item.type === 'userMessage' && contentText(item.content) === text)) t.items.unshift({id:'accepted-'+d.turn.id,type:'userMessage',content:[{type:'text',text}],localAccepted:true}); } renderThread(); }
     if (active) toast('补充要求已发送到当前轮次。');
-    try { await refreshSelected(); } catch (err) { recordError(err,'thread'); }
+    try { if (id === state.selectedId && selection === state.selectionVersion) await refreshSelected(); } catch (err) { recordError(err,'thread'); }
   });
 }
 async function interruptThread() {
@@ -1088,7 +1146,7 @@ function setupEvents() {
   const es = new EventSource(targetUrl('/api/events')); state.eventSource = es;
   es.onopen = () => {
     const restored = !state.transport; state.transport = true; renderStatus();
-    if (restored) refreshWorkspace().catch(e => { recordError(e,'sync'); renderStatus(); });
+    if (restored) resumeWorkspace().catch(e => { recordError(e,'sync'); renderStatus(); });
   };
   es.onmessage = handleEvent;
   ['manager/status','manager/error','manager/request','manager/requestResolved'].forEach(name => es.addEventListener(name,handleEvent));
@@ -1148,7 +1206,7 @@ function setupResizableLayout() {
   window.addEventListener('resize',apply); apply();
 }
 function toggleSidebar(open, persist = true) {
-  const shell = $('app-shell'); const mobile = window.innerWidth <= 700;
+  const shell = $('app-shell'); const mobile = compactLayout();
   const show = open ?? (mobile ? !shell.classList.contains('sidebar-open') : shell.classList.contains('sidebar-hidden'));
   shell.classList.toggle('sidebar-open', mobile && show);
   shell.classList.toggle('sidebar-hidden', !mobile && !show);
@@ -1159,7 +1217,7 @@ function toggleSidebar(open, persist = true) {
 function toggleInspector(open) {
   const shell = $('app-shell'); const show = open ?? shell.classList.contains('inspector-hidden');
   shell.classList.toggle('inspector-hidden', !show); $('toggle-inspector').setAttribute('aria-expanded',String(show));
-  if (show && window.innerWidth <= 700) toggleSidebar(false, false);
+  if (show && compactLayout()) toggleSidebar(false, false);
 }
 function toggleMessageDetails(show) {
   const scroller = $('messages-scroller');
@@ -1172,12 +1230,11 @@ function toggleMessageDetails(show) {
   if (atBottom) scroller.scrollTop = scroller.scrollHeight;
 }
 function wireEvents() {
-  const fitKeyboard=()=>{document.documentElement.style.setProperty('--visual-height',(window.visualViewport?.height||window.innerHeight)+'px');};
-  window.visualViewport?.addEventListener('resize',fitKeyboard);fitKeyboard();
+  handoffControls??=createHandoffControls({endUse:endThreadUse});
   voice=installVoice({input:$('message-input'),context:()=>targetHost+':'+state.selectedId,render:()=>renderControls()});
   const settings = $('composer-settings');
   document.addEventListener('click',event => { if (!settings.contains(event.target)) settings.open = false; });
-  settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); settings.open = false; settings.querySelector('summary').focus(); } });
+  settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); settings.open = false; settings.querySelector('summary').focus(); } });
   setupResizableLayout();
   try { taskNotificationsEnabled = localStorage.getItem('rcm.taskNotifications.' + targetHost) === 'true'; } catch {}
   renderTaskNotifications();
@@ -1188,12 +1245,18 @@ function wireEvents() {
   try { autoRefresh = localStorage.getItem('rcm.autoRefresh.' + targetHost) === 'true'; } catch {}
   setAutoRefresh(autoRefresh);
   $('auto-refresh').onchange = event => setAutoRefresh(event.target.checked);
-  window.addEventListener('pagehide', () => { clearInterval(autoRefreshTimer); autoRefreshTimer = null; });
-  window.addEventListener('pageshow', event => { toggleInspector(false); if (event.persisted) setAutoRefresh($('auto-refresh').checked); });
+  window.addEventListener('pagehide', () => { flushDrafts(); clearInterval(autoRefreshTimer); autoRefreshTimer = null; });
+  window.addEventListener('pageshow', event => { if (event.persisted) setAutoRefresh($('auto-refresh').checked); });
+  document.addEventListener('visibilitychange',() => { if (document.hidden) flushDrafts(); });
+  installThreadSync({window,document,
+    canSync:()=>connected()&&!state.status?.service?.releasing&&!!state.selectedId&&!state.busy.has('handoff:'+state.selectedId),
+    refresh:refreshSelected,resume:resumeWorkspace,
+    onError:error=>{const message='自动同步暂未成功，将自动重试：'+messageOf(error);if(state.historyError!==message){state.historyError=message;recordError(error,'sync');renderThread();}},
+  });
   let composerWidth = 0;
   new ResizeObserver(entries => {
     const width = entries[0].contentRect.width;
-    if (width !== composerWidth) { composerWidth = width; resizeInput(); }
+    if (width !== composerWidth) { composerWidth = width; requestAnimationFrame(resizeInput); }
   }).observe($('message-input'));
   toggleMessageDetails(readLayout('messageDetails',false));
   $('toggle-message-details').onclick = () => toggleMessageDetails(!$('conversation').classList.contains('show-message-details'));
@@ -1215,8 +1278,11 @@ function wireEvents() {
   historyScroller.addEventListener('keydown',event => { if (['ArrowUp','PageUp','Home'].includes(event.key)) loadEarlierNearTop(); });
   let searchTimer; $('thread-search').oninput = e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.search = e.target.value.trim(); loadThreads(); },300); };
   $('message-form').onsubmit = sendMessage; $('interrupt').onclick = interruptThread;
-  $('message-input').oninput = () => { if (state.selectedId) state.drafts.set(state.selectedId,$('message-input').value); resizeInput(); renderControls(); };
-  $('message-input').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!$('send-message').disabled) sendMessage(); } };
+  $('message-input').oninput = () => { if (state.selectedId && !draftWritesSuspended) state.drafts.set(state.selectedId,$('message-input').value); resizeInput(); renderControls(); };
+  let composing = false, compositionEnded = -Infinity;
+  $('message-input').addEventListener('compositionstart',() => { composing = true; });
+  $('message-input').addEventListener('compositionend',() => { composing = false; compositionEnded = performance.now(); });
+  $('message-input').onkeydown = e => { if (shouldSendOnEnter(e,{touch:touchInput(),composing,compositionEnded})) { e.preventDefault(); if (!$('send-message').disabled) sendMessage(); } };
   $('model-select').onchange = e => { state.model = e.target.value; state.effort = defaultEffort(state.model); fillEfforts($('effort-select'),state.model,state.effort); renderControls(); };
   $('effort-select').onchange = e => { state.effort = e.target.value; renderControls(); };
   $('new-model').onchange = e => { fillEfforts($('new-effort'),e.target.value); renderControls(); };
@@ -1228,16 +1294,15 @@ function wireEvents() {
   $('toggle-inspector').onclick = () => toggleInspector(); $('close-inspector').onclick = () => toggleInspector(false);
   $('open-sidebar').onclick = () => toggleSidebar();
   $('close-sidebar').onclick = () => { toggleSidebar(false); $('open-sidebar').focus(); };
-  $('sidebar-backdrop').onclick = () => { if (window.innerWidth <= 700) toggleSidebar(false); toggleInspector(false); };
+  $('sidebar-backdrop').onclick = () => { if (compactLayout()) toggleSidebar(false); toggleInspector(false); };
   $('toggle-projects').onclick = () => { const show = $('project-list').hidden; $('project-list').hidden = !show; $('toggle-projects').setAttribute('aria-expanded',String(show)); saveLayout('projects',show); };
-  document.addEventListener('keydown',e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); toggleSidebar(true); $('thread-search').focus(); } if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') { e.preventDefault(); openNewDialog(); } if (e.key === 'Escape') { if (window.innerWidth <= 700) toggleSidebar(false); if (window.innerWidth <= 1050) toggleInspector(false); } });
-  toggleSidebar(window.innerWidth > 700 && readLayout('sidebar',true), false);
+  document.addEventListener('keydown',e => { if(e.defaultPrevented||document.querySelector('dialog[open]'))return; if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); toggleSidebar(true); $('thread-search').focus(); } if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') { e.preventDefault(); openNewDialog(); } if (e.key === 'Escape' && !compactLayout() && window.innerWidth <= 1050) toggleInspector(false); });
+  toggleSidebar(!compactLayout() && readLayout('sidebar',true), false);
   toggleInspector(false);
   $('project-list').hidden = !readLayout('projects',true);
   $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
-  let narrow = window.innerWidth <= 700;
-  window.addEventListener('resize', () => { const next = window.innerWidth <= 700; if (next !== narrow) { narrow = next; toggleSidebar(!next && readLayout('sidebar',true), false); } });
-  window.addEventListener('online',() => refreshWorkspace().catch(e => recordError(e,'sync')));
+  mobileUI = installMobileUI({closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:mobile=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
+  window.addEventListener('offline',() => { voice?.interrupt(); flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {
   setInterval(()=>{if(connected()&&!state.loadingThreads&&!sidebar.pending&&!sidebar.drag&&!sidebar.menu&&!sidebar.dialog&&!document.hidden)loadThreads();},15000);
@@ -1248,7 +1313,7 @@ async function init() {
     if(detail.open)ids.delete(detail.dataset.itemId);else ids.add(detail.dataset.itemId);
     try{sessionStorage.setItem('rcm.openDetails.'+targetHost+'.'+state.selectedId,JSON.stringify([...ids]));}catch{}
   });
-  installBrowserBackup(connectionConfig,()=>{saveView();saveOutputPositions();if(state.selectedId)state.drafts.set(state.selectedId,$('message-input').value);sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));});
+  installBrowserBackup(connectionConfig,flushDrafts,()=>{draftWritesSuspended=true;});
   const inspector=$('inspector');
   const navigation=el('nav','inspector-nav');navigation.setAttribute('aria-label','工作区详情分类');
   inspector.querySelector('.inspector-heading').after(navigation);
@@ -1258,6 +1323,7 @@ async function init() {
   function showInspectorView(view){
     groups.forEach(group=>{group.hidden=category(group)!==view;if(!group.hidden&&group.id!=='diagnostics')group.open=true;});
     navigation.querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.view===view)));
+    inspector.scrollTop = 0;
   }
   for(const [view,title] of views){const button=el('button','',title);button.type='button';button.dataset.view=view;button.onclick=()=>showInspectorView(view);navigation.append(button);}
   showInspectorView('session');
@@ -1267,7 +1333,6 @@ async function init() {
   try { const c = await api('/api/csrf'); state.csrf = c.token; await loadStatus(); if (connected()) await refreshWorkspace(); else if (!connectionPending()) await connectRemote(); }
   catch (e) { recordError(e,'init'); const n = $('connection-banner'); n.hidden = false; n.className = 'connection-banner error'; n.textContent = messageOf(e); }
 }
-try{state.drafts=new Map(JSON.parse(sessionStorage.getItem('rcm.drafts.'+targetHost)||'[]'));}catch{}
 if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
 init();
 
@@ -1276,5 +1341,5 @@ $('connection-select').onchange=()=>{voice?.interrupt();rememberHost($('connecti
 
 const clearRecovery=el('button','text-button','清除日志缓存并重新加载');
 clearRecovery.type='button';
-clearRecovery.onclick=async()=>{clearRecovery.disabled=true;clearTimeout(cacheSaveTimer);try{await clearDetailCache();location.reload();}catch(e){clearRecovery.disabled=false;toast('无法清除日志缓存：'+messageOf(e),true);}};
+clearRecovery.onclick=async()=>{flushDrafts();clearRecovery.disabled=true;clearTimeout(cacheSaveTimer);try{await clearDetailCache();location.reload();}catch(e){clearRecovery.disabled=false;toast('无法清除日志缓存：'+messageOf(e),true);}};
 $('diagnostics').append(clearRecovery);
