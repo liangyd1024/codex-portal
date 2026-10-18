@@ -36,3 +36,15 @@ Codex 原生界面读取被 Computer Use 安全策略阻止。本文核对的是
 ## 尚存差异
 
 网页版文件路径引用继续采用可选中的文本回退，不具备 Codex 原生打开文件/编辑器的能力；不会伪装成可打开的网页链接。Markdown 仍是项目的轻量实现，并非完整 CommonMark/GFM、数学公式或原生交互组件实现。字体和间距未获原生界面证据，未标记为完全一致。
+
+## 正式部署与只读复验
+
+代码版本：84f9a01baca61ee79621d3d65caeb3a4ca4998fc，已推送 origin/master。以最新 master 为基线，包含已上线的 595e53e 归档同步修复。安装脚本空闲检查、加密备份和健康检查成功。
+
+部署前备份：/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T135657113901Z.tar.gz.age。
+
+正式 4317 的版本接口确认 84f9a01；app.js、message-body.js、styles.css 的 SHA-256 均与该已提交版本一致。复验期间其他会话开始修改工作区 app.js / styles.css / index.html，因此资源校验以 Git 中的发布提交为准，未覆盖或部署这些后续未提交改动。
+
+真实服务只读读取慢日志会话成功：historySource=snapshot、5 轮、controlled=false。正式网页无 fixture，显示 5 条最终回复、过程默认关闭，桌面和 390px 均无页面横向溢出。重启初期为 connecting、缓存正文可读，随后真实状态确认 connected；未发送消息或验证新轮次执行。证据：/tmp/rcm-body-20261018/production-desktop.png、production-mobile.png。
+
+本轮两个预览进程及浏览器 TaskSpace 已关闭；测试目录和证据保留。
