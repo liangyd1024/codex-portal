@@ -175,6 +175,9 @@ function renderRefresh() {
   n.setAttribute('aria-busy', String(state.refreshing));
   setText('refresh-message', state.refreshMessage);
   setText('refresh-time', state.lastSync ? state.refreshScope + '最后更新：' + dateTime(state.lastSync) + '（北京时间）' : '尚未成功刷新');
+  const syncTime = timestamp(state.lastSync);
+  const compactTime = syncTime ? new Intl.DateTimeFormat('zh-CN', {timeZone:'Asia/Shanghai',hour:'2-digit',minute:'2-digit',hour12:false}).format(syncTime) : '';
+  setText('refresh-compact', state.refreshing ? '刷新中…' : state.refreshMessage.endsWith('刷新成功') ? '已刷新' + (compactTime ? ' · ' + compactTime : '') : state.refreshMessage);
   for (const id of ['refresh-all','refresh-projects']) {
     $(id).classList.toggle('refreshing', state.refreshing);
     $(id).setAttribute('aria-busy', String(state.refreshing));

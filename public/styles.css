@@ -382,3 +382,10 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .message-body :is(ul,ol) :is(ul,ol){margin:4px 0}
 .message-body hr{border:0;border-top:1px solid #e5e5e5;margin:16px 0}
 .message-body .table-scroll:focus-visible{outline:2px solid #666;outline-offset:2px}
+
+#refresh-compact{display:none}
+@media(max-width:700px),(pointer:coarse) and (max-width:1050px) and (max-height:600px){
+  .refresh-status{padding:6px 16px}
+  #refresh-message,#refresh-time{display:none}
+  #refresh-compact{display:inline}
+}
