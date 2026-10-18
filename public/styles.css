@@ -352,3 +352,7 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
  .composer-settings .model-controls{position:fixed;bottom:calc(100dvh - var(--visual-height,100dvh) + 76px);left:16px;right:16px;width:auto;max-width:none}
  .composer.is-recording .composer-settings{display:none}
 }
+
+.mobile-setup{padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--panel,#f5f7f2)}.mobile-setup p{margin:10px 0}.mobile-setup strong{display:block}#mobile-access-body :is(button,a,summary,select):focus-visible{outline:2px solid #526d41;outline-offset:3px}#mobile-access-body button.full-width{max-width:100%;box-sizing:border-box}
+
+.mobile-address img{image-rendering:pixelated;background:white;padding:16px;box-sizing:content-box;max-width:calc(100% - 32px)}

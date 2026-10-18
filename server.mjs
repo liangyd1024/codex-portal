@@ -16,7 +16,7 @@ import { Manager, AppError } from './lib/manager.mjs';
 
 const ROOT=path.dirname(fileURLToPath(import.meta.url));
 let BUILD_VERSION='development';try{BUILD_VERSION=(await readFile(path.join(ROOT,'VERSION'),'utf8')).trim();}catch{}
-export function createApp({mobileConfig=null,access=new MobileAccess(null),config=loadConfig(),stateDir=process.env.RCM_STATE_DIR||path.join(homedir(),'.codex/remote-codex-manager'),managers:providedManagers}={}) {
+export function createApp({mobileConfig=null,setupMobile=null,access=new MobileAccess(null),config=loadConfig(),stateDir=process.env.RCM_STATE_DIR||path.join(homedir(),'.codex/remote-codex-manager'),managers:providedManagers}={}) {
  const managers=providedManagers||new Map(config.connections.map(host=>[host.id,new Manager({titleStore:path.join(stateDir,`web-titles-${host.id}.json`),host:publicHost(host),...(host.kind==='local'?createLocalTransport(host):createSshTransport(host))})]));
  const manager=managers.get(config.defaultConnection);
   const broadcasts=new Map();
@@ -51,7 +51,7 @@ export function createApp({mobileConfig=null,access=new MobileAccess(null),confi
         throw new AppError('请先使用本机生成的配对码登录。',401,'PAIRING_REQUIRED');
       }
       if(remote&&access.expires(req)===null)res.setHeader('Set-Cookie',access.cookie(access.token(req)));
-      if(p==='/api/access/status'&&req.method==='GET')return json(res,200,{local:!remote,sessionExpires:remote?access.expires(req):undefined,origins:remote?[]:mobileConfig?.origins||[]});
+      if(p==='/api/access/status'&&req.method==='GET')return json(res,200,{local:!remote,sessionExpires:remote?access.expires(req):undefined,origins:remote?[]:mobileConfig?.origins||[],canSetup:!remote&&Boolean(setupMobile)});
       if(p==='/api/access/ca'&&!remote&&req.method==='GET'&&mobileConfig){res.writeHead(200,{'Content-Type':'application/x-x509-ca-cert','Content-Disposition':'attachment; filename="Codex-Local-CA.crt"'});return res.end(await readFile(mobileConfig.ca));}
       if(p==='/api/access/qr'&&!remote&&req.method==='GET'&&mobileConfig){const name=url.searchParams.get('kind')==='tailscale'?'tailscale.png':'lan.png';res.writeHead(200,{'Content-Type':'image/png'});return res.end(await readFile(path.join(path.dirname(mobileConfig.ca),name)));}
       if(req.method==='GET'&&p==='/api/connections')return json(res,200,{machineId:config.machineId,defaultConnection:config.defaultConnection,data:[...managers].map(([id,m])=>({id,host:publicHost(m.host),connection:m.connection}))});
@@ -86,7 +86,8 @@ export function createApp({mobileConfig=null,access=new MobileAccess(null),confi
         const token=req.headers['x-csrf-token']||'';
         if(typeof token!=='string'||Buffer.byteLength(token)!==Buffer.byteLength(csrf)||!timingSafeEqual(Buffer.from(token),Buffer.from(csrf)))throw new AppError('本机会话已变化。请刷新页面。',403,'CSRF');
         const data=await body(req);
-        if(p==='/api/access/code'&&!remote)return json(res,200,access.createCode(data.ttlSeconds,data.sessionTtlSeconds));
+        if(p==='/api/access/setup'&&!remote){if(!setupMobile)throw new AppError('此入口不支持配置手机访问。请在本机正式服务中操作。',409);if(data.mode!==undefined&&!['lan','tailscale'].includes(data.mode))throw new AppError('未知手机访问方式。');mobileConfig=await setupMobile(data.mode||'lan');return json(res,200,{ok:true});}
+        if(p==='/api/access/code'&&!remote){if(!mobileConfig?.origins?.length)throw new AppError('请先配置手机访问地址，再生成配对码。',409,'MOBILE_NOT_CONFIGURED');return json(res,200,access.createCode(data.ttlSeconds,data.sessionTtlSeconds));}
         if(p==='/api/access/revoke'&&!remote){access.revoke();for(const client of clients)if(client.mobileRequest){client.end();clients.delete(client);}return json(res,200,{ok:true});}
         if(p==='/api/access/logout'){access.logout(req);res.setHeader('Set-Cookie',access.cookie());for(const client of clients)if(client.mobileRequest&&!access.valid(client.mobileRequest)){client.end();clients.delete(client);}return json(res,200,{ok:true});}
         if(p==='/api/connect'){
@@ -114,18 +115,26 @@ export function createApp({mobileConfig=null,access=new MobileAccess(null),confi
   const createSecureServer=options=>https.createServer(options,(req,res)=>handler(req,res,true));
   server.on('listening',()=>{for(const m of managers.values())Promise.resolve(m.restoreConnection?.()).catch(()=>{});});
   server.on('close',()=>{for(const [key,m] of managers){m.off('event',broadcasts.get(key));m.disconnect({preserveIntent:true});}for(const client of clients)client.end();});
-  return {server,manager,managers,proxyServer,createSecureServer};
+  return {server,manager,managers,proxyServer,createSecureServer,setMobileConfig:value=>{mobileConfig=value;}};
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   const configPath=path.join(homedir(),'Library/Application Support/RemoteCodexManager/mobile/config.json');
   let mobileConfig=null;try{if(process.env.RCM_MOBILE!=='0')mobileConfig=JSON.parse(await readFile(configPath,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
   const access=new MobileAccess(path.join(homedir(),'Library/Application Support/RemoteCodexManager/mobile/sessions.json'));
-  const {server,manager,managers,proxyServer,createSecureServer}=createApp({mobileConfig,access});
-  if(mobileConfig){
-    proxyServer.listen(4318,'127.0.0.1');
+  let setupPending;
+  const setupMobile=process.env.RCM_MOBILE==='0'?null:(mode='lan')=>{if(setupPending)throw new AppError('手机入口正在配置，请稍后重新检查。',409);return setupPending=(async()=>{
+    await promisify(execFile)(process.execPath,[path.join(ROOT,'scripts/setup-mobile.mjs'),...(mode==='tailscale'?['--tailscale']:[])],{timeout:60000});
+    const next=JSON.parse(await readFile(configPath,'utf8'));
+    if(!mobileConfig){await startMobile(next);mobileConfig=next;}else{mobileConfig.origins=next.origins;}
+    return mobileConfig;
+  })().finally(()=>{setupPending=null;});};
+  const {server,manager,managers,proxyServer,createSecureServer,setMobileConfig}=createApp({mobileConfig:null,access,setupMobile});
+  async function startMobile(initial){
+    const mobileConfig=initial;
     const tls=createSecureServer({key:await readFile(mobileConfig.key),cert:await readFile(mobileConfig.cert)});
-    tls.listen(4319,mobileConfig.lanIP);
+    const listen=(endpoint,port,host)=>new Promise((resolve,reject)=>{endpoint.once('error',reject);endpoint.listen(port,host,()=>{endpoint.off('error',reject);resolve();});});
+    try{await listen(proxyServer,4318,'127.0.0.1');await listen(tls,4319,mobileConfig.lanIP);}catch(error){if(proxyServer.listening)await new Promise(resolve=>proxyServer.close(resolve));throw error;}
     for(const endpoint of [proxyServer,tls])endpoint.on('error',error=>console.error('手机入口：'+error.message));
     let renewing=false,lastRenewal=Date.now();
     const refreshTLS=async()=>{
@@ -146,6 +155,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
     };
     setInterval(refreshTLS,30000).unref();
   }
+  if(mobileConfig){try{await startMobile(mobileConfig);setMobileConfig(mobileConfig);}catch(error){console.error('手机入口启动失败：'+error.message);mobileConfig=null;}}
   const port=Number(process.env.RCM_PORT||4317);
   server.listen(port,'127.0.0.1',()=>console.log(`Remote Codex Manager: http://127.0.0.1:${server.address().port}`));
   server.on('error',error=>{console.error(error.message);process.exitCode=1;});

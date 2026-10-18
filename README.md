@@ -38,7 +38,9 @@ node scripts/install-local.mjs --ref <commit>
 
 原始基线仍位于 Ally 的 `~/Library/Application Support/RemoteCodexManager/app`。开发代码位于 Git 工作目录；后台服务运行不可变的 release 目录。
 
-Ally 的已有手机入口继续使用原 `mobile/config.json` 和证书。Marco 本次仅启用本机网页，安装不会自动创建手机入口。
+已有手机入口继续使用原 `mobile/config.json` 和证书。安装不会自动创建手机入口；在本机正式工作台的“工作区详情 → 手机访问”点击“开启同一 Wi-Fi 访问”，即可创建证书和二维码，并启动 HTTPS 入口，无需重启网页服务。手机需与 Mac 在同一网络，并安装、信任页面提供的证书后扫码配对。未开启入口时不能生成配对码；失败可重试。开发预览（`RCM_MOBILE=0`）不开放此操作。
+
+局域网配置使用 macOS 自带 OpenSSL 和 CoreImage，不依赖 Tailscale 或额外的 Python 二维码包。已有 Tailscale 入口会保留；新建跨网络入口可展开“Tailscale · 跨网络访问”并点击开启；需要两端登录同一 Tailscale 网络。程序核对 HTTPS Serve 转发成功后才公布地址，发现既有服务冲突或公网 Funnel 会拒绝覆盖。
 
 ## 连接和维护
 
