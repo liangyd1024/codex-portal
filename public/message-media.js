@@ -10,6 +10,17 @@ export function userMessageContent(content) {
     // Remove only a verified desktop attachment envelope, not arbitrary user prose.
     if(records.length && !remainder && records.length===images.length && records.every(r=>r[2].endsWith('/'+r[1])) && JSON.stringify(records.map(r=>r[2]).sort())===JSON.stringify(images.map(i=>i.type==='localImage'?i.path:'').sort()))text=wrapper[2].trim();
   }
+  const reply=/^\s*<send_user_message_question_reply>\s*([\s\S]*?)\s*<\/send_user_message_question_reply>\s*$/.exec(text);
+  if(reply){
+    try{
+      const answers=JSON.parse(reply[1]);
+      if(Array.isArray(answers)&&answers.length&&answers.every(a=>{
+        if(!a||typeof a.question!=='string'||typeof a.answer!=='string'||typeof a.questionItemId!=='string'||Object.keys(a).some(k=>!['questionItemId','question','answer'].includes(k)))return false;
+        const id=JSON.parse(a.questionItemId);
+        return Array.isArray(id)&&id.length===3&&id[0]==='request_user_input_async'&&typeof id[1]==='string'&&Number.isInteger(id[2])&&id[2]>=0;
+      }))text=answers.map(a=>a.answer).join('\n\n');
+    }catch{} // Unrecognized text stays intact, including malformed JSON examples.
+  }
   return {text,images};
 }
 export function itemImageUrl(threadId,itemId,{part,reference,host}={}) {

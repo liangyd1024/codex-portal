@@ -37,3 +37,14 @@ test('image endpoint preserves security checks and forwards only scoped selector
   assert.equal((await fetch(base+route+'&host=unknown')).status,404);assert.equal(calls.length,1);
  }finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));}
 });
+
+test('question reply envelopes show all answers without leaking protocol fields',()=>{
+ const answers=[{questionItemId:JSON.stringify(['request_user_input_async','call_one',0]),question:'推广范围？',answer:'验证后推广到所有月份'}, {questionItemId:JSON.stringify(['request_user_input_async','call_one',1]),question:'继续？',answer:'允许'}];
+ const text='<send_user_message_question_reply>\n'+JSON.stringify(answers)+'\n</send_user_message_question_reply>';
+ const content=[{type:'text',text}];assert.equal(userMessageContent(content).text,'验证后推广到所有月份\n\n允许');assert.equal(content[0].text,text);
+ for(const value of ['not json',JSON.stringify([]),JSON.stringify([{...answers[0],answer:null}]),JSON.stringify([{...answers[0],extra:'keep me'}]),JSON.stringify([{...answers[0],questionItemId:'unrecognized'}])]){
+  const original='<send_user_message_question_reply>'+value+'</send_user_message_question_reply>';assert.equal(userMessageContent(original).text,original);
+ }
+ assert.equal(userMessageContent('示例：'+text).text,'示例：'+text);
+ assert.equal(userMessageContent('```\n'+text+'\n```').text,'```\n'+text+'\n```');
+});
