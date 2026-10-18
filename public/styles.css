@@ -260,12 +260,9 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .conversation-details{padding-left:0;padding-right:0}
 @media(max-width:700px){.sidebar{position:fixed}.sidebar-resizer{display:none}.conversation-details,.control-note{width:calc(100% - 32px)}}
 
-.voice-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:var(--conversation-width);margin:6px auto 0;font-size:12px;color:var(--muted)}
-.voice-controls select{max-width:160px;border:1px solid var(--line);border-radius:6px;background:white;padding:6px;color:var(--ink)}
-.voice-controls button{min-height:36px}.voice-controls [aria-pressed=true]{background:#e7efe8;color:#264d32}
 #mobile-access-body{font-size:13px;line-height:1.7;overflow-wrap:anywhere}#mobile-access-body img{display:block;margin:8px 0}#mobile-access-body button{margin:4px}
 .pairing-page{max-width:440px;margin:10vh auto;padding:24px;font-size:16px;line-height:1.7}.pairing-page h1{font-size:24px}.pairing-page form{display:flex;flex-direction:column;gap:12px}.pairing-page input{padding:12px;font-size:20px;border:1px solid var(--line);border-radius:8px}
-@media(max-width:700px){.composer-region{padding-bottom:max(8px,env(safe-area-inset-bottom))}.voice-controls button,.voice-controls select{min-height:44px}.voice-controls{gap:6px}#voice-status{flex-basis:100%}.composer{flex-wrap:wrap}.composer textarea{flex-basis:100%;width:100%;font-size:16px}.composer .composer-bottom{width:100%;justify-content:space-between}.sidebar{padding-bottom:env(safe-area-inset-bottom)}.app-shell{height:var(--visual-height,100dvh);min-height:0}}
+@media(max-width:700px){.composer-region{padding-bottom:max(8px,env(safe-area-inset-bottom))}.composer{flex-wrap:wrap}.composer textarea{flex-basis:100%;width:100%;font-size:16px}.composer .composer-bottom{width:100%;justify-content:space-between}.sidebar{padding-bottom:env(safe-area-inset-bottom)}.app-shell{height:var(--visual-height,100dvh);min-height:0}}
 
 /* Project tree: one scroll area for projects and their sessions. */
 .sidebar-sections #project-list{flex:1;min-height:0;overflow:auto;max-height:none}
@@ -320,3 +317,38 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 @media(hover:none){.project-heading .project-create{opacity:1}}
 @media(max-width:700px){.sidebar .project-threads .thread-row{min-height:44px}.project-heading .project-create{width:36px;height:36px}}
 @media(prefers-reduced-motion:reduce){#new-thread-form[aria-busy="true"] #create-thread .icon{animation:none}}
+/* A single composer row for typing, dictation and sending. */
+.composer{position:relative;flex-wrap:nowrap;align-items:flex-end;gap:6px;padding:6px 8px}
+.composer textarea{flex:1 1 0;width:0;min-width:0;min-height:36px;padding:7px 6px;line-height:22px}
+.composer .composer-bottom{flex:0 0 auto;width:auto;min-height:36px;gap:6px;align-items:center}
+.composer .send-actions{align-items:center;gap:4px}
+.composer .send-button,.composer #voice-toggle,.composer #voice-cancel{width:34px;height:34px;flex-shrink:0}
+.composer #voice-toggle{color:#515651;border-radius:50%}
+.composer #voice-toggle[aria-pressed="true"]{background:#252825;color:white}
+.composer.is-recording{border-color:#888e88;box-shadow:0 0 0 2px #2528250a}
+.composer-settings{position:relative;flex-shrink:0}
+.composer-settings summary{display:flex;align-items:center;gap:5px;min-height:34px;padding:0 6px;border-radius:7px;cursor:pointer;color:#626762;font-size:12px;list-style:none}
+.composer-settings summary::-webkit-details-marker{display:none}
+.composer-settings summary:hover,.composer-settings[open] summary{background:#f1f2f1}
+.composer-settings summary:focus-visible{outline:2px solid #60876a;outline-offset:2px}
+.composer-settings summary>.icon{width:16px;height:16px}
+.composer-settings .settings-chevron{width:12px;height:12px;transform:rotate(90deg)}
+#composer-model-label{max-width:170px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.composer-settings .model-controls{position:absolute;bottom:calc(100% + 12px);right:0;z-index:12;display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:12px;width:260px;max-width:calc(100vw - 40px);border:1px solid #e3e5e3;border-radius:12px;background:white;box-shadow:0 8px 30px #00000016}
+.composer-settings .select-control{display:flex;gap:8px}
+.composer-settings .select-control>.sr-only{position:static;clip:auto;width:auto;height:auto;overflow:visible;white-space:nowrap;font-size:12px;color:#737873}
+.composer-settings .select-control select{flex:1;min-width:0;max-width:none;font-size:13px;min-height:32px}
+.composer-settings .select-control>.icon,.composer-settings .select-divider{display:none}
+.voice-feedback{position:absolute;bottom:calc(100% + 10px);left:0;right:0;z-index:13;display:flex;align-items:center;justify-content:space-between;gap:8px;width:fit-content;max-width:100%;padding:8px 10px;border:1px solid #e3e5e3;border-radius:10px;background:#fff;box-shadow:0 4px 16px #0000000c;color:#606660;font-size:12px;line-height:1.5}
+.voice-feedback .icon-button{width:24px;height:24px}
+@media(max-width:700px){
+ .composer{flex-wrap:nowrap;padding:4px;gap:2px}
+ .composer textarea{flex:1 1 0;width:0;min-height:44px;font-size:16px;padding:11px 6px}
+ .composer .composer-bottom{width:auto;min-height:44px;gap:2px}
+ .composer #voice-toggle,.composer #voice-cancel,.composer .send-button,.composer-settings summary{width:44px;height:44px;min-height:44px}
+ .composer .send-actions{gap:0}
+ .composer-settings summary{justify-content:center;padding:0}
+ #composer-model-label,.composer-settings .settings-chevron{display:none}
+ .composer-settings .model-controls{position:fixed;bottom:calc(100dvh - var(--visual-height,100dvh) + 76px);left:16px;right:16px;width:auto;max-width:none}
+ .composer.is-recording .composer-settings{display:none}
+}

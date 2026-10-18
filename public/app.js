@@ -255,10 +255,10 @@ function renderControls() {
   $('model-select').disabled = !ready || !state.models.length || state.loadingModels;
   $('effort-select').disabled = !ready || !state.model || !effortsFor(state.model).length || state.loadingModels;
   const input = $('message-input'); input.disabled = !ready || !own || posting;
-  input.placeholder = !ready ? '连接目标机器后继续…' : !own ? '先接管会话，再发送消息…' : active ? '补充要求，发送到当前轮次…' : '给目标机器 Codex 发送消息…';
+  input.placeholder = !ready ? '连接后继续…' : !own ? '接管后发送消息…' : active ? '补充要求…' : '发送消息…';
   const hasModel = Boolean(state.model && state.models.some(m => modelId(m) === state.model));
   const hasEffort = effortsFor(state.model).some(e => e.value === state.effort);
-  $('send-message').disabled = !ready || !own || !featureReady(active?'steer':'message') || posting || !input.value.trim() || (!active && (!hasModel || !hasEffort));
+  $('send-message').disabled = Boolean(voice?.active) || !ready || !own || !featureReady(active?'steer':'message') || posting || !input.value.trim() || (!active && (!hasModel || !hasEffort));
   $('send-message').setAttribute('aria-label',active ? '补充当前轮次' : '发送消息');
   $('interrupt').hidden = !active&&!backgroundRunning(); $('interrupt').disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt');
   $('takeover').hidden = own || !state.selectedId; $('takeover').disabled = !ready || !featureReady('takeover') || switching || !state.selectedId;
@@ -273,6 +273,8 @@ function renderControls() {
   $('new-thread-status').hidden = !creating && !createReason;
   ['new-cwd','new-model','new-effort','close-new-dialog','cancel-new-dialog'].forEach(id => $(id).disabled = creating);
   document.querySelectorAll('.project-create').forEach(button => { button.disabled = $('new-thread').disabled; });
+  setText('composer-model-label',(modelFor(state.model)?.displayName || state.model || '模型')+' · '+(effortNames[state.effort] || state.effort || '档位'));
+  voice?.sync();
   const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '查看模式。接管后可在原会话继续工作。';
   setText('composer-hint',state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
   setText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
@@ -1199,7 +1201,10 @@ function toggleMessageDetails(show) {
 function wireEvents() {
   const fitKeyboard=()=>{document.documentElement.style.setProperty('--visual-height',(window.visualViewport?.height||window.innerHeight)+'px');};
   window.visualViewport?.addEventListener('resize',fitKeyboard);fitKeyboard();
-  voice=installVoice({input:$('message-input'),context:()=>targetHost+':'+state.selectedId,send:()=>sendMessage(),render:()=>renderControls()});
+  voice=installVoice({input:$('message-input'),context:()=>targetHost+':'+state.selectedId,render:()=>renderControls()});
+  const settings = $('composer-settings');
+  document.addEventListener('click',event => { if (!settings.contains(event.target)) settings.open = false; });
+  settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); settings.open = false; settings.querySelector('summary').focus(); } });
   setupResizableLayout();
   try { taskNotificationsEnabled = localStorage.getItem('rcm.taskNotifications.' + targetHost) === 'true'; } catch {}
   renderTaskNotifications();
