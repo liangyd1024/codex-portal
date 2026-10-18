@@ -1,5 +1,5 @@
 """Run through SSH stdin. Only this application's dedicated service is managed."""
-import json, os, pathlib, plistlib, pwd, socket, subprocess, time
+import json, os, pathlib, plistlib, pwd, re, socket, subprocess, time
 
 HOME = pathlib.Path(globals().get('SERVICE_HOME', str(pathlib.Path.home())))
 ROOT = HOME / '.codex/remote-codex-manager'
@@ -93,9 +93,13 @@ def main():
         if nvm.is_dir():
             entries = [str(p / 'bin') for p in sorted(nvm.iterdir(), reverse=True) if (p / 'bin/node').exists()] + entries
         entries += ['/Applications/ChatGPT.app/Contents/Resources/cua_node/bin', '/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin']
+        delay = globals().get('SERVICE_THREAD_UNLOAD_DELAY_SECS')
+        if delay is not None and (type(delay) is not int or not 0 <= delay <= 86400):
+            raise RuntimeError('会话释放等待参数无效。')
+        delay_args = ['-c', 'thread_unload_delay_secs=' + str(delay)] if delay is not None else []
         config = {
             'Label': LABEL,
-            'ProgramArguments': [str(BINARY), 'app-server', '--listen', 'unix://' + str(SOCKET)],
+            'ProgramArguments': [str(BINARY), 'app-server', *delay_args, '--listen', 'unix://' + str(SOCKET)],
             'WorkingDirectory': str(HOME),
             'RunAtLoad': True,
             'KeepAlive': {'SuccessfulExit': False},
@@ -116,8 +120,11 @@ def main():
             status = command(['/bin/launchctl', 'print', DOMAIN + '/' + LABEL])
             pid = next((int(line.split('=')[1].strip()) for line in status.stdout.splitlines() if line.strip().startswith('pid =')), None)
             started = command(['/bin/ps', '-p', str(pid), '-o', 'lstart=']).stdout.strip() if pid else None
+            # Read the running job, not a desired config or a rewritten plist.
+            delay_match = re.search(r'thread_unload_delay_secs=(\d+)', status.stdout)
+            actual_delay = int(delay_match.group(1)) if delay_match else None
             journal = ensure_relay()
-            emit({'outputJournal': journal, 'running': True, 'pid': pid, 'startedAt': started, 'version': version, 'socket': str(SOCKET), 'hostname': socket.gethostname(), 'binary': str(BINARY), 'protocolValidation': validation})
+            emit({'outputJournal': journal, 'threadUnloadDelaySecs': actual_delay, 'running': True, 'pid': pid, 'startedAt': started, 'version': version, 'socket': str(SOCKET), 'hostname': socket.gethostname(), 'binary': str(BINARY), 'protocolValidation': validation})
             return
         time.sleep(0.2)
     # No credential files or full logs are returned.

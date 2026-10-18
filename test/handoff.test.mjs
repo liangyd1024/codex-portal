@@ -179,3 +179,8 @@ test('waiting, disconnected and unconfirmed messages never claim a successful re
   assert.match(handoffMessage({state:'waiting'},false),/状态待确认/);
   assert.match(handoffMessage({state:'released'},true),/草稿保留/);
 });
+test('waiting message uses confirmed runtime delay instead of a fixed 30-minute claim',async()=>{
+ const {m}=fixture();m.service.threadUnloadDelaySecs=5;
+ try{const result=await m.handoff('a');assert.equal(result.unloadDelaySecs,5);assert.match(handoffMessage(result,true),/5 秒/);assert.doesNotMatch(handoffMessage(result,true),/30 分钟/);}
+ finally{m.disconnect();}
+});
