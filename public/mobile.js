@@ -6,12 +6,15 @@ function setting(title,id,key,options){
  select.onchange=()=>{try{localStorage.setItem(key,select.value);}catch{}};label.append(select);return {label,select};
 }
 async function copy(text,status){try{await navigator.clipboard.writeText(text);status.textContent='已复制。';}catch{status.textContent='无法自动复制。请选中文字后复制。';}}
+let mobileLoadVersion=0;
 export async function installMobile(api){
+ const version=++mobileLoadVersion;
  const body=document.getElementById('mobile-access-body');body.replaceChildren();
  body.append(node('p','正在检查手机访问…','subtle'));
- let info;try{info=await api('/api/access/status');}catch(error){body.replaceChildren(node('p','无法检查手机访问：'+error.message));const retry=node('button','重试','secondary-button');retry.onclick=()=>installMobile(api);body.append(retry);return;}
+ let info;try{info=await api('/api/access/status');}catch(error){if(version!==mobileLoadVersion)return;body.replaceChildren(node('p','无法检查手机访问：'+error.message));const retry=node('button','重试','secondary-button');retry.onclick=()=>installMobile(api);body.append(retry);return;}
+ if(version!==mobileLoadVersion)return;
  body.replaceChildren();
- if(!info.local){body.append(node('p',info.sessionExpires===null?'当前手机：永久登录。':'登录有效期至 '+new Date(info.sessionExpires).toLocaleString('zh-CN')));const button=node('button','退出手机登录','secondary-button');button.onclick=async()=>{button.disabled=true;try{await api('/api/access/logout',{method:'POST'});location.reload();}catch(e){body.append(node('p',e.message));button.disabled=false;}};body.append(button);return;}
+ if(!info.local){body.append(node('p',info.sessionExpires===null?'当前手机：永久登录。':'登录有效期至 '+new Date(info.sessionExpires).toLocaleString('zh-CN')));const button=node('button','退出手机登录','secondary-button');button.onclick=async()=>{if(button.disabled)return;button.disabled=true;button.textContent='正在退出…';try{await api('/api/access/logout',{method:'POST'});location.reload();}catch(e){body.append(node('p',e.message));button.textContent='重试退出登录';button.disabled=false;}};body.append(button);return;}
  body.append(node('h3','1. 选择手机访问地址'));
  const feedback=node('p','','subtle');feedback.setAttribute('role','status');
  for(const origin of info.origins){
@@ -48,9 +51,9 @@ export async function installMobile(api){
  const generate=node('button','生成配对码','primary-button full-width');generate.disabled=!info.origins.length;
  if(!info.origins.length){expiry.select.disabled=true;session.select.disabled=true;generate.setAttribute('aria-describedby','mobile-setup-required');}
  const value=s=>s.value==='permanent'?null:Number(s.value);
- generate.onclick=async()=>{generate.disabled=true;try{const d=await api('/api/access/code',{method:'POST',body:{ttlSeconds:value(expiry.select),sessionTtlSeconds:value(session.select)}});result.replaceChildren();const code=node('strong',d.code,'pair-code');const copyButton=node('button','复制配对码','secondary-button');copyButton.onclick=()=>copy(d.code,feedback);result.append(code,copyButton,node('p',(d.expires===null?'配对码永不过期':'配对码到期：'+new Date(d.expires).toLocaleString('zh-CN'))+'。仅可使用一次。'),node('p',d.sessionTtlSeconds===null?'配对后永久登录。':'配对后登录有效期：'+d.sessionTtlSeconds/86400+' 天。'));generate.textContent='重新生成配对码';}catch(e){result.textContent=e.message;}finally{result.hidden=false;generate.disabled=false;}};
+ generate.onclick=async()=>{if(generate.disabled)return;generate.disabled=true;generate.textContent='正在生成…';try{const d=await api('/api/access/code',{method:'POST',body:{ttlSeconds:value(expiry.select),sessionTtlSeconds:value(session.select)}});result.replaceChildren();const code=node('strong',d.code,'pair-code');const copyButton=node('button','复制配对码','secondary-button');copyButton.onclick=()=>copy(d.code,feedback);result.append(code,copyButton,node('p',(d.expires===null?'配对码永不过期':'配对码到期：'+new Date(d.expires).toLocaleString('zh-CN'))+'。仅可使用一次。'),node('p',d.sessionTtlSeconds===null?'配对后永久登录。':'配对后登录有效期：'+d.sessionTtlSeconds/86400+' 天。'));generate.textContent='重新生成配对码';}catch(e){result.textContent=e.message;generate.textContent='重试生成配对码';}finally{result.hidden=false;generate.disabled=false;}};
  const hint=node('p',info.origins.length?'生成新码会使旧码失效。':'先开启手机访问，再设置有效期并生成配对码。','subtle');hint.id='mobile-setup-required';body.append(generate,result,hint);
  const danger=node('details',null,'mobile-revoke');danger.append(node('summary','撤销手机访问'));
  danger.append(node('p','全部手机将退出登录，当前配对码也会失效。'));
- const revoke=node('button','撤销全部手机登录','secondary-button full-width');revoke.onclick=async()=>{revoke.disabled=true;try{await api('/api/access/revoke',{method:'POST',body:{}});result.hidden=true;generate.textContent='生成配对码';feedback.textContent='已撤销全部手机登录和当前配对码。';danger.open=false;}catch(e){feedback.textContent=e.message;}finally{revoke.disabled=false;}};danger.append(revoke);body.append(danger);
+ const revoke=node('button','撤销全部手机登录','secondary-button full-width');revoke.onclick=async()=>{if(revoke.disabled)return;revoke.disabled=true;revoke.textContent='正在撤销…';try{await api('/api/access/revoke',{method:'POST',body:{}});result.hidden=true;generate.textContent='生成配对码';feedback.textContent='已撤销全部手机登录和当前配对码。';danger.open=false;}catch(e){feedback.textContent=e.message;}finally{revoke.disabled=false;revoke.textContent='撤销全部手机登录';}};danger.append(revoke);body.append(danger);
 }

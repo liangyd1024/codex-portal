@@ -1,0 +1,13 @@
+.thread-actions{position:relative;flex:none}
+.thread-actions>summary{list-style:none;font-size:24px;cursor:pointer;min-width:36px}
+.thread-actions>summary::-webkit-details-marker{display:none}
+.thread-actions-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:30;width:min(270px,calc(100vw - 32px));padding:6px;border:1px solid var(--line,#ddd);border-radius:12px;background:#fff;box-shadow:0 8px 24px #0002}
+.thread-actions-panel button{width:100%;padding:10px 12px;border:0;border-radius:7px;background:transparent;text-align:left;font:inherit;cursor:pointer;min-height:44px}
+.thread-actions-panel button:hover:not(:disabled){background:#f3f4f3}
+.thread-actions-panel p{margin:5px 12px 8px;font-size:12px;line-height:1.6;color:#747a77}
+.handoff-status{display:flex;align-items:center;gap:12px;max-width:var(--conversation-width,880px);margin:0 auto 10px;padding:12px 16px;border:1px solid var(--line,#ddd);border-radius:14px;background:#fafbfa;font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.handoff-status span{flex:1;min-width:0}
+.handoff-status button{flex:none;min-height:44px}
+.handoff-status:focus-visible{outline:2px solid #738b73;outline-offset:2px}
+.thread-actions[hidden],.handoff-status[hidden]{display:none}
+@media(max-width:700px){.thread-actions>summary{min-width:44px;min-height:44px}.handoff-status{align-items:stretch;flex-direction:column;gap:4px;padding:10px 12px}.handoff-status button{align-self:flex-start}.thread-actions-panel{position:fixed;right:16px;top:calc(52px + env(safe-area-inset-top,0px))}}

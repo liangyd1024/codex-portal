@@ -129,7 +129,7 @@ def desktop_membership(connection):
     migration = state.get('app-server-projects-migration-by-host', {}).get(host_key, {})
     assignments = state.get('thread-project-assignments', {})
     hints = state.get('thread-workspace-root-hints', {})
-    roots = sorted(connection.execute('SELECT project_id, path FROM project_roots'), key=lambda r: len(r['path']), reverse=True)
+    roots = sorted((r for r in connection.execute('SELECT project_id, path FROM project_roots') if isinstance(r['path'], str) and r['path'].startswith('/')), key=lambda r: len(r['path']), reverse=True)
     projectless = set(state.get('projectless-thread-ids', []))
 
     def resolve(thread):
@@ -148,7 +148,7 @@ def desktop_membership(connection):
                 return project if project in projects else None
             # Legacy desktop chats can belong to a saved root before assignment
             # migration. Only registered roots qualify; never invent a project.
-            cwd = hints.get(thread['id'], thread.get('cwd', '')).rstrip('/')
+            cwd = (hints.get(thread['id']) or thread.get('cwd') or '').rstrip('/')
             for root in roots:
                 path = root['path'].rstrip('/')
                 if cwd == path or cwd.startswith(path + '/'):
@@ -411,6 +411,10 @@ def read_outputs(payload):
 
 
 def read_history(payload):
+    # On a new installation even the history database is absent until the first
+    # turn. Only the manager's successful new-thread path may allow that absence.
+    if payload.get('allowMissingStore') is True and not (STORE / 'thread_history_1.sqlite').exists():
+        return {'data': [], 'nextCursor': None, 'historySource': 'snapshot'}
     connection = connect_store('thread_history_1.sqlite')
     try:
         require_columns(connection, 'thread_history_1.sqlite', 'thread_turns', TURN_COLUMNS)
@@ -477,12 +481,140 @@ def read_notices(payload):
     finally: db.close()
 
 
+PINNED_SECTION = '01984de2-8f74-7c91-a3b2-5c5e937cf318'
+
+
+def sidebar_revision(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:24]
+
+
+def read_sidebar(payload):
+    """One read transaction; only desktop-owned metadata is returned, never credentials."""
+    db = connect_store('state_5.sqlite')
+    try:
+        try:
+            state = json.loads((STORE / '.codex-global-state.json').read_text())
+        except FileNotFoundError:
+            state = {}
+        account = payload.get('accountId')
+        atoms = state.get('electron-persisted-atom-state', {})
+        buckets = atoms.get('sidebar-custom-sections-v3', {})
+        layout = buckets.get(account, {}) if account else {}
+        prefs = atoms.get('flat-project-sidebar-preferences-v1', {})
+        preferences = {'grouping': prefs.get('mode', 'project'), 'chats': prefs.get('chatSortMode', 'updated_at'),
+                       'projects': prefs.get('projectSortMode', 'updated_at'), 'pinned': prefs.get('pinnedSortMode', 'manual')}
+        host_key = 'local:' + str(STORE)
+        mapping = state.get('app-server-project-id-by-legacy-project-id-by-host', {}).get(host_key, {})
+        reverse = {server: legacy for legacy, server in mapping.items()}
+        projects = [dict(row) for row in db.execute('SELECT id,name,position FROM projects ORDER BY position,id')]
+        roots = [r for r in db.execute('SELECT project_id,path FROM project_roots ORDER BY position') if isinstance(r['path'], str) and r['path'].startswith('/')]
+        project_ids = {p['id'] for p in projects}
+        project_orders = state.get('sidebar-project-thread-orders', {})
+        for project in projects:
+            project.update(roots=[r['path'] for r in roots if r['project_id'] == project['id']],
+                           legacyId=reverse.get(project['id'], project['id']), recencyAt=0, threadIds=[])
+        project_by_id = {p['id']: p for p in projects}
+        sections_db = {r['id']: dict(r) for r in db.execute('SELECT id,name FROM thread_sections')}
+        sections = []
+        for section in layout.get('sections', []):
+            server_id = section.get('hostSectionIds', {}).get('local')
+            # A removed server section must not be revived by stale desktop metadata.
+            if server_id not in sections_db or server_id == PINNED_SECTION:
+                continue
+            sections.append({'id': server_id, 'desktopId': section['id'], 'name': sections_db[server_id]['name'],
+                             'itemKeys': section.get('itemKeys', []), 'projectIds': [], 'threadIds': []})
+        sections_by_id = {s['id']: s for s in sections}
+        placed_projects = set()
+        pinned_projects = []
+        for legacy in state.get('pinned-project-ids', []) if account else []:
+            pid = mapping.get(legacy, legacy)
+            if pid in project_ids and pid not in placed_projects:
+                pinned_projects.append(pid); placed_projects.add(pid)
+        for section in sections:
+            for key in section['itemKeys']:
+                if key.startswith('codex:project:'):
+                    pid = mapping.get(key[14:], key[14:])
+                    if pid in project_ids and pid not in placed_projects:
+                        section['projectIds'].append(pid); placed_projects.add(pid)
+        resolve = desktop_membership(db)
+        columns = {r['name'] for r in db.execute('PRAGMA table_info(threads)')}
+        optional = ['recency_at', 'is_pinned', 'section_position', 'section_entered_at_ms']
+        query_columns = list(THREAD_COLUMNS) + [c for c in optional if c in columns]
+        rows = db.execute('SELECT ' + ','.join(query_columns) + " FROM threads WHERE source IN (?, ?, ?, ?) AND COALESCE(thread_source,'') != 'ambient_suggestions'", INTERACTIVE_SOURCES).fetchall()
+        tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        receipts = {r['thread_id']: dict(r) for r in db.execute('SELECT thread_id,first_unread_turn,revision FROM thread_read_receipts')} if 'thread_read_receipts' in tables else {}
+        migrated_pins = set(state.get('app-server-migrated-pinned-thread-ids-by-host', {}).get(host_key, []))
+        legacy_pins = set(state.get('pinned-thread-ids', [])) - migrated_pins if account else set()
+        threads = []
+        for row in rows:
+            values = dict(row)
+            t = normalized_thread(row)
+            # Keep membership and placement distinct. Section placement wins only in rendering.
+            t['projectId'] = resolve({**t, 'sectionId': None})
+            t['preview'] = t['preview'][:200]
+            t['recencyAt'] = values.get('recency_at') or t['updatedAt']
+            t['isPinned'] = t['sectionId'] == PINNED_SECTION or bool(values.get('is_pinned')) or t['id'] in legacy_pins
+            t['sectionPosition'] = values.get('section_position')
+            receipt = receipts.get(t['id'])
+            t['readRevision'] = receipt['revision'] if receipt else None
+            t['isUnread'] = receipt['first_unread_turn'] is not None if receipt else False
+            t['revision'] = sidebar_revision([t['id'],t['name'],t['projectId'],t['sectionId'],t['archived'],t['isPinned'],t['readRevision']])
+            threads.append(t)
+            if not t['archived'] and t['projectId'] in project_by_id:
+                p = project_by_id[t['projectId']]
+                p['recencyAt'] = max(p['recencyAt'], t['recencyAt'])
+        by_id = {t['id']: t for t in threads}
+        for s in sections:
+            s['revision'] = sidebar_revision([s['name'],sorted(t['id'] for t in threads if t['sectionId'] == s['id'])])
+        # Preserve manual ordering, including legacy project thread order during migration.
+        def recent(t): return (-t['recencyAt'], t['id'])
+        def section_order(t): return (t['sectionPosition'] if t['sectionPosition'] is not None else MAX_SQLITE_INTEGER, t['id'])
+        active = sorted((t for t in threads if not t['archived']), key=recent)
+        pinned = [t for t in active if t['isPinned']]
+        pinned.sort(key=recent if preferences['pinned'] == 'updated_at' else section_order)
+        root_threads = []
+        for t in active:
+            if t['isPinned']: continue
+            if t['sectionId'] in sections_by_id:
+                sections_by_id[t['sectionId']]['threadIds'].append(t['id'])
+            elif t['projectId'] in project_by_id:
+                project_by_id[t['projectId']]['threadIds'].append(t['id'])
+            else: root_threads.append(t['id'])
+        for p in projects:
+            order = project_orders.get(p['legacyId'], {}).get('threadIds', [])
+            if preferences['chats'] == 'manual':
+                positions = {tid: index for index, tid in enumerate(order)}
+                p['threadIds'].sort(key=lambda tid: (positions.get(tid, MAX_SQLITE_INTEGER), section_order(by_id[tid])))
+            p['revision'] = sidebar_revision([p['name'],p['roots'],p['position']])
+        for s in sections:
+            s['threadIds'].sort(key=lambda tid: section_order(by_id[tid]))
+        if preferences['chats'] == 'manual': root_threads.sort(key=lambda tid: section_order(by_id[tid]))
+        if preferences['projects'] == 'updated_at': projects.sort(key=lambda p: (-p['recencyAt'],p['position'],p['id']))
+        ordered_sections = layout.get('sectionOrder', [])
+        section_positions = {key: index for index,key in enumerate(ordered_sections)}
+        sections.sort(key=lambda s: section_positions.get('custom:' + s['desktopId'], MAX_SQLITE_INTEGER))
+        archived = archived_flag(payload)
+        search = (optional_text(payload, 'search') or '').casefold()
+        visible = [t for t in (threads if archived else active) if t['archived'] == archived and (not search or search in (t['name'] or t['preview']).casefold())]
+        visible.sort(key=recent)
+        offset = cursor_number(payload) or 0
+        page = visible[offset:offset+50] if archived else visible
+        return {'data': page, 'nextCursor': 'db:' + str(offset+50) if archived and len(visible)>offset+50 else None,
+                'projects': projects, 'sections': sections, 'pinnedThreadIds': [t['id'] for t in pinned], 'pinnedProjectIds': pinned_projects,
+                'rootThreadIds': root_threads, 'rootProjectIds': [p['id'] for p in projects if p['id'] not in placed_projects],
+                'sectionOrder': ordered_sections, 'preferences': preferences, 'archived': archived,
+                'accountScope': sidebar_revision(account) if account else None, 'accountLayoutAvailable': bool(account),
+                'historySource': 'snapshot', 'total': len(visible), 'selectedThread': by_id.get(payload.get('selectedId'))}
+    finally:
+        db.close()
+
+
 def main():
     payload = globals().get('PAYLOAD')
     if not isinstance(payload, dict):
         raise ValueError('PAYLOAD 必须是 JSON 对象。')
     action = payload.get('action')
-    handlers = {'sidebarMetadata': read_sidebar_metadata, 'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
+    handlers = {'sidebar': read_sidebar, 'sidebarMetadata': read_sidebar_metadata, 'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
     if action not in handlers:
         raise ValueError('不支持的只读操作。')
     return handlers[action](payload)

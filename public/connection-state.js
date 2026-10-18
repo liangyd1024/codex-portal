@@ -1,3 +1,16 @@
+export function backgroundActivity(detail, {controlled = false, connected = false} = {}) {
+  if (!controlled) return {state:'idle', terminals:[]};
+  const result = detail?.backgroundTerminals;
+  // Historical command items may remain inProgress after their process exits.
+  // A successful live list, including an empty list, is authoritative.
+  if (connected && !result?.error && Array.isArray(result?.data)) {
+    return {state:result.data.length ? 'running' : 'idle', terminals:result.data};
+  }
+  const unconfirmed = result != null || (detail?.turns || []).some(turn =>
+    (turn.items || []).some(item => item.type === 'commandExecution' && ['inProgress','in_progress','running'].includes(item.status?.type || item.status)));
+  return {state:unconfirmed ? 'unknown' : 'idle', terminals:[]};
+}
+
 // HTTP replies and SSE notifications can arrive in a different order.
 export function selectConnectionStatus(current, incoming, retiredInstances = new Set()) {
   if (!incoming) return current;
@@ -10,6 +23,12 @@ export function selectConnectionStatus(current, incoming, retiredInstances = new
     }
   }
   return incoming;
+}
+
+// Skill metadata is added by the engine and is absent from the optimistic echo.
+export function userContentKey(content) {
+  if(typeof content==='string')content=[{type:'text',text:content}];
+  return JSON.stringify((content||[]).filter(p=>['text','image','localImage'].includes(p.type)).map(p=>p.type==='text'?['text',p.text||'']:[p.type,p.url||p.path||p.imageUrl||'']));
 }
 
 // Snapshot reads can lag behind SSE. Keep streamed text and terminal states.
@@ -34,8 +53,8 @@ export function mergeLiveTurns(current = [], incoming = []) {
       const i = items.findIndex(value => value.id === item.id);
       if (i < 0) items.push(item); else items[i] = mergeItem(items[i], item);
     }
-    const userTexts = new Set(items.filter(item => item.type === 'userMessage' && !item.localAccepted).map(item => (item.content || []).map(part => part.text || '').join('\n')));
-    const confirmed = items.filter(item => !item.localAccepted || !userTexts.has((item.content || []).map(part => part.text || '').join('\n')));
+    const userTexts = new Set(items.filter(item => item.type === 'userMessage' && !item.localAccepted).map(item => userContentKey(item.content)));
+    const confirmed = items.filter(item => !item.localAccepted || !userTexts.has(userContentKey(item.content)));
     result[index] = {...old, ...turn, items:confirmed, status:terminal(old.status) && !terminal(turn.status) ? old.status : turn.status || old.status};
   }
   return result;

@@ -5,25 +5,43 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 3
+PROTOCOL_POLICY = 6
 REQUEST_FIELDS = {
+    'account/read': set(),
+    'thread/archive': {'threadId'},
+    'thread/unarchive': {'threadId'},
+    'thread/metadata/update': {'threadId','projectId'},
+    'thread/section/move': {'threadId','sectionId','beforeThreadId'},
+    'thread/readState/update': {'threadId','expectedRevision','operation'},
+    'threadSection/create': {'name'},
+    'threadSection/update': {'sectionId','name'},
+    'threadSection/delete': {'sectionId'},
     'initialize': {'clientInfo', 'capabilities'},
     'model/list': {'limit', 'cursor', 'includeHidden'},
     'thread/list': {'limit', 'cursor', 'sortKey', 'sortDirection', 'useStateDbOnly', 'sourceKinds', 'searchTerm', 'cwd', 'archived'},
     'thread/read': {'threadId', 'includeTurns'},
     'thread/start': {'cwd', 'model', 'approvalPolicy', 'approvalsReviewer', 'sandbox', 'serviceName', 'projectId', 'config'},
     'thread/resume': {'threadId', 'excludeTurns'},
+    'thread/unsubscribe': {'threadId'},
     'thread/name/set': {'threadId', 'name'},
-    'thread/loaded/list': set(),
+    'thread/loaded/list': {'cursor'},
     'thread/goal/get': {'threadId'},
     'thread/backgroundTerminals/list': {'threadId', 'limit'},
     'thread/backgroundTerminals/terminate': {'threadId','processId'},
     'thread/queue/list': {'threadId', 'limit'},
-    'turn/start': {'threadId', 'input', 'model', 'effort'},
+    'turn/start': {'threadId', 'input', 'model', 'effort', 'approvalPolicy', 'sandboxPolicy', 'collaborationMode'},
+    'collaborationMode/list': set(),
+    'skills/list': {'cwds'},
+    'plugin/installed': {'cwds'},
+    'thread/goal/set': {'threadId','objective','status','tokenBudget','origin'},
     'turn/steer': {'threadId', 'expectedTurnId', 'input'},
     'turn/interrupt': {'threadId', 'turnId'},
 }
 FEATURE_METHODS = {
+    'plan': ['collaborationMode/list','turn/start'],
+    'skills': ['skills/list','turn/start'],
+    'plugins': ['plugin/installed','turn/start'],
+    'goal': ['thread/goal/set','thread/goal/get'],
     'create': ['thread/start', 'thread/name/set', 'turn/start'],
     'takeover': ['thread/resume'],
     'message': ['turn/start'],
@@ -31,6 +49,7 @@ FEATURE_METHODS = {
     'stop': ['turn/interrupt','thread/backgroundTerminals/list','thread/backgroundTerminals/terminate'],
     'queue': ['thread/queue/list'],
     'release': ['thread/loaded/list', 'thread/read', 'thread/goal/get', 'thread/backgroundTerminals/list', 'thread/queue/list'],
+    'handoff': ['thread/unsubscribe', 'thread/loaded/list', 'thread/read', 'thread/goal/get', 'thread/backgroundTerminals/list', 'thread/queue/list'],
 }
 
 

@@ -1,10 +1,20 @@
+import {NewChatDraft} from './new-chat.js';
+import {installAttachments} from './attachments.js';
+let attachments;
+import {Sidebar} from './sidebar.js';
+import {DraftStore, shouldSendOnEnter, coalesceRefresh} from './input-state.js';
+import {installThreadSync} from './thread-sync.js';
+import {installMobileUI, compactLayout, touchInput} from './mobile-ui.js';
+let mobileUI, draftWritesSuspended = false;
+import {createHandoffControls} from './thread-handoff.js';
+let handoffControls;
 import {installBrowserBackup} from './browser-backup.js';
-import {installVoice} from './voice.js';
+import {installComposer, WEB_ACCESS} from './composer.js';
 import {installMobile} from './mobile.js';
-let voice;
+let composer;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from './detail-cache.js';
 import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
-import {selectConnectionStatus, mergeLiveTurns, taskNotice, claimNotice} from './connection-state.js';
+import {selectConnectionStatus, userContentKey, mergeLiveTurns, taskNotice, claimNotice, backgroundActivity} from './connection-state.js';
 function savedHost() { try { return localStorage.getItem('rcm.connection'); } catch { return null; } }
 const requestedHost = new URL(location.href).searchParams.get('host');
 const response=await fetch('/api/connections');
@@ -21,6 +31,10 @@ const targetUrl=path=>path+(path.includes('?')?'&':'?')+'host='+targetHost;
 const retiredStatusInstances=new Set();
 function applyStatus(status){
   const next=selectConnectionStatus(state.status,status,retiredStatusInstances);
+  const previous=state.status;
+  if(previous&&(previous.instanceId!==next.instanceId||previous.connection?.state!==next.connection?.state||
+    previous.controlledThreads?.includes(state.selectedId)!==next.controlledThreads?.includes(state.selectedId)||
+    Boolean(previous.handoffs?.some(h=>h.threadId===state.selectedId))!==Boolean(next.handoffs?.some(h=>h.threadId===state.selectedId))))state.detailVersion++;
   if(state.status?.instanceId&&next.instanceId!==state.status.instanceId){
     state.csrf='';state.localRequests=[];
     if(state.detail){state.detail.controlled=false;state.detail.controlState='viewing';state.detail.pendingRequests=[];}
@@ -31,11 +45,39 @@ function applyStatus(status){
 const $ = id => document.getElementById(id);
 const state = {
   status: null, models: [], projects: [], threads: [], selectedId: savedView().selectedId || null, detail: null,
-  projectId: savedView().projectId || null, search: '', threadCursor: null, historyCursor: null, loadedOlderHistory: false,
+  sidebar:null, sidebarArchived:false, selectedArchived:false, projectId: savedView().projectId || null, search: '', threadCursor: null, historyCursor: null, loadedOlderHistory: false,
   model: '', effort: '', csrf: '', transport: false, busy: new Set(), loadingThreads: false, loadingModels: false, loadingProjects: false, threadListSource: null,
-  runtimeNotices: new Map(), loadingDetail: false, errors: [], localRequests: [], drafts: new Map(), selectionVersion: 0,
-  listVersion: 0, threadPageError: false, historyError: '', eventSource: null, lastSync: null, refreshScope: '', refreshMessage: '', refreshing: false, streamRender: false, requestSignature: '',
+  runtimeNotices: new Map(), loadingDetail: false, errors: [], localRequests: [], drafts: new DraftStore({storage:()=>sessionStorage,host:targetHost,onError:()=>toast('浏览器无法保存草稿，请先复制重要内容。',true)}), selectionVersion: 0,
+  listVersion: 0, detailVersion: 0, threadPageError: false, historyError: '', eventSource: null, lastSync: null, refreshScope: '', refreshMessage: '', refreshing: false, streamRender: false, requestSignature: '',
 };
+const newDraftId='local:new-chat-draft';
+const newDraft=new NewChatDraft(sessionStorage,'rcm.new-chat.'+targetHost);
+let newChatOpen=false;
+const inputId=()=>newChatOpen?newDraftId:state.selectedId;
+const inputReady=()=>newChatOpen?usable()&&Boolean(newDraft.cwd):usable()&&controlled()&&!state.selectedArchived;
+function rememberNewDraft(){try{newDraft.save();}catch{toast('新会话草稿设置暂未保存，请保留当前页面。',true);}}
+function closeNewChat(restore=true){
+  if(!newChatOpen)return;
+  state.drafts.set(newDraftId,$('message-input').value);newChatOpen=false;
+  $('conversation').append(document.querySelector('.composer-region'));
+  $('new-chat-page').hidden=true;document.querySelector('.main-panel').classList.remove('new-chat-open');
+  if(restore){$('message-input').value=state.drafts.get(state.selectedId)||'';renderThread();resizeInput();}
+}
+function flushDrafts() {
+  if (draftWritesSuspended) return;
+  if (inputId()) state.drafts.set(inputId(),$('message-input').value);
+  else state.drafts.persist();
+  saveView(); saveOutputPositions();
+}
+const resumeWorkspace = coalesceRefresh(async () => {
+  if (document.hidden || navigator.onLine === false) return;
+  await loadStatus();
+  if (connected()&&!state.status?.service?.releasing) {
+    // The selected conversation must not wait for slow model/project catalogs.
+    await refreshSelected();
+    if(!state.loadingThreads&&!sidebar.pending&&!sidebar.menu&&!sidebar.dialog)loadThreads();
+  }
+});
 const effortNames = {none:'无', minimal:'最低', low:'低', medium:'中', high:'高', xhigh:'超高', max:'最高', ultra:'极高'};
 const statusNames = {unknown:'状态未确认',notLoaded:'尚未加载', idle:'就绪', active:'执行中', inProgress:'执行中', in_progress:'执行中', running:'执行中', completed:'已完成', interrupted:'已停止', failed:'失败', systemError:'服务错误', pending:'等待中', declined:'已拒绝', stopped:'已停止', success:'成功'};
 const stages = {ssh:'SSH 连接', identity:'身份核验', service:'目标机器服务', protocol:'协议连接', initialize:'协议初始化', models:'模型目录', threads:'会话列表', connected:'已连接', connecting:'正在连接', disconnected:'未连接', reconnecting:'正在重连', error:'连接失败', ready:'已连接'};
@@ -59,7 +101,7 @@ function setText(id, value) { $(id).textContent = value == null || value === '' 
 function pretty(value) { try { return JSON.stringify(value, null, 2); } catch { return String(value); } }
 function messageOf(value) {
   const message=typeof value === 'string' ? value : value?.message || pretty(value);
-  if(value?.code==='RPC_TIMEOUT'||/timed out after \d+ ms/.test(message)) return '目标机器响应超时，操作结果尚未确认。请先刷新会话列表，避免重复创建或发送。';
+  if(value?.code==='RPC_TIMEOUT'||/timed out after \d+ ms/.test(message)) return value?.readOnly?'读取目标机器超时，已有内容和草稿保留，请重试刷新。':'目标机器响应超时，操作结果尚未确认。请先核对会话记录，避免重复创建或发送。';
   if(/ssh: connect to host .*Operation timed out/i.test(message)) return '无法连接目标机器。请确认目标机器在线且网络可达，然后重新连接。';
   return message;
 }
@@ -83,7 +125,12 @@ function requestKey(r) { return r.key ?? (typeof r.id + ':' + String(r.id)); }
 function requestPath(r) { return String(r.key ?? r.id); }
 function controlled() {
   if (!state.detail || !state.selectedId || state.detail.recovering) return false;
+  if(state.busy.has('handoff:'+state.selectedId)||currentHandoff())return false;
   return Boolean(state.detail.controlled || state.status?.controlledThreads?.includes(state.selectedId));
+}
+function currentHandoff() {
+  if(Array.isArray(state.status?.handoffs))return state.status.handoffs.find(v=>v.threadId===state.selectedId)||null;
+  return state.detail?.handoff||null;
 }
 function snapshotHistory() { return state.detail?.historySource === 'snapshot' || currentThread()?.historySource === 'snapshot'; }
 function uncertainHistory() { return snapshotHistory() && !controlled(); }
@@ -91,7 +138,6 @@ function running() {
   if (uncertainHistory()) return false;
   return turns().some(t => ['inProgress','in_progress','running'].includes(typeOf(t.status))) || typeOf(currentThread()?.status) === 'active';
 }
-function backgroundRunning(){return controlled()&&((state.detail?.backgroundTerminals?.data||[]).length>0||turns().some(t=>(t.items||[]).some(i=>i.type==='commandExecution'&&['inProgress','running'].includes(i.status))));}
 function requestThread(r) { return r.threadId || r.params?.threadId; }
 function requests() {
   const all = [...(state.status?.pendingRequests || []), ...(state.detail?.pendingRequests || []), ...state.localRequests];
@@ -123,7 +169,7 @@ function relativeTime(value) {
 let refreshNoticeTimer = null;
 function renderRefresh() {
   const n = $('refresh-status');
-  n.hidden = state.refreshing || !state.refreshMessage;
+  n.hidden = !state.refreshMessage;
   n.classList.toggle('error', !state.refreshing && state.refreshMessage.includes('失败'));
   n.setAttribute('aria-busy', String(state.refreshing));
   setText('refresh-message', state.refreshMessage);
@@ -181,13 +227,13 @@ async function api(path, options = {}) {
     let data;
     try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error('服务未返回有效数据。请查看连接诊断。'); }
     if (!response.ok) {
-      if(response.status===401&&data.error?.code==='PAIRING_REQUIRED')location.reload();
+      if(response.status===401&&data.error?.code==='PAIRING_REQUIRED'){flushDrafts();location.reload();}
       const e = new Error(data.error?.message || data.message || '请求失败，HTTP ' + response.status);
-      e.status = response.status; e.code = data.error?.code; e.details = data.error?.details; throw e;
+      e.readOnly = method==='GET'; e.status = response.status; e.code = data.error?.code; e.details = data.error?.details; throw e;
     }
     return data;
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('请求超时。请刷新状态，确认目标机器结果后再操作。');
+    if (e.name === 'AbortError') throw new Error(method==='GET'?'读取超时，已有内容和草稿保留，请重试刷新。':'操作结果未确认，草稿已保留。请先核对会话记录，避免重复提交。');
     if (e instanceof TypeError) throw new Error('无法连接本机服务。请确认服务仍在运行。');
     throw e;
   } finally { clearTimeout(timer); }
@@ -225,7 +271,7 @@ function renderStatus() {
   if (error) { banner.hidden = false; banner.className = 'connection-banner error'; banner.textContent = error; }
   else if (connected() && !state.transport) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '实时通道已中断。发送与审批已停用。恢复连接后，先核对目标机器状态。'; }
   else if (['connecting','reconnecting'].includes(conn)) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '正在连接目标机器。' + (c.stage ? (stages[c.stage] || c.stage) + '…' : '正在核验连接状态…'); }
-  else if(connected()&&service.protocolValidation?.status==='limited'){const names={create:'新建会话',takeover:'接管会话',message:'发送消息',steer:'补充要求',stop:'停止',queue:'排队输入',release:'释放控制'};const disabled=Object.entries(service.protocolValidation.features||{}).filter(([,v])=>!v.supported).map(([name])=>names[name]||name);banner.hidden=false;banner.className='connection-banner';banner.textContent='已连接。当前引擎暂不支持：'+(disabled.join('、')||'部分协议读取')+'。其他已核验功能仍可使用。详见连接诊断。';}
+  else if(connected()&&service.protocolValidation?.status==='limited'){const names={create:'新建会话',takeover:'接管会话',message:'发送消息',steer:'补充要求',stop:'停止',queue:'排队输入',handoff:'交还桌面端',release:'释放控制'};const disabled=Object.entries(service.protocolValidation.features||{}).filter(([,v])=>!v.supported).map(([name])=>names[name]||name);banner.hidden=false;banner.className='connection-banner';banner.textContent='已连接。当前引擎暂不支持：'+(disabled.join('、')||'部分协议读取')+'。其他已核验功能仍可使用。详见连接诊断。';}
   else banner.hidden = true;
   const connect = $('connect-button'); clear(connect); connect.append(icon(connected()||connectionPending() ? 'close' : 'link'),el('span','',state.busy.has('disconnect') ? '正在断开…' : connectionPending()?'取消连接':connected() ? '断开本机连接' : '连接目标机器'));
   const welcome = $('welcome-connect'); clear(welcome); welcome.append(icon(connected() ? 'plus' : 'link'),el('span','',connectionPending() ? '正在连接…' : connected() ? '新建目标机器会话' : '连接 ' + (h.alias || '目标机器')));
@@ -243,8 +289,14 @@ function renderControlOverview() {
   });
 }
 function renderControls() {
-  const ready = usable(), own = controlled(), active = running();
-  const posting = state.busy.has('message'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
+  const ready = usable(), own = newChatOpen||controlled()&&!state.selectedArchived, active = !newChatOpen&&running();
+  const background = backgroundActivity(state.detail,{controlled:own,connected:ready});
+  const handoff=currentHandoff(),handing=state.busy.has('handoff:'+state.selectedId)||handoff?.state==='checking';
+  handoffControls??=createHandoffControls({endUse:endThreadUse});
+  handoffControls.render({id:state.selectedId,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId)),handoff,connected:ready,
+    supported:state.status?.service?.protocolValidation?.features?.handoff?.supported===true,busy:handing,archived:state.selectedArchived,conflict:state.detail?.controlState==='conflict'});
+  const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
+  $('connection-select').disabled=creating;
   $('new-thread').disabled = !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels;
   $('connect-button').disabled = state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release');
   $('welcome-connect').disabled = connectionPending() || state.busy.has('connect') || state.busy.has('disconnect') || (connected() && (!ready || !state.models.length||!featureReady('create')));
@@ -254,93 +306,79 @@ function renderControls() {
   $('thread-search').disabled = !connected();
   $('model-select').disabled = !ready || !state.models.length || state.loadingModels;
   $('effort-select').disabled = !ready || !state.model || !effortsFor(state.model).length || state.loadingModels;
-  const input = $('message-input'); input.disabled = !ready || !own || posting;
-  input.placeholder = !ready ? '连接后继续…' : !own ? '接管后发送消息…' : active ? '补充要求…' : '发送消息…';
+  const input = $('message-input'); input.disabled = !ready || !own || posting || handing;
+  input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? '补充要求…' : '发送消息…';
   const hasModel = Boolean(state.model && state.models.some(m => modelId(m) === state.model));
   const hasEffort = effortsFor(state.model).some(e => e.value === state.effort);
-  $('send-message').disabled = Boolean(voice?.active) || !ready || !own || !featureReady(active?'steer':'message') || posting || !input.value.trim() || (!active && (!hasModel || !hasEffort));
+  $('send-message').disabled = !ready || !own || !featureReady(active?'steer':'message') || posting || attachments?.pending() || (!input.value.trim()&&!attachments?.has()) || (!active && (!hasModel || !hasEffort));
   $('send-message').setAttribute('aria-label',active ? '补充当前轮次' : '发送消息');
-  $('interrupt').hidden = !active&&!backgroundRunning(); $('interrupt').disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt');
-  $('takeover').hidden = own || !state.selectedId; $('takeover').disabled = !ready || !featureReady('takeover') || switching || !state.selectedId;
-  $('takeover').querySelector('span').textContent = switching ? '正在接管…' : '接管会话';
-  $('running-indicator').hidden = !active&&!backgroundRunning();
-  $('running-indicator').lastElementChild.textContent=active?'正在执行':'后台命令仍在运行';
-  const createReason = !ready ? '连接目标机器并恢复实时通道后才能创建。' : !featureReady('create') ? '当前引擎不支持创建会话：'+(state.status?.service?.protocolValidation?.features?.create?.reason || '请查看连接诊断') : !$('new-cwd').value ? '请先选择项目。' : !$('new-model').value || !$('new-effort').value ? '请选择可用的模型与思考档位。' : '';
-  $('create-thread').disabled = creating || Boolean(createReason);
-  $('create-thread').replaceChildren(icon(creating ? 'refresh' : 'plus'),el('span','',creating ? '正在创建…' : '创建会话'));
-  $('new-thread-form').setAttribute('aria-busy',String(creating));
-  setText('new-thread-status',creating ? '正在等待目标机器创建会话，请勿重复提交。' : createReason);
-  $('new-thread-status').hidden = !creating && !createReason;
-  ['new-cwd','new-model','new-effort','close-new-dialog','cancel-new-dialog'].forEach(id => $(id).disabled = creating);
+  $('message-form').setAttribute('aria-busy',String(posting));
+  $('send-message').title = posting ? '正在发送…' : active ? '补充当前轮次' : '发送消息';
+  $('interrupt').hidden = !active&&background.state!=='running'; $('interrupt').disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt');
+  $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || handing || !state.selectedId;
+  $('takeover').querySelector('span').textContent = switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话';
+  const availability = $('composer-availability');
+  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '正在发送…' : state.busy.has('interrupt') ? '正在请求停止，请稍候…' : !featureReady(active?'steer':'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !hasModel ? '请选择一个可用模型。' : own && !hasEffort ? '请选择思考档位。' : '';
+  availability.textContent = unavailable; availability.hidden = !unavailable;
+  $('new-thread').setAttribute('aria-description',!ready ? '连接恢复后可新建会话。' : !state.models.length ? '正在等待目标机器模型目录。' : creating ? '正在创建，请稍候。' : '');
+  controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
+  controlReason('takeover',!ready ? '连接恢复后可接管。' : switching ? '正在接管，请稍候。' : handing ? '交还状态正在确认，请稍候。' : '当前引擎暂不支持接管。');
+  controlReason('release-service',!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。');
+  $('interrupt').title=active?'停止当前轮次':'停止后台命令';
+  $('interrupt').setAttribute('aria-label',state.busy.has('interrupt') ? '正在请求停止' : $('interrupt').title);
+  $('interrupt').setAttribute('aria-busy',String(state.busy.has('interrupt')));
+  $('running-indicator').hidden = !active&&background.state==='idle';
+  $('running-indicator').firstElementChild.hidden=!active&&background.state!=='running';
+  $('running-indicator').lastElementChild.textContent=active?'正在执行':background.state==='running'?'后台命令仍在运行（'+background.terminals.length+'）':'后台命令状态待确认';
+  $('running-indicator').title=active?'':background.state==='running'?background.terminals.map(t=>t.command).filter(Boolean).join('\n'):background.state==='unknown'?'连接恢复或下次同步后重新核对。':'';
+  if(newChatOpen){
+    const reason=!ready?'连接恢复后可发送，草稿已保留。':newDraft.phase==='uncertain'?'创建结果未确认，请刷新侧栏核对，避免重复创建。':!newDraft.cwd?'选择一个项目后开始。':creating?'正在创建会话…':'';
+    $('send-message').disabled ||= !featureReady('create')||!newDraft.cwd||newDraft.phase!=='editing';
+    $('send-message').setAttribute('aria-label',creating?'正在创建会话':'发送并开始会话');
+    input.disabled=!ready||posting;input.placeholder='描述你想完成的任务…';
+    availability.textContent=reason;availability.hidden=!reason;
+    $('new-retry-create').hidden=newDraft.phase!=='uncertain';
+    $('new-cwd').disabled=creating||newDraft.phase==='uncertain';$('close-new-chat').disabled=creating;
+    $('interrupt').hidden=true;$('takeover').hidden=true;$('toggle-message-details').hidden=true;
+    $('thread-title').hidden=false;setText('thread-title','新会话');
+  }
   document.querySelectorAll('.project-create').forEach(button => { button.disabled = $('new-thread').disabled; });
   setText('composer-model-label',(modelFor(state.model)?.displayName || state.model || '模型')+' · '+(effortNames[state.effort] || state.effort || '档位'));
-  voice?.sync();
+  composer?.render(); attachments?.render();
   const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '查看模式。接管后可在原会话继续工作。';
   setText('composer-hint',state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
   setText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
   document.querySelectorAll('.request-card button,.request-card input,.request-card textarea').forEach(n => { n.disabled = !ready || state.busy.has('request:' + n.closest('.request-card').dataset.requestId); });
+  document.querySelectorAll('.request-card').forEach(card => {
+    const pending = state.busy.has('request:' + card.dataset.requestId);
+    card.setAttribute('aria-busy',String(pending));
+    let feedback = card.querySelector('.request-feedback');
+    if (!feedback) { feedback = el('p','request-feedback subtle'); feedback.setAttribute('role','status'); card.append(feedback); }
+    feedback.textContent = pending ? '正在提交，请稍候…' : !ready ? '连接恢复后可处理此请求，已填内容会保留。' : '';
+    feedback.hidden = !feedback.textContent;
+  });
 }
-const collapsedProjects = new Set(readLayout('collapsedProjects.'+targetHost,[]));
-function projectForThread(thread) {
-  return state.projects.find(project => project.id === thread.projectId);
+function controlReason(id, text) {
+  const button = $(id); let note = $('reason-' + id);
+  if (!note) { note = el('p','control-reason'); note.id = 'reason-' + id; button.after(note); button.setAttribute('aria-describedby',note.id); }
+  note.textContent = text; note.hidden = !button.disabled || button.hidden;
 }
+const sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadName,relativeTime,api,toast,
+  connected:usable,selectedId:()=>state.selectedId,newThread:openNewDialog,
+  select:t=>{state.projectId=t.projectId;state.selectedArchived=!!t.archived;saveView();selectThread(t.id);},
+  onArchiveView:archived=>{state.sidebarArchived=archived;state.threadCursor=null;state.threads=[];loadThreads();},
+  refresh:()=>loadThreads(false,true),
+  changed:async(action,t)=>{if(t?.id===state.selectedId&&['archive','restore'].includes(action))state.selectedArchived=action==='archive';await Promise.all([loadThreads(false,true),loadStatus()]);if(t?.id===state.selectedId)await refreshSelected();renderControls();},
+});
 function renderProjects() { renderThreads(); }
 function renderThreads() {
-  const scroller = $('project-list'), scrollTop = scroller.scrollTop;
-  const focusedProject = document.activeElement?.dataset.projectId;
-  const n = clear($('thread-list'));
-  setText('projects-heading',state.loadingProjects || state.loadingThreads ? '项目 · 同步中' : state.threadListSource === 'snapshot' ? '项目 · 历史快照' : '项目');
-  const groups = state.projects.map(p => ({...p,threads:[]}));
-  // Unassigned chats stay chats: working directories never create projects.
-  for (const t of state.threads) {
-    const project = projectForThread(t);
-    if (project) groups.find(p => p.id === project.id).threads.push(t);
-    else appendThread(n,t,null);
-  }
-  for (const p of groups) {
-    if (state.search && !p.threads.length) continue;
-    const group = el('div','project-group');
-    const expanded = Boolean(state.search) || !collapsedProjects.has(p.id);
-    const b = el('button','project-button' + (state.projectId === p.id ? ' selected' : ''));
-    b.dataset.projectId = p.id;
-    b.setAttribute('aria-expanded',String(expanded)); b.title = (p.roots || []).join('\n');
-    b.append(icon('chevron','project-chevron'),icon('folder'),el('span','project-name',p.name || baseName(p.roots?.[0])));
-    const children = el('div','project-threads'); children.hidden = !expanded;
-    children.id = 'project-children-'+n.childElementCount; b.setAttribute('aria-controls',children.id);
-    b.onclick = () => {
-      if (expanded) collapsedProjects.add(p.id); else collapsedProjects.delete(p.id);
-      state.projectId = state.projects.some(item => item.id === p.id) ? p.id : null;
-      saveLayout('collapsedProjects.'+targetHost,[...collapsedProjects]); saveView(); renderThreads();
-      requestAnimationFrame(loadVisibleThreads);
-    };
-    for (const t of p.threads) appendThread(children,t,state.projects.some(item => item.id === p.id) ? p.id : null);
-    if (!p.threads.length) children.append(el('p','project-empty',state.loadingThreads || state.threadCursor ? '正在读取会话…' : state.threadPageError ? '会话读取失败，请刷新重试' : '暂无会话'));
-    const heading = el('div','project-heading'); heading.append(b);
-    if (p.roots?.length && state.projects.some(item => item.id === p.id)) {
-      const add = el('button','icon-button project-create'); add.type = 'button';
-      add.title = '在 '+p.name+' 中新建会话'; add.setAttribute('aria-label',add.title); add.append(icon('plus'));
-      add.disabled = $('new-thread').disabled; add.onclick = () => openNewDialog(p.roots[0]); heading.append(add);
-    }
-    group.append(heading,children); n.append(group);
-  }
-  if (!n.childElementCount) n.append(el('p','sidebar-empty',state.loadingThreads || state.loadingProjects ? '正在读取项目与会话…' : state.search ? '没有匹配的会话' : '连接后读取项目与会话'));
-  const project = state.projects.find(p => p.id === state.projectId);
-  setText('breadcrumb-project',project?.name || '工作区');
-  $('more-threads').hidden = !state.loadingThreads && !state.threadPageError && !state.threadCursor;
-  $('more-threads').textContent = state.threadPageError ? '加载失败，点击重试' : state.loadingThreads ? '正在加载会话…' : '加载更多会话';
-  $('more-threads').disabled = state.loadingThreads;
-  $('more-threads').onclick = () => loadThreads(Boolean(state.threadCursor));
-  if (focusedProject) [...n.querySelectorAll('.project-button')].find(b => b.dataset.projectId === focusedProject)?.focus({preventScroll:true});
-  scroller.scrollTop = scrollTop;
-}
-function appendThread(n,t,projectId) {
-    const b = el('button','thread-row' + (state.selectedId === t.id ? ' selected' : '')); b.dataset.threadId = t.id; b.title = threadName(t); if (state.selectedId === t.id) b.setAttribute('aria-current','true');
-    const title = el('div','thread-name'); title.append(el('span','',threadName(t)));
-    const session=state.status?.controlledSessions?.find(item=>item.id===t.id);
-    if (typeOf(t.status) === 'active' && t.historySource !== 'snapshot' && state.threadListSource !== 'snapshot') title.append(el('span','thread-running'));
-    const meta = el('div','thread-meta'); meta.append(el('span','thread-preview',''),el('span','thread-time',relativeTime(t.recencyAt || t.updatedAt || t.createdAt)));
-    if (session) b.title += ' · '+sessionLabel(session); b.append(title,meta); b.onclick = () => { state.projectId = projectId; saveView(); selectThread(t.id); }; n.append(b);
-
+  setText('projects-heading',state.loadingProjects||state.loadingThreads?'工作区 · 同步中':'工作区');
+  if(state.sidebar)sidebar.render({...state.sidebar,data:state.threads},{search:state.search,loading:state.loadingThreads});
+  setText('breadcrumb-project',state.projects.find(p=>p.id===state.projectId)?.name||'工作区');
+  $('more-threads').hidden=!state.loadingThreads&&!state.threadPageError&&!state.threadCursor;
+  $('more-threads').textContent=state.threadPageError?'加载失败，点击重试':state.loadingThreads?'正在加载会话…':'加载更多会话';
+  $('more-threads').disabled=state.loadingThreads;
+  $('more-threads').onclick=()=>loadThreads(Boolean(state.threadCursor));
 }
 function modelId(m) { return m.model || m.id; }
 function modelFor(id) { return state.models.find(m => modelId(m) === id || m.id === id); }
@@ -361,15 +399,15 @@ function fillEfforts(select, model, effort) {
 }
 function renderModels(preferThread = false) {
   const t = currentThread();
-  if (preferThread && t?.model) state.model = modelFor(t.model) ? modelId(modelFor(t.model)) : t.model;
-  if (preferThread && t?.reasoningEffort) state.effort = t.reasoningEffort;
+  if (preferThread && !newChatOpen && t?.model) state.model = modelFor(t.model) ? modelId(modelFor(t.model)) : t.model;
+  if (preferThread && !newChatOpen && t?.reasoningEffort) state.effort = t.reasoningEffort;
   // Preserve restored preferences until the model catalog arrives.
   if (!state.models.length) {
     fillModels($('model-select'),state.model); fillEfforts($('effort-select'),state.model,state.effort);
     renderControls(); return;
   }
   if (!modelFor(state.model)) state.model = state.models.length ? modelId(state.models.find(m => m.isDefault) || state.models[0]) : '';
-  if (preferThread && t?.reasoningEffort) state.effort = t.reasoningEffort;
+  if (preferThread && !newChatOpen && t?.reasoningEffort) state.effort = t.reasoningEffort;
   if (!effortsFor(state.model).some(e => e.value === state.effort)) state.effort = defaultEffort(state.model);
   fillModels($('model-select'),state.model); fillEfforts($('effort-select'),state.model,state.effort);
   renderControls();
@@ -468,7 +506,7 @@ function renderCommandOutput(item) {
   wrap.append(controls,pre);return wrap;
 }
 function renderItem(item) {
-  if (item.type === 'userMessage') { const m = el('div','message user'); m.append(el('div','user-bubble',contentText(item.content))); return m; }
+  if (item.type === 'userMessage') { const m = el('div','message user'),bubble=el('div','user-bubble',contentText(item.content)); for(const part of Array.isArray(item.content)?item.content:[]){if(part.type==='image'&&/^data:image\/(png|jpeg|webp);base64,/.test(part.url||'')){const img=el('img','user-image');img.src=part.url;img.alt='已发送的图片';img.loading='lazy';bubble.append(img);}}m.append(bubble); return m; }
   if (['agentMessage','plan'].includes(item.type)) {
     const m = el('article','message agent'); m.setAttribute('aria-label',item.type === 'plan' ? '计划' : 'Codex 回复'); const label = el('div','agent-label' + (item.type === 'agentMessage' ? ' message-author' : '')); label.append(icon('mark'),el('span','',item.type === 'plan' ? '计划' : 'Codex')); m.append(label);
     const text=String(item.text||''), heartbeat=text.match(/<heartbeat>\s*<automation_id>([^<]+)<\/automation_id>\s*<decision>([^<]+)<\/decision>\s*<message>([\s\S]*?)<\/message>\s*<\/heartbeat>/);
@@ -531,7 +569,7 @@ function renderMessages() {
   // Keep the jump input stable while the user types; render after blur.
   if(document.activeElement?.matches('.output-controls input')) return;
   const scroller = $('messages-scroller'), nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
-  const shape=JSON.stringify([state.selectedId,state.loadingDetail,state.historyError,uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],turns()],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
+  const shape=JSON.stringify([state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],turns()],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
   if(shape===lastMessageShape){
     for(const turn of turns())for(const item of turn.items||[]){
       if(item.type!=='commandExecution')continue;
@@ -618,7 +656,7 @@ function renderThread() {
   const badge = $('control-badge'); badge.className = 'control-badge' + (own ? ' controlled' : busy ? ' busy' : ''); badge.textContent = own ? '已取得控制' : busy ? '已被占用' : '查看模式';
   const note = $('control-note');
   note.className = 'control-note' + (busy ? ' error' : '');
-  note.textContent = own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '原会话已有控制端。请先结束目标机器桌面的任务，再手动退出桌面应用。然后重试接管。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
+  note.textContent = own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话仍在另一个入口中使用。请在原入口结束此会话的使用并等待释放，再重试。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
   if (snapshotHistory()) note.textContent = (own ? '历史来自快照。实时状态由目标机器控制连接确认。' : '历史快照，运行状态需接管后确认。') + (busy ? ' ' + note.textContent : '');
   renderMessages(); renderSession(); renderFiles(); renderControls(); resizeInput();
 }
@@ -694,7 +732,7 @@ function renderRequests() {
       if (!knownApproval) card.append(el('p','','此工具需要专用实现。请查看请求详情。可以取消请求，避免会话一直等待。'));
       const detail = el('details','request-detail'); detail.append(el('summary','','请求详情'),el('pre','',pretty({method,params:p}))); card.append(detail);
       const actions = el('div','request-actions');
-      if (knownApproval) { const available = p.availableDecisions; const accepts = !Array.isArray(available) || !available.length || available.includes('accept'); const declines = !Array.isArray(available) || !available.length || available.includes('decline'); const accept = el('button','accept','允许一次'); accept.onclick = () => respondRequest(r,{decision:'accept'}); if (accepts) actions.append(accept); const decline = el('button','','拒绝'); decline.onclick = () => respondRequest(r,{decision:'decline'}); if (declines) actions.append(decline); }
+      if (knownApproval) { const available = p.availableDecisions; const accepts = !Array.isArray(available) || !available.length || available.includes('accept'); const declines = !Array.isArray(available) || !available.length || available.includes('decline'); const accept = el('button','accept','允许一次'); accept.onclick = () => respondRequest(r,{decision:'accept'}); if (accepts) actions.append(accept); if(available?.includes('acceptForSession')){const session=el('button','accept','本会话允许');session.onclick=()=>respondRequest(r,{decision:'acceptForSession'});actions.append(session);} const decline = el('button','','拒绝'); decline.onclick = () => respondRequest(r,{decision:'decline'}); if (declines) actions.append(decline); }
       const cancel = el('button','','取消请求'); cancel.onclick = () => respondRequest(r,{decision:'cancel'}); if (!Array.isArray(p.availableDecisions) || !p.availableDecisions.length || p.availableDecisions.includes('cancel')) actions.append(cancel); card.append(actions);
     }
     const previous = saved.get(requestPath(r));
@@ -742,17 +780,19 @@ async function loadThreads(append = false, reportFailure = false) {
     threadSearch = state.search; state.threadCursor = null;
   }
   renderThreads();
-  const q = new URLSearchParams(); if (state.search) q.set('search',state.search);
+  const q = new URLSearchParams(); if (state.search) q.set('search',state.search); if(state.selectedId)q.set('selectedId',state.selectedId);
   if (append && state.threadCursor) q.set('cursor',state.threadCursor);
   try {
-    const d = await api('/api/threads?' + q); if (seq !== state.listVersion) return;
+    if(state.sidebarArchived)q.set('archived','true');
+    const d = await api('/api/sidebar?' + q); if (seq !== state.listVersion) return;
+    state.sidebar=d;state.projects=d.projects||[];if(d.selectedThread?.id===state.selectedId)state.selectedArchived=!!d.selectedThread.archived;
     state.threadListSource = d.historySource || null;
     for (const thread of d.data || []) createdThreads.delete(thread.id);
-    const pending = [...createdThreads.values()].filter(t => !state.search || threadName(t).includes(state.search));
+    const pending = state.sidebarArchived?[]:[...createdThreads.values()].filter(t => !state.search || threadName(t).includes(state.search));
     const all = append ? [...state.threads,...(d.data || [])] : [...pending,...(d.data || [])];
     const seen = new Set(); state.threads = all.filter(t => !seen.has(t.id) && seen.add(t.id)); state.threadCursor = d.nextCursor || null;
   } catch (e) { if (seq === state.listVersion) { state.threadPageError = true; recordError(e,'threads'); toast(messageOf(e),true); } if (reportFailure) throw e; }
-  finally { if (seq === state.listVersion) { state.loadingThreads = false; renderThreads(); if (!state.threadPageError) requestAnimationFrame(loadVisibleThreads); } }
+  finally { if (seq === state.listVersion) { state.loadingThreads = false; renderThreads(); renderControls(); if (!state.threadPageError) requestAnimationFrame(loadVisibleThreads); } }
 }
 function loadVisibleThreads() {
   const list = $('project-list');
@@ -775,32 +815,36 @@ function saveDetailSoon(){
   },5000);
 }
 async function restoreDetail(id,seq){
+  const version=state.detailVersion;
   const cached=await readDetailCache(targetHost,id);
-  if(!cached||id!==state.selectedId||seq!==state.selectionVersion||state.detail)return;
+  if(!cached||id!==state.selectedId||seq!==state.selectionVersion||version!==state.detailVersion||state.detail)return;
   state.loadingDetail=false;applyDetail(cached,true);
 }
 function applyDetail(data, resetModels = false) {
+  if(data.goalError&&state.detail?.thread?.id===data.thread?.id)data.goal=state.detail.goal;
   state.detail = {...data, turns:data.turns || data.thread?.turns || []};
   state.historyCursor = data.nextCursor || data.historyCursor || null; state.historyError = '';
   if (resetModels) renderModels(true); renderThread(); renderRequests(); if(!data.recovering)saveDetailSoon();
 }
 async function selectThread(id) {
-  voice?.interrupt();
+  if(state.busy.has('create')){toast('正在创建会话，请稍候。');return;}
+  closeNewChat();
+
   toggleInspector(false);
   $('messages').style.paddingBottom = '';
-  if (state.selectedId) state.drafts.set(state.selectedId,$('message-input').value);
+  if (inputId()) state.drafts.set(inputId(),$('message-input').value);
   const seq = ++state.selectionVersion; state.selectedId = id; state.detail = null; state.historyCursor = null; state.loadedOlderHistory = false; state.loadingDetail = true; state.historyError = ''; saveView();
-  $('message-input').value = state.drafts.get(id) || ''; resizeInput(); renderThread(); renderThreads(); if (window.innerWidth <= 700) toggleSidebar(false, false);
+  $('message-input').value = state.drafts.get(id) || ''; resizeInput(); renderThread(); renderThreads(); if (compactLayout()) toggleSidebar(false, false);
   await restoreDetail(id,seq);
-  try { const data = await readSelectedDetail(id); if (seq !== state.selectionVersion) return; state.loadingDetail = false; data.turns=mergeLiveTurns(turns(),data.turns||[]);applyDetail(data,true); $('messages-scroller').scrollTop = $('messages-scroller').scrollHeight; }
+  if(seq!==state.selectionVersion)return;
+  try { await refreshSelected(); if (seq !== state.selectionVersion) return; $('messages-scroller').scrollTop = $('messages-scroller').scrollHeight; }
   catch (e) { if (seq !== state.selectionVersion) return; state.loadingDetail = false; state.historyError = messageOf(e); recordError(e,'thread'); renderThread(); }
 }
-async function readSelectedDetail(id){
+async function readSelectedDetail(id,isCurrent){
   const cold=!state.detail,started=performance.now();let firstMs=null;
   if(!state.detail){
-    const seq=state.selectionVersion;
     const preview=await api('/api/threads/'+encodeURIComponent(id)+'?preview=1');
-    if(id!==state.selectedId||seq!==state.selectionVersion)return preview;
+    if(!isCurrent())return preview;
     state.loadingDetail=false;applyDetail(preview,true);firstMs=performance.now()-started;
   }
   const bases=outputBases(turns());
@@ -808,24 +852,30 @@ async function readSelectedDetail(id){
   const encoding=(typeof DecompressionStream==='function'?'?outputEncoding=gzip-base64':'?outputEncoding=plain')+(cold?'&fast=1':'');
   const response=await api('/api/threads/' + encodeURIComponent(id)+encoding,{headers:{'X-Output-Versions':JSON.stringify(versions)}}),received=performance.now();
   const result=hydrateOutputs(await decodeOutputs(response),bases);
-  if(cold&&id===state.selectedId)document.body.dataset.logRecovery=JSON.stringify({host:targetHost,id,firstMs:Math.round(firstMs),networkMs:Math.round(received-started-firstMs),decodeMs:Math.round(performance.now()-received),completeMs:Math.round(performance.now()-started)});
-  if(cold)setTimeout(()=>{if(id===state.selectedId)scheduleDetailRefresh();},1000);
+  if(cold&&isCurrent())document.body.dataset.logRecovery=JSON.stringify({host:targetHost,id,firstMs:Math.round(firstMs),networkMs:Math.round(received-started-firstMs),decodeMs:Math.round(performance.now()-received),completeMs:Math.round(performance.now()-started)});
+  if(cold)setTimeout(()=>{if(isCurrent())scheduleDetailRefresh();},1000);
   return result;
 }
 const detailReads = new Map();
 async function refreshSelected() {
-  if (!state.selectedId) return;
-  const id = state.selectedId, seq = state.selectionVersion;
-  if(detailReads.has(id)) return detailReads.get(id);
+  if (newChatOpen||!state.selectedId) return;
+  const id = state.selectedId, seq = state.selectionVersion, version = state.detailVersion;
+  const key=JSON.stringify([id,seq,version]);
+  const isCurrent=()=>!newChatOpen&&id===state.selectedId&&seq===state.selectionVersion&&version===state.detailVersion;
+  if(detailReads.has(key)) return detailReads.get(key);
   const read=(async()=>{
   if(!state.detail)await restoreDetail(id,seq);
-  const data = await readSelectedDetail(id); if (id !== state.selectedId || seq !== state.selectionVersion) return;
+  if(!isCurrent())return;
+  const resetModels=!state.detail||state.loadingDetail;
+  const data = await readSelectedDetail(id,isCurrent); if (!isCurrent()) return;
   data.turns = mergeLiveTurns(turns(), data.turns || data.thread?.turns || []);
   if (state.loadedOlderHistory) data.nextCursor = state.historyCursor;
-  applyDetail(data,!state.detail);
-  })();
-  detailReads.set(id,read);
-  try { await read; } finally { if(detailReads.get(id)===read)detailReads.delete(id); }
+  state.loadingDetail=false;
+  applyDetail(data,resetModels);
+  })().catch(error=>{if(isCurrent())throw error;});
+  detailReads.set(key,read);
+  try { await read; }
+  finally { if(detailReads.get(key)===read)detailReads.delete(key); }
 }
 async function refreshWorkspace(forceModels = false) {
   if (workspaceRefreshPromise) return workspaceRefreshPromise;
@@ -936,6 +986,21 @@ async function takeoverThread() {
     }
   });
 }
+async function endThreadUse() {
+  const id=state.selectedId,selection=state.selectionVersion;
+  if(!id||!usable())return;
+  state.drafts.set(id,$('message-input').value);
+  try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}
+  await action('handoff:'+id,async()=>{
+    try {
+      const handoff=await api('/api/threads/'+encodeURIComponent(id)+'/handoff',{method:'POST',timeout:45000});
+      if(id===state.selectedId&&selection===state.selectionVersion&&state.detail){state.detail.controlled=false;state.detail.handoff=handoff;state.detail.controlState='viewing';}
+      await loadStatus();renderThread();
+      if(id===state.selectedId&&selection===state.selectionVersion)handoffControls.focus();
+      if(id===state.selectedId&&selection===state.selectionVersion)toast(handoff.state==='released'?'已确认释放，可在桌面端重试。':'已退出网页使用，正在等待释放。');
+    }catch(error){await loadStatus().catch(()=>{});renderThread();if(id===state.selectedId&&selection===state.selectionVersion)handoffControls.focus();throw error;}
+  });
+}
 async function releaseService() {
   if(!confirm('将停止目标机器的专用服务，影响所有入口。请确认任务已结束，且其他入口已断开。停止后需在目标机执行 maintenance resume 才能重连。'))return;
   await action('release',async () => {
@@ -952,53 +1017,66 @@ async function respondRequest(r, answer) {
   });
 }
 function openNewDialog(projectRoot) {
-  voice?.interrupt();
-  if (!usable() || !state.models.length) { toast('连接目标机器并读取模型目录后，再新建会话。',true); return; }
-  const project = state.projects.find(p => p.id === state.projectId);
+  if(state.busy.has('create'))return;
+  flushDrafts();
   const select=clear($('new-cwd'));
   const options=state.projects.flatMap(p=>(p.roots||[]).map(root=>({root,name:p.name||baseName(root)})));
-  options.forEach(p=>{const option=el('option','',p.name);option.value=p.root;select.append(option);});
-  const preferred=(typeof projectRoot === 'string' ? projectRoot : null)||project?.roots?.[0]||currentThread()?.cwd;
+  for(const p of options){const option=el('option','',p.name);option.value=p.root;select.append(option);}
+  const preferred=(typeof projectRoot==='string'?projectRoot:null)||newDraft.cwd||state.projects.find(p=>p.id===state.projectId)?.roots?.[0]||currentThread()?.cwd;
   if(options.some(p=>p.root===preferred))select.value=preferred;
-  select.onchange=()=>{setText('new-project-path',select.value||'此连接暂无项目。请先在 Codex 中添加项目。');renderControls();};select.onchange();
-  $('new-thread-error').hidden = true;
-  fillModels($('new-model'),state.model); fillEfforts($('new-effort'),$('new-model').value,state.effort);
-  $('new-thread-dialog').showModal(); renderControls(); setTimeout(() => $('new-cwd').focus(),0);
+  newDraft.cwd=select.value;rememberNewDraft();
+  select.onchange=()=>{newDraft.cwd=select.value;rememberNewDraft();renderControls();};
+  state.selectionVersion++;newChatOpen=true;$('new-chat-page').hidden=false;document.querySelector('.main-panel').classList.add('new-chat-open');
+  $('new-composer-slot').append(document.querySelector('.composer-region'));
+  $('message-input').value=state.drafts.get(newDraftId)||'';
+  $('new-chat-error').hidden=true;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);
+  renderModels();renderControls();resizeInput();mobileUI?.syncDrawers();$('message-input').focus();
 }
-async function createThread(e) {
-  e.preventDefault(); if ($('create-thread').disabled) return; const cwd = $('new-cwd').value.trim();
-  $('new-thread-error').hidden = true;
-  if (!cwd.startsWith('/')) { $('new-thread-error').textContent = '请选择一个项目。'; $('new-thread-error').hidden = false; return; }
-  await action('create',async () => {
-    try {
-      const d = await api('/api/threads',{method:'POST',body:{cwd,model:$('new-model').value,effort:$('new-effort').value}});
-      const id = d.thread?.id || d.id; if (!id) throw new Error('服务未返回新会话 ID。请刷新列表核对结果。');
-      $('new-thread-dialog').close(); if (window.innerWidth <= 700) toggleSidebar(false, false); state.model = $('new-model').value; state.effort = $('new-effort').value;
-      const thread = {...d.thread,id,cwd,name:d.thread?.name || '新会话'};
-      createdThreads.set(id,thread); state.threads.unshift(thread);
-      const project = state.projects.find(p => p.roots?.includes(cwd));
-      state.projectId = project?.id || null; if (project) collapsedProjects.delete(project.id);
-      saveLayout('collapsedProjects.'+targetHost,[...collapsedProjects]);
-      state.search = ''; $('thread-search').value = '';
-      state.historyCursor = null; state.loadedOlderHistory = false; state.historyError = '';
-      state.selectionVersion++;
-      state.selectedId = id; toggleInspector(false); saveView(); state.loadingDetail = false; state.drafts.set(id,''); $('message-input').value = ''; applyDetail({...d,thread:{...d.thread,name:d.thread?.name || '新会话'},controlled:true},true);
-      renderThreads(); toast('目标机器会话已创建。'); $('message-input').focus();
-      void Promise.allSettled([loadThreads(),loadStatus()]);
-    } catch (err) { $('new-thread-error').textContent = messageOf(err); $('new-thread-error').hidden = false; recordError(err,'create'); }
+async function createThreadFromDraft(){
+  if(state.busy.has('create')||newDraft.phase!=='editing')return;
+  const cwd=newDraft.cwd,model=state.model,effort=state.effort,text=$('message-input').value;
+  if(!cwd||(!text.trim()&&!attachments.has())||attachments.pending())return;
+  state.drafts.set(newDraftId,text);$('new-chat-error').hidden=true;
+  let created=false;
+  await action('create',async()=>{
+    try{
+      newDraft.begin();
+      const d=await api('/api/threads',{method:'POST',body:{cwd,model,effort,access:WEB_ACCESS}});
+      const id=d.thread?.id||d.id;if(!id)throw Error('未返回会话 ID，请刷新侧栏核对创建结果。');
+      const thread={...d.thread,id,cwd,name:d.thread?.name||'新会话'};
+      createdThreads.set(id,thread);state.threads.unshift(thread);
+      attachments.moveDraft(newDraftId,id);composer.moveDraft(newDraftId,id);
+      closeNewChat(false);state.drafts.set(id,text);state.drafts.delete(newDraftId);
+      state.sidebarArchived=false;state.selectedArchived=false;state.selectedId=id;state.selectionVersion++;
+      state.model=model;state.effort=effort;state.loadingDetail=false;
+      const project=state.projects.find(p=>p.roots?.includes(cwd));state.projectId=project?.id||null;if(project)sidebar.expandProject(project.id);
+      state.search='';$('thread-search').value='';state.historyCursor=null;state.loadedOlderHistory=false;state.historyError='';
+      saveView();$('message-input').value=text;applyDetail({...d,thread,controlled:true},true);renderThreads();
+      newDraft.complete();created=true;
+    }catch(error){
+      newDraft.failed(error);$('new-chat-error').textContent=messageOf(error);$('new-chat-error').hidden=false;recordError(error,'create');
+    }
   });
+  if(created){await sendMessage();void Promise.allSettled([loadThreads(),loadStatus()]);}
 }
 async function sendMessage(e) {
-  voice?.interrupt();
-  e?.preventDefault(); const text = $('message-input').value.trim(), id = state.selectedId;
-  if (!text || !id || !usable() || !controlled() || state.busy.has('message')) return;
-  const active = running();
+  e?.preventDefault();
+  if ($('send-message').disabled) return;
+  if(newChatOpen){await createThreadFromDraft();return;}
+  const text = $('message-input').value.trim(), id = state.selectedId;
+  if ((!text&&!attachments?.has()) || attachments?.pending() || !id || !usable() || !controlled() || state.busy.has('message')) return;
+  const active = running(), selection = state.selectionVersion;
+  const sent = state.drafts.capture(id,$('message-input').value), pictures=attachments.capture();
   await action('message',async () => {
-    const payload = active ? {text} : {text,model:state.model,effort:state.effort};
+    const images=pictures.items.map(i=>({url:i.url}));
+    const payload = active ? {text,images} : {text,images,model:state.model,effort:state.effort,...composer.options()};
     const d = await api('/api/threads/' + encodeURIComponent(id) + (active ? '/steer' : '/message'),{method:'POST',body:payload});
-    state.drafts.delete(id); if (id === state.selectedId) { $('message-input').value = ''; resizeInput(); if (d.turn) { upsertTurn(d.turn); const t = ensureTurn(d.turn.id); if (!t.items.some(item => item.type === 'userMessage' && contentText(item.content) === text)) t.items.unshift({id:'accepted-'+d.turn.id,type:'userMessage',content:[{type:'text',text}],localAccepted:true}); } renderThread(); }
+    attachments.acknowledge(pictures);
+    const cleared = state.drafts.acknowledge(sent);
+    if (id === state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }
+    if (id === state.selectedId && selection === state.selectionVersion) { if (d.turn) { upsertTurn(d.turn); const t = ensureTurn(d.turn.id); const content=[...(text?[{type:'text',text}]:[]),...images.map(i=>({type:'image',url:i.url}))]; if (!t.items.some(item => item.type === 'userMessage' && userContentKey(item.content) === userContentKey(content))) t.items.unshift({id:'accepted-'+d.turn.id,type:'userMessage',content,localAccepted:true}); } renderThread(); }
     if (active) toast('补充要求已发送到当前轮次。');
-    try { await refreshSelected(); } catch (err) { recordError(err,'thread'); }
+    try { if (id === state.selectedId && selection === state.selectionVersion) await refreshSelected(); } catch (err) { recordError(err,'thread'); }
   });
 }
 async function interruptThread() {
@@ -1037,7 +1115,7 @@ function ensureTurn(id) {
   if (!t) { t = {id:id || 'live',status:'inProgress',items:[]}; state.detail.turns = [...turns(),t]; }
   return t;
 }
-function upsertItem(turnId,item) { const t = ensureTurn(turnId); if (!t) return; if (item.type === 'userMessage') t.items = t.items.filter(old => !old.localAccepted || contentText(old.content) !== contentText(item.content)); const i = t.items.findIndex(x => x.id === item.id); if (i >= 0) t.items[i] = mergeLiveTurns([{id:turnId,items:[t.items[i]]}],[{id:turnId,items:[item]}])[0].items[0]; else t.items.push(item); }
+function upsertItem(turnId,item) { const t = ensureTurn(turnId); if (!t) return; if (item.type === 'userMessage') t.items = t.items.filter(old => !old.localAccepted || userContentKey(old.content) !== userContentKey(item.content)); const i = t.items.findIndex(x => x.id === item.id); if (i >= 0) t.items[i] = mergeLiveTurns([{id:turnId,items:[t.items[i]]}],[{id:turnId,items:[item]}])[0].items[0]; else t.items.push(item); }
 function scheduleStreamRender() {
   if (state.streamRender) return; state.streamRender = true;
   setTimeout(() => { state.streamRender = false; renderMessages(); renderSession(); renderFiles(); renderControls(); },80);
@@ -1111,7 +1189,7 @@ function setupEvents() {
   const es = new EventSource(targetUrl('/api/events')); state.eventSource = es;
   es.onopen = () => {
     const restored = !state.transport; state.transport = true; renderStatus();
-    if (restored) refreshWorkspace().catch(e => { recordError(e,'sync'); renderStatus(); });
+    if (restored) resumeWorkspace().catch(e => { recordError(e,'sync'); renderStatus(); });
   };
   es.onmessage = handleEvent;
   ['manager/status','manager/error','manager/request','manager/requestResolved'].forEach(name => es.addEventListener(name,handleEvent));
@@ -1171,7 +1249,7 @@ function setupResizableLayout() {
   window.addEventListener('resize',apply); apply();
 }
 function toggleSidebar(open, persist = true) {
-  const shell = $('app-shell'); const mobile = window.innerWidth <= 700;
+  const shell = $('app-shell'); const mobile = compactLayout();
   const show = open ?? (mobile ? !shell.classList.contains('sidebar-open') : shell.classList.contains('sidebar-hidden'));
   shell.classList.toggle('sidebar-open', mobile && show);
   shell.classList.toggle('sidebar-hidden', !mobile && !show);
@@ -1182,7 +1260,7 @@ function toggleSidebar(open, persist = true) {
 function toggleInspector(open) {
   const shell = $('app-shell'); const show = open ?? shell.classList.contains('inspector-hidden');
   shell.classList.toggle('inspector-hidden', !show); $('toggle-inspector').setAttribute('aria-expanded',String(show));
-  if (show && window.innerWidth <= 700) toggleSidebar(false, false);
+  if (show && compactLayout()) toggleSidebar(false, false);
 }
 function toggleMessageDetails(show) {
   const scroller = $('messages-scroller');
@@ -1195,12 +1273,12 @@ function toggleMessageDetails(show) {
   if (atBottom) scroller.scrollTop = scroller.scrollHeight;
 }
 function wireEvents() {
-  const fitKeyboard=()=>{document.documentElement.style.setProperty('--visual-height',(window.visualViewport?.height||window.innerHeight)+'px');};
-  window.visualViewport?.addEventListener('resize',fitKeyboard);fitKeyboard();
-  voice=installVoice({input:$('message-input'),context:()=>targetHost+':'+state.selectedId,render:()=>renderControls()});
+  attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady(),busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
+  handoffControls??=createHandoffControls({endUse:endThreadUse});
+  composer=installComposer({host:targetHost,api,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
   const settings = $('composer-settings');
   document.addEventListener('click',event => { if (!settings.contains(event.target)) settings.open = false; });
-  settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); settings.open = false; settings.querySelector('summary').focus(); } });
+  settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); settings.open = false; settings.querySelector('summary').focus(); } });
   setupResizableLayout();
   try { taskNotificationsEnabled = localStorage.getItem('rcm.taskNotifications.' + targetHost) === 'true'; } catch {}
   renderTaskNotifications();
@@ -1211,19 +1289,25 @@ function wireEvents() {
   try { autoRefresh = localStorage.getItem('rcm.autoRefresh.' + targetHost) === 'true'; } catch {}
   setAutoRefresh(autoRefresh);
   $('auto-refresh').onchange = event => setAutoRefresh(event.target.checked);
-  window.addEventListener('pagehide', () => { clearInterval(autoRefreshTimer); autoRefreshTimer = null; });
-  window.addEventListener('pageshow', event => { toggleInspector(false); if (event.persisted) setAutoRefresh($('auto-refresh').checked); });
+  window.addEventListener('pagehide', () => { flushDrafts(); clearInterval(autoRefreshTimer); autoRefreshTimer = null; });
+  window.addEventListener('pageshow', event => { if (event.persisted) setAutoRefresh($('auto-refresh').checked); });
+  document.addEventListener('visibilitychange',() => { if (document.hidden) flushDrafts(); });
+  installThreadSync({window,document,
+    canSync:()=>!newChatOpen&&connected()&&!state.status?.service?.releasing&&!!state.selectedId&&!state.busy.has('handoff:'+state.selectedId),
+    refresh:refreshSelected,resume:resumeWorkspace,
+    onError:error=>{const message='自动同步暂未成功，将自动重试：'+messageOf(error);if(state.historyError!==message){state.historyError=message;recordError(error,'sync');renderThread();}},
+  });
   let composerWidth = 0;
   new ResizeObserver(entries => {
     const width = entries[0].contentRect.width;
-    if (width !== composerWidth) { composerWidth = width; resizeInput(); }
+    if (width !== composerWidth) { composerWidth = width; requestAnimationFrame(resizeInput); }
   }).observe($('message-input'));
   toggleMessageDetails(readLayout('messageDetails',false));
   $('toggle-message-details').onclick = () => toggleMessageDetails(!$('conversation').classList.contains('show-message-details'));
   $('connect-button').onclick = () => connected()||connectionPending() ? disconnectRemote() : connectRemote();
   $('welcome-connect').onclick = () => connected() ? openNewDialog() : connectRemote();
   $('new-thread').onclick = openNewDialog; $('takeover').onclick = takeoverThread; $('release-service').onclick = releaseService;
-  $('refresh-all').onclick = () => action('refresh',() => refreshWorkspace(true)); $('refresh-projects').onclick = () => action('projects',() => showRefresh('项目列表',loadProjects));
+  $('refresh-all').onclick = () => action('refresh',() => refreshWorkspace(true)); $('refresh-projects').onclick = () => action('projects',() => showRefresh('侧边栏',()=>loadThreads(false,true)));
   $('project-list').addEventListener('scroll',loadVisibleThreads,{passive:true});
   new ResizeObserver(loadVisibleThreads).observe($('project-list'));
   const historyScroller = $('messages-scroller');
@@ -1238,31 +1322,31 @@ function wireEvents() {
   historyScroller.addEventListener('keydown',event => { if (['ArrowUp','PageUp','Home'].includes(event.key)) loadEarlierNearTop(); });
   let searchTimer; $('thread-search').oninput = e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.search = e.target.value.trim(); loadThreads(); },300); };
   $('message-form').onsubmit = sendMessage; $('interrupt').onclick = interruptThread;
-  $('message-input').oninput = () => { if (state.selectedId) state.drafts.set(state.selectedId,$('message-input').value); resizeInput(); renderControls(); };
-  $('message-input').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!$('send-message').disabled) sendMessage(); } };
+  $('message-input').oninput = () => { if (inputId() && !draftWritesSuspended) state.drafts.set(inputId(),$('message-input').value); resizeInput(); renderControls(); };
+  let composing = false, compositionEnded = -Infinity;
+  $('message-input').addEventListener('compositionstart',() => { composing = true; });
+  $('message-input').addEventListener('compositionend',() => { composing = false; compositionEnded = performance.now(); });
+  $('message-input').onkeydown = e => { if (shouldSendOnEnter(e,{touch:touchInput(),composing,compositionEnded})) { e.preventDefault(); if (!$('send-message').disabled) sendMessage(); } };
   $('model-select').onchange = e => { state.model = e.target.value; state.effort = defaultEffort(state.model); fillEfforts($('effort-select'),state.model,state.effort); renderControls(); };
   $('effort-select').onchange = e => { state.effort = e.target.value; renderControls(); };
-  $('new-model').onchange = e => { fillEfforts($('new-effort'),e.target.value); renderControls(); };
-  $('new-effort').onchange = renderControls;
-  $('new-thread-dialog').addEventListener('cancel',e => { if (state.busy.has('create')) e.preventDefault(); });
-  $('new-thread-form').onsubmit = createThread;
-  ['close-new-dialog','cancel-new-dialog'].forEach(id => $(id).onclick = () => $('new-thread-dialog').close());
-  $('new-thread-dialog').addEventListener('click',e => { if (e.target === $('new-thread-dialog') && !state.busy.has('create')) { const b = e.target.getBoundingClientRect(); if (e.clientX < b.left || e.clientX > b.right || e.clientY < b.top || e.clientY > b.bottom) e.target.close(); } });
+  $('new-retry-create').onclick=()=>{newDraft.complete();$('new-chat-error').hidden=true;renderControls();$('message-input').focus();};
+  $('close-new-chat').onclick=()=>{if(!state.busy.has('create'))closeNewChat();};
+
   $('toggle-inspector').onclick = () => toggleInspector(); $('close-inspector').onclick = () => toggleInspector(false);
   $('open-sidebar').onclick = () => toggleSidebar();
   $('close-sidebar').onclick = () => { toggleSidebar(false); $('open-sidebar').focus(); };
-  $('sidebar-backdrop').onclick = () => { if (window.innerWidth <= 700) toggleSidebar(false); toggleInspector(false); };
+  $('sidebar-backdrop').onclick = () => { if (compactLayout()) toggleSidebar(false); toggleInspector(false); };
   $('toggle-projects').onclick = () => { const show = $('project-list').hidden; $('project-list').hidden = !show; $('toggle-projects').setAttribute('aria-expanded',String(show)); saveLayout('projects',show); };
-  document.addEventListener('keydown',e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); toggleSidebar(true); $('thread-search').focus(); } if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') { e.preventDefault(); openNewDialog(); } if (e.key === 'Escape') { if (window.innerWidth <= 700) toggleSidebar(false); if (window.innerWidth <= 1050) toggleInspector(false); } });
-  toggleSidebar(window.innerWidth > 700 && readLayout('sidebar',true), false);
+  document.addEventListener('keydown',e => { if(e.defaultPrevented||document.querySelector('dialog[open]'))return; if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); toggleSidebar(true); $('thread-search').focus(); } if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') { e.preventDefault(); openNewDialog(); } if (e.key === 'Escape' && !compactLayout() && window.innerWidth <= 1050) toggleInspector(false); });
+  toggleSidebar(!compactLayout() && readLayout('sidebar',true), false);
   toggleInspector(false);
   $('project-list').hidden = !readLayout('projects',true);
   $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
-  let narrow = window.innerWidth <= 700;
-  window.addEventListener('resize', () => { const next = window.innerWidth <= 700; if (next !== narrow) { narrow = next; toggleSidebar(!next && readLayout('sidebar',true), false); } });
-  window.addEventListener('online',() => refreshWorkspace().catch(e => recordError(e,'sync')));
+  mobileUI = installMobileUI({closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:mobile=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
+  window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {
+  setInterval(()=>{if(connected()&&!state.loadingThreads&&!sidebar.pending&&!sidebar.menu&&!sidebar.dialog&&!document.hidden)loadThreads();},15000);
   $('messages').addEventListener('click',e=>{
     const summary=e.target.closest('summary');if(!summary)return;
     const detail=summary.closest('details[data-item-id]');if(!detail)return;
@@ -1270,7 +1354,7 @@ async function init() {
     if(detail.open)ids.delete(detail.dataset.itemId);else ids.add(detail.dataset.itemId);
     try{sessionStorage.setItem('rcm.openDetails.'+targetHost+'.'+state.selectedId,JSON.stringify([...ids]));}catch{}
   });
-  installBrowserBackup(connectionConfig,()=>{saveView();saveOutputPositions();if(state.selectedId)state.drafts.set(state.selectedId,$('message-input').value);sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));});
+  installBrowserBackup(connectionConfig,flushDrafts,()=>{draftWritesSuspended=true;});
   const inspector=$('inspector');
   const navigation=el('nav','inspector-nav');navigation.setAttribute('aria-label','工作区详情分类');
   inspector.querySelector('.inspector-heading').after(navigation);
@@ -1280,6 +1364,7 @@ async function init() {
   function showInspectorView(view){
     groups.forEach(group=>{group.hidden=category(group)!==view;if(!group.hidden&&group.id!=='diagnostics')group.open=true;});
     navigation.querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.view===view)));
+    inspector.scrollTop = 0;
   }
   for(const [view,title] of views){const button=el('button','',title);button.type='button';button.dataset.view=view;button.onclick=()=>showInspectorView(view);navigation.append(button);}
   showInspectorView('session');
@@ -1289,14 +1374,13 @@ async function init() {
   try { const c = await api('/api/csrf'); state.csrf = c.token; await loadStatus(); if (connected()) await refreshWorkspace(); else if (!connectionPending()) await connectRemote(); }
   catch (e) { recordError(e,'init'); const n = $('connection-banner'); n.hidden = false; n.className = 'connection-banner error'; n.textContent = messageOf(e); }
 }
-try{state.drafts=new Map(JSON.parse(sessionStorage.getItem('rcm.drafts.'+targetHost)||'[]'));}catch{}
 if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
 init();
 
 $('connection-select').value=targetHost;
-$('connection-select').onchange=()=>{voice?.interrupt();rememberHost($('connection-select').value);if(state.selectedId)state.drafts.set(state.selectedId,$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',$('connection-select').value);location.assign(url);};
+$('connection-select').onchange=()=>{if(state.busy.has('create'))return;rememberHost($('connection-select').value);if(inputId())state.drafts.set(inputId(),$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',$('connection-select').value);location.assign(url);};
 
 const clearRecovery=el('button','text-button','清除日志缓存并重新加载');
 clearRecovery.type='button';
-clearRecovery.onclick=async()=>{clearRecovery.disabled=true;clearTimeout(cacheSaveTimer);try{await clearDetailCache();location.reload();}catch(e){clearRecovery.disabled=false;toast('无法清除日志缓存：'+messageOf(e),true);}};
+clearRecovery.onclick=async()=>{flushDrafts();clearRecovery.disabled=true;clearTimeout(cacheSaveTimer);try{await clearDetailCache();location.reload();}catch(e){clearRecovery.disabled=false;toast('无法清除日志缓存：'+messageOf(e),true);}};
 $('diagnostics').append(clearRecovery);

@@ -1,0 +1,184 @@
+{
+  "desktop": {
+    "viewport": [
+      1440,
+      1000
+    ],
+    "version": {
+      "version": "12bcbaa02f99180e7acd60e9decd3ed7c712b6b4",
+      "machineId": "marco"
+    },
+    "fixture": false,
+    "form": {
+      "left": 280,
+      "right": 1160,
+      "width": 880,
+      "height": 188,
+      "bottom": 994
+    },
+    "actions": {
+      "left": 289,
+      "right": 1151,
+      "width": 862,
+      "height": 36,
+      "bottom": 987
+    },
+    "send": {
+      "left": 1115,
+      "right": 1149,
+      "width": 34,
+      "height": 34,
+      "bottom": 986
+    },
+    "disabled": false,
+    "permissionControls": 0,
+    "overflow": false,
+    "thumbnailDecoded": true,
+    "errors": [],
+    "violations": []
+  },
+  "mobile": {
+    "viewport": [
+      390,
+      844
+    ],
+    "form": {
+      "left": 12,
+      "right": 378,
+      "width": 366,
+      "height": 212,
+      "bottom": 836
+    },
+    "actions": {
+      "left": 17,
+      "right": 373,
+      "width": 356,
+      "height": 48,
+      "bottom": 831
+    },
+    "send": {
+      "left": 325,
+      "right": 373,
+      "width": 48,
+      "height": 48,
+      "bottom": 831
+    },
+    "disabled": false,
+    "overflow": false,
+    "permissionControls": 0,
+    "backgroundRunning": false,
+    "errors": [],
+    "violations": []
+  },
+  "send": {
+    "qa": {
+      "calls": [
+        {
+          "url": "/api/threads?host=local",
+          "status": 201,
+          "access": "full",
+          "threadId": "01a14efd-ba2d-7240-a682-1e84ef04fc48"
+        },
+        {
+          "url": "/api/threads/01a14efd-ba2d-7240-a682-1e84ef04fc48/message?host=local",
+          "status": 200,
+          "access": "full",
+          "mode": "default",
+          "images": [
+            {
+              "prefix": "data:image/jpeg;base64,/9j/4AA",
+              "length": 12799
+            }
+          ],
+          "turnId": "01a14efe-39a4-7b02-a578-2dbc192d816c"
+        }
+      ],
+      "errors": [],
+      "violations": []
+    },
+    "reply": [
+      "我会读取图片编号和圆形颜色，并执行指定的只读命令。",
+      "RCM–FINAL–4827，红色，WEB_FULL_ACCESS_FINAL_OK"
+    ],
+    "backgroundRunning": false,
+    "draft": "",
+    "images": 0
+  },
+  "enginePolicy": {
+    "threadId": "01a14efd-ba2d-7240-a682-1e84ef04fc48",
+    "contexts": [
+      {
+        "turn_id": "01a14efe-39a4-7b02-a578-2dbc192d816c",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        }
+      }
+    ]
+  },
+  "resources": {
+    "version": "12bcbaa02f99180e7acd60e9decd3ed7c712b6b4",
+    "resources": {
+      "composer.css": {
+        "matches": true,
+        "sha256": "f19b9c7d286659cb4b1ec6a0baf3e6972f5c74e8a7db20496fd76c41f1a4544b"
+      },
+      "composer.js": {
+        "matches": true,
+        "sha256": "b518c09272d29cc61fd11b5d52baecae5231622e2bc3fbd91bf6d85cff6f6eb4"
+      },
+      "attachments.js": {
+        "matches": true,
+        "sha256": "c3a281d6d874337d707a35ac1e9bb377ee6886fe4e0e2489abc1c1ebfe0487c3"
+      },
+      "app.js": {
+        "matches": true,
+        "sha256": "2f604fa37010b7841dd6953609c377f0b586ff332e806bf17a84e452c87b7bf7"
+      }
+    }
+  },
+  "serviceStatus": {
+    "seconds": 1.7,
+    "version": "12bcbaa02f99180e7acd60e9decd3ed7c712b6b4",
+    "keys": [
+      "thread",
+      "turns",
+      "nextCursor",
+      "historySource",
+      "outputPreview",
+      "controlled",
+      "controlState",
+      "handoff",
+      "goal",
+      "goalError",
+      "queue",
+      "backgroundTerminals",
+      "pendingRequests"
+    ],
+    "status": {
+      "type": "idle"
+    },
+    "controlled": true,
+    "goalError": null,
+    "backgroundTerminals": {
+      "data": [],
+      "nextCursor": null
+    },
+    "backgroundTerminalsError": null,
+    "pendingRequests": []
+  },
+  "completedTurn": {
+    "threadId": "01a14efd-ba2d-7240-a682-1e84ef04fc48",
+    "turnId": "01a14efe-39a4-7b02-a578-2dbc192d816c",
+    "status": "completed",
+    "command": "/bin/zsh -lc 'printf WEB_FULL_ACCESS_FINAL_OK'",
+    "exitCode": 0,
+    "output": "WEB_FULL_ACCESS_FINAL_OK",
+    "reply": "RCM–FINAL–4827，红色，WEB_FULL_ACCESS_FINAL_OK"
+  },
+  "limitations": [
+    "390px Chromium 模拟，不代表实体手机或 Safari。",
+    "本轮未重新验证实体中文输入法。",
+    "目标状态读取有间歇超时；界面曾显示后台命令状态待确认，随后独立服务读取确认会话空闲、后台命令为空。"
+  ]
+}
