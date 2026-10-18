@@ -45,12 +45,15 @@ export function installComposer({host,api,context,refresh,notify}) {
       const seen=new Set(),items=entries.filter(e=>{const key=e.path||e.id;if(seen.has(key))return false;seen.add(key);return true;});
       const search=document.createElement('input');search.type='search';search.placeholder='搜索';search.setAttribute('aria-label','搜索'+(kind==='skills'?'技能':'插件'));dialog.append(search);
       const list=document.createElement('div');list.className='composer-catalog';dialog.append(list);
+      const errors=kind==='skills'?(source.data||[]).flatMap(e=>e.errors||[]):source.marketplaceLoadErrors||[];
+      if(errors.length){const warning=text('p','部分目录未能读取，列表可能不完整。已有选择仍保留。'),retry=text('button','重新读取');warning.setAttribute('role','status');retry.type='button';retry.onclick=()=>{dialog.close();void picker(kind,button);};dialog.append(warning,retry);}
+      for(const key of choice()[kind])if(!seen.has(key))items.push({[kind==='skills'?'path':'id']:key,name:key,enabled:false,missing:true});
       if(!items.length)list.append(text('p',kind==='skills'?'此项目暂无技能。':'目标机器暂无已安装插件。'));
       for(const entry of items){
         const key=kind==='skills'?entry.path:entry.id,label=document.createElement('label');label.className='composer-catalog-item';
-        const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=choice()[kind].includes(key);checkbox.disabled=!entry.enabled;
-        const body=document.createElement('span');body.append(text('strong',entry.interface?.displayName||entry.name),text('small',entry.description||entry.interface?.shortDescription||(!entry.enabled?'未启用':'')));
-        checkbox.onchange=()=>{if(context().id!==id)return;const c=choice();c[kind]=checkbox.checked?[...c[kind],key]:c[kind].filter(v=>v!==key);save();render();};
+        const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=choice()[kind].includes(key);checkbox.disabled=!entry.enabled&&!checkbox.checked;
+        const body=document.createElement('span');body.append(text('strong',entry.interface?.displayName||entry.name),text('small',[entry.description||entry.interface?.shortDescription, !entry.enabled?(entry.missing?'目录中暂不可用，可取消选择后重试':(entry.disabledReason||'未启用')+'；已选项目可取消选择'):''].filter(Boolean).join(' · ')));
+        checkbox.onchange=()=>{if(context().id!==id)return;const c=choice();c[kind]=checkbox.checked?[...c[kind],key]:c[kind].filter(v=>v!==key);checkbox.disabled=!entry.enabled&&!checkbox.checked;save();render();};
         label.append(checkbox,body);list.append(label);
       }
       search.oninput=()=>{for(const row of list.querySelectorAll('label'))row.hidden=!row.textContent.toLowerCase().includes(search.value.toLowerCase());};
