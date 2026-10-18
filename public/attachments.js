@@ -9,8 +9,12 @@ export class AttachmentDrafts {
 }
 async function prepare(file){
   if(!file.type.startsWith('image/')||file.size>25*1024*1024)throw Error('请选择小于 25 MB 的图片。');
-  const url=URL.createObjectURL(file),img=new Image();
-  try{img.src=url;await img.decode();const scale=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);let data;for(const quality of [.86,.7,.5,.3]){data=canvas.toDataURL('image/jpeg',quality);if(data.length<=1000000)return data;}throw Error('图片压缩后仍过大，请裁剪后重试。');}catch(e){throw Error(e.message.includes('过大')?e.message:'无法读取此图片，请转为 JPEG、PNG 或 WebP 后重试。');}finally{URL.revokeObjectURL(url);}
+  const img=new Image();
+  try{
+    // The application's img-src policy permits data images, but not blob URLs.
+    img.src=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.onabort=()=>reject(Error('图片读取已取消。'));reader.readAsDataURL(file);});
+    await img.decode();const scale=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);let data;for(const quality of [.86,.7,.5,.3]){data=canvas.toDataURL('image/jpeg',quality);if(data.length<=1000000)return data;}throw Error('图片压缩后仍过大，请裁剪后重试。');
+  }catch(e){throw Error(e?.message?.includes('过大')?e.message:'无法读取此图片，请转为 JPEG、PNG 或 WebP 后重试。');}
 }
 export function installAttachments({host,context,changed,notify}){
   const store=new AttachmentDrafts(sessionStorage,'rcm.images.'+host,notify),form=document.getElementById('message-form'),input=document.getElementById('message-input');

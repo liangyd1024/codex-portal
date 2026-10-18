@@ -1,21 +1,18 @@
+export const WEB_ACCESS='full';
+
 export function installComposer({host,api,context,refresh,notify}) {
   const link=document.createElement('link');link.rel='stylesheet';link.href='/composer.css';document.head.append(link);
   const bar=document.createElement('div');bar.className='composer-tools';
-  bar.innerHTML='<label><span class="sr-only">执行模式</span><select id="execution-mode" aria-label="执行模式"><option value="default">执行</option><option value="plan">计划</option></select></label><label><span class="sr-only">权限</span><select id="access-mode" aria-label="权限"><option value="default">默认权限</option><option value="full">完全访问</option></select></label><button type="button" id="goal-settings">目标</button><button type="button" id="skill-picker">技能</button><button type="button" id="plugin-picker">插件</button><span id="composer-tools-status" role="status"></span>';
+  bar.innerHTML='<label><span class="sr-only">执行模式</span><select id="execution-mode" aria-label="执行模式"><option value="default">执行</option><option value="plan">计划</option></select></label><button type="button" id="goal-settings">目标</button><button type="button" id="skill-picker">技能</button><button type="button" id="plugin-picker">插件</button><span id="composer-tools-status" role="status"></span>';
   const tools=document.createElement('details');tools.className='composer-options';
   const summary=document.createElement('summary');summary.textContent='工具';summary.setAttribute('aria-label','更多输入工具');const panel=document.createElement('div');panel.className='composer-options-panel';
   for(const button of bar.querySelectorAll('button'))panel.append(button);tools.append(summary,panel);bar.querySelector('[role=status]').before(tools);
-  const position=()=>{if(!tools.open)return;const v=window.visualViewport,top=v?.offsetTop||0,height=v?.height||innerHeight;panel.style.maxHeight=Math.max(44,height-24)+'px';panel.style.top=Math.max(top+8,bar.getBoundingClientRect().top-panel.offsetHeight-8)+'px';};
+  const position=()=>{if(!tools.open)return;const v=window.visualViewport,top=v?.offsetTop||0,left=v?.offsetLeft||0,height=v?.height||innerHeight,width=v?.width||innerWidth;panel.style.maxHeight=Math.max(44,height-24)+'px';panel.style.maxWidth=Math.max(0,width-16)+'px';panel.style.right='auto';panel.style.left=Math.max(left+8,Math.min(summary.getBoundingClientRect().right-panel.offsetWidth,left+width-panel.offsetWidth-8))+'px';panel.style.top=Math.max(top+8,bar.getBoundingClientRect().top-panel.offsetHeight-8)+'px';};
   tools.addEventListener('toggle',position);window.visualViewport?.addEventListener('resize',position);window.visualViewport?.addEventListener('scroll',position);window.addEventListener('resize',position);
   tools.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();tools.open=false;summary.focus();}});
   document.addEventListener('pointerdown',e=>{if(!tools.contains(e.target))tools.open=false;});
   document.getElementById('message-form').before(bar);
-  const mode=bar.querySelector('#execution-mode'),access=bar.querySelector('#access-mode'),status=bar.querySelector('#composer-tools-status');
-  const preference='rcm.access.'+host;
-  let saved;try{saved=localStorage.getItem(preference);}catch{}
-  // The owner explicitly requested full access as the default for this workbench.
-  access.value=saved==='default'?'default':'full';
-  access.onchange=()=>{try{localStorage.setItem(preference,access.value);}catch{notify('权限已选择，但浏览器无法记住，下次打开请重新核对。',true);}render();};
+  const mode=bar.querySelector('#execution-mode'),status=bar.querySelector('#composer-tools-status');
   const selectionKey='rcm.composer.'+host;let savedSelections;try{savedSelections=JSON.parse(sessionStorage.getItem(selectionKey)||'[]');}catch{}
   const selections=new Map(Array.isArray(savedSelections)?savedSelections.filter(v=>Array.isArray(v)&&typeof v[0]==='string'&&['default','plan'].includes(v[1]?.mode)&&Array.isArray(v[1]?.skills)&&Array.isArray(v[1]?.plugins)):[]);let selected,loading=false;
   const save=()=>{try{sessionStorage.setItem(selectionKey,JSON.stringify([...selections]));}catch{notify('输入工具选择暂未保存，刷新后请重新核对。',true);}};
@@ -90,7 +87,8 @@ export function installComposer({host,api,context,refresh,notify}) {
     mode.value=choice().mode;const count=choice().skills.length+choice().plugins.length;summary.textContent='工具'+(count?' '+count:'');
     for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||c.active;
     if(c.goalError){bar.querySelector('#goal-settings').textContent='目标（状态待确认）';bar.querySelector('#goal-settings').title='目标状态暂未读取，请刷新后重试。';}else{bar.querySelector('#goal-settings').textContent='目标';bar.querySelector('#goal-settings').title='设置目标';}
-    status.textContent=[access.value==='full'?'命令无需逐次审批':'',choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:'',c.goalError?'目标状态暂不可用':c.goal?'目标：'+({active:'进行中',paused:'已暂停',complete:'已完成'}[c.goal.status]||c.goal.status):''].filter(Boolean).join(' · ');
+    status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:'',c.goalError?'目标状态暂不可用':c.goal?'目标：'+({active:'进行中',paused:'已暂停',complete:'已完成'}[c.goal.status]||c.goal.status):''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
   }
-  return {render,setAccess:value=>{access.value=value;access.onchange();},access:()=>access.value,options:()=>({access:access.value,...choice()}),isLoading:()=>loading};
+  // Web access is fixed by owner policy; old stored preferences cannot override it.
+  return {render,options:()=>({...choice(),access:WEB_ACCESS}),isLoading:()=>loading};
 }

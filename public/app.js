@@ -8,12 +8,12 @@ let mobileUI, draftWritesSuspended = false;
 import {createHandoffControls} from './thread-handoff.js';
 let handoffControls;
 import {installBrowserBackup} from './browser-backup.js';
-import {installComposer} from './composer.js';
+import {installComposer, WEB_ACCESS} from './composer.js';
 import {installMobile} from './mobile.js';
 let composer;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from './detail-cache.js';
 import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
-import {selectConnectionStatus, mergeLiveTurns, taskNotice, claimNotice} from './connection-state.js';
+import {selectConnectionStatus, mergeLiveTurns, taskNotice, claimNotice, backgroundActivity} from './connection-state.js';
 function savedHost() { try { return localStorage.getItem('rcm.connection'); } catch { return null; } }
 const requestedHost = new URL(location.href).searchParams.get('host');
 const response=await fetch('/api/connections');
@@ -124,7 +124,6 @@ function running() {
   if (uncertainHistory()) return false;
   return turns().some(t => ['inProgress','in_progress','running'].includes(typeOf(t.status))) || typeOf(currentThread()?.status) === 'active';
 }
-function backgroundRunning(){return controlled()&&((state.detail?.backgroundTerminals?.data||[]).length>0||turns().some(t=>(t.items||[]).some(i=>i.type==='commandExecution'&&['inProgress','running'].includes(i.status))));}
 function requestThread(r) { return r.threadId || r.params?.threadId; }
 function requests() {
   const all = [...(state.status?.pendingRequests || []), ...(state.detail?.pendingRequests || []), ...state.localRequests];
@@ -277,6 +276,7 @@ function renderControlOverview() {
 }
 function renderControls() {
   const ready = usable(), own = controlled()&&!state.selectedArchived, active = running();
+  const background = backgroundActivity(state.detail,{controlled:own,connected:ready});
   const handoff=currentHandoff(),handing=state.busy.has('handoff:'+state.selectedId)||handoff?.state==='checking';
   handoffControls??=createHandoffControls({endUse:endThreadUse});
   handoffControls.render({id:state.selectedId,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId)),handoff,connected:ready,
@@ -299,7 +299,7 @@ function renderControls() {
   $('send-message').setAttribute('aria-label',active ? '补充当前轮次' : '发送消息');
   $('message-form').setAttribute('aria-busy',String(posting));
   $('send-message').title = posting ? '正在发送…' : active ? '补充当前轮次' : '发送消息';
-  $('interrupt').hidden = !active&&!backgroundRunning(); $('interrupt').disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt');
+  $('interrupt').hidden = !active&&background.state!=='running'; $('interrupt').disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt');
   $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || handing || !state.selectedId;
   $('takeover').querySelector('span').textContent = switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话';
   const availability = $('composer-availability');
@@ -309,17 +309,20 @@ function renderControls() {
   controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
   controlReason('takeover',!ready ? '连接恢复后可接管。' : switching ? '正在接管，请稍候。' : handing ? '交还状态正在确认，请稍候。' : '当前引擎暂不支持接管。');
   controlReason('release-service',!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。');
-  $('interrupt').setAttribute('aria-label',state.busy.has('interrupt') ? '正在请求停止' : '停止当前轮次');
+  $('interrupt').title=active?'停止当前轮次':'停止后台命令';
+  $('interrupt').setAttribute('aria-label',state.busy.has('interrupt') ? '正在请求停止' : $('interrupt').title);
   $('interrupt').setAttribute('aria-busy',String(state.busy.has('interrupt')));
-  $('running-indicator').hidden = !active&&!backgroundRunning();
-  $('running-indicator').lastElementChild.textContent=active?'正在执行':'后台命令仍在运行';
+  $('running-indicator').hidden = !active&&background.state==='idle';
+  $('running-indicator').firstElementChild.hidden=!active&&background.state!=='running';
+  $('running-indicator').lastElementChild.textContent=active?'正在执行':background.state==='running'?'后台命令仍在运行（'+background.terminals.length+'）':'后台命令状态待确认';
+  $('running-indicator').title=active?'':background.state==='running'?background.terminals.map(t=>t.command).filter(Boolean).join('\n'):background.state==='unknown'?'连接恢复或下次同步后重新核对。':'';
   const createReason = !ready ? '连接目标机器并恢复实时通道后才能创建。' : !featureReady('create') ? '当前引擎不支持创建会话：'+(state.status?.service?.protocolValidation?.features?.create?.reason || '请查看连接诊断') : !$('new-cwd').value ? '请先选择项目。' : !$('new-model').value || !$('new-effort').value ? '请选择可用的模型与思考档位。' : '';
   $('create-thread').disabled = creating || Boolean(createReason);
   $('create-thread').replaceChildren(icon(creating ? 'refresh' : 'plus'),el('span','',creating ? '正在创建…' : '创建会话'));
   $('new-thread-form').setAttribute('aria-busy',String(creating));
   setText('new-thread-status',creating ? '正在等待目标机器创建会话，请勿重复提交。' : createReason);
   $('new-thread-status').hidden = !creating && !createReason;
-  ['new-cwd','new-model','new-effort','new-access','close-new-dialog','cancel-new-dialog'].forEach(id => $(id).disabled = creating);
+  ['new-cwd','new-model','new-effort','close-new-dialog','cancel-new-dialog'].forEach(id => $(id).disabled = creating);
   document.querySelectorAll('.project-create').forEach(button => { button.disabled = $('new-thread').disabled; });
   setText('composer-model-label',(modelFor(state.model)?.displayName || state.model || '模型')+' · '+(effortNames[state.effort] || state.effort || '档位'));
   composer?.render(); attachments?.render();
@@ -1004,7 +1007,6 @@ function openNewDialog(projectRoot) {
   select.onchange=()=>{setText('new-project-path',select.value||'此连接暂无项目。请先在 Codex 中添加项目。');renderControls();};select.onchange();
   $('new-thread-error').hidden = true;
   fillModels($('new-model'),state.model); fillEfforts($('new-effort'),$('new-model').value,state.effort);
-  $('new-access').value=composer?.access()||'full';
   $('new-thread-dialog').showModal(); renderControls(); setTimeout(() => $('new-cwd').focus(),0);
 }
 async function createThread(e) {
@@ -1013,8 +1015,7 @@ async function createThread(e) {
   if (!cwd.startsWith('/')) { $('new-thread-error').textContent = '请选择一个项目。'; $('new-thread-error').hidden = false; return; }
   await action('create',async () => {
     try {
-      const d = await api('/api/threads',{method:'POST',body:{cwd,model:$('new-model').value,effort:$('new-effort').value,access:$('new-access').value}});
-      composer?.setAccess($('new-access').value);
+      const d = await api('/api/threads',{method:'POST',body:{cwd,model:$('new-model').value,effort:$('new-effort').value,access:WEB_ACCESS}});
       state.sidebarArchived=false;state.selectedArchived=false;
       const id = d.thread?.id || d.id; if (!id) throw new Error('服务未返回新会话 ID。请刷新列表核对结果。');
       flushDrafts(); $('new-thread-dialog').close(); if (compactLayout()) toggleSidebar(false, false); state.model = $('new-model').value; state.effort = $('new-effort').value;

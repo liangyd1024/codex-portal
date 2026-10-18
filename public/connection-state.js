@@ -1,3 +1,16 @@
+export function backgroundActivity(detail, {controlled = false, connected = false} = {}) {
+  if (!controlled) return {state:'idle', terminals:[]};
+  const result = detail?.backgroundTerminals;
+  // Historical command items may remain inProgress after their process exits.
+  // A successful live list, including an empty list, is authoritative.
+  if (connected && !result?.error && Array.isArray(result?.data)) {
+    return {state:result.data.length ? 'running' : 'idle', terminals:result.data};
+  }
+  const unconfirmed = result != null || (detail?.turns || []).some(turn =>
+    (turn.items || []).some(item => item.type === 'commandExecution' && ['inProgress','in_progress','running'].includes(item.status?.type || item.status)));
+  return {state:unconfirmed ? 'unknown' : 'idle', terminals:[]};
+}
+
 // HTTP replies and SSE notifications can arrive in a different order.
 export function selectConnectionStatus(current, incoming, retiredInstances = new Set()) {
   if (!incoming) return current;
