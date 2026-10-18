@@ -22,4 +22,4 @@
 - 合成中文 composition Enter 未触发消息发送。实体中文输入法、手机 Safari/Android 未验证；本轮新建和发送参数采用模拟接口，未再次向真实模型发消息。
 - 图片原生剪贴板、失败保留与重试的验证见 [上一轮记录](verification-2026-10-18-composer-fix.md)。
 
-截图：[桌面](composer-fix-evidence-2026-10-18/full-access-desktop.png)、[390px](composer-fix-evidence-2026-10-18/full-access-mobile.png)。正式部署结果另记部署文档。
+截图：[桌面](composer-fix-evidence-2026-10-18/full-access-desktop.png)、[390px](composer-fix-evidence-2026-10-18/full-access-mobile.png)。正式部署结果见[部署记录](deployment-2026-10-18-composer-full-access.md)。
