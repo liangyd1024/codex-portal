@@ -1,3 +1,4 @@
+import {markdown, groupTurnItems} from './message-body.js';
 import {NewChatDraft} from './new-chat.js';
 import {installAttachments} from './attachments.js';
 let attachments;
@@ -413,61 +414,6 @@ function renderModels(preferThread = false) {
   renderControls();
 }
 
-function appendInline(n, text) {
-  const pattern = /(`[^`\n]+`|\*\*[^*\n]+\*\*|\[[^\]\n]+\]\([^\s)]+\))/g; let last = 0;
-  for (const m of String(text).matchAll(pattern)) {
-    if (m.index > last) n.append(document.createTextNode(text.slice(last,m.index)));
-    const t = m[0];
-    if (t[0] === '`') n.append(el('code','',t.slice(1,-1)));
-    else if (t.startsWith('**')) n.append(el('strong','',t.slice(2,-2)));
-    else {
-      const match = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(t);
-      let safe = false;
-      try { const u = new URL(match[2]); safe = ['https:','http:'].includes(u.protocol); } catch {}
-      if (safe) { const a = el('a','',match[1]); a.href = match[2]; a.target = '_blank'; a.rel = 'noopener noreferrer'; n.append(a); }
-      else n.append(document.createTextNode(match[1] + ' (' + match[2] + ')'));
-    }
-    last = m.index + t.length;
-  }
-  if (last < text.length) n.append(document.createTextNode(text.slice(last)));
-}
-function markdown(text) {
-  const n = el('div','message-body'); const lines = String(text || '').split('\n');
-  let code = null, paragraph = [], list = null;
-  const flush = () => { if (paragraph.length) { const p = el('p'); appendInline(p,paragraph.join('\n')); n.append(p); paragraph = []; } list = null; };
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-    const line = lines[lineIndex];
-    if (line.trimStart().startsWith('```')) {
-      if (code) { const pre = el('pre'); pre.append(el('code','',code.join('\n'))); n.append(pre); code = null; }
-      else { flush(); code = []; } continue;
-    }
-    if (code) { code.push(line); continue; }
-    const tableCells = value => value.trim().replace(/^\|/, '').replace(/\|$/, '').split(/(?<!\\)\|/).map(cell => cell.trim().replace(/\\\|/g, '|'));
-    if (line.includes('|') && lines[lineIndex + 1] && tableCells(lines[lineIndex + 1]).every(cell => /^:?-{3,}:?$/.test(cell))) {
-      flush(); const wrap = el('div','table-scroll'), table = el('table'), head = el('thead'), row = el('tr');
-      const headings = tableCells(line);
-      headings.forEach(value => { const cell = el('th'); cell.scope = 'col'; appendInline(cell,value); row.append(cell); });
-      head.append(row); table.append(head); const body = el('tbody'); lineIndex++;
-      while (lineIndex + 1 < lines.length && lines[lineIndex + 1].trim() && lines[lineIndex + 1].includes('|')) {
-        const values = tableCells(lines[++lineIndex]), tr = el('tr');
-        headings.forEach((_,i) => { const cell = el('td'); appendInline(cell, values[i] || ''); tr.append(cell); }); body.append(tr);
-      }
-      table.append(body); wrap.append(table); n.append(wrap); continue;
-    }
-    if (!line.trim()) { flush(); continue; }
-    const heading = /^(#{1,4})\s+(.+)$/.exec(line);
-    if (heading) { flush(); const h = el('h' + Math.min(4,heading[1].length + 1)); appendInline(h,heading[2]); n.append(h); continue; }
-    const bullet = /^(?:[-*+]\s+|\d+\.\s+)(.+)$/.exec(line);
-    if (bullet) {
-      if (paragraph.length) flush();
-      const ordered = /^\d/.test(line); if (!list || list.tagName !== (ordered ? 'OL' : 'UL')) { list = el(ordered ? 'ol' : 'ul'); n.append(list); }
-      const li = el('li'); appendInline(li,bullet[1]); list.append(li); continue;
-    }
-    if (line.startsWith('> ')) { flush(); const b = el('blockquote'); appendInline(b,line.slice(2)); n.append(b); continue; }
-    list = null; paragraph.push(line);
-  }
-  flush(); if (code) { const pre = el('pre'); pre.append(el('code','',code.join('\n'))); n.append(pre); } return n;
-}
 function contentText(content) {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return content?.text || '';
@@ -602,35 +548,23 @@ function renderMessages() {
     if (actualModel || actualEffort) meta.append(el('span','turn-model',[actualModel,actualEffort && '思考：' + (effortNames[actualEffort] || actualEffort)].filter(Boolean).join(' · ')));
     const turnStatus = uncertainHistory() && ['inProgress','in_progress','running'].includes(typeOf(t.status)) ? '状态未确认' : statusNames[typeOf(t.status)] || typeOf(t.status);
     meta.append(el('span','turn-status',turnStatus)); turn.append(meta);
-    const items = t.items || [];
-    let processGroup = null, processBody = null;
-    const processItems = items.filter(item => !['userMessage','agentMessage','plan','error'].includes(item.type));
-    for (const item of items) {
-      if (['userMessage','agentMessage','plan','error'].includes(item.type)) {
-        turn.append(renderItem(item));
-        continue;
-      }
-      if (!processGroup) {
-        processGroup = el('details','activity-group process-group');
-        processGroup.dataset.itemId = 'process-' + t.id;
-        const summary = el('summary');
-        summary.append(icon('chevron','chevron'),el('span','','查看过程'));
-        const failed = processItems.some(value => ['failed','declined','systemError'].includes(typeOf(value.status)) || (value.exitCode != null && value.exitCode !== 0));
-        const active = processItems.some(value => ['inProgress','in_progress','running'].includes(typeOf(value.status)));
-        if (failed) summary.append(el('span','process-status error','有失败记录'));
-        else if (active) summary.append(el('span','process-status',uncertainHistory() ? '状态未确认' : '执行中'));
-        processBody = el('div','activity-items');
-        processGroup.append(summary,processBody); turn.append(processGroup);
-      }
-      processBody.append(renderItem(item));
+    for (const group of groupTurnItems(t)) {
+      if (group.type === 'message') { turn.append(renderItem(group.item)); continue; }
+      const processGroup = el('details','activity-group process-group');
+      processGroup.dataset.itemId = 'process-' + t.id + '-' + group.key;
+      const summary = el('summary');
+      summary.append(icon('chevron','chevron'),el('span','','查看过程'));
+      const failed = group.items.some(value => ['failed','declined','systemError'].includes(typeOf(value.status)) || (value.exitCode != null && value.exitCode !== 0));
+      const active = group.items.some(value => ['inProgress','in_progress','running'].includes(typeOf(value.status)));
+      if (failed) summary.append(el('span','process-status error','有失败记录'));
+      else if (active) summary.append(el('span','process-status',uncertainHistory() ? '状态未确认' : '执行中'));
+      const body = el('div','activity-items');
+      for (const item of group.items) body.append(renderItem(item));
+      processGroup.append(summary,body); turn.append(processGroup);
     }
     if (t.error) turn.append(el('div','turn-error',messageOf(t.error)));
     n.append(turn);
   });
-  if(state.detail?.outputPreview&&!opened.size){
-    const latest=turns().flatMap(t=>(t.items||[]).filter(i=>i.type==='commandExecution'&&i.aggregatedOutput).map(i=>[t.id,i.id])).at(-1);
-    if(latest){opened.add('process-'+latest[0]);opened.add(latest[1]);}
-  }
   n.querySelectorAll('details[data-item-id]').forEach(d => { if (opened.has(d.dataset.itemId)) d.open = true; });
   n.querySelectorAll('.tool-output[data-follow-tail="true"]').forEach(pre=>{pre.scrollTop=pre.scrollHeight;});
   if (nearBottom && !state.busy.has('history')) scroller.scrollTop = scroller.scrollHeight;

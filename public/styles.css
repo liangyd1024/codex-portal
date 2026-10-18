@@ -372,3 +372,13 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .message-body th{color:#303030;background:#f7f7f7}
 .message-body td:first-child{color:#555}
 .message-body ::-webkit-scrollbar-thumb{background:#d4d4d4}
+
+/* Keep Markdown structure and column alignment from the source reply. */
+.message-body h1{font-size:20px}
+.message-body h5,.message-body h6{font-size:14px}
+.message-body :is(h1,h5,h6){color:inherit;font-weight:600;line-height:1.5;margin:16px 0 6px}
+.message-body li>p{margin:0 0 3px}
+.message-body li>:last-child{margin-bottom:0}
+.message-body :is(ul,ol) :is(ul,ol){margin:4px 0}
+.message-body hr{border:0;border-top:1px solid #e5e5e5;margin:16px 0}
+.message-body .table-scroll:focus-visible{outline:2px solid #666;outline-offset:2px}
