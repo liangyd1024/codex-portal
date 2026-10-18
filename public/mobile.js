@@ -18,7 +18,7 @@ export async function installMobile(api){
   const tail=origin.includes('.ts.net'),card=node('details',null,'mobile-address');card.open=info.origins.length===1;
   card.append(node('summary',tail?'Tailscale · 已连接 Tailscale 的手机':'同一 Wi-Fi · 需安装证书'));
   const link=node('a',origin);link.href=origin;const qr=node('img');qr.src='/api/access/qr?kind='+(tail?'tailscale':'lan');qr.alt='手机访问地址二维码';qr.width=160;qr.height=160;
-  const button=node('button','复制地址','secondary-button');button.onclick=()=>copy(origin,feedback);card.append(link,qr,button);
+  const button=node('button','复制地址','secondary-button');button.onclick=()=>copy(origin,feedback);card.append(link,qr,button);if(tail)card.append(node('p',info.tailscaleStatus||'HTTPS 转发已配置，请用已连接 Tailscale 的手机验证。','subtle'));
   if(!tail){const help=node('p','在 Mac 下载证书，通过 AirDrop 或文件传输发送到手机并安装。iPhone：安装描述文件后，在“设置 → 通用 → 关于本机 → 证书信任设置”中启用信任。安卓：在安全设置中安装 CA 证书。');const ca=node('a','下载局域网证书');ca.href='/api/access/ca';ca.download='Codex-Local-CA.crt';card.append(help,ca);}
   body.append(card);
  }
@@ -39,6 +39,7 @@ export async function installMobile(api){
   setup.onclick=async()=>{setup.disabled=true;setup.textContent='正在配置…';status.textContent='正在检查 Tailscale 和 HTTPS 转发…';try{await api('/api/access/setup',{method:'POST',body:{mode:'tailscale'}});await installMobile(api);}catch(e){status.textContent='配置未完成：'+e.message;setup.textContent='重试 Tailscale 配置';setup.disabled=false;}};
   tail.append(setup,status);body.append(tail);
  }
+ if(info.origins.length){const refresh=node('button','重新检查连接','secondary-button');refresh.onclick=()=>installMobile(api);body.append(refresh);}
  body.append(feedback,node('h3','2. 设置有效期'));
  const expiry=setting('配对码有效期','pair-code-expiry','rcm.pairCodeExpiry',[['3600','1 小时（默认）'],['600','10 分钟'],['86400','24 小时'],['604800','7 天'],['permanent','永不过期']]);
  const session=setting('配对后的手机登录有效期','mobile-session-expiry','rcm.mobileSessionExpiry',[['604800','7 天（默认）'],['86400','1 天'],['2592000','30 天'],['permanent','永久登录']]);

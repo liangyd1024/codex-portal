@@ -5,6 +5,7 @@ import http from 'node:http';
 import {gzip} from 'node:zlib';
 import https from 'node:https';
 import {MobileAccess} from './lib/mobile-access.mjs';
+import {tailscaleHealth} from './lib/tailscale-serve.mjs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
@@ -51,7 +52,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
         throw new AppError('请先使用本机生成的配对码登录。',401,'PAIRING_REQUIRED');
       }
       if(remote&&access.expires(req)===null)res.setHeader('Set-Cookie',access.cookie(access.token(req)));
-      if(p==='/api/access/status'&&req.method==='GET')return json(res,200,{local:!remote,sessionExpires:remote?access.expires(req):undefined,origins:remote?[]:mobileConfig?.origins||[],canSetup:!remote&&Boolean(setupMobile)});
+      if(p==='/api/access/status'&&req.method==='GET')return json(res,200,{local:!remote,sessionExpires:remote?access.expires(req):undefined,origins:remote?[]:mobileConfig?.origins||[],canSetup:!remote&&Boolean(setupMobile),tailscaleStatus:!remote&&mobileConfig?.origins.some(origin=>new URL(origin).hostname.endsWith('.ts.net'))?await tailscaleHealth():undefined});
       if(p==='/api/access/ca'&&!remote&&req.method==='GET'&&mobileConfig){res.writeHead(200,{'Content-Type':'application/x-x509-ca-cert','Content-Disposition':'attachment; filename="Codex-Local-CA.crt"'});return res.end(await readFile(mobileConfig.ca));}
       if(p==='/api/access/qr'&&!remote&&req.method==='GET'&&mobileConfig){const name=url.searchParams.get('kind')==='tailscale'?'tailscale.png':'lan.png';res.writeHead(200,{'Content-Type':'image/png'});return res.end(await readFile(path.join(path.dirname(mobileConfig.ca),name)));}
       if(req.method==='GET'&&p==='/api/connections')return json(res,200,{machineId:config.machineId,defaultConnection:config.defaultConnection,data:[...managers].map(([id,m])=>({id,host:publicHost(m.host),connection:m.connection}))});

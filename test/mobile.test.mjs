@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import {checkServe} from '../lib/tailscale-serve.mjs';
+import {checkServe,describeTailscale} from '../lib/tailscale-serve.mjs';
 import {EventEmitter} from 'node:events';
 import {createApp} from '../server.mjs';
 class Fake extends EventEmitter {host={id:'local'};disconnect(){} }
@@ -58,4 +58,10 @@ test('macOS LAN setup creates trusted TLS and usable QR without Tailscale or Pyt
   }finally{tls.closeAllConnections();await new Promise(r=>tls.close(r));}
  });
  console.log('手机测试数据保留：'+home);
+});
+
+test('Tailscale health distinguishes connection and certificate/DNS issues',()=>{
+ assert.match(describeTailscale({BackendState:'Stopped'}),/未连接/);
+ assert.match(describeTailscale({BackendState:'Running',Health:['DNS unavailable']}),/暂未就绪.*DNS unavailable/);
+ assert.match(describeTailscale({BackendState:'Running',Health:[]}),/手机.*验证/);
 });
