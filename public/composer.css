@@ -15,6 +15,9 @@
 .composer-options summary{min-height:36px;padding:6px 10px}
 .mobile-layout .composer-tools{margin:4px auto 8px}
 .mobile-layout .composer-options summary{min-height:44px}
+/* Attachments make the composer multiline; keep its actions across the full row. */
+.composer:has(.attachment-list:not([hidden])) .composer-bottom{flex:1 0 100%;width:100%;justify-content:flex-end}
+.composer:has(.attachment-list:not([hidden])) #add-images{margin-right:auto}
 /* Inline references retain native textarea editing and IME behavior. */
 .mention-input-wrap{position:relative;min-width:0;width:100%;flex:1 1 100%;isolation:isolate}
 .composer .mention-input-wrap textarea{position:relative;z-index:1;display:block;width:100%;margin:0;background:transparent;caret-color:var(--ink,#242825)}
