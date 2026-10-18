@@ -291,3 +291,32 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 #mobile-access-body button{margin:4px 0;min-height:44px;white-space:normal}.pair-result{margin-top:12px;padding:12px;border:1px solid #cbd9c8;border-radius:10px;background:#f0f5ed}.pair-code{display:block;font-size:30px;letter-spacing:5px;user-select:all}.mobile-revoke{margin-top:24px;color:#945543}
 :root{--inspector:360px}.inspector-heading{position:sticky;top:0;background:#fafbf9;z-index:3}.inspector-nav{top:48px;flex-shrink:0}.inspector-section{flex-shrink:0}
 @media(max-width:1050px){.inspector{width:min(360px,100vw)}}
+/* Compact Codex-style project navigation. */
+.sidebar{background:#f9f9f9;border-color:#ebebeb;padding:10px 8px 0;color:#303030}
+.sidebar-heading{margin:0 4px 12px}
+.sidebar .new-thread{background:transparent;border:0;box-shadow:none;font-weight:500;min-height:36px;font-size:14px}
+.sidebar .new-thread:hover,.sidebar .project-button:hover,.sidebar .thread-row:hover{background:#ededed}
+.sidebar .search-box{margin:6px 8px 18px}
+.sidebar .section-heading{color:#777;letter-spacing:0;margin-bottom:6px}
+.sidebar .control-overview{display:none}
+.project-group{margin-bottom:10px}
+.project-heading{display:flex;align-items:center;gap:2px}
+.project-heading .project-button{flex:1;min-width:0;width:auto;font-size:13px;font-weight:500;color:#4b4b4b;min-height:32px}
+.project-heading .project-button.selected{background:transparent;color:#222}
+.project-heading .project-create{width:28px;height:28px;opacity:0;color:#777}
+.project-heading:hover .project-create,.project-heading:focus-within .project-create{opacity:1}
+.project-threads{margin:2px 0 0 10px;padding-left:8px;border-left:0}
+.sidebar .project-threads .thread-row{display:flex;align-items:center;gap:10px;min-height:34px;padding:6px 9px;border-radius:7px;margin-bottom:1px}
+.sidebar .thread-row.selected{background:#e9e9e9}
+.sidebar .thread-name{flex:1;min-width:0;font-size:13px;line-height:21px;color:#414141}
+.sidebar .thread-row.selected .thread-name{color:#171717}
+.sidebar .thread-meta{flex:none;margin:0;font-size:11px;color:#929292}
+.sidebar .thread-preview{display:none}
+.sidebar .thread-time{margin:0}
+#new-thread-status{line-height:1.6;margin:16px 0 0;color:#626b63}
+#new-thread-form[aria-busy="true"] #create-thread .icon{animation:spin 1s linear infinite}
+#new-thread-form[aria-busy="true"] #create-thread{opacity:.75;cursor:progress}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(hover:none){.project-heading .project-create{opacity:1}}
+@media(max-width:700px){.sidebar .project-threads .thread-row{min-height:44px}.project-heading .project-create{width:36px;height:36px}}
+@media(prefers-reduced-motion:reduce){#new-thread-form[aria-busy="true"] #create-thread .icon{animation:none}}

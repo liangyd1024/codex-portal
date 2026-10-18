@@ -265,7 +265,14 @@ function renderControls() {
   $('takeover').querySelector('span').textContent = switching ? '正在接管…' : '接管会话';
   $('running-indicator').hidden = !active&&!backgroundRunning();
   $('running-indicator').lastElementChild.textContent=active?'正在执行':'后台命令仍在运行';
-  $('create-thread').disabled = !ready || !featureReady('create') || creating || !$('new-model').value || !$('new-effort').value;
+  const createReason = !ready ? '连接目标机器并恢复实时通道后才能创建。' : !featureReady('create') ? '当前引擎不支持创建会话：'+(state.status?.service?.protocolValidation?.features?.create?.reason || '请查看连接诊断') : !$('new-cwd').value ? '请先选择项目。' : !$('new-model').value || !$('new-effort').value ? '请选择可用的模型与思考档位。' : '';
+  $('create-thread').disabled = creating || Boolean(createReason);
+  $('create-thread').replaceChildren(icon(creating ? 'refresh' : 'plus'),el('span','',creating ? '正在创建…' : '创建会话'));
+  $('new-thread-form').setAttribute('aria-busy',String(creating));
+  setText('new-thread-status',creating ? '正在等待目标机器创建会话，请勿重复提交。' : createReason);
+  $('new-thread-status').hidden = !creating && !createReason;
+  ['new-cwd','new-model','new-effort','close-new-dialog','cancel-new-dialog'].forEach(id => $(id).disabled = creating);
+  document.querySelectorAll('.project-create').forEach(button => { button.disabled = $('new-thread').disabled; });
   const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '查看模式。接管后可在原会话继续工作。';
   setText('composer-hint',state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
   setText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
@@ -311,7 +318,13 @@ function renderThreads() {
     };
     for (const t of p.threads) appendThread(children,t,state.projects.some(item => item.id === p.id) ? p.id : null);
     if (!p.threads.length) children.append(el('p','project-empty',state.loadingThreads || state.threadCursor ? '正在读取会话…' : state.threadPageError ? '会话读取失败，请刷新重试' : '暂无会话'));
-    group.append(b,children); n.append(group);
+    const heading = el('div','project-heading'); heading.append(b);
+    if (p.roots?.length && state.projects.some(item => item.id === p.id)) {
+      const add = el('button','icon-button project-create'); add.type = 'button';
+      add.title = '在 '+p.name+' 中新建会话'; add.setAttribute('aria-label',add.title); add.append(icon('plus'));
+      add.disabled = $('new-thread').disabled; add.onclick = () => openNewDialog(p.roots[0]); heading.append(add);
+    }
+    group.append(heading,children); n.append(group);
   }
   if (!n.childElementCount) n.append(el('p','sidebar-empty',state.loadingThreads || state.loadingProjects ? '正在读取项目与会话…' : state.search ? '没有匹配的会话' : '连接后读取项目与会话'));
   const project = state.projects.find(p => p.id === state.projectId);
@@ -326,10 +339,9 @@ function appendThread(n,t,projectId) {
     const b = el('button','thread-row' + (state.selectedId === t.id ? ' selected' : '')); b.dataset.threadId = t.id; b.title = threadName(t); if (state.selectedId === t.id) b.setAttribute('aria-current','true');
     const title = el('div','thread-name'); title.append(el('span','',threadName(t)));
     const session=state.status?.controlledSessions?.find(item=>item.id===t.id);
-    const badge=el('span','thread-runtime',session?sessionLabel(session):'查看模式');badge.dataset.threadId=t.id;
     if (typeOf(t.status) === 'active' && t.historySource !== 'snapshot' && state.threadListSource !== 'snapshot') title.append(el('span','thread-running'));
     const meta = el('div','thread-meta'); meta.append(el('span','thread-preview',''),el('span','thread-time',relativeTime(t.recencyAt || t.updatedAt || t.createdAt)));
-    if (session) meta.append(badge); b.append(title,meta); b.onclick = () => { state.projectId = projectId; saveView(); selectThread(t.id); }; n.append(b);
+    if (session) b.title += ' · '+sessionLabel(session); b.append(title,meta); b.onclick = () => { state.projectId = projectId; saveView(); selectThread(t.id); }; n.append(b);
 
 }
 function modelId(m) { return m.model || m.id; }
@@ -341,7 +353,7 @@ function defaultEffort(id) { const m = modelFor(id), opts = effortsFor(id); retu
 function fillModels(select, selected) {
   clear(select); if (!state.models.length) { const o = el('option','',state.loadingModels ? '正在读取模型…' : '等待模型目录'); o.value = ''; select.append(o); return; }
   state.models.forEach(m => { const o = el('option','',m.displayName || modelId(m)); o.value = modelId(m); o.title = m.description || ''; select.append(o); });
-  select.value = selected || modelId(state.models.find(m => m.isDefault) || state.models[0]);
+  select.value = state.models.some(m => modelId(m) === selected) ? selected : modelId(state.models.find(m => m.isDefault) || state.models[0]);
 }
 function fillEfforts(select, model, effort) {
   clear(select); const opts = effortsFor(model);
@@ -717,19 +729,29 @@ async function loadProjects() {
   try { await projectLoadPromise; }
   finally { projectLoadPromise = null; state.loadingProjects = false; renderProjects(); }
 }
+const createdThreads = new Map();
+let threadSearch = '';
 async function loadThreads(append = false, reportFailure = false) {
   if (!connected() || (append && (state.loadingThreads || !state.threadCursor))) return;
   // Restore project metadata before grouping the cross-project thread list.
   if (state.projectId && !state.projects.length) await loadProjects();
   const seq = ++state.listVersion; state.loadingThreads = true; state.threadPageError = false;
-  if (!append) { state.threads = []; state.threadCursor = null; $('project-list').scrollTop = 0; }
+  if (!append) {
+    if (threadSearch !== state.search) {
+      state.threads = [...createdThreads.values()].filter(t => !state.search || threadName(t).includes(state.search));
+      $('project-list').scrollTop = 0;
+    }
+    threadSearch = state.search; state.threadCursor = null;
+  }
   renderThreads();
   const q = new URLSearchParams(); if (state.search) q.set('search',state.search);
   if (append && state.threadCursor) q.set('cursor',state.threadCursor);
   try {
     const d = await api('/api/threads?' + q); if (seq !== state.listVersion) return;
     state.threadListSource = d.historySource || null;
-    const all = append ? [...state.threads,...(d.data || [])] : d.data || [];
+    for (const thread of d.data || []) createdThreads.delete(thread.id);
+    const pending = [...createdThreads.values()].filter(t => !state.search || threadName(t).includes(state.search));
+    const all = append ? [...state.threads,...(d.data || [])] : [...pending,...(d.data || [])];
     const seen = new Set(); state.threads = all.filter(t => !seen.has(t.id) && seen.add(t.id)); state.threadCursor = d.nextCursor || null;
   } catch (e) { if (seq === state.listVersion) { state.threadPageError = true; recordError(e,'threads'); toast(messageOf(e),true); } if (reportFailure) throw e; }
   finally { if (seq === state.listVersion) { state.loadingThreads = false; renderThreads(); if (!state.threadPageError) requestAnimationFrame(loadVisibleThreads); } }
@@ -931,30 +953,40 @@ async function respondRequest(r, answer) {
     renderRequests(); await loadStatus(); toast('已提交处理结果。');
   });
 }
-function openNewDialog() {
+function openNewDialog(projectRoot) {
   voice?.interrupt();
   if (!usable() || !state.models.length) { toast('连接目标机器并读取模型目录后，再新建会话。',true); return; }
   const project = state.projects.find(p => p.id === state.projectId);
   const select=clear($('new-cwd'));
   const options=state.projects.flatMap(p=>(p.roots||[]).map(root=>({root,name:p.name||baseName(root)})));
   options.forEach(p=>{const option=el('option','',p.name);option.value=p.root;select.append(option);});
-  const preferred=project?.roots?.[0]||currentThread()?.cwd;
+  const preferred=(typeof projectRoot === 'string' ? projectRoot : null)||project?.roots?.[0]||currentThread()?.cwd;
   if(options.some(p=>p.root===preferred))select.value=preferred;
-  select.onchange=()=>setText('new-project-path',select.value||'此连接暂无项目。请先在 Codex 中添加项目。');select.onchange();
+  select.onchange=()=>{setText('new-project-path',select.value||'此连接暂无项目。请先在 Codex 中添加项目。');renderControls();};select.onchange();
   $('new-thread-error').hidden = true;
   fillModels($('new-model'),state.model); fillEfforts($('new-effort'),$('new-model').value,state.effort);
   $('new-thread-dialog').showModal(); renderControls(); setTimeout(() => $('new-cwd').focus(),0);
 }
 async function createThread(e) {
-  e.preventDefault(); const cwd = $('new-cwd').value.trim();
+  e.preventDefault(); if ($('create-thread').disabled) return; const cwd = $('new-cwd').value.trim();
+  $('new-thread-error').hidden = true;
   if (!cwd.startsWith('/')) { $('new-thread-error').textContent = '请选择一个项目。'; $('new-thread-error').hidden = false; return; }
   await action('create',async () => {
     try {
       const d = await api('/api/threads',{method:'POST',body:{cwd,model:$('new-model').value,effort:$('new-effort').value}});
-      $('new-thread-dialog').close(); if (window.innerWidth <= 700) toggleSidebar(false, false); state.model = $('new-model').value; state.effort = $('new-effort').value;
       const id = d.thread?.id || d.id; if (!id) throw new Error('服务未返回新会话 ID。请刷新列表核对结果。');
+      $('new-thread-dialog').close(); if (window.innerWidth <= 700) toggleSidebar(false, false); state.model = $('new-model').value; state.effort = $('new-effort').value;
+      const thread = {...d.thread,id,cwd,name:d.thread?.name || '新会话'};
+      createdThreads.set(id,thread); state.threads.unshift(thread);
+      const project = state.projects.find(p => p.roots?.includes(cwd));
+      state.projectId = project?.id || null; if (project) collapsedProjects.delete(project.id);
+      saveLayout('collapsedProjects.'+targetHost,[...collapsedProjects]);
+      state.search = ''; $('thread-search').value = '';
+      state.historyCursor = null; state.loadedOlderHistory = false; state.historyError = '';
+      state.selectionVersion++;
       state.selectedId = id; toggleInspector(false); saveView(); state.loadingDetail = false; state.drafts.set(id,''); $('message-input').value = ''; applyDetail({...d,thread:{...d.thread,name:d.thread?.name || '新会话'},controlled:true},true);
-      await Promise.allSettled([loadThreads(),loadStatus()]); toast('目标机器会话已创建。'); $('message-input').focus();
+      renderThreads(); toast('目标机器会话已创建。'); $('message-input').focus();
+      void Promise.allSettled([loadThreads(),loadStatus()]);
     } catch (err) { $('new-thread-error').textContent = messageOf(err); $('new-thread-error').hidden = false; recordError(err,'create'); }
   });
 }
@@ -1210,9 +1242,11 @@ function wireEvents() {
   $('model-select').onchange = e => { state.model = e.target.value; state.effort = defaultEffort(state.model); fillEfforts($('effort-select'),state.model,state.effort); renderControls(); };
   $('effort-select').onchange = e => { state.effort = e.target.value; renderControls(); };
   $('new-model').onchange = e => { fillEfforts($('new-effort'),e.target.value); renderControls(); };
+  $('new-effort').onchange = renderControls;
+  $('new-thread-dialog').addEventListener('cancel',e => { if (state.busy.has('create')) e.preventDefault(); });
   $('new-thread-form').onsubmit = createThread;
   ['close-new-dialog','cancel-new-dialog'].forEach(id => $(id).onclick = () => $('new-thread-dialog').close());
-  $('new-thread-dialog').addEventListener('click',e => { if (e.target === $('new-thread-dialog')) { const b = e.target.getBoundingClientRect(); if (e.clientX < b.left || e.clientX > b.right || e.clientY < b.top || e.clientY > b.bottom) e.target.close(); } });
+  $('new-thread-dialog').addEventListener('click',e => { if (e.target === $('new-thread-dialog') && !state.busy.has('create')) { const b = e.target.getBoundingClientRect(); if (e.clientX < b.left || e.clientX > b.right || e.clientY < b.top || e.clientY > b.bottom) e.target.close(); } });
   $('toggle-inspector').onclick = () => toggleInspector(); $('close-inspector').onclick = () => toggleInspector(false);
   $('open-sidebar').onclick = () => toggleSidebar();
   $('close-sidebar').onclick = () => { toggleSidebar(false); $('open-sidebar').focus(); };
