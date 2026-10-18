@@ -20,3 +20,11 @@
 ## 交付
 
 修改在 master 提交。共享开发目录同时出现另一会话的消息正文渲染改动，本次不暂存、不修改这些文件；从包含当前已上线版本的干净 master 副本验证和部署，保留另一会话未提交内容。正式版本和备份位置以部署记录及 `installed.json` 为准。
+
+## 正式部署结果
+
+- 功能提交：`595e53e08dee1953694b5695984f4e45e9d38656`，已推送 `origin/master`。从干净 master 副本 `/tmp/rcm-archive-release-595e53e` 再跑全量测试，120 Node + 29 Python 通过，日志 `/tmp/rcm-archive-release-tests.log`。
+- 通过安装脚本原有空闲检查、加密备份及健康检查，正式 4317 `/api/version` 返回该提交。保留原正式版本 `a1bad52` 的全部功能，Git 祖先关系已核对。
+- 备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T134451848588Z.tar.gz.age`。
+- 重启后首次请求因尚未连接返回 503；通过正常网页连接流程恢复后，原报错会话正式详情接口 HTTP 200、无 error。此结果与预览验证分开记录。
+- 验收 TaskSpace 已结束，独立预览服务已停止。共享工作区另一会话的未提交文件保留。桌面视觉与 SSH 双机端到端验证边界如上。
