@@ -7,3 +7,5 @@
 - 部署后 ego-browser 原验收空间 63 返回 task space not found，因此未进行生产浏览器复查，也未创建新空间绕过；真实引擎新建和发送未验收。
 - 预览模拟验证与官方参考见 [验收记录](new-chat-verification-2026-10-18.md)。
 - 修改已通过 git apply --check 后同步到原开发目录，保留其既有未提交改动。线上核对基准为独立发布 worktree。
+
+- 最后状态检查：连接 connected，阶段 已连接，error=None；网页健康通过不等于引擎连接恢复完成。
