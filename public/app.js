@@ -1,4 +1,6 @@
 import {Sidebar} from './sidebar.js';
+import {createHandoffControls} from './thread-handoff.js';
+let handoffControls;
 import {installBrowserBackup} from './browser-backup.js';
 import {installVoice} from './voice.js';
 import {installMobile} from './mobile.js';
@@ -84,7 +86,12 @@ function requestKey(r) { return r.key ?? (typeof r.id + ':' + String(r.id)); }
 function requestPath(r) { return String(r.key ?? r.id); }
 function controlled() {
   if (!state.detail || !state.selectedId || state.detail.recovering) return false;
+  if(state.busy.has('handoff:'+state.selectedId)||currentHandoff())return false;
   return Boolean(state.detail.controlled || state.status?.controlledThreads?.includes(state.selectedId));
+}
+function currentHandoff() {
+  if(Array.isArray(state.status?.handoffs))return state.status.handoffs.find(v=>v.threadId===state.selectedId)||null;
+  return state.detail?.handoff||null;
 }
 function snapshotHistory() { return state.detail?.historySource === 'snapshot' || currentThread()?.historySource === 'snapshot'; }
 function uncertainHistory() { return snapshotHistory() && !controlled(); }
@@ -226,7 +233,7 @@ function renderStatus() {
   if (error) { banner.hidden = false; banner.className = 'connection-banner error'; banner.textContent = error; }
   else if (connected() && !state.transport) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '实时通道已中断。发送与审批已停用。恢复连接后，先核对目标机器状态。'; }
   else if (['connecting','reconnecting'].includes(conn)) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '正在连接目标机器。' + (c.stage ? (stages[c.stage] || c.stage) + '…' : '正在核验连接状态…'); }
-  else if(connected()&&service.protocolValidation?.status==='limited'){const names={create:'新建会话',takeover:'接管会话',message:'发送消息',steer:'补充要求',stop:'停止',queue:'排队输入',release:'释放控制'};const disabled=Object.entries(service.protocolValidation.features||{}).filter(([,v])=>!v.supported).map(([name])=>names[name]||name);banner.hidden=false;banner.className='connection-banner';banner.textContent='已连接。当前引擎暂不支持：'+(disabled.join('、')||'部分协议读取')+'。其他已核验功能仍可使用。详见连接诊断。';}
+  else if(connected()&&service.protocolValidation?.status==='limited'){const names={create:'新建会话',takeover:'接管会话',message:'发送消息',steer:'补充要求',stop:'停止',queue:'排队输入',handoff:'交还桌面端',release:'释放控制'};const disabled=Object.entries(service.protocolValidation.features||{}).filter(([,v])=>!v.supported).map(([name])=>names[name]||name);banner.hidden=false;banner.className='connection-banner';banner.textContent='已连接。当前引擎暂不支持：'+(disabled.join('、')||'部分协议读取')+'。其他已核验功能仍可使用。详见连接诊断。';}
   else banner.hidden = true;
   const connect = $('connect-button'); clear(connect); connect.append(icon(connected()||connectionPending() ? 'close' : 'link'),el('span','',state.busy.has('disconnect') ? '正在断开…' : connectionPending()?'取消连接':connected() ? '断开本机连接' : '连接目标机器'));
   const welcome = $('welcome-connect'); clear(welcome); welcome.append(icon(connected() ? 'plus' : 'link'),el('span','',connectionPending() ? '正在连接…' : connected() ? '新建目标机器会话' : '连接 ' + (h.alias || '目标机器')));
@@ -245,6 +252,10 @@ function renderControlOverview() {
 }
 function renderControls() {
   const ready = usable(), own = controlled()&&!state.selectedArchived, active = running();
+  const handoff=currentHandoff(),handing=state.busy.has('handoff:'+state.selectedId)||handoff?.state==='checking';
+  handoffControls??=createHandoffControls({endUse:endThreadUse});
+  handoffControls.render({id:state.selectedId,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId)),handoff,connected:ready,
+    supported:state.status?.service?.protocolValidation?.features?.handoff?.supported===true,busy:handing,archived:state.selectedArchived,conflict:state.detail?.controlState==='conflict'});
   const posting = state.busy.has('message'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
   $('new-thread').disabled = !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels;
   $('connect-button').disabled = state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release');
@@ -255,15 +266,15 @@ function renderControls() {
   $('thread-search').disabled = !connected();
   $('model-select').disabled = !ready || !state.models.length || state.loadingModels;
   $('effort-select').disabled = !ready || !state.model || !effortsFor(state.model).length || state.loadingModels;
-  const input = $('message-input'); input.disabled = !ready || !own || posting;
+  const input = $('message-input'); input.disabled = !ready || !own || posting || handing;
   input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? '补充要求…' : '发送消息…';
   const hasModel = Boolean(state.model && state.models.some(m => modelId(m) === state.model));
   const hasEffort = effortsFor(state.model).some(e => e.value === state.effort);
   $('send-message').disabled = Boolean(voice?.active) || !ready || !own || !featureReady(active?'steer':'message') || posting || !input.value.trim() || (!active && (!hasModel || !hasEffort));
   $('send-message').setAttribute('aria-label',active ? '补充当前轮次' : '发送消息');
   $('interrupt').hidden = !active&&!backgroundRunning(); $('interrupt').disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt');
-  $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || !state.selectedId;
-  $('takeover').querySelector('span').textContent = switching ? '正在接管…' : '接管会话';
+  $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || handing || !state.selectedId;
+  $('takeover').querySelector('span').textContent = switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话';
   $('running-indicator').hidden = !active&&!backgroundRunning();
   $('running-indicator').lastElementChild.textContent=active?'正在执行':'后台命令仍在运行';
   const createReason = !ready ? '连接目标机器并恢复实时通道后才能创建。' : !featureReady('create') ? '当前引擎不支持创建会话：'+(state.status?.service?.protocolValidation?.features?.create?.reason || '请查看连接诊断') : !$('new-cwd').value ? '请先选择项目。' : !$('new-model').value || !$('new-effort').value ? '请选择可用的模型与思考档位。' : '';
@@ -574,7 +585,7 @@ function renderThread() {
   const badge = $('control-badge'); badge.className = 'control-badge' + (own ? ' controlled' : busy ? ' busy' : ''); badge.textContent = own ? '已取得控制' : busy ? '已被占用' : '查看模式';
   const note = $('control-note');
   note.className = 'control-note' + (busy ? ' error' : '');
-  note.textContent = own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '原会话已有控制端。请先结束目标机器桌面的任务，再手动退出桌面应用。然后重试接管。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
+  note.textContent = own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话仍在另一个入口中使用。请在原入口结束此会话的使用并等待释放，再重试。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
   if (snapshotHistory()) note.textContent = (own ? '历史来自快照。实时状态由目标机器控制连接确认。' : '历史快照，运行状态需接管后确认。') + (busy ? ' ' + note.textContent : '');
   renderMessages(); renderSession(); renderFiles(); renderControls(); resizeInput();
 }
@@ -884,6 +895,21 @@ async function takeoverThread() {
       if (e.code==='WRITER_CONFLICT'&&id === state.selectedId && state.detail) { state.detail.controlled = false; state.detail.controlState = 'conflict'; renderThread(); }
       recordError(e,'takeover'); toast(messageOf(e),true,17000);
     }
+  });
+}
+async function endThreadUse() {
+  const id=state.selectedId,selection=state.selectionVersion;
+  if(!id||!usable())return;
+  voice?.interrupt();state.drafts.set(id,$('message-input').value);
+  try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}
+  await action('handoff:'+id,async()=>{
+    try {
+      const handoff=await api('/api/threads/'+encodeURIComponent(id)+'/handoff',{method:'POST',timeout:45000});
+      if(id===state.selectedId&&selection===state.selectionVersion&&state.detail){state.detail.controlled=false;state.detail.handoff=handoff;state.detail.controlState='viewing';}
+      await loadStatus();renderThread();
+      if(id===state.selectedId&&selection===state.selectionVersion)handoffControls.focus();
+      if(id===state.selectedId&&selection===state.selectionVersion)toast(handoff.state==='released'?'已确认释放，可在桌面端重试。':'已退出网页使用，正在等待释放。');
+    }catch(error){await loadStatus().catch(()=>{});renderThread();if(id===state.selectedId&&selection===state.selectionVersion)handoffControls.focus();throw error;}
   });
 }
 async function releaseService() {

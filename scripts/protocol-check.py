@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 4
+PROTOCOL_POLICY = 5
 REQUEST_FIELDS = {
     'account/read': set(),
     'thread/archive': {'threadId'},
@@ -22,8 +22,9 @@ REQUEST_FIELDS = {
     'thread/read': {'threadId', 'includeTurns'},
     'thread/start': {'cwd', 'model', 'approvalPolicy', 'approvalsReviewer', 'sandbox', 'serviceName', 'projectId', 'config'},
     'thread/resume': {'threadId', 'excludeTurns'},
+    'thread/unsubscribe': {'threadId'},
     'thread/name/set': {'threadId', 'name'},
-    'thread/loaded/list': set(),
+    'thread/loaded/list': {'cursor'},
     'thread/goal/get': {'threadId'},
     'thread/backgroundTerminals/list': {'threadId', 'limit'},
     'thread/backgroundTerminals/terminate': {'threadId','processId'},
@@ -40,6 +41,7 @@ FEATURE_METHODS = {
     'stop': ['turn/interrupt','thread/backgroundTerminals/list','thread/backgroundTerminals/terminate'],
     'queue': ['thread/queue/list'],
     'release': ['thread/loaded/list', 'thread/read', 'thread/goal/get', 'thread/backgroundTerminals/list', 'thread/queue/list'],
+    'handoff': ['thread/unsubscribe', 'thread/loaded/list', 'thread/read', 'thread/goal/get', 'thread/backgroundTerminals/list', 'thread/queue/list'],
 }
 
 

@@ -83,7 +83,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
         if(!['image/png','image/jpeg','image/webp'].includes(result.mime))throw new AppError('不支持此图片格式。');
         res.writeHead(200,{'Content-Type':result.mime,'Content-Length':content.length,'Cache-Control':'private, max-age=300',...(url.searchParams.get('download')==='1'?{'Content-Disposition':`attachment; filename="${image[2]}.${result.extension}"`}:{})});res.end(content);return;
       }
-      const match=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(history|takeover|message|steer|interrupt))?$/);
+      const match=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(history|takeover|handoff|message|steer|interrupt))?$/);
       if(req.method==='GET'&&match){const[,id,action]=match;if(action==='history')return json(res,200,await manager.history(id,url.searchParams.get('cursor')));if(!action)return json(res,200,await manager.detail(id,JSON.parse(req.headers['x-output-versions']||'{}'),url.searchParams.get('preview')==='1',url.searchParams.get('outputEncoding'),url.searchParams.get('fast')==='1'));}
       if(req.method==='POST'){
         const token=req.headers['x-csrf-token']||'';
@@ -102,13 +102,13 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
         if(p==='/api/disconnect')return json(res,200,manager.disconnect());
         if(p==='/api/service/release')return json(res,200,await manager.release(data));
         if(p==='/api/threads')return json(res,201,await manager.newThread(data));
-        if(match){const[,id,action]=match;const fn={takeover:()=>manager.takeover(id),message:()=>manager.message(id,data),steer:()=>manager.steer(id,data),interrupt:()=>manager.interrupt(id)}[action];if(fn)return json(res,200,await fn());}
+        if(match){const[,id,action]=match;const fn={takeover:()=>manager.takeover(id),handoff:()=>manager.handoff(id),message:()=>manager.message(id,data),steer:()=>manager.steer(id,data),interrupt:()=>manager.interrupt(id)}[action];if(fn)return json(res,200,await fn());}
         const approval=p.match(/^\/api\/requests\/([^/]+)\/respond$/);
         if(approval)return json(res,200,manager.respond(decodeURIComponent(approval[1]),data));
       }
       if(p.startsWith('/api/'))return json(res,404,{error:{message:'找不到此接口。',code:'NOT_FOUND'}});
       if(req.method!=='GET'&&req.method!=='HEAD')throw new AppError('不支持此请求方法。',405);
-      const file={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
+      const file={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
       if(!file){res.writeHead(404);res.end('Not found');return;}
       const content=await readFile(path.join(ROOT,'public',file));
       res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);
