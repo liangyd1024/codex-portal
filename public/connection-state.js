@@ -25,6 +25,12 @@ export function selectConnectionStatus(current, incoming, retiredInstances = new
   return incoming;
 }
 
+// Skill metadata is added by the engine and is absent from the optimistic echo.
+export function userContentKey(content) {
+  if(typeof content==='string')content=[{type:'text',text:content}];
+  return JSON.stringify((content||[]).filter(p=>['text','image','localImage'].includes(p.type)).map(p=>p.type==='text'?['text',p.text||'']:[p.type,p.url||p.path||p.imageUrl||'']));
+}
+
 // Snapshot reads can lag behind SSE. Keep streamed text and terminal states.
 export function mergeLiveTurns(current = [], incoming = []) {
   const terminal = value => ['completed','failed','interrupted'].includes(value);
@@ -47,8 +53,8 @@ export function mergeLiveTurns(current = [], incoming = []) {
       const i = items.findIndex(value => value.id === item.id);
       if (i < 0) items.push(item); else items[i] = mergeItem(items[i], item);
     }
-    const userTexts = new Set(items.filter(item => item.type === 'userMessage' && !item.localAccepted).map(item => (item.content || []).map(part => part.text || '').join('\n')));
-    const confirmed = items.filter(item => !item.localAccepted || !userTexts.has((item.content || []).map(part => part.text || '').join('\n')));
+    const userTexts = new Set(items.filter(item => item.type === 'userMessage' && !item.localAccepted).map(item => userContentKey(item.content)));
+    const confirmed = items.filter(item => !item.localAccepted || !userTexts.has(userContentKey(item.content)));
     result[index] = {...old, ...turn, items:confirmed, status:terminal(old.status) && !terminal(turn.status) ? old.status : turn.status || old.status};
   }
   return result;

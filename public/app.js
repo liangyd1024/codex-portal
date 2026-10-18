@@ -14,7 +14,7 @@ import {installMobile} from './mobile.js';
 let composer;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from './detail-cache.js';
 import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
-import {selectConnectionStatus, mergeLiveTurns, taskNotice, claimNotice, backgroundActivity} from './connection-state.js';
+import {selectConnectionStatus, userContentKey, mergeLiveTurns, taskNotice, claimNotice, backgroundActivity} from './connection-state.js';
 function savedHost() { try { return localStorage.getItem('rcm.connection'); } catch { return null; } }
 const requestedHost = new URL(location.href).searchParams.get('host');
 const response=await fetch('/api/connections');
@@ -1074,7 +1074,7 @@ async function sendMessage(e) {
     attachments.acknowledge(pictures);
     const cleared = state.drafts.acknowledge(sent);
     if (id === state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }
-    if (id === state.selectedId && selection === state.selectionVersion) { if (d.turn) { upsertTurn(d.turn); const t = ensureTurn(d.turn.id); if (!t.items.some(item => item.type === 'userMessage' && contentText(item.content) === text)) t.items.unshift({id:'accepted-'+d.turn.id,type:'userMessage',content:[...(text?[{type:'text',text}]:[]),...images.map(i=>({type:'image',url:i.url}))],localAccepted:true}); } renderThread(); }
+    if (id === state.selectedId && selection === state.selectionVersion) { if (d.turn) { upsertTurn(d.turn); const t = ensureTurn(d.turn.id); const content=[...(text?[{type:'text',text}]:[]),...images.map(i=>({type:'image',url:i.url}))]; if (!t.items.some(item => item.type === 'userMessage' && userContentKey(item.content) === userContentKey(content))) t.items.unshift({id:'accepted-'+d.turn.id,type:'userMessage',content,localAccepted:true}); } renderThread(); }
     if (active) toast('补充要求已发送到当前轮次。');
     try { if (id === state.selectedId && selection === state.selectionVersion) await refreshSelected(); } catch (err) { recordError(err,'thread'); }
   });
@@ -1115,7 +1115,7 @@ function ensureTurn(id) {
   if (!t) { t = {id:id || 'live',status:'inProgress',items:[]}; state.detail.turns = [...turns(),t]; }
   return t;
 }
-function upsertItem(turnId,item) { const t = ensureTurn(turnId); if (!t) return; if (item.type === 'userMessage') t.items = t.items.filter(old => !old.localAccepted || contentText(old.content) !== contentText(item.content)); const i = t.items.findIndex(x => x.id === item.id); if (i >= 0) t.items[i] = mergeLiveTurns([{id:turnId,items:[t.items[i]]}],[{id:turnId,items:[item]}])[0].items[0]; else t.items.push(item); }
+function upsertItem(turnId,item) { const t = ensureTurn(turnId); if (!t) return; if (item.type === 'userMessage') t.items = t.items.filter(old => !old.localAccepted || userContentKey(old.content) !== userContentKey(item.content)); const i = t.items.findIndex(x => x.id === item.id); if (i >= 0) t.items[i] = mergeLiveTurns([{id:turnId,items:[t.items[i]]}],[{id:turnId,items:[item]}])[0].items[0]; else t.items.push(item); }
 function scheduleStreamRender() {
   if (state.streamRender) return; state.streamRender = true;
   setTimeout(() => { state.streamRender = false; renderMessages(); renderSession(); renderFiles(); renderControls(); },80);
