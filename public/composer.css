@@ -31,3 +31,25 @@
 .skill-suggestions[hidden]{display:none}.skill-suggestions-heading{padding:6px 10px;color:#777;font-size:12px}.skill-suggestions button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;min-height:44px;padding:10px;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit}.skill-suggestions button[aria-selected=true]{background:#edf2f8}.skill-suggestions strong{max-width:65%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}.skill-suggestions span{color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.skill-suggestions button:focus-visible{outline:2px solid #377cf6;outline-offset:-2px}
 @media(forced-colors:active){.composer .has-mentions textarea{color:CanvasText;-webkit-text-fill-color:CanvasText}.has-mentions .mention-mirror{display:none}}
 .composer-options-panel>label{display:block;margin-bottom:8px}.composer-options-panel>label select{width:100%;min-height:44px}
+
+/* Keep typing and its actions together, independent of attachment presence. */
+.composer,.mobile-layout .composer{flex-wrap:wrap;padding:10px 12px;border-radius:18px;gap:4px}
+.composer .mention-input-wrap,.mobile-layout .composer .mention-input-wrap{flex:1 1 100%;width:100%}
+.composer .composer-bottom,.mobile-layout .composer .composer-bottom{flex:1 0 100%;width:100%;justify-content:flex-end;gap:8px;padding:0}
+.composer .composer-tools,.mobile-layout .composer-tools{width:auto;max-width:none;margin:0 auto 0 0;flex-wrap:nowrap;gap:8px}
+.composer-options{margin:0}.composer-options summary,.mobile-layout .composer-options summary{border:0;min-height:36px;width:36px;padding:0;justify-content:center;font-size:25px;color:#626762;border-radius:50%}
+.composer-options summary:hover,.composer-options[open] summary{background:#f1f2f1}
+.composer-options summary[data-mode=plan]{background:#edf2fb;color:#3773bc}
+.composer-options-panel{width:232px;padding:6px;border-radius:12px;box-shadow:0 8px 30px #0002;font-size:14px}
+.composer-tools .composer-options-panel button,.composer-tools .composer-options-panel select{border:0;border-radius:7px;background:transparent;color:#353735;min-height:36px;margin:0;padding:8px 10px;width:100%;font:inherit;text-align:left}
+.composer-options-panel button:hover,.composer-options-panel select:hover{background:#f3f3f3}
+.composer-options-panel>label{margin:4px 0;padding:4px 0;border-top:1px solid #eee;border-bottom:1px solid #eee}
+.composer-tools [role=status]{flex-basis:auto;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.composer-dialog{border:1px solid #e5e5e5;box-shadow:0 16px 60px #0002;border-radius:16px;padding:20px;font-size:14px}
+.composer-dialog::backdrop{background:#0002}.composer-dialog button{background:#f5f5f5;font-size:14px}.composer-dialog h2{font-size:17px;font-weight:600}
+.composer-dialog-close{font-size:13px!important;min-height:32px!important;padding:4px 10px!important}
+.catalog-dialog{width:min(440px,calc(100vw - 32px))}.catalog-dialog input[type=search]{border:1px solid #ddd;border-radius:8px;background:transparent}
+.catalog-dialog .composer-catalog{max-height:45dvh}.composer-catalog-item{padding:10px 6px;border-radius:8px}.composer-catalog-item:hover{background:#f5f5f5}
+.composer-catalog-item strong{font-weight:500}.composer-catalog-item small{line-height:1.5}.composer-dialog p{line-height:1.6;color:#666}
+.composer .send-button{width:34px;height:34px}
+@media(max-width:700px){.composer-options summary,.mobile-layout .composer-options summary{width:44px;min-height:44px}.composer-tools .composer-options-panel button,.composer-tools .composer-options-panel select{min-height:44px}.composer .composer-tools [role=status]{display:none}.composer .send-button{width:44px;height:44px}}

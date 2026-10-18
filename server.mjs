@@ -45,7 +45,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       const url=new URL(req.url,origin);const p=url.pathname;
       if(p==='/api/access/login'&&remote&&req.method==='POST'){
         const data=await body(req);
-        if(p==='/api/sidebar/actions')return json(res,200,await sidebarAction(manager,data));const token=access.login(data.code);res.setHeader('Set-Cookie',access.cookie(token));return json(res,200,{ok:true});
+        const token=access.login(data.code);res.setHeader('Set-Cookie',access.cookie(token));return json(res,200,{ok:true});
       }
       if(remote&&!access.valid(req)){
         if(req.method==='GET'&&['/','/index.html','/login.js','/styles.css','/mobile-ui.css'].includes(p)){
@@ -74,7 +74,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
         req.on('close',()=>{clearInterval(heartbeat);clients.delete(res);});return;
       }
       if(req.method==='GET'&&p==='/api/status')return json(res,200,manager.status());
-      if(req.method==='GET'&&p==='/api/composer')return json(res,200,await composerCatalog(manager,url.searchParams.get('cwd')));
+      if(req.method==='GET'&&p==='/api/composer')return json(res,200,await composerCatalog(manager,url.searchParams.get('cwd'),url.searchParams.get('kind')));
       if(req.method==='GET'&&p==='/api/models'){manager.requireConnected();return json(res,200,{data:url.searchParams.get('refresh')==='1'||!manager.models.length?await manager.refreshCatalog('models'):manager.models,nextCursor:null});}
       if(req.method==='GET'&&p==='/api/sidebar')return json(res,200,await readSidebar(manager,Object.fromEntries(url.searchParams)));
       if(req.method==='GET'&&p==='/api/projects')return json(res,200,{data:await manager.refreshCatalog('projects')});

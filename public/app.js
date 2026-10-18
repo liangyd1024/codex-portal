@@ -1126,6 +1126,7 @@ function scheduleListRefresh() { clearTimeout(listRefreshTimer); listRefreshTime
 function handleEvent(event) {
   let data; try { data = JSON.parse(event.data); } catch { return; }
   const method = data.method || event.type, p = data.params || {};
+  if (method==='manager/sidebarChanged'||/thread\/(section|readState)\//.test(method)||method.startsWith('threadSection/'))scheduleListRefresh();
   if(method==='manager/taskNotice'){
     notifyTaskEvent(p.event.method,p.event.params);return;
   }
@@ -1346,7 +1347,7 @@ function wireEvents() {
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {
-  setInterval(()=>{if(connected()&&!state.loadingThreads&&!sidebar.pending&&!sidebar.menu&&!sidebar.dialog&&!document.hidden)loadThreads();},15000);
+  setInterval(()=>{if(connected()&&!state.loadingThreads&&!sidebar.pending&&!sidebar.drag&&!sidebar.menu&&!sidebar.dialog&&!document.hidden)loadThreads();},15000);
   $('messages').addEventListener('click',e=>{
     const summary=e.target.closest('summary');if(!summary)return;
     const detail=summary.closest('details[data-item-id]');if(!detail)return;

@@ -37,9 +37,6 @@
 .mobile-layout .auto-refresh-inline span{display:inline}
 .mobile-layout #toggle-message-details{font-size:15px;width:100%;height:auto}
 .mobile-layout #toggle-message-details:after{content:none}
-.mobile-layout #thread-actions{display:none}
-.mobile-layout .mobile-more-panel .thread-actions-panel{position:static;width:100%;border:0;box-shadow:none;padding:0;display:block}
-.mobile-layout .mobile-more-panel .thread-actions-panel[hidden]{display:none}
 .mobile-layout .mobile-takeover:has(#takeover[hidden]){display:none}
 .mobile-layout .mobile-takeover{max-width:880px;width:100%;margin:0 auto 8px}
 .mobile-layout #takeover{width:100%;font-size:16px}

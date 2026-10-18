@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Manager} from '../lib/manager.mjs';
-import {permissionParams,turnOptions,setGoal} from '../lib/composer.mjs';
+import {permissionParams,turnOptions,setGoal,composerCatalog} from '../lib/composer.mjs';
 
 function fixture(){
   const m=new Manager({host:{alias:'test'}}),calls=[];
@@ -67,4 +67,25 @@ test('session approval is forwarded only when explicitly offered by the engine',
  m.respond('approval',{decision:'acceptForSession'});assert.equal(replies[0].decision,'acceptForSession');
  m.requests.set('approval',{id:2,kind:'approval',params:{availableDecisions:['accept','cancel']}});
  assert.throws(()=>m.respond('approval',{decision:'acceptForSession'}),/未提供/);assert.equal(replies.length,1);
+});
+
+test('catalog reads only the requested kind and shares pending reads per project',async()=>{
+ const {m,calls}=fixture();const [a,b]=await Promise.all([composerCatalog(m,'/project','skills'),composerCatalog(m,'/project','skills')]);
+ assert.deepEqual(a,b);assert.deepEqual(calls.map(c=>c.method),['skills/list']);
+ await composerCatalog(m,'/project','skills');assert.equal(calls.length,1);
+ await composerCatalog(m,'/other','skills');assert.equal(calls.length,2);
+ await composerCatalog(m,'/project','plugins');assert.equal(calls.length,3);
+ await assert.rejects(composerCatalog(m,'/project','invalid'));
+});
+test('failed catalogs are retryable, replacement connections do not reuse data',async()=>{
+ const {m}=fixture();let calls=0;m.rpc.request=async()=>{calls++;if(calls===1)throw Error('timeout');return {data:[]};};
+ assert.match((await composerCatalog(m,'/project','skills')).skills.error,/timeout/);
+ assert.deepEqual((await composerCatalog(m,'/project','skills')).skills,{data:[]});assert.equal(calls,2);
+ m.rpc={connected:true,request:async()=>({data:['new connection']})};
+ assert.deepEqual((await composerCatalog(m,'/project','skills')).skills.data,['new connection']);
+});
+test('sending revalidates cached capabilities and preserves read failure semantics',async()=>{
+ const {m}=fixture();m.controlled.set('a',{cwd:'/project',model:'test'});
+ await composerCatalog(m,'/project','skills');m.rpc.request=async()=>{throw Error('offline');};
+ await assert.rejects(turnOptions(m,'a',{skills:['/skills/SKILL.md']},{}),/暂时无法读取/);
 });

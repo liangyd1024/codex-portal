@@ -46,7 +46,7 @@ export async function installMobile(api){
  body.append(feedback,node('h3','2. 设置有效期'));
  const expiry=setting('配对码有效期','pair-code-expiry','rcm.pairCodeExpiry',[['3600','1 小时（默认）'],['600','10 分钟'],['86400','24 小时'],['604800','7 天'],['permanent','永不过期']]);
  const session=setting('配对后的手机登录有效期','mobile-session-expiry','rcm.mobileSessionExpiry',[['604800','7 天（默认）'],['86400','1 天'],['2592000','30 天'],['permanent','永久登录']]);
- body.append(expiry.label,session.label,node('p','设置用于新生成的配对码，现有手机登录不变。永久登录可主动退出，也可由本机撤销。浏览器清除网站数据后需要重新配对。','subtle'),node('h3','3. 生成配对码'));
+ body.append(expiry.label,session.label,node('p','配对一次后，同一手机浏览器在登录有效期内可直接访问；重启或升级工作台不需要重新配对。设置只影响新配对的设备。登录过期、退出、撤销或清除网站数据后需要重新配对。','subtle'),node('h3','3. 生成配对码'));
  const result=node('div',null,'pair-result');result.setAttribute('role','status');result.hidden=true;
  const generate=node('button','生成配对码','primary-button full-width');generate.disabled=!info.origins.length;
  if(!info.origins.length){expiry.select.disabled=true;session.select.disabled=true;generate.setAttribute('aria-describedby','mobile-setup-required');}

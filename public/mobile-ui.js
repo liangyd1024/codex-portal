@@ -15,8 +15,7 @@ export function installMobileUI({closeDrawers, layoutChanged}) {
   const toasts=byId('toasts'),toastMarker=document.createComment('desktop notifications');toasts.before(toastMarker);
   const takeoverSlot = document.createElement('div'); takeoverSlot.className = 'mobile-takeover';
   byId('message-form').before(takeoverSlot);
-  const handoff = byId('thread-actions'), handoffPanel = handoff.querySelector('.thread-actions-panel');
-  const relocations = [byId('refresh-all'), byId('auto-refresh').closest('label'), byId('toggle-message-details'), handoffPanel, byId('takeover')].map(node => {
+  const relocations = [byId('refresh-all'), byId('auto-refresh').closest('label'), byId('toggle-message-details'), byId('handoff-thread'), byId('takeover')].map(node => {
     const marker = document.createComment('desktop control'); node.before(marker); return {node,marker};
   });
   const refreshLabel = document.createElement('span'); refreshLabel.textContent = '刷新状态与会话';
@@ -42,8 +41,6 @@ export function installMobileUI({closeDrawers, layoutChanged}) {
       returnTo?.focus({preventScroll:true});
     }
   }
-  function syncHandoff() { if (compactLayout()) handoffPanel.hidden = handoff.hidden; else handoffPanel.hidden = false; }
-  new MutationObserver(syncHandoff).observe(handoff,{attributes:true,attributeFilter:['hidden']});
   new MutationObserver(syncDrawers).observe(shell,{attributes:true,attributeFilter:['class']});
   function positionPanels() {
     if (!compactLayout()) return;
@@ -79,7 +76,7 @@ export function installMobileUI({closeDrawers, layoutChanged}) {
       else marker.after(node);
       const reason = byId('reason-' + node.id); if (reason) node.after(reason);
     }
-    syncHandoff(); layoutChanged(mobile); syncDrawers(); updateViewport();
+    layoutChanged(mobile); syncDrawers(); updateViewport();
   }
   more.addEventListener('toggle',() => {
     if (more.open) { byId('composer-settings').open = false; positionPanels(); }

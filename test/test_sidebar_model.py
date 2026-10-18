@@ -79,10 +79,23 @@ class SidebarModelTest(unittest.TestCase):
     def test_manual_order_read_revision_and_stale_legacy_pin(self):
         self.state['pinned-thread-ids']=['t1'];self.state['app-server-migrated-pinned-thread-ids-by-host']={'local:'+str(self.root):['t1']}
         self.state['electron-persisted-atom-state']['flat-project-sidebar-preferences-v1']['chatSortMode']='manual'
+        self.state['electron-persisted-atom-state']['flat-project-sidebar-preferences-v1']['manualSortVersion']=1
         self.state['sidebar-project-thread-orders']={'legacy-project':{'threadIds':['t2','t1']}}
         self.add('t1',project_id='p1');self.add('t2',project_id='p1')
         self.db.execute("INSERT INTO thread_read_receipts VALUES ('t1','turn','r1')");self.save()
         a=self.read();self.assertEqual(a['projects'][0]['threadIds'],['t2','t1']);self.assertEqual(a['pinnedThreadIds'],[])
-        t=next(t for t in a['data'] if t['id']=='t1');self.assertTrue(t['isUnread']);self.assertEqual(t['readRevision'],'r1')
+        t=next(t for t in a['data'] if t['id']=='t1');self.assertIsNone(t['isUnread']);self.assertEqual(t['readRevision'],'r1')
         self.db.execute("UPDATE threads SET name='renamed' WHERE id='t1'");self.db.commit()
         self.assertNotEqual(t['revision'],next(t for t in self.read()['data'] if t['id']=='t1')['revision'])
+
+    def test_current_desktop_sort_preferences_and_order_migration(self):
+        atoms=self.state['electron-persisted-atom-state']
+        atoms['flat-project-sidebar-preferences-v1'].update(chatSortMode='manual',projectSortMode='manual')
+        self.add('first',updated_at=1);self.add('second',updated_at=2)
+        self.save();self.assertEqual(self.read()['preferences']['chats'],'updated_at')
+        atoms['flat-project-sidebar-preferences-v1']['manualSortVersion']=1
+        atoms['unified-sidebar-chat-order-v1']=['codex:thread:local:first','codex:thread:local:second']
+        atoms['unified-sidebar-project-order-v1']=['codex:project:p2','codex:project:legacy-project']
+        atoms['pinned-sidebar-sort-mode-v1']='updated_at';self.save()
+        result=self.read();self.assertEqual(result['rootThreadIds'],['first','second']);self.assertEqual(result['projects'][0]['id'],'p2');self.assertEqual(result['preferences']['pinned'],'updated_at')
+        atoms['codex-sidebar-sort-mode-v1']='manual';self.save();self.assertEqual(self.read()['preferences']['chats'],'updated_at')

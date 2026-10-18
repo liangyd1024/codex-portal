@@ -100,7 +100,7 @@
 .message-body{overflow-wrap:anywhere}
 .message{margin:8px 0}.message.user{margin:6px 0 16px}
 .message-turn{margin-bottom:20px;padding-bottom:0}
-.user-bubble{padding:8px 12px;border-radius:12px;max-width:88%}
+.user-bubble{padding:12px 16px;border-radius:18px;max-width:88%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;font-weight:500}
 .agent-label{font-size:12px;line-height:18px;gap:6px;margin-bottom:6px}
 .agent-label .icon{width:16px;height:16px}
 .turn-meta,.turn-meta .turn-model{font-size:11px;line-height:16px}.turn-meta{margin-bottom:6px}
@@ -356,3 +356,19 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .mobile-setup{padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--panel,#f5f7f2)}.mobile-setup p{margin:10px 0}.mobile-setup strong{display:block}#mobile-access-body :is(button,a,summary,select):focus-visible{outline:2px solid #526d41;outline-offset:3px}#mobile-access-body button.full-width{max-width:100%;box-sizing:border-box}
 
 .mobile-address img{image-rendering:pixelated;background:white;padding:16px;box-sizing:content-box;max-width:calc(100% - 32px)}
+
+/* Neutral Codex-style reply typography; user bubbles and controls stay separate. */
+.message-body,.agent-label{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+.message-body{color:#202020;font-weight:400}
+.message-body :is(strong,h2,h3,h4){color:inherit}
+.agent-label{color:#666}
+.message-body a{color:#303030;text-decoration:underline}
+.message-body a:focus-visible{outline-color:#666}
+.message-body code{color:#333;background:#f5f5f5}
+.message-body pre{background:#f7f7f7;border-color:#e5e5e5}
+.message-body pre code{background:transparent}
+.message-body blockquote{color:#666;border-color:#d4d4d4}
+.message-body :is(.table-scroll,th,td){border-color:#e5e5e5}
+.message-body th{color:#303030;background:#f7f7f7}
+.message-body td:first-child{color:#555}
+.message-body ::-webkit-scrollbar-thumb{background:#d4d4d4}

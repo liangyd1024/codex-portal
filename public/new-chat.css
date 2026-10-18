@@ -1,8 +1,8 @@
 .main-panel.new-chat-open>#welcome,.main-panel.new-chat-open>#conversation{display:none!important}
 .new-chat-page{flex:1;min-height:0;overflow:auto;padding:20px 28px;display:flex;flex-direction:column}.new-chat-page[hidden]{display:none}.new-chat-page>#close-new-chat{align-self:flex-start;min-height:44px;padding:8px 12px}
-.new-chat-content{width:100%;max-width:880px;margin:auto; padding:32px 0 80px}.new-chat-content h1{text-align:center;font-weight:550;font-size:28px;margin:0 0 24px;color:var(--ink)}
-.new-project-picker{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 20px;color:var(--muted);font-size:14px}.new-project-picker select{max-width:80%;min-height:44px;border:1px solid var(--line);border-radius:9px;padding:8px 12px;background:var(--panel,#fff);color:var(--ink)}
+.new-chat-content{width:100%;max-width:760px;margin:auto; padding:24px 0 64px}.new-chat-content h1{text-align:center;font-weight:550;font-size:28px;margin:0 0 8px;color:var(--ink)}
+.new-project-picker{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 22px;color:var(--muted);font-size:14px}.new-project-picker select{max-width:80%;min-height:44px;border:0;border-radius:8px;padding:6px 8px;background:var(--panel,#fff);color:var(--ink)}
 #new-composer-slot .composer-region{padding:0;max-height:none;overflow:visible;background:transparent}#new-composer-slot :is(.model-selection-note,.composer-caption,#conversation-requests){display:none!important}
-#new-composer-slot textarea{min-height:100px}.new-chat-page :focus-visible{outline:2px solid #377cf6;outline-offset:2px}
+#new-composer-slot textarea{min-height:72px}.new-chat-page :focus-visible{outline:2px solid #377cf6;outline-offset:2px}
 @media(max-width:700px){.new-chat-page{padding:10px 12px}.new-chat-content{padding:24px 0;margin:auto 0}.new-chat-content h1{font-size:24px}.new-project-picker select{font-size:16px}.new-chat-page .composer-region{overflow:visible!important}}
 .main-panel.new-chat-open #handoff-thread{display:none!important}
