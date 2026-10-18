@@ -1,3 +1,4 @@
+import {activitySource,activityIcon} from './activity.js';
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message-media.js';
 import {markdown, groupTurnItems} from './message-body.js';
 import {NewChatDraft} from './new-chat.js';
@@ -236,6 +237,10 @@ async function api(path, options = {}) {
       const e = new Error(data.error?.message || data.message || '请求失败，HTTP ' + response.status);
       e.readOnly = method==='GET'; e.status = response.status; e.code = data.error?.code; e.details = data.error?.details; throw e;
     }
+    // Freshness uses this browser's clock, including observations from SSH hosts.
+    for(const thread of [data.thread,...(Array.isArray(data.data)?data.data:[])]) {
+      if(thread?.activity)thread.activity.observedAt=Date.now();
+    }
     return data;
   } catch (e) {
     if (e.name === 'AbortError') throw new Error(method==='GET'?'读取超时，已有内容和草稿保留，请重试刷新。':'操作结果未确认，草稿已保留。请先核对会话记录，避免重复提交。');
@@ -282,7 +287,7 @@ function renderStatus() {
   const welcome = $('welcome-connect'); clear(welcome); welcome.append(icon(connected() ? 'plus' : 'link'),el('span','',connectionPending() ? '正在连接…' : connected() ? '新建目标机器会话' : '连接 ' + (h.alias || '目标机器')));
   setText('welcome-footnote',connected() ? '已连接。选择左侧会话，或新建目标机器会话。' : '等待连接。此页面不包含演示会话。');
   renderControlOverview();
-  renderControls(); renderDiagnostics();
+  renderControls(); renderDiagnostics(); if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();
 }
 function renderControlOverview() {
   const sessions=state.status?.controlledSessions||[],counts=new Map();
@@ -332,10 +337,12 @@ function renderControls() {
   $('interrupt').title=active?'停止当前轮次':'停止后台命令';
   $('interrupt').setAttribute('aria-label',state.busy.has('interrupt') ? '正在请求停止' : $('interrupt').title);
   $('interrupt').setAttribute('aria-busy',String(state.busy.has('interrupt')));
-  $('running-indicator').hidden = !active&&background.state==='idle';
-  $('running-indicator').firstElementChild.hidden=!active&&background.state!=='running';
-  $('running-indicator').lastElementChild.textContent=active?'正在执行':background.state==='running'?'后台命令仍在运行（'+background.terminals.length+'）':'后台命令状态待确认';
-  $('running-indicator').title=active?'':background.state==='running'?background.terminals.map(t=>t.command).filter(Boolean).join('\n'):background.state==='unknown'?'连接恢复或下次同步后重新核对。':'';
+  const source=activitySource(currentThread(),{connected:usable(),webActive:controlled()&&(active||background.state==='running')});
+  const indicator=$('running-indicator');
+  const unknownBackground=!source&&controlled()&&background.state==='unknown';
+  indicator.hidden=!source&&!unknownBackground;
+  indicator.replaceChildren(...(source?[activityIcon(source,icon)]:[]));
+  if(unknownBackground){const warning=el('span','activity-icon');warning.title='后台命令状态待确认';warning.setAttribute('role','img');warning.setAttribute('aria-label',warning.title);warning.classList.add('activity-unknown');warning.append(icon('alert'));indicator.append(warning);}
   if(newChatOpen){
     const reason=!ready?'连接恢复后可发送，草稿已保留。':newDraft.phase==='uncertain'?'创建结果未确认，请刷新侧栏核对，避免重复创建。':!newDraft.cwd?'选择一个项目后开始。':creating?'正在创建会话…':'';
     $('send-message').disabled ||= !featureReady('create')||!newDraft.cwd||newDraft.phase!=='editing';
@@ -369,6 +376,7 @@ function controlReason(id, text) {
   note.textContent = text; note.hidden = !button.disabled || button.hidden;
 }
 const sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadName,relativeTime,api,toast,
+  activitySource:t=>activitySource(t,{connected:usable(),webActive:((state.status?.controlledSessions||[]).find(s=>s.id===t.id)?.status||t.status)?.type==='active'}),
   connected:usable,selectedId:()=>state.selectedId,newThread:openNewDialog,
   select:t=>{state.projectId=t.projectId;state.selectedArchived=!!t.archived;saveView();selectThread(t.id);},
   onArchiveView:archived=>{state.sidebarArchived=archived;state.threadCursor=null;state.threads=[];loadThreads();},
@@ -1290,6 +1298,7 @@ function wireEvents() {
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {
+  setInterval(()=>{renderControls();if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();},5000);
   setInterval(()=>{if(connected()&&!state.loadingThreads&&!sidebar.pending&&!sidebar.drag&&!sidebar.menu&&!sidebar.dialog&&!document.hidden)loadThreads();},15000);
   $('messages').addEventListener('click',e=>{
     const summary=e.target.closest('summary');if(!summary)return;

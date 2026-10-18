@@ -409,3 +409,15 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .message-body .code-block code{white-space:inherit;overflow-wrap:normal}
 .code-block pre:focus-visible,.code-copy:focus-visible,.message-image button:focus-visible{outline:2px solid #666;outline-offset:-2px}
 @media(max-width:700px){.code-copy,.message-image-retry{min-height:44px}.message-image-open img{max-height:300px}.image-viewer{padding:12px}.image-viewer-close{min-height:44px}}
+
+/* Shape distinguishes the entrance; the small pulse indicates live activity. */
+.activity-icon{display:inline-flex;align-items:center;justify-content:center;position:relative;width:22px;height:22px;flex:0 0 22px;border-radius:5px;color:#2563a6;background:#eaf2fb;vertical-align:middle}
+.activity-icon>.icon{width:16px;height:16px}
+.activity-web{color:#33764c;background:#eaf5ee}
+.activity-icon::after{content:"";position:absolute;right:0;top:0;width:5px;height:5px;border-radius:50%;background:currentColor;animation:pulse 1.3s infinite}
+.thread-name>.activity-icon{margin-left:5px}
+.running-indicator{min-height:26px}
+@media(max-width:700px){.activity-icon{width:22px;height:22px;flex-basis:22px}.thread-name>.activity-icon{margin-left:4px}}
+@media(prefers-reduced-motion:reduce){.activity-icon::after{animation:none}}
+
+.activity-unknown::after{display:none}

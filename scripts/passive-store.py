@@ -91,6 +91,125 @@ def archived_flag(payload):
     raise ValueError('archived 必须是布尔值。')
 
 
+def desktop_activity(identifiers):
+    """Observe existing desktop owners briefly; never resume or claim a thread.
+
+    Only a versioned live snapshot is evidence. Missing owners, old versions and
+    timeouts remain unknown, regardless of persisted inProgress history.
+    """
+    import os
+    import socket
+    import stat
+    import struct
+    import time
+    import uuid
+    identifiers = set(identifiers)
+    if not identifiers:
+        return {}
+    result = {}
+    client = None
+    source = None
+    try:
+        endpoint = None
+        for candidate in [STORE / 'ipc/ipc.sock', pathlib.Path('/tmp/codex-ipc') / ('ipc-' + str(os.getuid()) + '.sock')]:
+            try:
+                info, parent = candidate.lstat(), candidate.parent.lstat()
+            except FileNotFoundError:
+                continue
+            if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid() or not stat.S_ISDIR(parent.st_mode) or parent.st_uid != os.getuid() or parent.st_mode & 0o022:
+                return {}
+            endpoint = candidate
+            break
+        if endpoint is None:
+            return {}
+        deadline = time.monotonic() + 1.2
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.settimeout(1.2)
+        client.connect(str(endpoint))
+
+        def send(value):
+            data = json.dumps(value).encode('utf-8')
+            client.sendall(struct.pack('<I', len(data)) + data)
+
+        def exact(size):
+            data = bytearray()
+            while len(data) < size:
+                client.settimeout(max(0.001, deadline - time.monotonic()))
+                part = client.recv(size - len(data))
+                if not part:
+                    raise EOFError()
+                data.extend(part)
+            return data
+
+        def receive():
+            size = struct.unpack('<I', exact(4))[0]
+            if not 0 < size <= 16 * 1024 * 1024:
+                raise ValueError('Invalid activity frame')
+            return json.loads(exact(size))
+
+        def following(identifier, value):
+            send({'type': 'broadcast', 'sourceClientId': source, 'version': 1,
+                  'method': 'thread-stream-following-changed',
+                  'params': {'hostId': 'local', 'conversationId': identifier, 'following': value}})
+
+        request = str(uuid.uuid4())
+        send({'type': 'request', 'requestId': request, 'sourceClientId': 'initializing-client',
+              'version': 0, 'method': 'initialize', 'params': {'clientType': 'remote-codex-manager'}})
+        while time.monotonic() < deadline:
+            message = receive()
+            if message.get('type') == 'response' and message.get('requestId') == request:
+                if message.get('resultType') != 'success':
+                    return {}
+                source = message['result']['clientId']
+                break
+        if source is None:
+            return {}
+        for identifier in identifiers:
+            following(identifier, True)
+        while time.monotonic() < deadline and len(result) < len(identifiers):
+            message = receive()
+            if message.get('type') != 'broadcast' or message.get('method') != 'thread-stream-state-changed' or message.get('version') != 11:
+                continue
+            params = message.get('params', {})
+            identifier = params.get('conversationId')
+            change = params.get('change', {})
+            if identifier not in identifiers or params.get('hostId') != 'local' or change.get('type') != 'snapshot':
+                continue
+            state = change.get('conversationState', {})
+            status = state.get('threadRuntimeStatus', {}).get('type')
+            if state.get('id') == identifier and status in ('active', 'idle', 'systemError', 'notLoaded'):
+                result[identifier] = {'source': 'desktop', 'state': 'running' if status == 'active' else 'idle', 'observedAt': int(time.time() * 1000)}
+                following(identifier, False)
+    except (OSError, EOFError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+    finally:
+        if client is not None:
+            if source is not None:
+                for identifier in identifiers:
+                    try:
+                        following(identifier, False)
+                    except OSError:
+                        break
+            client.close()
+    return result
+
+
+def sidebar_activity(threads):
+    # The persisted latest turn selects candidates only; it never proves activity.
+    try:
+        db = connect_store('thread_history_1.sqlite')
+        try:
+            candidates = {r[0] for r in db.execute("SELECT t.thread_id FROM thread_turns t WHERE t.status='inProgress' AND NOT EXISTS (SELECT 1 FROM thread_turns newer WHERE newer.thread_id=t.thread_id AND newer.rollout_ordinal>t.rollout_ordinal)")}
+        finally:
+            db.close()
+        activity = desktop_activity([t['id'] for t in threads if t['id'] in candidates])
+        for thread in threads:
+            if thread['id'] in activity:
+                thread['activity'] = activity[thread['id']]
+    except (RuntimeError, sqlite3.Error):
+        pass
+
+
 def normalized_thread(row):
     return {
         'id': row['id'],
@@ -213,7 +332,11 @@ def read_detail(payload):
         row = connection.execute('SELECT ' + ', '.join(THREAD_COLUMNS) + ' FROM threads WHERE id = ?', (identifier,)).fetchone()
         if row is None:
             raise ValueError('未找到会话：' + identifier)
-        return {'thread': normalized_thread(row), 'historySource': 'snapshot'}
+        thread = normalized_thread(row)
+        activity = desktop_activity([identifier])
+        if identifier in activity:
+            thread['activity'] = activity[identifier]
+        return {'thread': thread, 'historySource': 'snapshot'}
     finally:
         connection.close()
 
@@ -634,6 +757,7 @@ def read_sidebar(payload):
             if not t['archived'] and t['projectId'] in project_by_id:
                 p = project_by_id[t['projectId']]
                 p['recencyAt'] = max(p['recencyAt'], t['recencyAt'])
+        sidebar_activity(threads)
         by_id = {t['id']: t for t in threads}
         for s in sections:
             s['revision'] = sidebar_revision([s['name'],sorted(t['id'] for t in threads if t['sectionId'] == s['id'])])
