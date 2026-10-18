@@ -62,3 +62,15 @@ test('unfinished long links remain plain text without exponential parsing',()=>{
  const text='[报告]('+ 'a'.repeat(20000);
  assert.equal(markdown(text).textContent,text);
 });
+test('SQL code blocks preserve text and expose language, scrolling and copy',async()=>{
+ const sql='SELECT id, total_amount\nFROM billing_trans\n  WHERE status = 3;';let copied;
+ Object.defineProperty(globalThis,'navigator',{value:{clipboard:{writeText:async value=>{copied=value;}}},configurable:true});
+ const body=markdown('```sql\n'+sql+'\n```');const pre=all(body,'PRE')[0];assert.equal(pre.textContent,sql);assert.equal(pre.tabIndex,0);
+ const button=all(body,'BUTTON')[0];assert.equal(button.attrs['aria-label'],'复制 sql代码');await button.onclick();assert.equal(copied,sql);assert.ok(body.textContent.includes('已复制'));
+});
+test('Markdown images render through scoped resolver; code examples do not load media',()=>{
+ const calls=[];const options={image:(path,alt)=>{calls.push({path,alt});return new Node('img');}};
+ const body=markdown('![图](</tmp/a b.png>)\n\n`![代码](/tmp/code.png)`\n\n```text\n![示例](/tmp/example.png)\n```',0,options);
+ assert.equal(all(body,'IMG').length,1);assert.deepEqual(calls,[{path:'/tmp/a b.png',alt:'图'}]);
+ assert.equal(groupTurnItems({status:'completed',items:[{type:'imageGeneration',result:'image'}]})[0].type,'message');
+});

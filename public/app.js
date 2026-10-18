@@ -1,3 +1,4 @@
+import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message-media.js';
 import {markdown, groupTurnItems} from './message-body.js';
 import {NewChatDraft} from './new-chat.js';
 import {installAttachments} from './attachments.js';
@@ -417,11 +418,6 @@ function renderModels(preferThread = false) {
   renderControls();
 }
 
-function contentText(content) {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return content?.text || '';
-  return content.map(c => c.text || (c.type === 'image' || c.type === 'localImage' ? '[图片附件]' : c.type === 'skill' ? '[技能：' + (c.name || c.path || '') + ']' : c.type === 'mention' ? '[引用：' + (c.name || c.path || '') + ']' : '')).filter(Boolean).join('\n');
-}
 function toolDetails(item, title, iconName = 'terminal') {
   const d = el('details','tool-block'); d.dataset.itemId = item.id || title; d.dataset.running = String(['inProgress','in_progress','running'].includes(typeOf(item.status)));
   const summary = el('summary'); summary.append(icon(iconName),el('span','tool-title',title),el('span','tool-status',uncertainHistory() && ['inProgress','in_progress','running'].includes(typeOf(item.status)) ? '状态未确认' : (item.type==='commandExecution'&&item.exitCode===-1?'已终止':statusNames[typeOf(item.status)] || typeOf(item.status))),icon('chevron','chevron'));
@@ -455,17 +451,32 @@ function renderCommandOutput(item) {
   wrap.append(controls,pre);return wrap;
 }
 function renderItem(item) {
-  if (item.type === 'userMessage') { const m = el('div','message user'),bubble=el('div','user-bubble',contentText(item.content)); for(const part of Array.isArray(item.content)?item.content:[]){if(part.type==='image'&&/^data:image\/(png|jpeg|webp);base64,/.test(part.url||'')){const img=el('img','user-image');img.src=part.url;img.alt='已发送的图片';img.loading='lazy';bubble.append(img);}}m.append(bubble); return m; }
+  const imageUrl=options=>itemImageUrl(state.selectedId,item.id,{...options,host:targetHost});
+  const bodyMarkdown=text=>markdown(text,0,{image:(path,label)=>{
+    if(!isRasterImage(path))return null;
+    if(path.startsWith('/')&&!path.startsWith('//'))return imageCard(imageUrl({reference:path}),label||'回复图片');
+    if(/^data:image\/(png|jpeg|webp|gif);base64,/.test(path))return imageCard(path,label||'回复图片');
+    return null;
+  }});
+  if (item.type === 'userMessage') {
+    const m=el('div','message user'),bubble=el('div','user-bubble'),content=userMessageContent(item.content);
+    if(content.text)bubble.append(el('div','user-message-text',content.text));
+    for(const part of content.images){
+      const src=part.type==='image'&&/^data:image\/(png|jpeg|webp|gif);base64,/.test(part.url||'')?part.url:imageUrl({part:part.index});
+      bubble.append(imageCard(src,'图片附件 '+(part.index+1)));
+    }
+    m.append(bubble);return m;
+  }
   if (['agentMessage','plan'].includes(item.type)) {
     const m = el('article','message agent'); m.setAttribute('aria-label',item.type === 'plan' ? '计划' : 'Codex 回复'); const label = el('div','agent-label' + (item.type === 'agentMessage' ? ' message-author' : '')); label.append(icon('mark'),el('span','',item.type === 'plan' ? '计划' : 'Codex')); m.append(label);
     const text=String(item.text||''), heartbeat=text.match(/<heartbeat>\s*<automation_id>([^<]+)<\/automation_id>\s*<decision>([^<]+)<\/decision>\s*<message>([\s\S]*?)<\/message>\s*<\/heartbeat>/);
     if(heartbeat){
-      m.append(markdown(text.slice(0,heartbeat.index)));
+      m.append(bodyMarkdown(text.slice(0,heartbeat.index)));
       const card=el('section','decision-notice');card.append(el('strong','','自动任务通知 · '+heartbeat[1]),el('p','',heartbeat[3].trim()));
       const reply=el('button','secondary-button',controlled()?'回复决策':'接管并回复决策');
       reply.onclick=async()=>{if(!controlled())await takeoverThread();if(!controlled())return;$('message-input').focus();$('message-input').placeholder='输入你的决定，确认后发送…';};
-      card.append(reply,el('small','','此通知是历史记录。填写并发送后，才会提交你的决定。'));m.append(card,markdown(text.slice(heartbeat.index+heartbeat[0].length)));
-    }else m.append(markdown(text)); return m;
+      card.append(reply,el('small','','此通知是历史记录。填写并发送后，才会提交你的决定。'));m.append(card,bodyMarkdown(text.slice(heartbeat.index+heartbeat[0].length)));
+    }else m.append(bodyMarkdown(text)); return m;
   }
   if (item.type === 'reasoning') {
     const r = el('details','reasoning-block'); r.dataset.itemId = item.id; r.append(el('summary','','思考摘要'));
@@ -483,20 +494,13 @@ function renderItem(item) {
     (item.changes || []).forEach(change => { const row = el('div','file-row'); row.append(icon('file'),el('span','file-path',change.path),el('span','file-kind',kindName(change.kind))); body.append(row); if (change.diff) body.append(el('pre','file-diff',change.diff)); }); return d;
   }
   if (item.type === 'imageGeneration') {
+    if(item.result || item.imageRef){
+      const card=el('article','message generated-image-message');
+      const src=item.imageRef?imageUrl({}):'data:image/png;base64,'+item.result;
+      card.append(imageCard(src,'生成的图片'));return card;
+    }
     const {d,body}=toolDetails(item,'生成图片','file');
-    if(item.revisedPrompt)body.append(el('p','tool-meta',item.revisedPrompt));
-    if(item.imageRef){
-      const ref=item.imageRef;
-      const url='/api/threads/'+encodeURIComponent(ref.threadId)+'/items/'+encodeURIComponent(ref.itemId)+'/image';
-      const button=el('button','secondary-button','加载图片预览');button.type='button';
-      const image=el('img','generated-image');image.alt='目标机器生成图片的预览';image.hidden=true;
-      button.onclick=()=>{button.disabled=true;button.textContent='正在加载预览…';image.hidden=false;image.src=targetUrl(url+'?preview=1');};
-      image.onload=()=>{button.hidden=true;};image.onerror=()=>{button.disabled=false;button.textContent='重试图片预览';image.hidden=true;};
-      const download=el('a','image-download','下载原图');download.href=targetUrl(url+'?download=1');download.download=ref.itemId+'.png';
-      body.append(button,download,image);
-    }else if(item.result){const image=el('img','generated-image');image.alt='目标机器生成图片';image.src='data:image/png;base64,'+item.result;body.append(image);}
-    else body.append(el('p','tool-meta',item.failure?messageOf(item.failure):'该记录没有图片内容。'));
-    if(item.savedPath)body.append(el('p','tool-meta','目标机器文件：'+item.savedPath));return d;
+    body.append(el('p','tool-meta',item.failure?messageOf(item.failure):'图片尚未生成。'));return d;
   }
   if (item.type === 'error') return el('div','turn-error',messageOf(item.error || item.message || item.text || item));
   const name = item.tool || item.name || item.type || '目标机器事件';

@@ -389,3 +389,23 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
   #refresh-message,#refresh-time{display:none}
   #refresh-compact{display:inline}
 }
+
+/* Message attachments stay with their text; original files are scoped to stored items. */
+.message-image{display:inline-flex;flex-direction:column;align-items:flex-start;max-width:100%;margin:8px 0;white-space:normal;vertical-align:top}
+.message-image-open{display:block;max-width:100%;padding:0;background:transparent;border-radius:10px;overflow:hidden;cursor:zoom-in}
+.message-image-open img{display:block;max-width:100%;max-height:360px;object-fit:contain}
+.message-image-status{font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.message-image-retry{font-size:13px;padding:6px 10px;margin-top:6px;border:1px solid currentColor;border-radius:6px;color:inherit;background:transparent}
+.message-image [hidden]{display:none!important}
+.user-bubble:has(.message-image):not(:has(.user-message-text)){background:transparent;padding:0;color:var(--ink)}
+.image-viewer{width:min(1100px,calc(100vw - 32px));max-height:calc(100dvh - 32px);padding:16px;overflow:auto}
+.image-viewer img{display:block;max-width:100%;max-height:calc(100dvh - 110px);object-fit:contain;margin:12px auto 0}
+.image-viewer-close{float:right;padding:8px 12px;border-radius:6px;background:#eee;color:#222;min-height:40px}
+.image-viewer .image-download{display:inline-block;padding:10px;color:#333}
+.message-body .code-block{max-width:100%;border:1px solid #e5e5e5;border-radius:8px;overflow:hidden;margin:10px 0}
+.code-block-header{display:flex;align-items:center;gap:10px;min-height:40px;padding:5px 12px;background:#f3f3f3;color:#555;font-size:12px}
+.code-language{margin-right:auto}.code-copy-status{font-size:12px}.code-copy{padding:6px 8px;background:transparent;border-radius:5px;color:#333;white-space:nowrap}
+.message-body .code-block pre{margin:0;border:0;border-radius:0;white-space:pre;overflow:auto;overflow-wrap:normal;tab-size:4}
+.message-body .code-block code{white-space:inherit;overflow-wrap:normal}
+.code-block pre:focus-visible,.code-copy:focus-visible,.message-image button:focus-visible{outline:2px solid #666;outline-offset:-2px}
+@media(max-width:700px){.code-copy,.message-image-retry{min-height:44px}.message-image-open img{max-height:300px}.image-viewer{padding:12px}.image-viewer-close{min-height:44px}}

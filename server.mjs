@@ -81,9 +81,9 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       if(req.method==='GET'&&p==='/api/threads')return json(res,200,await manager.threads(Object.fromEntries(url.searchParams)));
       const image=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})\/items\/([A-Za-z0-9_-]{1,160})\/image$/);
       if(req.method==='GET'&&image){
-        const result=await manager.image(image[1],image[2],{preview:url.searchParams.get('preview')==='1'});
+        const result=await manager.image(image[1],image[2],{preview:url.searchParams.get('preview')==='1',part:url.searchParams.get('part'),reference:url.searchParams.get('reference')});
         const content=Buffer.from(result.data,'base64');
-        if(!['image/png','image/jpeg','image/webp'].includes(result.mime))throw new AppError('不支持此图片格式。');
+        if(!['image/png','image/jpeg','image/webp','image/gif'].includes(result.mime))throw new AppError('不支持此图片格式。');
         res.writeHead(200,{'Content-Type':result.mime,'Content-Length':content.length,'Cache-Control':'private, max-age=300',...(url.searchParams.get('download')==='1'?{'Content-Disposition':`attachment; filename="${image[2]}.${result.extension}"`}:{})});res.end(content);return;
       }
       const match=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(history|takeover|handoff|message|steer|interrupt|goal))?$/);
@@ -111,7 +111,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       }
       if(p.startsWith('/api/'))return json(res,404,{error:{message:'找不到此接口。',code:'NOT_FOUND'}});
       if(req.method!=='GET'&&req.method!=='HEAD')throw new AppError('不支持此请求方法。',405);
-      const file={'/project-picker.js':'project-picker.js','/project-picker.css':'project-picker.css','/message-body.js':'message-body.js','/new-chat.js':'new-chat.js','/new-chat.css':'new-chat.css','/inline-mentions.js':'inline-mentions.js','/skill-suggestions.js':'skill-suggestions.js','/attachments.js':'attachments.js','/composer.js':'composer.js','/composer.css':'composer.css','/':'index.html','/index.html':'index.html','/app.js':'app.js','/mobile-ui.js':'mobile-ui.js','/mobile-ui.css':'mobile-ui.css','/input-state.js':'input-state.js','/thread-sync.js':'thread-sync.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
+      const file={'/project-picker.js':'project-picker.js','/project-picker.css':'project-picker.css','/message-media.js':'message-media.js','/message-body.js':'message-body.js','/new-chat.js':'new-chat.js','/new-chat.css':'new-chat.css','/inline-mentions.js':'inline-mentions.js','/skill-suggestions.js':'skill-suggestions.js','/attachments.js':'attachments.js','/composer.js':'composer.js','/composer.css':'composer.css','/':'index.html','/index.html':'index.html','/app.js':'app.js','/mobile-ui.js':'mobile-ui.js','/mobile-ui.css':'mobile-ui.css','/input-state.js':'input-state.js','/thread-sync.js':'thread-sync.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
       if(!file){res.writeHead(404);res.end('Not found');return;}
       const content=await readFile(path.join(ROOT,'public',file));
       res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);

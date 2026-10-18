@@ -237,6 +237,63 @@ def history_item(item, identifier):
     return value
 
 
+MAX_IMAGE_BYTES = 24 * 1024 * 1024
+
+
+def stored_image_bytes(value, payload):
+    # Client selects a part/reference within this persisted item, never a free file.
+    part = payload.get('part')
+    reference = payload.get('reference')
+    if part is not None and reference is not None:
+        raise ValueError('图片来源不能同时指定。')
+    if part is not None:
+        if not isinstance(part, str) or not re.fullmatch(r'\d{1,5}', part):
+            raise ValueError('图片附件序号无效。')
+        parts = value.get('content', [])
+        if value.get('type') != 'userMessage' or not isinstance(parts, list) or int(part) >= len(parts):
+            raise ValueError('未找到图片附件。')
+        source = parts[int(part)]
+        if source.get('type') == 'localImage':
+            image_path = source.get('path')
+        elif source.get('type') == 'image' and isinstance(source.get('url'), str):
+            match = re.fullmatch(r'data:image/(?:png|jpeg|webp|gif);base64,([A-Za-z0-9+/=\s]+)', source['url'])
+            if not match or len(match[1]) > MAX_IMAGE_BYTES * 4 // 3 + 4:
+                raise ValueError('该附件不包含可读取的图片。')
+            return base64.b64decode(match[1], validate=True)
+        else:
+            raise ValueError('该附件不是本地图片。')
+    elif reference is not None:
+        if value.get('type') not in ('agentMessage', 'plan') or not isinstance(reference, str):
+            raise ValueError('图片引用无效。')
+        # Match only Markdown image destinations, not ordinary links or tool output.
+        text = value.get('text') or ''
+        refs = re.findall(r'!\[[^\]\n]*\]\((<[^>\n]+>|(?:\\.|[^\s()\\]|\([^()\n]*\))+?)\)', text)
+        refs = [re.sub(r'\\([!"#$%&\'()*+,\-./:;<=>?@[\]\\^_`{|}~])', r'\1', ref[1:-1] if ref.startswith('<') else ref) for ref in refs]
+        if reference not in refs:
+            raise ValueError('图片未在该消息中引用。')
+        image_path = reference
+    elif value.get('type') == 'imageGeneration' and isinstance(value.get('result'), str):
+        if len(value['result']) > MAX_IMAGE_BYTES * 4 // 3 + 4:
+            raise ValueError('图片超过 24 MiB 限制。')
+        return base64.b64decode(value['result'], validate=True)
+    else:
+        raise ValueError('该记录不包含可读取的图片。')
+    if not isinstance(image_path, str) or not pathlib.Path(image_path).is_absolute():
+        raise ValueError('仅支持目标机器上的绝对图片路径。')
+    import os
+    import stat
+    # Do not read device files, FIFOs or a replacement symlink.
+    fd = os.open(image_path, os.O_RDONLY | os.O_NONBLOCK | getattr(os, 'O_NOFOLLOW', 0))
+    with os.fdopen(fd, 'rb') as image_file:
+        info = os.fstat(image_file.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_IMAGE_BYTES:
+            raise ValueError('图片不是普通文件或超过 24 MiB 限制。')
+        content = image_file.read(MAX_IMAGE_BYTES + 1)
+    if len(content) > MAX_IMAGE_BYTES:
+        raise ValueError('图片超过 24 MiB 限制。')
+    return content
+
+
 def read_image(payload):
     connection = connect_store('thread_history_1.sqlite')
     try:
@@ -247,13 +304,13 @@ def read_image(payload):
         if row is None:
             raise ValueError('未找到图片记录。')
         value = decode_json(row['item_json'], 'thread_items.item_json', item_id)
-        if value.get('type') != 'imageGeneration' or not isinstance(value.get('result'), str):
-            raise ValueError('该记录不是生成图片。')
-        content = base64.b64decode(value['result'], validate=True)
+        content = stored_image_bytes(value, payload)
         if content.startswith(b'\x89PNG\r\n\x1a\n'):
             mime, extension = 'image/png', 'png'
         elif content.startswith(b'\xff\xd8\xff'):
             mime, extension = 'image/jpeg', 'jpg'
+        elif content.startswith((b'GIF87a', b'GIF89a')):
+            mime, extension = 'image/gif', 'gif'
         elif content.startswith(b'RIFF') and content[8:12] == b'WEBP':
             mime, extension = 'image/webp', 'webp'
         else:

@@ -7,7 +7,7 @@ export function groupTurnItems(turn) {
   const hasAnswer = items.some(i => i.type === 'agentMessage' && i.phase === 'final_answer' && i.text?.trim());
   const groups = [];
   for (const [index,item] of items.entries()) {
-    const process = !['userMessage','agentMessage','plan','error'].includes(item.type) ||
+    const process = !(item.type === 'imageGeneration' && (item.result || item.imageRef)) && !['userMessage','agentMessage','plan','error'].includes(item.type) ||
       (finished && hasAnswer && item.type === 'agentMessage' && item.phase === 'commentary');
     if (!process) { groups.push({type:'message',item}); continue; }
     let group = groups.at(-1);
@@ -16,25 +16,28 @@ export function groupTurnItems(turn) {
   }
   return groups;
 }
-function appendInline(n, text, depth = 0) {
+function appendInline(n, text, depth = 0, options = {}) {
   text = String(text);
   if (depth > 20) { n.append(document.createTextNode(text)); return; }
   // Raw HTML is always text; only explicitly allowed link schemes become links.
   const pattern = /\\[!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~]|(`+)([^]*?)\1(?!`)|\*\*([^]*?)\*\*|__([^]*?)__|\[([^\]\n]+)\]\((<[^>\n]+>|(?:\\.|[^\s()\\]|\([^()\n]*\))+?)\)|\*([^*\n]+)\*|~~([^~\n]+)~~|&(?:#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi;
   let last = 0;
   for (const m of text.matchAll(pattern)) {
-    if (m.index > last) n.append(document.createTextNode(text.slice(last,m.index)));
+    const image = m[5] !== undefined && m.index > last && text[m.index-1] === '!';
+    if (m.index > last) n.append(document.createTextNode(text.slice(last,m.index-(image?1:0))));
     const token = m[0];
     if (token[0] === '\\') n.append(document.createTextNode(token.slice(1)));
     else if (m[1]) n.append(el('code','',m[2].replace(/\n/g,' ').replace(/^ (.*) $/,'$1')));
-    else if (m[3] !== undefined || m[4] !== undefined) { const strong=el('strong'); appendInline(strong,m[3] ?? m[4],depth+1); n.append(strong); }
+    else if (m[3] !== undefined || m[4] !== undefined) { const strong=el('strong'); appendInline(strong,m[3] ?? m[4],depth+1,options); n.append(strong); }
     else if (m[5] !== undefined) {
       const href = m[6].replace(/^<|>$/g,'').replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/g,'$1');
+      const media=image && options.image?.(href,m[5]);
+      if(media){n.append(media);last=m.index+token.length;continue;}
       let safe = false;
       try { safe = ['https:','http:'].includes(new URL(href).protocol); } catch {}
-      if (safe) { const link=el('a'); appendInline(link,m[5],depth+1); link.href=href; link.target='_blank'; link.rel='noopener noreferrer'; n.append(link); }
-      else { appendInline(n,m[5],depth+1); n.append(document.createTextNode(' (' + href + ')')); }
-    } else if (m[7] !== undefined || m[8] !== undefined) { const span=el(m[7] !== undefined?'em':'del'); appendInline(span,m[7] ?? m[8],depth+1); n.append(span); }
+      if (safe) { const link=el('a'); appendInline(link,m[5],depth+1,options); link.href=href; link.target='_blank'; link.rel='noopener noreferrer'; n.append(link); }
+      else { appendInline(n,m[5],depth+1,options); n.append(document.createTextNode(' (' + href + ')')); }
+    } else if (m[7] !== undefined || m[8] !== undefined) { const span=el(m[7] !== undefined?'em':'del'); appendInline(span,m[7] ?? m[8],depth+1,options); n.append(span); }
     else {
       const entity=token.slice(1,-1).toLowerCase(), named={amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",nbsp:'\u00a0'};
       const point=entity.startsWith('#x')?parseInt(entity.slice(2),16):entity.startsWith('#')?Number(entity.slice(1)):null;
@@ -46,7 +49,7 @@ function appendInline(n, text, depth = 0) {
 }
 const listMarker = line => /^( *)([-+*]|\d+[.)]) +(.*)$/.exec(line);
 const tableCells = value => value.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map(cell => cell.trim());
-export function markdown(text, depth = 0) {
+export function markdown(text, depth = 0, options = {}) {
   const n = el('div','message-body'), lines = String(text || '').replace(/\r\n?/g,'\n').split('\n');
   if (depth > 20) { n.textContent=text; return n; }
   let paragraph = [];
@@ -55,30 +58,37 @@ export function markdown(text, depth = 0) {
     const p=el('p');
     paragraph.forEach((line,index)=>{
       const hard = /(?: {2,}|\\)$/.test(line);
-      appendInline(p,line.replace(/(?: {2,}|\\)$/,''));
+      appendInline(p,line.replace(/(?: {2,}|\\)$/,''),0,options);
       if(index<paragraph.length-1)p.append(hard?el('br'):document.createTextNode('\n'));
     });
     n.append(p); paragraph=[];
   };
-  const appendBlocks = (parent, content) => { const body=markdown(content,depth+1); parent.append(...Array.from(body.childNodes)); };
+  const appendBlocks = (parent, content) => { const body=markdown(content,depth+1,options); parent.append(...Array.from(body.childNodes)); };
   for (let i=0;i<lines.length;i++) {
     const line=lines[i];
     const fence=/^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence) {
       flush(); const code=[]; const closing=new RegExp('^ {0,3}'+fence[1][0]+'{'+fence[1].length+',}\\s*$');
       while (++i<lines.length && !closing.test(lines[i])) code.push(lines[i]);
-      const pre=el('pre'), content=el('code','',code.join('\n')); pre.append(content); n.append(pre); continue;
+      const value=code.join('\n'), language=fence[2].trim().split(/\s+/)[0].replace(/[^a-zA-Z0-9_+-]/g,'').slice(0,30);
+      const block=el('div','code-block'),header=el('div','code-block-header'),copy=el('button','code-copy','复制代码');
+      copy.type='button';copy.setAttribute('aria-label','复制'+(language?' '+language:'')+'代码');
+      const feedback=el('span','code-copy-status');feedback.setAttribute('role','status');
+      copy.onclick=async()=>{copy.disabled=true;feedback.textContent='正在复制…';try{await navigator.clipboard.writeText(value);feedback.textContent='已复制';}catch{feedback.textContent='复制失败，请选择代码复制';}finally{copy.disabled=false;}};
+      header.append(el('span','code-language',language||'代码'),feedback,copy);
+      const pre=el('pre'), content=el('code','',value);pre.tabIndex=0;pre.setAttribute('aria-label',(language||'')+'代码，可横向滚动');
+      pre.append(content);block.append(header,pre);n.append(block);continue;
     }
     if (!line.trim()) { flush(); continue; }
     if (/^ {0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/.test(line)) { flush(); n.append(el('hr')); continue; }
     const heading=/^ {0,3}(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/.exec(line);
-    if(heading){flush();const h=el('h'+heading[1].length);appendInline(h,heading[2]);n.append(h);continue;}
+    if(heading){flush();const h=el('h'+heading[1].length);appendInline(h,heading[2],0,options);n.append(h);continue;}
     const markers=lines[i+1] && tableCells(lines[i+1]);
     const headings=tableCells(line);
     if(line.includes('|') && markers?.length===headings.length && markers.every(c=>/^:?-{3,}:?$/.test(c))){
       flush();const wrap=el('div','table-scroll'),table=el('table'),head=el('thead'),row=el('tr');
       wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label','表格，可横向滚动');
-      const cell=(tag,value,index)=>{const c=el(tag);if(tag==='th')c.scope='col';const marker=markers[index];if(marker.endsWith(':'))c.style.textAlign=marker.startsWith(':')?'center':'right';else if(marker.startsWith(':'))c.style.textAlign='left';appendInline(c,value);return c;};
+      const cell=(tag,value,index)=>{const c=el(tag);if(tag==='th')c.scope='col';const marker=markers[index];if(marker.endsWith(':'))c.style.textAlign=marker.startsWith(':')?'center':'right';else if(marker.startsWith(':'))c.style.textAlign='left';appendInline(c,value,0,options);return c;};
       headings.forEach((value,index)=>row.append(cell('th',value,index)));head.append(row);table.append(head);const body=el('tbody');i++;
       while(i+1<lines.length && lines[i+1].trim() && lines[i+1].includes('|')) {const values=tableCells(lines[++i]),tr=el('tr');headings.forEach((_,index)=>tr.append(cell('td',values[index]||'',index)));body.append(tr);}
       table.append(body);wrap.append(table);n.append(wrap);continue;
