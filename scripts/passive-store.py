@@ -129,7 +129,7 @@ def desktop_membership(connection):
     migration = state.get('app-server-projects-migration-by-host', {}).get(host_key, {})
     assignments = state.get('thread-project-assignments', {})
     hints = state.get('thread-workspace-root-hints', {})
-    roots = sorted(connection.execute('SELECT project_id, path FROM project_roots'), key=lambda r: len(r['path']), reverse=True)
+    roots = sorted((r for r in connection.execute('SELECT project_id, path FROM project_roots') if isinstance(r['path'], str) and r['path'].startswith('/')), key=lambda r: len(r['path']), reverse=True)
     projectless = set(state.get('projectless-thread-ids', []))
 
     def resolve(thread):
@@ -148,7 +148,7 @@ def desktop_membership(connection):
                 return project if project in projects else None
             # Legacy desktop chats can belong to a saved root before assignment
             # migration. Only registered roots qualify; never invent a project.
-            cwd = hints.get(thread['id'], thread.get('cwd', '')).rstrip('/')
+            cwd = (hints.get(thread['id']) or thread.get('cwd') or '').rstrip('/')
             for root in roots:
                 path = root['path'].rstrip('/')
                 if cwd == path or cwd.startswith(path + '/'):
@@ -411,6 +411,8 @@ def read_outputs(payload):
 
 
 def read_history(payload):
+    if payload.get('allowMissingStore') is True and not (STORE / 'thread_history_1.sqlite').exists():
+        return {'data': [], 'nextCursor': None, 'historySource': 'snapshot'}
     connection = connect_store('thread_history_1.sqlite')
     try:
         require_columns(connection, 'thread_history_1.sqlite', 'thread_turns', TURN_COLUMNS)
@@ -511,7 +513,7 @@ def read_sidebar(payload):
             if key.startswith('codex:thread:local:'): return 'thread:' + key[19:]
             return key
         projects = [dict(row) for row in db.execute('SELECT id,name,position FROM projects ORDER BY position,id')]
-        roots = list(db.execute('SELECT project_id,path FROM project_roots ORDER BY position'))
+        roots = [r for r in db.execute('SELECT project_id,path FROM project_roots ORDER BY position') if isinstance(r['path'], str) and r['path'].startswith('/')]
         project_ids = {p['id'] for p in projects}
         project_orders = state.get('sidebar-project-thread-orders', {})
         for project in projects:

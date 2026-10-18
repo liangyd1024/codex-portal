@@ -1,3 +1,5 @@
+import {installAttachments} from './attachments.js';
+let attachments;
 import {Sidebar} from './sidebar.js';
 import {DraftStore, shouldSendOnEnter, coalesceRefresh} from './input-state.js';
 import {installThreadSync} from './thread-sync.js';
@@ -6,9 +8,9 @@ let mobileUI, draftWritesSuspended = false;
 import {createHandoffControls} from './thread-handoff.js';
 let handoffControls;
 import {installBrowserBackup} from './browser-backup.js';
-import {installVoice} from './voice.js';
+import {installComposer} from './composer.js';
 import {installMobile} from './mobile.js';
-let voice;
+let composer;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from './detail-cache.js';
 import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
 import {selectConnectionStatus, mergeLiveTurns, taskNotice, claimNotice} from './connection-state.js';
@@ -85,7 +87,7 @@ function setText(id, value) { $(id).textContent = value == null || value === '' 
 function pretty(value) { try { return JSON.stringify(value, null, 2); } catch { return String(value); } }
 function messageOf(value) {
   const message=typeof value === 'string' ? value : value?.message || pretty(value);
-  if(value?.code==='RPC_TIMEOUT'||/timed out after \d+ ms/.test(message)) return '目标机器响应超时，操作结果尚未确认。请先刷新会话列表，避免重复创建或发送。';
+  if(value?.code==='RPC_TIMEOUT'||/timed out after \d+ ms/.test(message)) return value?.readOnly?'读取目标机器超时，已有内容和草稿保留，请重试刷新。':'目标机器响应超时，操作结果尚未确认。请先核对会话记录，避免重复创建或发送。';
   if(/ssh: connect to host .*Operation timed out/i.test(message)) return '无法连接目标机器。请确认目标机器在线且网络可达，然后重新连接。';
   return message;
 }
@@ -212,13 +214,13 @@ async function api(path, options = {}) {
     let data;
     try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error('服务未返回有效数据。请查看连接诊断。'); }
     if (!response.ok) {
-      if(response.status===401&&data.error?.code==='PAIRING_REQUIRED'){voice?.interrupt();flushDrafts();location.reload();}
+      if(response.status===401&&data.error?.code==='PAIRING_REQUIRED'){flushDrafts();location.reload();}
       const e = new Error(data.error?.message || data.message || '请求失败，HTTP ' + response.status);
-      e.status = response.status; e.code = data.error?.code; e.details = data.error?.details; throw e;
+      e.readOnly = method==='GET'; e.status = response.status; e.code = data.error?.code; e.details = data.error?.details; throw e;
     }
     return data;
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('请求超时。请刷新状态，确认目标机器结果后再操作。');
+    if (e.name === 'AbortError') throw new Error(method==='GET'?'读取超时，已有内容和草稿保留，请重试刷新。':'操作结果未确认，草稿已保留。请先核对会话记录，避免重复提交。');
     if (e instanceof TypeError) throw new Error('无法连接本机服务。请确认服务仍在运行。');
     throw e;
   } finally { clearTimeout(timer); }
@@ -293,7 +295,7 @@ function renderControls() {
   input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? '补充要求…' : '发送消息…';
   const hasModel = Boolean(state.model && state.models.some(m => modelId(m) === state.model));
   const hasEffort = effortsFor(state.model).some(e => e.value === state.effort);
-  $('send-message').disabled = Boolean(voice?.active) || !ready || !own || !featureReady(active?'steer':'message') || posting || !input.value.trim() || (!active && (!hasModel || !hasEffort));
+  $('send-message').disabled = !ready || !own || !featureReady(active?'steer':'message') || posting || attachments?.pending() || (!input.value.trim()&&!attachments?.has()) || (!active && (!hasModel || !hasEffort));
   $('send-message').setAttribute('aria-label',active ? '补充当前轮次' : '发送消息');
   $('message-form').setAttribute('aria-busy',String(posting));
   $('send-message').title = posting ? '正在发送…' : active ? '补充当前轮次' : '发送消息';
@@ -301,7 +303,7 @@ function renderControls() {
   $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || handing || !state.selectedId;
   $('takeover').querySelector('span').textContent = switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话';
   const availability = $('composer-availability');
-  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '正在发送…' : state.busy.has('interrupt') ? '正在请求停止，请稍候…' : voice?.active ? '' : !featureReady(active?'steer':'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !hasModel ? '请选择一个可用模型。' : own && !hasEffort ? '请选择思考档位。' : '';
+  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '正在发送…' : state.busy.has('interrupt') ? '正在请求停止，请稍候…' : !featureReady(active?'steer':'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !hasModel ? '请选择一个可用模型。' : own && !hasEffort ? '请选择思考档位。' : '';
   availability.textContent = unavailable; availability.hidden = !unavailable;
   $('new-thread').setAttribute('aria-description',!ready ? '连接恢复后可新建会话。' : !state.models.length ? '正在等待目标机器模型目录。' : creating ? '正在创建，请稍候。' : '');
   controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
@@ -317,10 +319,10 @@ function renderControls() {
   $('new-thread-form').setAttribute('aria-busy',String(creating));
   setText('new-thread-status',creating ? '正在等待目标机器创建会话，请勿重复提交。' : createReason);
   $('new-thread-status').hidden = !creating && !createReason;
-  ['new-cwd','new-model','new-effort','close-new-dialog','cancel-new-dialog'].forEach(id => $(id).disabled = creating);
+  ['new-cwd','new-model','new-effort','new-access','close-new-dialog','cancel-new-dialog'].forEach(id => $(id).disabled = creating);
   document.querySelectorAll('.project-create').forEach(button => { button.disabled = $('new-thread').disabled; });
   setText('composer-model-label',(modelFor(state.model)?.displayName || state.model || '模型')+' · '+(effortNames[state.effort] || state.effort || '档位'));
-  voice?.sync();
+  composer?.render(); attachments?.render();
   const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '查看模式。接管后可在原会话继续工作。';
   setText('composer-hint',state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
   setText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
@@ -344,7 +346,7 @@ const sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadNa
   select:t=>{state.projectId=t.projectId;state.selectedArchived=!!t.archived;saveView();selectThread(t.id);},
   onArchiveView:archived=>{state.sidebarArchived=archived;state.threadCursor=null;state.threads=[];loadThreads();},
   refresh:()=>loadThreads(false,true),
-  changed:async(action,t)=>{if(t?.id===state.selectedId&&['archive','restore'].includes(action))state.selectedArchived=action==='archive';await Promise.all([loadThreads(false,true),loadStatus()]);if(t?.id===state.selectedId&&['rename','archive','restore'].includes(action))await refreshSelected();renderControls();},
+  changed:async(action,t)=>{if(t?.id===state.selectedId&&['archive','restore'].includes(action))state.selectedArchived=action==='archive';await Promise.all([loadThreads(false,true),loadStatus()]);if(t?.id===state.selectedId)await refreshSelected();renderControls();},
 });
 function renderProjects() { renderThreads(); }
 function renderThreads() {
@@ -482,7 +484,7 @@ function renderCommandOutput(item) {
   wrap.append(controls,pre);return wrap;
 }
 function renderItem(item) {
-  if (item.type === 'userMessage') { const m = el('div','message user'); m.append(el('div','user-bubble',contentText(item.content))); return m; }
+  if (item.type === 'userMessage') { const m = el('div','message user'),bubble=el('div','user-bubble',contentText(item.content)); for(const part of Array.isArray(item.content)?item.content:[]){if(part.type==='image'&&/^data:image\/(png|jpeg|webp);base64,/.test(part.url||'')){const img=el('img','user-image');img.src=part.url;img.alt='已发送的图片';img.loading='lazy';bubble.append(img);}}m.append(bubble); return m; }
   if (['agentMessage','plan'].includes(item.type)) {
     const m = el('article','message agent'); m.setAttribute('aria-label',item.type === 'plan' ? '计划' : 'Codex 回复'); const label = el('div','agent-label' + (item.type === 'agentMessage' ? ' message-author' : '')); label.append(icon('mark'),el('span','',item.type === 'plan' ? '计划' : 'Codex')); m.append(label);
     const text=String(item.text||''), heartbeat=text.match(/<heartbeat>\s*<automation_id>([^<]+)<\/automation_id>\s*<decision>([^<]+)<\/decision>\s*<message>([\s\S]*?)<\/message>\s*<\/heartbeat>/);
@@ -708,7 +710,7 @@ function renderRequests() {
       if (!knownApproval) card.append(el('p','','此工具需要专用实现。请查看请求详情。可以取消请求，避免会话一直等待。'));
       const detail = el('details','request-detail'); detail.append(el('summary','','请求详情'),el('pre','',pretty({method,params:p}))); card.append(detail);
       const actions = el('div','request-actions');
-      if (knownApproval) { const available = p.availableDecisions; const accepts = !Array.isArray(available) || !available.length || available.includes('accept'); const declines = !Array.isArray(available) || !available.length || available.includes('decline'); const accept = el('button','accept','允许一次'); accept.onclick = () => respondRequest(r,{decision:'accept'}); if (accepts) actions.append(accept); const decline = el('button','','拒绝'); decline.onclick = () => respondRequest(r,{decision:'decline'}); if (declines) actions.append(decline); }
+      if (knownApproval) { const available = p.availableDecisions; const accepts = !Array.isArray(available) || !available.length || available.includes('accept'); const declines = !Array.isArray(available) || !available.length || available.includes('decline'); const accept = el('button','accept','允许一次'); accept.onclick = () => respondRequest(r,{decision:'accept'}); if (accepts) actions.append(accept); if(available?.includes('acceptForSession')){const session=el('button','accept','本会话允许');session.onclick=()=>respondRequest(r,{decision:'acceptForSession'});actions.append(session);} const decline = el('button','','拒绝'); decline.onclick = () => respondRequest(r,{decision:'decline'}); if (declines) actions.append(decline); }
       const cancel = el('button','','取消请求'); cancel.onclick = () => respondRequest(r,{decision:'cancel'}); if (!Array.isArray(p.availableDecisions) || !p.availableDecisions.length || p.availableDecisions.includes('cancel')) actions.append(cancel); card.append(actions);
     }
     const previous = saved.get(requestPath(r));
@@ -734,11 +736,19 @@ async function loadModels(force = false) {
   try { await modelLoadPromise; }
   finally { modelLoadPromise = null; state.loadingModels = false; renderModels(); }
 }
-async function loadProjects() { if(!state.sidebar)await loadThreads(false,true); }
+async function loadProjects() {
+  if (projectLoadPromise) return projectLoadPromise;
+  state.loadingProjects = true; renderProjects();
+  projectLoadPromise = (async () => { const d = await api('/api/projects'); state.projects = d.data || []; if (state.projectId && !state.projects.some(p => p.id === state.projectId)) state.projectId = null; })();
+  try { await projectLoadPromise; }
+  finally { projectLoadPromise = null; state.loadingProjects = false; renderProjects(); }
+}
 const createdThreads = new Map();
 let threadSearch = '';
 async function loadThreads(append = false, reportFailure = false) {
   if (!connected() || (append && (state.loadingThreads || !state.threadCursor))) return;
+  // Restore project metadata before grouping the cross-project thread list.
+  if (state.projectId && !state.projects.length) await loadProjects();
   const seq = ++state.listVersion; state.loadingThreads = true; state.threadPageError = false;
   if (!append) {
     if (threadSearch !== state.search) {
@@ -789,12 +799,13 @@ async function restoreDetail(id,seq){
   state.loadingDetail=false;applyDetail(cached,true);
 }
 function applyDetail(data, resetModels = false) {
+  if(data.goalError&&state.detail?.thread?.id===data.thread?.id)data.goal=state.detail.goal;
   state.detail = {...data, turns:data.turns || data.thread?.turns || []};
   state.historyCursor = data.nextCursor || data.historyCursor || null; state.historyError = '';
   if (resetModels) renderModels(true); renderThread(); renderRequests(); if(!data.recovering)saveDetailSoon();
 }
 async function selectThread(id) {
-  voice?.interrupt();
+
   toggleInspector(false);
   $('messages').style.paddingBottom = '';
   if (state.selectedId) state.drafts.set(state.selectedId,$('message-input').value);
@@ -846,7 +857,7 @@ async function refreshWorkspace(forceModels = false) {
   if (workspaceRefreshPromise) return workspaceRefreshPromise;
   workspaceRefreshPromise = showRefresh('工作区', async () => {
     await loadStatus(); if (!connected()) throw new Error('目标机器未连接。请先连接，再刷新。');
-    const results = await Promise.allSettled([loadModels(forceModels),loadThreads(false,true),refreshSelected()]);
+    const results = await Promise.allSettled([loadModels(forceModels),loadProjects(),loadThreads(false,true),refreshSelected()]);
     const labels = ['模型列表','项目列表','会话列表','当前会话'];
     const failures = results.flatMap((r,i) => r.status === 'rejected' ? [labels[i] + '：' + (r.reason?.message || String(r.reason))] : []);
     if (failures.length) throw new Error(failures.join('；'));
@@ -954,7 +965,7 @@ async function takeoverThread() {
 async function endThreadUse() {
   const id=state.selectedId,selection=state.selectionVersion;
   if(!id||!usable())return;
-  voice?.interrupt();state.drafts.set(id,$('message-input').value);
+  state.drafts.set(id,$('message-input').value);
   try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}
   await action('handoff:'+id,async()=>{
     try {
@@ -982,7 +993,7 @@ async function respondRequest(r, answer) {
   });
 }
 function openNewDialog(projectRoot) {
-  voice?.interrupt();
+
   if (!usable() || !state.models.length) { toast('连接目标机器并读取模型目录后，再新建会话。',true); return; }
   const project = state.projects.find(p => p.id === state.projectId);
   const select=clear($('new-cwd'));
@@ -993,6 +1004,7 @@ function openNewDialog(projectRoot) {
   select.onchange=()=>{setText('new-project-path',select.value||'此连接暂无项目。请先在 Codex 中添加项目。');renderControls();};select.onchange();
   $('new-thread-error').hidden = true;
   fillModels($('new-model'),state.model); fillEfforts($('new-effort'),$('new-model').value,state.effort);
+  $('new-access').value=composer?.access()||'full';
   $('new-thread-dialog').showModal(); renderControls(); setTimeout(() => $('new-cwd').focus(),0);
 }
 async function createThread(e) {
@@ -1001,7 +1013,8 @@ async function createThread(e) {
   if (!cwd.startsWith('/')) { $('new-thread-error').textContent = '请选择一个项目。'; $('new-thread-error').hidden = false; return; }
   await action('create',async () => {
     try {
-      const d = await api('/api/threads',{method:'POST',body:{cwd,model:$('new-model').value,effort:$('new-effort').value}});
+      const d = await api('/api/threads',{method:'POST',body:{cwd,model:$('new-model').value,effort:$('new-effort').value,access:$('new-access').value}});
+      composer?.setAccess($('new-access').value);
       state.sidebarArchived=false;state.selectedArchived=false;
       const id = d.thread?.id || d.id; if (!id) throw new Error('服务未返回新会话 ID。请刷新列表核对结果。');
       flushDrafts(); $('new-thread-dialog').close(); if (compactLayout()) toggleSidebar(false, false); state.model = $('new-model').value; state.effort = $('new-effort').value;
@@ -1020,17 +1033,19 @@ async function createThread(e) {
 }
 async function sendMessage(e) {
   e?.preventDefault();
-  if (voice?.active || $('send-message').disabled) return;
+  if ($('send-message').disabled) return;
   const text = $('message-input').value.trim(), id = state.selectedId;
-  if (!text || !id || !usable() || !controlled() || state.busy.has('message')) return;
+  if ((!text&&!attachments?.has()) || attachments?.pending() || !id || !usable() || !controlled() || state.busy.has('message')) return;
   const active = running(), selection = state.selectionVersion;
-  const sent = state.drafts.capture(id,$('message-input').value);
+  const sent = state.drafts.capture(id,$('message-input').value), pictures=attachments.capture();
   await action('message',async () => {
-    const payload = active ? {text} : {text,model:state.model,effort:state.effort};
+    const images=pictures.items.map(i=>({url:i.url}));
+    const payload = active ? {text,images} : {text,images,model:state.model,effort:state.effort,...composer.options()};
     const d = await api('/api/threads/' + encodeURIComponent(id) + (active ? '/steer' : '/message'),{method:'POST',body:payload});
+    attachments.acknowledge(pictures);
     const cleared = state.drafts.acknowledge(sent);
     if (id === state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }
-    if (id === state.selectedId && selection === state.selectionVersion) { if (d.turn) { upsertTurn(d.turn); const t = ensureTurn(d.turn.id); if (!t.items.some(item => item.type === 'userMessage' && contentText(item.content) === text)) t.items.unshift({id:'accepted-'+d.turn.id,type:'userMessage',content:[{type:'text',text}],localAccepted:true}); } renderThread(); }
+    if (id === state.selectedId && selection === state.selectionVersion) { if (d.turn) { upsertTurn(d.turn); const t = ensureTurn(d.turn.id); if (!t.items.some(item => item.type === 'userMessage' && contentText(item.content) === text)) t.items.unshift({id:'accepted-'+d.turn.id,type:'userMessage',content:[...(text?[{type:'text',text}]:[]),...images.map(i=>({type:'image',url:i.url}))],localAccepted:true}); } renderThread(); }
     if (active) toast('补充要求已发送到当前轮次。');
     try { if (id === state.selectedId && selection === state.selectionVersion) await refreshSelected(); } catch (err) { recordError(err,'thread'); }
   });
@@ -1082,6 +1097,7 @@ function scheduleListRefresh() { clearTimeout(listRefreshTimer); listRefreshTime
 function handleEvent(event) {
   let data; try { data = JSON.parse(event.data); } catch { return; }
   const method = data.method || event.type, p = data.params || {};
+  if (method==='manager/sidebarChanged'||/thread\/(section|readState)\//.test(method)||method.startsWith('threadSection/'))scheduleListRefresh();
   if(method==='manager/taskNotice'){
     notifyTaskEvent(p.event.method,p.event.params);return;
   }
@@ -1102,7 +1118,6 @@ function handleEvent(event) {
     const rid = p.requestId ?? p.id, resolvedKey = p.key ?? (typeof rid + ':' + String(rid)); const filter = list => (list || []).filter(r => requestKey(r) !== resolvedKey);
     state.localRequests = filter(state.localRequests); if (state.status) state.status.pendingRequests = filter(state.status.pendingRequests); if (state.detail) state.detail.pendingRequests = filter(state.detail.pendingRequests); renderRequests(); return;
   }
-  if (method==='manager/sidebarChanged'||/thread\/(section|readState)\//.test(method)||method.startsWith('threadSection/'))scheduleListRefresh();
   if (/thread\/(started|name\/updated|archived|unarchived)|turn\/(started|completed)/.test(method)) scheduleListRefresh();
   const threadId = p.threadId || p.thread?.id;
   if (threadId !== state.selectedId || !state.detail) return;
@@ -1230,8 +1245,9 @@ function toggleMessageDetails(show) {
   if (atBottom) scroller.scrollTop = scroller.scrollHeight;
 }
 function wireEvents() {
+  attachments=installAttachments({host:targetHost,context:()=>({id:state.selectedId,ready:usable()&&controlled()&&!state.selectedArchived,busy:state.busy.has('message')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});
-  voice=installVoice({input:$('message-input'),context:()=>targetHost+':'+state.selectedId,render:()=>renderControls()});
+  composer=installComposer({host:targetHost,api,context:()=>({id:state.selectedId,cwd:currentThread()?.cwd,ready:usable()&&controlled()&&!state.selectedArchived,busy:state.busy.size>0,active:running(),goal:state.detail?.goal,goalError:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
   const settings = $('composer-settings');
   document.addEventListener('click',event => { if (!settings.contains(event.target)) settings.open = false; });
   settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); settings.open = false; settings.querySelector('summary').focus(); } });
@@ -1302,7 +1318,7 @@ function wireEvents() {
   $('project-list').hidden = !readLayout('projects',true);
   $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
   mobileUI = installMobileUI({closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:mobile=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
-  window.addEventListener('offline',() => { voice?.interrupt(); flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
+  window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {
   setInterval(()=>{if(connected()&&!state.loadingThreads&&!sidebar.pending&&!sidebar.drag&&!sidebar.menu&&!sidebar.dialog&&!document.hidden)loadThreads();},15000);
@@ -1337,7 +1353,7 @@ if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)|
 init();
 
 $('connection-select').value=targetHost;
-$('connection-select').onchange=()=>{voice?.interrupt();rememberHost($('connection-select').value);if(state.selectedId)state.drafts.set(state.selectedId,$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',$('connection-select').value);location.assign(url);};
+$('connection-select').onchange=()=>{rememberHost($('connection-select').value);if(state.selectedId)state.drafts.set(state.selectedId,$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',$('connection-select').value);location.assign(url);};
 
 const clearRecovery=el('button','text-button','清除日志缓存并重新加载');
 clearRecovery.type='button';

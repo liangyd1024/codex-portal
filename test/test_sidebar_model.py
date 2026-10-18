@@ -40,6 +40,15 @@ class SidebarModelTest(unittest.TestCase):
 
     def read(self,**kw):return store.read_sidebar({'accountId':'account1',**kw})
 
+    def test_null_project_root_does_not_break_sidebar_or_membership(self):
+        self.db.executemany('INSERT INTO project_roots VALUES (?,?,?)', [('p1', None, 0), ('p1', '', 1), ('p2', '/valid', 2)])
+        self.add('valid-chat', cwd='/valid/sub')
+        self.add('no-cwd', cwd=None)
+        result=self.read()
+        self.assertEqual(next(p for p in result['projects'] if p['id']=='p1')['roots'], [])
+        self.assertEqual(next(t for t in result['data'] if t['id']=='valid-chat')['projectId'], 'p2')
+        self.assertIsNone(next(t for t in result['data'] if t['id']=='no-cwd')['projectId'])
+
     def test_account_layout_and_section_are_independent_of_membership(self):
         self.add('chat',project_id='p1',thread_section_id='s1')
         a=self.read();self.assertEqual([s['id'] for s in a['sections']],['s1'])

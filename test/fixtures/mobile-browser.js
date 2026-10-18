@@ -30,6 +30,7 @@
     if(f.delay?.path===p){const d=f.delay;f.delay=null;await new Promise((resolve,reject)=>{d.resolve=resolve;f.pending=d;options.signal?.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')));});}
     if(f.fail?.path===p){const error=f.fail;f.fail=null;return json({error:{message:error.message||'模拟请求失败，请重试。',code:error.code||'FIXTURE_ERROR'}},error.status||503);}
     if(p==='/api/connections')return json({machineId:'qa-machine',defaultConnection:'qa-local',data:[{id:'qa-local',host},{id:'qa-remote',host:{...host,id:'qa-remote',alias:'验收远程机器'}}]});
+    if(p==='/api/composer')return json({modes:{data:[{mode:'default'},{mode:'plan'}]},skills:{data:[{skills:[{name:'测试技能',path:'/test/SKILL.md',enabled:true}]}]},plugins:{marketplaces:[{plugins:[{id:'test-plugin',name:'测试插件',enabled:true,installed:true}]}]}});
     if(p==='/api/csrf')return json({token:'fixture-token'});
     if(p==='/api/status')return json(status());
     if(p==='/api/models')return json({data:models});
@@ -52,9 +53,10 @@
     if(match){const id=match[1],action=match[2],t=f.threads.find(t=>t.id===id);
       if(!t)return json({error:{message:'找不到模拟会话'}},404);
       if(!action)return json(detail(id));
+      if(action==='goal'){f.goal=body;return json({goal:body});}
       if(action==='takeover'){f.owned.add(id);f.handoffs=f.handoffs.filter(h=>h.threadId!==id);return json(detail(id));}
       if(action==='handoff'){f.owned.delete(id);const h={threadId:id,state:'released'};f.handoffs.push(h);return json(h);}
-      if(action==='message'||action==='steer'){t.status={type:'active'};const turn={id:'sent-'+f.calls.length,status:'inProgress',items:[{id:'user-'+f.calls.length,type:'userMessage',content:[{type:'text',text:body.text}]}]};f.turns.set(id,[...(f.turns.get(id)||[]),turn]);return json({turn});}
+      if(action==='message'||action==='steer'){t.status={type:'active'};const turn={id:'sent-'+f.calls.length,status:'inProgress',items:[{id:'user-'+f.calls.length,type:'userMessage',content:[...(body.text?[{type:'text',text:body.text}]:[]),...(body.images||[]).map(i=>({type:'image',url:i.url}))]}]};f.turns.set(id,[...(f.turns.get(id)||[]),turn]);return json({turn});}
       if(action==='interrupt'){t.status={type:'idle'};for(const turn of f.turns.get(id)||[])turn.status='interrupted';return json({ok:true});}
       if(action==='history'){const data=f.history.get(id)||[];f.history.delete(id);return json({data,nextCursor:null});}
     }

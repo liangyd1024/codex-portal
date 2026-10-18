@@ -1,0 +1,70 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {Manager} from '../lib/manager.mjs';
+import {permissionParams,turnOptions,setGoal} from '../lib/composer.mjs';
+
+function fixture(){
+  const m=new Manager({host:{alias:'test'}}),calls=[];
+  m.connection={state:'connected'};m.service={protocolValidation:{features:{create:{supported:true},message:{supported:true}}}};
+  m.rpc={connected:true,request:async(method,params)=>{
+    calls.push({method,params});
+    if(method==='thread/start')return {thread:{id:'new',cwd:'/project',status:{type:'idle'}},model:'test'};
+    if(method==='turn/start')return {turn:{id:'turn',status:'inProgress'}};
+    if(method==='skills/list')return {data:[{skills:[{name:'skill',path:'/skills/SKILL.md',enabled:true}]}]};
+    if(method==='plugin/installed')return {marketplaces:[{plugins:[{id:'plugin',name:'插件',installed:true,enabled:true}]}]};
+    return {};
+  }};
+  return {m,calls};
+}
+test('full access applies to creation and turns, can be returned to default, rejects invalid modes',async()=>{
+  const {m,calls}=fixture();await m.newThread({cwd:'/project',access:'full'});
+  assert.equal(calls[0].params.approvalPolicy,'never');assert.equal(calls[0].params.sandbox,'danger-full-access');
+  await m.message('new',{text:'test',access:'full',mode:'plan'});
+  const turn=calls.find(c=>c.method==='turn/start').params;
+  assert.equal(turn.approvalPolicy,'never');assert.equal(turn.sandboxPolicy.type,'dangerFullAccess');assert.equal(turn.collaborationMode.mode,'plan');
+  assert.equal(permissionParams('default').sandboxPolicy.type,'workspaceWrite');assert.equal(permissionParams('default').approvalPolicy,'on-request');
+  assert.throws(()=>permissionParams('invalid'));
+  await assert.rejects(turnOptions(m,'new',{mode:'invented'},{}));
+});
+test('skills and plugins are resolved against target catalogs, not arbitrary browser paths',async()=>{
+  const {m}=fixture();m.controlled.set('a',{cwd:'/project',model:'test'});
+  const options=await turnOptions(m,'a',{skills:['/skills/SKILL.md'],plugins:['plugin']},{});
+  assert.deepEqual(options.input[0],{type:'skill',name:'skill',path:'/skills/SKILL.md'});
+  assert.match(options.input[1].text,/插件/);
+  await assert.rejects(turnOptions(m,'a',{skills:['/arbitrary/file']},{}),/不可用/);
+  await assert.rejects(turnOptions(m,'a',{plugins:['missing']},{}),/不可用/);
+});
+test('goal uses explicit user origin and rejects busy threads and invalid budgets',async()=>{
+  const {m,calls}=fixture();m.controlled.set('a',{status:{type:'idle'}});
+  await setGoal(m,'a',{objective:'目标',tokenBudget:2000});
+  assert.deepEqual(calls[0].params,{threadId:'a',objective:'目标',tokenBudget:2000,origin:'user'});
+  await assert.rejects(setGoal(m,'a',{objective:'x',tokenBudget:-1}));
+  m.activeTurns.set('a','turn');await assert.rejects(setGoal(m,'a',{status:'paused'}),e=>e.code==='THREAD_BUSY');
+});
+test('only known newly created threads fall back when a durable state row is not present',async()=>{
+  const {m}=fixture();await m.newThread({cwd:'/project'});
+  m.passive=async()=>{throw Error('未找到会话：new');};
+  assert.equal((await m.readThreadMetadata('new',true)).thread.id,'new');
+  await assert.rejects(m.readThreadMetadata('unknown',true));
+  m.passive=async()=>{throw Error('database is locked');};await assert.rejects(m.readThreadMetadata('new',true),/database is locked/);
+  m.passive=async()=>({thread:{id:'new',name:'persisted'}});
+  assert.equal((await m.readThreadMetadata('new',true)).thread.name,'persisted');assert.equal(m.createdSnapshots.has('new'),false);
+});
+test('a create timeout has an unknown outcome and is never retried automatically',async()=>{
+  const {m}=fixture();let calls=0;m.rpc.request=async()=>{calls++;throw Object.assign(Error('timeout'),{code:'RPC_TIMEOUT'});};
+  await assert.rejects(m.newThread({cwd:'/project'}),e=>e.code==='OUTCOME_UNKNOWN');assert.equal(calls,1);
+});
+test('optional goal timeout does not report the whole conversation as failed or emit repeated error toasts',async()=>{
+  const {m}=fixture();m.controlled.set('a',{cwd:'/project',status:{type:'idle'}});
+  m.passive=async action=>action==='detail'?{thread:{id:'a'}}:{data:[],historySource:'snapshot'};
+  m.rpc.request=async method=>{if(method==='thread/goal/get')throw Error('goal timeout');if(method==='thread/read')return {thread:{id:'a'}};return {data:[]};};
+  for(let i=0;i<2;i++){const detail=await m.detail('a');assert.equal(detail.thread.id,'a');assert.equal(detail.goalError,'goal timeout');assert.equal(detail.goal,null);}
+  assert.equal(m.errors.length,0);
+});
+test('session approval is forwarded only when explicitly offered by the engine',()=>{
+ const {m}=fixture();const replies=[];m.rpc.respond=(id,result)=>replies.push(result);
+ m.requests.set('approval',{id:1,kind:'approval',params:{availableDecisions:['accept','acceptForSession','cancel']}});
+ m.respond('approval',{decision:'acceptForSession'});assert.equal(replies[0].decision,'acceptForSession');
+ m.requests.set('approval',{id:2,kind:'approval',params:{availableDecisions:['accept','cancel']}});
+ assert.throws(()=>m.respond('approval',{decision:'acceptForSession'}),/未提供/);assert.equal(replies.length,1);
+});

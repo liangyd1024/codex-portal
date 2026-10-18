@@ -12,6 +12,7 @@ export function installMobileUI({closeDrawers, layoutChanged}) {
   summary.textContent = '⋯'; summary.setAttribute('aria-label','更多操作');
   const panel = document.createElement('div'); panel.className = 'mobile-more-panel';
   more.append(summary,panel); byId('toggle-inspector').before(more);
+  const toasts=byId('toasts'),toastMarker=document.createComment('desktop notifications');toasts.before(toastMarker);
   const takeoverSlot = document.createElement('div'); takeoverSlot.className = 'mobile-takeover';
   byId('message-form').before(takeoverSlot);
   const relocations = [byId('refresh-all'), byId('auto-refresh').closest('label'), byId('toggle-message-details'), byId('handoff-thread'), byId('takeover')].map(node => {
@@ -68,6 +69,7 @@ export function installMobileUI({closeDrawers, layoutChanged}) {
   }
   function applyLayout() {
     const mobile = compactLayout(); root.classList.toggle('mobile-layout',mobile);
+    if(mobile)document.querySelector('.topbar').after(toasts);else toastMarker.after(toasts);
     more.open = false; byId('composer-settings').open = false;
     for (const {node,marker} of relocations) {
       if (mobile) (node.id === 'takeover' ? takeoverSlot : panel).append(node);

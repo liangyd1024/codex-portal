@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 5
+PROTOCOL_POLICY = 6
 REQUEST_FIELDS = {
     'account/read': set(),
     'thread/archive': {'threadId'},
@@ -29,11 +29,19 @@ REQUEST_FIELDS = {
     'thread/backgroundTerminals/list': {'threadId', 'limit'},
     'thread/backgroundTerminals/terminate': {'threadId','processId'},
     'thread/queue/list': {'threadId', 'limit'},
-    'turn/start': {'threadId', 'input', 'model', 'effort'},
+    'turn/start': {'threadId', 'input', 'model', 'effort', 'approvalPolicy', 'sandboxPolicy', 'collaborationMode'},
+    'collaborationMode/list': set(),
+    'skills/list': {'cwds'},
+    'plugin/installed': {'cwds'},
+    'thread/goal/set': {'threadId','objective','status','tokenBudget','origin'},
     'turn/steer': {'threadId', 'expectedTurnId', 'input'},
     'turn/interrupt': {'threadId', 'turnId'},
 }
 FEATURE_METHODS = {
+    'plan': ['collaborationMode/list','turn/start'],
+    'skills': ['skills/list','turn/start'],
+    'plugins': ['plugin/installed','turn/start'],
+    'goal': ['thread/goal/set','thread/goal/get'],
     'create': ['thread/start', 'thread/name/set', 'turn/start'],
     'takeover': ['thread/resume'],
     'message': ['turn/start'],
