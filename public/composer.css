@@ -15,3 +15,15 @@
 .composer-options summary{min-height:36px;padding:6px 10px}
 .mobile-layout .composer-tools{margin:4px auto 8px}
 .mobile-layout .composer-options summary{min-height:44px}
+/* Inline references retain native textarea editing and IME behavior. */
+.mention-input-wrap{position:relative;min-width:0;width:100%;flex:1 1 100%;isolation:isolate}
+.composer .mention-input-wrap textarea{position:relative;z-index:1;display:block;width:100%;margin:0;background:transparent;caret-color:var(--ink,#242825)}
+.mention-mirror{display:none;position:absolute;top:0;left:0;box-sizing:border-box;white-space:pre-wrap;overflow:hidden;overflow-wrap:break-word;pointer-events:none;border-style:solid;border-color:transparent;color:var(--ink,#242825)}
+.has-mentions .mention-mirror{display:block}.composer .has-mentions textarea{color:transparent;-webkit-text-fill-color:transparent}.composer .has-mentions textarea::placeholder{-webkit-text-fill-color:var(--muted,#777)}
+.inline-mention{color:#367bd6}
+.mobile-layout .composer .mention-input-wrap{flex:1 1 0;width:0;min-width:0}.mobile-layout .composer .mention-input-wrap textarea{width:100%;min-width:0}
+.mobile-layout .composer:has(#interrupt:not([hidden])) .mention-input-wrap{flex-basis:100%;width:100%}
+@media(max-width:420px){.mobile-layout .composer .mention-input-wrap{flex-basis:100%;width:100%}}
+.skill-suggestions{position:fixed;z-index:48;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;padding:8px;background:var(--panel,#fff);color:var(--ink,#222);border:1px solid #ddd;border-radius:14px;box-shadow:0 8px 32px #0002;font-size:14px;overflow-wrap:anywhere}
+.skill-suggestions[hidden]{display:none}.skill-suggestions-heading{padding:6px 10px;color:#777;font-size:12px}.skill-suggestions button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;min-height:44px;padding:10px;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit}.skill-suggestions button[aria-selected=true]{background:#edf2f8}.skill-suggestions strong{max-width:65%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}.skill-suggestions span{color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.skill-suggestions button:focus-visible{outline:2px solid #377cf6;outline-offset:-2px}
+@media(forced-colors:active){.composer .has-mentions textarea{color:CanvasText;-webkit-text-fill-color:CanvasText}.has-mentions .mention-mirror{display:none}}

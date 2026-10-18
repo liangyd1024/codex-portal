@@ -1,9 +1,11 @@
+import {installSkillSuggestions} from './skill-suggestions.js';
+import {installInlineMentions,mentionRanges} from './inline-mentions.js';
 export const WEB_ACCESS='full';
 
 export function installComposer({host,api,context,refresh,notify}) {
   const link=document.createElement('link');link.rel='stylesheet';link.href='/composer.css';document.head.append(link);
   const bar=document.createElement('div');bar.className='composer-tools';
-  bar.innerHTML='<label><span class="sr-only">执行模式</span><select id="execution-mode" aria-label="执行模式"><option value="default">执行</option><option value="plan">计划</option></select></label><button type="button" id="goal-settings">目标</button><button type="button" id="skill-picker">技能</button><button type="button" id="plugin-picker">插件</button><span id="composer-tools-status" role="status"></span>';
+  bar.innerHTML='<label><span class="sr-only">执行模式</span><select id="execution-mode" aria-label="执行模式"><option value="default">默认</option><option value="plan">计划</option><option value="goal">目标…</option></select></label><button type="button" id="goal-settings">目标</button><button type="button" id="skill-picker">技能</button><button type="button" id="plugin-picker">插件</button><span id="composer-tools-status" role="status"></span>';
   const tools=document.createElement('details');tools.className='composer-options';
   const summary=document.createElement('summary');summary.textContent='工具';summary.setAttribute('aria-label','更多输入工具');const panel=document.createElement('div');panel.className='composer-options-panel';
   for(const button of bar.querySelectorAll('button'))panel.append(button);tools.append(summary,panel);bar.querySelector('[role=status]').before(tools);
@@ -17,11 +19,26 @@ export function installComposer({host,api,context,refresh,notify}) {
   const selections=new Map(Array.isArray(savedSelections)?savedSelections.filter(v=>Array.isArray(v)&&typeof v[0]==='string'&&['default','plan'].includes(v[1]?.mode)&&Array.isArray(v[1]?.skills)&&Array.isArray(v[1]?.plugins)):[]);let selected,loading=false;
   const save=()=>{try{sessionStorage.setItem(selectionKey,JSON.stringify([...selections]));}catch{notify('输入工具选择暂未保存，刷新后请重新核对。',true);}};
   const choice=()=>{const id=context().id;if(!selections.has(id))selections.set(id,{mode:'default',skills:[],plugins:[]});return selections.get(id);};
-  mode.onchange=()=>{choice().mode=mode.value;save();render();};
+  mode.onchange=()=>{if(mode.value==='goal'){mode.value=choice().mode;bar.querySelector('#goal-settings').click();return;}choice().mode=mode.value;save();render();};
+  const input=document.getElementById('message-input');
+  const references=()=>Array.isArray(choice().references)?choice().references.filter(r=>r&&['skills','plugins'].includes(r.kind)&&typeof r.key==='string'&&typeof r.token==='string'&&r.token.length>1):[];
+  const present=()=>mentionRanges(input.value,references());
+  const syncReferences=()=>{const active=present();for(const kind of ['skills','plugins'])choice()[kind]=[...new Set(active.filter(r=>r.kind===kind).map(r=>r.key))];};
+  function insertReference(entry,kind='skills',range){
+    const key=kind==='skills'?entry.path:entry.id;
+    const token=(kind==='skills'?'$':'@')+(entry.name||key).replace(/\s+/gu,'-');
+    const collision=present().find(r=>r.token===token&&r.key!==key);if(collision){notify('同名能力已在草稿中，请先删除原引用再选择。',true);return false;}
+    choice().references=[...references().filter(r=>r.token!==token&&!(r.kind===kind&&r.key===key)),{kind,key,token}];
+    const start=range?.start??input.selectionStart,end=range?.end??input.selectionEnd;
+    input.setRangeText((start>0&&!/\s/u.test(input.value[start-1])?' ':'')+token+' ',start,end,'end');
+    syncReferences();save();input.focus();input.dispatchEvent(new Event('input',{bubbles:true}));render();return true;
+  }
+  const mirror=installInlineMentions(input,references);
+  input.addEventListener('input',()=>{syncReferences();save();mirror.render();});
   const dialog=document.createElement('dialog');dialog.className='composer-dialog';document.body.append(dialog);
   let opener,dialogVersion=0;
   dialog.addEventListener('click',e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
-  dialog.addEventListener('close',()=>{if(!dialog.open)opener?.focus();});
+  dialog.addEventListener('close',()=>{if(!dialog.open&&document.activeElement!==input)opener?.focus();});
   function open(title,button){
     dialogVersion++;opener=button.closest('details')?.querySelector('summary')||button;tools.open=false;dialog.replaceChildren();
     const heading=document.createElement('h2');heading.textContent=title;
@@ -48,9 +65,9 @@ export function installComposer({host,api,context,refresh,notify}) {
       if(!items.length)list.append(text('p',kind==='skills'?'此项目暂无技能。':'目标机器暂无已安装插件。'));
       for(const entry of items){
         const key=kind==='skills'?entry.path:entry.id,label=document.createElement('label');label.className='composer-catalog-item';
-        const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=choice()[kind].includes(key);checkbox.disabled=!entry.enabled&&!checkbox.checked;
+        const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=present().some(r=>r.kind===kind&&r.key===key);checkbox.disabled=!entry.enabled&&!checkbox.checked;
         const body=document.createElement('span');body.append(text('strong',entry.interface?.displayName||entry.name),text('small',[entry.description||entry.interface?.shortDescription, !entry.enabled?(entry.missing?'目录中暂不可用，可取消选择后重试':(entry.disabledReason||'未启用')+'；已选项目可取消选择'):''].filter(Boolean).join(' · ')));
-        checkbox.onchange=()=>{if(context().id!==id)return;const c=choice();c[kind]=checkbox.checked?[...c[kind],key]:c[kind].filter(v=>v!==key);checkbox.disabled=!entry.enabled&&!checkbox.checked;save();render();};
+        checkbox.onchange=()=>{if(context().id!==id)return;if(checkbox.checked){dialog.close();insertReference(entry,kind);}else{for(const range of present().filter(r=>r.kind===kind&&r.key===key).reverse())input.setRangeText('',range.start,range.end,'end');syncReferences();save();render();input.dispatchEvent(new Event('input',{bubbles:true}));}checkbox.disabled=!entry.enabled&&!checkbox.checked;};
         label.append(checkbox,body);list.append(label);
       }
       search.oninput=()=>{for(const row of list.querySelectorAll('label'))row.hidden=!row.textContent.toLowerCase().includes(search.value.toLowerCase());};
@@ -82,13 +99,17 @@ export function installComposer({host,api,context,refresh,notify}) {
     if(current.goal){for(const [value,name] of [['paused','暂停目标'],['active','继续目标'],['complete','标记完成']]){const b=text('button',name);b.type='button';b.onclick=()=>void update({status:value});form.append(b);}}
     dialog.append(form);objective.focus();
   };
+  const suggestions=installSkillSuggestions({input,api,context,select:(entry,range)=>insertReference(entry,'skills',range)});
   function render(){
-    const c=context();if(selected!==c.id){selected=c.id;if(dialog.open)dialog.close();}
+    const c=context();if(selected!==c.id){selected=c.id;suggestions.close();if(dialog.open)dialog.close();}
+    if(!c.ready||c.busy||c.active)suggestions.close();
+    syncReferences();mirror.render();
+    mode.title=choice().mode==='plan'?'计划：先制定方案':'默认：直接处理请求';
     mode.value=choice().mode;const count=choice().skills.length+choice().plugins.length;summary.textContent='工具'+(count?' '+count:'');
     for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||c.active;
     if(c.goalError){bar.querySelector('#goal-settings').textContent='目标（状态待确认）';bar.querySelector('#goal-settings').title='目标状态暂未读取，请刷新后重试。';}else{bar.querySelector('#goal-settings').textContent='目标';bar.querySelector('#goal-settings').title='设置目标';}
     status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:'',c.goalError?'目标状态暂不可用':c.goal?'目标：'+({active:'进行中',paused:'已暂停',complete:'已完成'}[c.goal.status]||c.goal.status):''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
-  return {render,options:()=>({...choice(),access:WEB_ACCESS}),isLoading:()=>loading};
+  return {render,options:()=>{syncReferences();const {mode,skills,plugins}=choice();return {mode,skills:[...skills],plugins:[...plugins],access:WEB_ACCESS};},isLoading:()=>loading};
 }
