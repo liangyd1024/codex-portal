@@ -385,6 +385,8 @@ def read_outputs(payload):
         db.commit()
         for entry in data:
             item = entry['item']; output = item.get('aggregatedOutput') or ''
+            # Engine command records may explicitly contain JSON null until output arrives.
+            item['aggregatedOutput'] = output
             if preview:
                 output = output[:limit]
                 item['aggregatedOutput'] = output

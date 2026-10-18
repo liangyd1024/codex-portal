@@ -4,7 +4,7 @@ import {sidebarGroups} from '../public/sidebar.js';
 function fixture(){
  const calls=[];const t={id:'t',name:'Original',revision:'r',archived:false,readRevision:'rr',sectionId:null};
  const layout={data:[t],sections:[{id:'s',revision:'sr',name:'Section'}],projects:[{id:'p'}],accountScope:'a',accountLayoutAvailable:true,preferences:{pinned:'manual'}};
- const m={service:{protocolValidation:{policy:4,unsupportedMethods:[]}},requireConnected(){},requireWritable(){},autoTitles:new Map([['t',{}]]),controlled:new Map(),subscriptions:new Map(),startingTurns:new Set(),activeTurns:new Map(),saveTitles(){},saveSubscriptions(){},publish(){},withMutation:fn=>fn(),passive:async(action)=>action==='sidebar'?structuredClone(layout):{data:[{status:'completed'}]},rpc:{connected:true,request:async(method,params)=>{calls.push([method,params]);if(method==='account/read')return {workspaceRouting:{chatgptAccountId:'account'}};if(method==='thread/read')return {thread:{status:{type:'notLoaded'}}};if(method.endsWith('/list'))return {data:[]};return {};}}};
+ const m={service:{protocolValidation:{policy:4,unsupportedMethods:[]}},requireConnected(){},requireWritable(){},autoTitles:new Map([['t',{}]]),controlled:new Map(),subscriptions:new Map(),startingTurns:new Set(),activeTurns:new Map(),async notifyDesktopArchive(id,archived){calls.push(['desktop-notify',{id,archived}]);},saveTitles(){},saveSubscriptions(){},publish(){},withMutation:fn=>fn(),passive:async(action)=>action==='sidebar'?structuredClone(layout):{data:[{status:'completed'}]},rpc:{connected:true,request:async(method,params)=>{calls.push([method,params]);if(method==='account/read')return {workspaceRouting:{chatgptAccountId:'account'}};if(method==='thread/read')return {thread:{status:{type:'notLoaded'}}};if(method.endsWith('/list'))return {data:[]};return {};}}};
  return {m,calls,t,layout,input:(action,extra={})=>({action,id:'t',expectedRevision:'r',accountScope:'a',...extra})};
 }
 test('pin and rename use allowlisted engine writes and protect manual titles',async()=>{
@@ -20,7 +20,7 @@ test('conflicting revision, account change, busy mutation and unsupported capabi
 });
 test('active or unknown archive status is blocked; idle archive does not interrupt or delete',async()=>{
  for(const status of ['active','unknown']){const {m,input,calls}=fixture();m.rpc.request=async(name,p)=>{calls.push([name,p]);return name==='account/read'?{}:{thread:{status:{type:status}}};};await assert.rejects(sidebarAction(m,input('archive')));assert.ok(!calls.some(([name])=>name==='thread/archive'));}
- const {m,input,calls}=fixture();await sidebarAction(m,input('archive'));assert.equal(calls.at(-1)[0],'thread/archive');assert.ok(!calls.some(([name])=>/interrupt|delete/.test(name)));
+ const {m,input,calls}=fixture();await sidebarAction(m,input('archive'));assert.deepEqual(calls.slice(-2).map(([name])=>name),['thread/archive','desktop-notify']);assert.ok(!calls.some(([name])=>/interrupt|delete/.test(name)));
 });
 test('unknown mutation outcome is not replayed and desktop read state is not modified',async()=>{
  const {m,input,calls}=fixture();const request=m.rpc.request;m.rpc.request=async(name,p)=>{if(name==='thread/section/move'){calls.push([name,p]);throw Object.assign(Error('timeout'),{code:'RPC_TIMEOUT'});}return request(name,p);};
@@ -70,4 +70,28 @@ test('first-load identity failure rejects instead of manufacturing a successful 
  const {m}=fixture();let passiveReads=0;m.passive=async()=>{passiveReads++;};
  m.rpc.request=async()=>{throw Object.assign(Error('timeout'),{code:'RPC_TIMEOUT'});};
  await assert.rejects(readSidebar(m),e=>e.code==='RPC_TIMEOUT');assert.equal(passiveReads,0);
+});
+
+test('archive notification failure reports persisted partial success and never retries the mutation',async()=>{
+ const {m,input,calls}=fixture();m.notifyDesktopArchive=async()=>{throw Error('offline');};
+ await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='DESKTOP_SYNC_FAILED'&&e.message.includes('已归档'));
+ assert.equal(calls.filter(([name])=>name==='thread/archive').length,1);assert.equal(m.sidebarMutation,false);
+});
+test('restore notifies desktop only after successful engine write',async()=>{
+ const {m,input,calls}=fixture();await sidebarAction(m,input('restore'));
+ assert.deepEqual(calls.slice(-2),[['thread/unarchive',{threadId:'t'}],['desktop-notify',{id:'t',archived:false}]]);
+ const original=m.rpc.request;m.rpc.request=async(name,p)=>{if(name==='thread/archive')throw Error('denied');return original(name,p);};
+ const count=calls.filter(([n])=>n==='desktop-notify').length;
+ await assert.rejects(sidebarAction(m,input('archive')));assert.equal(calls.filter(([n])=>n==='desktop-notify').length,count);
+});
+test('archive timeout reconciles persisted state without replay and only then notifies desktop',async()=>{
+ for(const confirmed of [true,false]){
+  const {m,input,calls}=fixture(),rpc=m.rpc.request,passive=m.passive;
+  m.rpc.request=async(name,p)=>{if(name==='thread/archive'){calls.push([name,p]);throw Object.assign(Error('timeout'),{code:'RPC_TIMEOUT'});}return rpc(name,p);};
+  m.passive=async(action,p)=>action==='detail'?{thread:{archived:confirmed}}:passive(action,p);
+  if(confirmed)assert.equal((await sidebarAction(m,input('archive'))).result.confirmedFromSnapshot,true);
+  else await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='OUTCOME_UNKNOWN');
+  assert.equal(calls.filter(([n])=>n==='thread/archive').length,1);
+  assert.equal(calls.filter(([n])=>n==='desktop-notify').length,confirmed?1:0);
+ }
 });
