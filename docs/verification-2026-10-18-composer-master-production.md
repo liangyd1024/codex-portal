@@ -12,7 +12,7 @@
 
 master 的 `npm test`：117 项 Node、25 项 Python 全部通过。日志 `/tmp/rcm-master-composer-tests.log`。`git diff --check` 通过。
 
-## 最新正式网页：真实服务
+## 231c769 正式网页：真实服务
 
 Ego Lite TaskSpace 73 的 p1，访问 `http://127.0.0.1:4317/`，没有模拟 API。仅操作专用会话 `01a14f15-694e-77b2-87e7-d3aea23e9547`。
 
@@ -29,7 +29,7 @@ Ego Lite TaskSpace 73 的 p1，访问 `http://127.0.0.1:4317/`，没有模拟 AP
 
 截图：[桌面新建](composer-master-production-evidence/production-new-desktop.png)、[技能搜索](composer-master-production-evidence/production-skill-search.png)、[窄屏图片草稿](composer-master-production-evidence/production-mobile-attachment.png)、[窄屏两轮完成](composer-master-production-evidence/production-mobile-completed.png)、[桌面恢复后](composer-master-production-evidence/production-desktop-completed.png)。
 
-## 正式资源：模拟异常验证
+## 231c769 正式资源：模拟异常验证
 
 同一 TaskSpace 的 p2 加载正式 4317 的静态资源，API/SSE 全部由专用 fixture 拦截；以下不冒充真实服务故障复现。
 
@@ -49,4 +49,24 @@ Ego Lite TaskSpace 73 的 p1，访问 `http://127.0.0.1:4317/`，没有模拟 AP
 
 实体手机 Safari/Android、真实系统中文输入法、SSH 目标上的图片端到端未测。中文输入法验证仅为合成事件。Codex 原生 UI 读取先前被工具安全策略阻止，未声明原生像素级或全部键盘行为一致。
 
-最终逐图检查发现窄屏菜单的“添加图片”保留 icon-button 类，被移动端规则限制为 44×44，文字竖排重叠。已在移入菜单时移除该类，预览验证按钮恢复为 218×44，文字水平；选图逻辑不变。重新运行 npm test 全部通过。最新发布与复验结果待部署后补充。
+最终逐图检查发现窄屏菜单的“添加图片”保留 icon-button 类，被移动端规则限制为 44×44，文字竖排重叠。已在移入菜单时移除该类，预览验证按钮恢复为 218×44，文字水平；选图逻辑不变。重新运行 npm test 全部通过。最新发布与复验结果见下节。
+
+
+## 窄屏菜单补修与再次发布
+
+最新正式版本：`a1bad52b8819678952b60aa06a14888ce6a230b6`，已提交并推送 master，安装脚本空闲检查、加密备份和健康检查通过。部署前备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T130523355048Z.tar.gz.age`。
+
+- 自动测试再次通过 117 Node +25 Python，日志 `/tmp/rcm-master-menu-tests.log`。
+- 4327 空闲后使用全新 `/tmp/rcm-menu-preview-20261018-final` 状态目录、`RCM_MOBILE=0` 启动预览；未使用 4328，未停止其他预览。
+- 最新正式静态资源配合模拟 API：390×540 与 1440×900 的添加图片菜单宽 218px，窄屏高 44px，文字水平，无横向溢出；ArrowDown 聚焦添加图片，Escape 关闭并返回 summary。
+- 通过点击添加图片唤起文件选择，选择图片后附件预览出现、菜单关闭。模拟页尝试移除时自动化报 element is not connected，未将该次操作标为通过。
+- 模拟页截图中的“找不到模拟会话”来自旧 fixture 会话缓存与当前 fixture 列表不一致，不是正式服务返回。
+
+修复后截图：[窄屏菜单](composer-master-production-evidence/production-fixed-mobile-menu.png)、[桌面菜单](composer-master-production-evidence/production-fixed-desktop-menu.png)。
+
+最新真实服务复验：版本接口确认 a1bad52，页面恢复两轮缓存消息。但连接初始化出现多个旧订阅 thread/resume 30 秒超时，第一次等待 60 秒未恢复可输入；因此上述 231c769 的真实文本/图片发送结果不冒充 a1bad52 全链路通过。最终连接已恢复为 connected，但专用测试会话因恢复订阅超时退回查看模式，未再次接管或发送；之前两轮记录完整显示。
+
+
+连接恢复后，在 a1bad52 真实新建草稿页（未创建额外会话）完成 390×844 菜单及文件选择验证：点击添加图片、文件选择、附件预览、菜单自动关闭、移除附件均通过，无横向溢出，最终附件数 0。[真实正式页菜单](composer-master-production-evidence/production-real-fixed-mobile.png)。本轮新增代码仅改菜单按钮样式类，真实发送链路的成功证据仍属于前一正式版 231c769；最新版本不标记为完整发送链路通过。
+
+最新版本的连接恢复慢与订阅超时尚未修复；按串行协调安排，本轮不扩展修改引擎、命名或目录超时路径。实体设备和真实系统中文输入法仍未验证。
