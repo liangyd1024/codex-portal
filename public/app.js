@@ -282,32 +282,27 @@ function renderControls() {
 }
 const collapsedProjects = new Set(readLayout('collapsedProjects.'+targetHost,[]));
 function projectForThread(thread) {
-  const cwd = String(thread.cwd || '').replace(/\/$/,'');
-  return state.projects.flatMap(project => (project.roots || []).map(root => ({project,root:root.replace(/\/$/,'')})))
-    .filter(({root}) => cwd === root || cwd.startsWith(root + '/'))
-    .sort((a,b) => b.root.length - a.root.length)[0]?.project;
+  return state.projects.find(project => project.id === thread.projectId);
 }
 function renderProjects() { renderThreads(); }
 function renderThreads() {
   const scroller = $('project-list'), scrollTop = scroller.scrollTop;
+  const focusedProject = document.activeElement?.dataset.projectId;
   const n = clear($('thread-list'));
   setText('projects-heading',state.loadingProjects || state.loadingThreads ? '项目 · 同步中' : state.threadListSource === 'snapshot' ? '项目 · 历史快照' : '项目');
   const groups = state.projects.map(p => ({...p,threads:[]}));
-  const extra = new Map();
+  // Unassigned chats stay chats: working directories never create projects.
   for (const t of state.threads) {
     const project = projectForThread(t);
     if (project) groups.find(p => p.id === project.id).threads.push(t);
-    else {
-      const key = t.cwd || '';
-      if (!extra.has(key)) extra.set(key,{id:'cwd:'+key,name:key ? baseName(key) : '未关联项目',roots:key ? [key] : [],threads:[]});
-      extra.get(key).threads.push(t);
-    }
+    else appendThread(n,t,null);
   }
-  for (const p of [...groups,...extra.values()]) {
+  for (const p of groups) {
     if (state.search && !p.threads.length) continue;
     const group = el('div','project-group');
     const expanded = Boolean(state.search) || !collapsedProjects.has(p.id);
     const b = el('button','project-button' + (state.projectId === p.id ? ' selected' : ''));
+    b.dataset.projectId = p.id;
     b.setAttribute('aria-expanded',String(expanded)); b.title = (p.roots || []).join('\n');
     b.append(icon('chevron','project-chevron'),icon('folder'),el('span','project-name',p.name || baseName(p.roots?.[0])));
     const children = el('div','project-threads'); children.hidden = !expanded;
@@ -335,6 +330,7 @@ function renderThreads() {
   $('more-threads').textContent = state.threadPageError ? '加载失败，点击重试' : state.loadingThreads ? '正在加载会话…' : '加载更多会话';
   $('more-threads').disabled = state.loadingThreads;
   $('more-threads').onclick = () => loadThreads(Boolean(state.threadCursor));
+  if (focusedProject) [...n.querySelectorAll('.project-button')].find(b => b.dataset.projectId === focusedProject)?.focus({preventScroll:true});
   scroller.scrollTop = scrollTop;
 }
 function appendThread(n,t,projectId) {

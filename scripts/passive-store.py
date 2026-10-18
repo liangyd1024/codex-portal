@@ -14,7 +14,7 @@ STORE = HOME / '.codex'
 MAX_SQLITE_INTEGER = 9223372036854775807
 THREAD_COLUMNS = (
     'id', 'name', 'title', 'cwd', 'created_at', 'updated_at', 'preview',
-    'archived', 'model', 'reasoning_effort', 'cli_version',
+    'archived', 'model', 'reasoning_effort', 'cli_version', 'source', 'project_id', 'thread_source', 'thread_section_id',
 )
 TURN_COLUMNS = (
     'thread_id', 'turn_id', 'rollout_ordinal', 'status', 'error_json',
@@ -103,9 +103,71 @@ def normalized_thread(row):
         'model': row['model'],
         'reasoningEffort': row['reasoning_effort'],
         'cliVersion': row['cli_version'],
+        'source': row['source'],
+        'projectId': row['project_id'],
+        'threadSource': row['thread_source'],
+        'sectionId': row['thread_section_id'],
         # Persisted history does not establish another process's live status.
         'status': {'type': 'notLoaded'},
     }
+
+
+# Codex Desktop uses the default interactive thread/list sources. Background exec
+# and all subagent variants belong to storage, not the user's sidebar.
+INTERACTIVE_SOURCES = ('cli', 'vscode', 'appServer', 'unknown')
+
+
+def desktop_membership(connection):
+    try:
+        state = json.loads((STORE / '.codex-global-state.json').read_text())
+    except FileNotFoundError:
+        state = {}
+    # Do not silently infer memberships from cwd when the desktop state is broken.
+    projects = {row['id'] for row in connection.execute('SELECT id FROM projects')}
+    host_key = 'local:' + str(STORE)
+    mapping = state.get('app-server-project-id-by-legacy-project-id-by-host', {}).get(host_key, {})
+    migration = state.get('app-server-projects-migration-by-host', {}).get(host_key, {})
+    assignments = state.get('thread-project-assignments', {})
+    hints = state.get('thread-workspace-root-hints', {})
+    roots = sorted(connection.execute('SELECT project_id, path FROM project_roots'), key=lambda r: len(r['path']), reverse=True)
+    projectless = set(state.get('projectless-thread-ids', []))
+
+    def resolve(thread):
+        if thread.get('sectionId'):
+            return None
+        project = thread.get('projectId')
+        if project is not None:
+            return project if project in projects else None
+        if thread['id'] in projectless:
+            return None
+        if not migration.get('threadAssignmentsMigrated', False):
+            assignment = assignments.get(thread['id'], {})
+            if assignment.get('projectKind') == 'local':
+                legacy = assignment.get('projectId')
+                project = mapping.get(legacy, legacy)
+                return project if project in projects else None
+            # Legacy desktop chats can belong to a saved root before assignment
+            # migration. Only registered roots qualify; never invent a project.
+            cwd = hints.get(thread['id'], thread.get('cwd', '')).rstrip('/')
+            for root in roots:
+                path = root['path'].rstrip('/')
+                if cwd == path or cwd.startswith(path + '/'):
+                    return root['project_id']
+        return None
+    return resolve
+
+
+def read_sidebar_metadata(payload):
+    identifiers = payload.get('threadIds', [])
+    if not isinstance(identifiers, list) or len(identifiers) > 100 or not all(isinstance(i, str) for i in identifiers):
+        raise ValueError('threadIds 必须为至多 100 个会话 ID。')
+    connection = connect_store('state_5.sqlite')
+    try:
+        resolve = desktop_membership(connection)
+        rows = connection.execute('SELECT id, project_id, cwd, thread_section_id FROM threads WHERE id IN (' + ','.join('?' for _ in identifiers) + ')', identifiers)
+        return {'data': {row['id']: {'projectId': resolve({'id': row['id'], 'projectId': row['project_id'], 'cwd': row['cwd'], 'sectionId': row['thread_section_id']})} for row in rows}}
+    finally:
+        connection.close()
 
 
 def literal_like(value):
@@ -117,8 +179,8 @@ def read_threads(payload):
     try:
         require_columns(connection, 'state_5.sqlite', 'threads', THREAD_COLUMNS)
         offset = cursor_number(payload) or 0
-        conditions = ['archived = ?']
-        parameters = [int(archived_flag(payload))]
+        conditions = ['archived = ?', 'source IN (?, ?, ?, ?)', "COALESCE(thread_source, '') != 'ambient_suggestions'"]
+        parameters = [int(archived_flag(payload)), *INTERACTIVE_SOURCES]
         cwd = optional_text(payload, 'cwd')
         search = optional_text(payload, 'search')
         if cwd:
@@ -130,8 +192,12 @@ def read_threads(payload):
         sql = 'SELECT ' + ', '.join(THREAD_COLUMNS) + ' FROM threads WHERE ' + ' AND '.join(conditions)
         sql += ' ORDER BY updated_at DESC, id ASC LIMIT ? OFFSET ?'
         rows = connection.execute(sql, parameters + [51, offset]).fetchall()
+        resolve = desktop_membership(connection)
+        data = [normalized_thread(row) for row in rows[:50]]
+        for thread in data:
+            thread['projectId'] = resolve(thread)
         return {
-            'data': [normalized_thread(row) for row in rows[:50]],
+            'data': data,
             'nextCursor': 'db:' + str(offset + 50) if len(rows) > 50 else None,
             'historySource': 'snapshot',
         }
@@ -416,7 +482,7 @@ def main():
     if not isinstance(payload, dict):
         raise ValueError('PAYLOAD 必须是 JSON 对象。')
     action = payload.get('action')
-    handlers = {'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
+    handlers = {'sidebarMetadata': read_sidebar_metadata, 'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
     if action not in handlers:
         raise ValueError('不支持的只读操作。')
     return handlers[action](payload)
