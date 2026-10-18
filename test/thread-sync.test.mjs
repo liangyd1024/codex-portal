@@ -57,7 +57,7 @@ function detailFixture() {
   const state={selectedId:'a',selectionVersion:1,detailVersion:1,detail:{thread:{id:'a'},turns:[]},loadedOlderHistory:false,
     status:{instanceId:'one',connection:{state:'connected'},controlledThreads:[],handoffs:[]}};
   const requests=[],applied=[];
-  const context=vm.createContext({state,performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
+  const context=vm.createContext({state,newChatOpen:false,performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
     turns:()=>state.detail?.turns||[],outputBases:()=>new Map(),decodeOutputs:async x=>x,hydrateOutputs:x=>x,
     restoreDetail:async()=>{},scheduleDetailRefresh:()=>{},
     api:path=>new Promise((resolve,reject)=>requests.push({path,resolve,reject})),
@@ -65,7 +65,7 @@ function detailFixture() {
   });
   vm.runInContext(source.slice(source.indexOf('async function readSelectedDetail('),source.indexOf('async function refreshWorkspace('))+'\nglobalThis.read=refreshSelected;',context);
   vm.runInContext(source.slice(source.indexOf('function applyStatus('),source.indexOf('\nconst $'))+'\nglobalThis.status=applyStatus;',context);
-  return {state,requests,applied,read:context.read,status:context.status};
+  return {state,requests,applied,context,read:context.read,status:context.status};
 }
 test('late thread and connection replies cannot overwrite a new selection; duplicate reads coalesce',async()=>{
   const f=detailFixture(),old=f.read(),duplicate=f.read();assert.equal(f.requests.length,1);
@@ -110,4 +110,15 @@ test('handoff and desktop-owned detail reads see new history without any engine 
     assert.equal(result.controlled,false);assert.equal(result.handoff.state,state);
     assert.deepEqual(m.status().subscribedThreads,[]);assert.deepEqual(m.status().controlledThreads,[]);
   }
+});
+
+test('new chat draft ignores old detail replies and pauses history reads',async()=>{
+  const f=detailFixture(),old=f.read();
+  f.context.newChatOpen=true;f.state.selectionVersion++;
+  f.requests[0].resolve({thread:{id:'a',name:'stale'},turns:[]});await old;
+  await f.read();assert.equal(f.requests.length,1);assert.equal(f.applied.length,0);
+  f.context.newChatOpen=false;f.state.selectionVersion++;
+  const fresh=f.read();assert.equal(f.requests.length,2);
+  f.requests[1].resolve({thread:{id:'a',name:'fresh'},turns:[]});await fresh;
+  assert.equal(f.state.detail.thread.name,'fresh');
 });

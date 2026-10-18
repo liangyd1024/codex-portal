@@ -8,7 +8,7 @@ export function installComposer({host,api,context,refresh,notify}) {
   bar.innerHTML='<label><span class="sr-only">执行模式</span><select id="execution-mode" aria-label="执行模式"><option value="default">默认</option><option value="plan">计划</option><option value="goal">目标…</option></select></label><button type="button" id="goal-settings">目标</button><button type="button" id="skill-picker">技能</button><button type="button" id="plugin-picker">插件</button><span id="composer-tools-status" role="status"></span>';
   const tools=document.createElement('details');tools.className='composer-options';
   const summary=document.createElement('summary');summary.textContent='工具';summary.setAttribute('aria-label','更多输入工具');const panel=document.createElement('div');panel.className='composer-options-panel';
-  for(const button of bar.querySelectorAll('button'))panel.append(button);tools.append(summary,panel);bar.querySelector('[role=status]').before(tools);
+  for(const button of bar.querySelectorAll('button'))panel.append(button);tools.append(summary,panel);bar.querySelector('[role=status]').before(tools);panel.prepend(bar.querySelector('label'));
   const position=()=>{if(!tools.open)return;const v=window.visualViewport,top=v?.offsetTop||0,left=v?.offsetLeft||0,height=v?.height||innerHeight,width=v?.width||innerWidth;panel.style.maxHeight=Math.max(44,height-24)+'px';panel.style.maxWidth=Math.max(0,width-16)+'px';panel.style.right='auto';panel.style.left=Math.max(left+8,Math.min(summary.getBoundingClientRect().right-panel.offsetWidth,left+width-panel.offsetWidth-8))+'px';panel.style.top=Math.max(top+8,bar.getBoundingClientRect().top-panel.offsetHeight-8)+'px';};
   tools.addEventListener('toggle',position);window.visualViewport?.addEventListener('resize',position);window.visualViewport?.addEventListener('scroll',position);window.addEventListener('resize',position);
   tools.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();tools.open=false;summary.focus();}});
@@ -105,11 +105,12 @@ export function installComposer({host,api,context,refresh,notify}) {
     if(!c.ready||c.busy||c.active)suggestions.close();
     syncReferences();mirror.render();
     mode.title=choice().mode==='plan'?'计划：先制定方案':'默认：直接处理请求';
-    mode.value=choice().mode;const count=choice().skills.length+choice().plugins.length;summary.textContent='工具'+(count?' '+count:'');
+    mode.value=choice().mode;const count=choice().skills.length+choice().plugins.length;summary.textContent=(choice().mode==='plan'?'计划 · ':'')+'工具'+(count?' '+count:'');
     for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||c.active;
     if(c.goalError){bar.querySelector('#goal-settings').textContent='目标（状态待确认）';bar.querySelector('#goal-settings').title='目标状态暂未读取，请刷新后重试。';}else{bar.querySelector('#goal-settings').textContent='目标';bar.querySelector('#goal-settings').title='设置目标';}
+    bar.querySelector('#goal-settings').disabled ||= c.draft;mode.querySelector('[value=goal]').disabled=Boolean(c.draft);
     status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:'',c.goalError?'目标状态暂不可用':c.goal?'目标：'+({active:'进行中',paused:'已暂停',complete:'已完成'}[c.goal.status]||c.goal.status):''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
-  return {render,options:()=>{syncReferences();const {mode,skills,plugins}=choice();return {mode,skills:[...skills],plugins:[...plugins],access:WEB_ACCESS};},isLoading:()=>loading};
+  return {render,moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins}=choice();return {mode,skills:[...skills],plugins:[...plugins],access:WEB_ACCESS};},isLoading:()=>loading};
 }

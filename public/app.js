@@ -1,3 +1,4 @@
+import {NewChatDraft} from './new-chat.js';
 import {installAttachments} from './attachments.js';
 let attachments;
 import {Sidebar} from './sidebar.js';
@@ -49,9 +50,22 @@ const state = {
   runtimeNotices: new Map(), loadingDetail: false, errors: [], localRequests: [], drafts: new DraftStore({storage:()=>sessionStorage,host:targetHost,onError:()=>toast('浏览器无法保存草稿，请先复制重要内容。',true)}), selectionVersion: 0,
   listVersion: 0, detailVersion: 0, threadPageError: false, historyError: '', eventSource: null, lastSync: null, refreshScope: '', refreshMessage: '', refreshing: false, streamRender: false, requestSignature: '',
 };
+const newDraftId='local:new-chat-draft';
+const newDraft=new NewChatDraft(sessionStorage,'rcm.new-chat.'+targetHost);
+let newChatOpen=false;
+const inputId=()=>newChatOpen?newDraftId:state.selectedId;
+const inputReady=()=>newChatOpen?usable()&&Boolean(newDraft.cwd):usable()&&controlled()&&!state.selectedArchived;
+function rememberNewDraft(){try{newDraft.save();}catch{toast('新会话草稿设置暂未保存，请保留当前页面。',true);}}
+function closeNewChat(restore=true){
+  if(!newChatOpen)return;
+  state.drafts.set(newDraftId,$('message-input').value);newChatOpen=false;
+  $('conversation').append(document.querySelector('.composer-region'));
+  $('new-chat-page').hidden=true;document.querySelector('.main-panel').classList.remove('new-chat-open');
+  if(restore){$('message-input').value=state.drafts.get(state.selectedId)||'';renderThread();resizeInput();}
+}
 function flushDrafts() {
   if (draftWritesSuspended) return;
-  if (state.selectedId) state.drafts.set(state.selectedId,$('message-input').value);
+  if (inputId()) state.drafts.set(inputId(),$('message-input').value);
   else state.drafts.persist();
   saveView(); saveOutputPositions();
 }
@@ -275,13 +289,14 @@ function renderControlOverview() {
   });
 }
 function renderControls() {
-  const ready = usable(), own = controlled()&&!state.selectedArchived, active = running();
+  const ready = usable(), own = newChatOpen||controlled()&&!state.selectedArchived, active = !newChatOpen&&running();
   const background = backgroundActivity(state.detail,{controlled:own,connected:ready});
   const handoff=currentHandoff(),handing=state.busy.has('handoff:'+state.selectedId)||handoff?.state==='checking';
   handoffControls??=createHandoffControls({endUse:endThreadUse});
   handoffControls.render({id:state.selectedId,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId)),handoff,connected:ready,
     supported:state.status?.service?.protocolValidation?.features?.handoff?.supported===true,busy:handing,archived:state.selectedArchived,conflict:state.detail?.controlState==='conflict'});
-  const posting = state.busy.has('message'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
+  const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
+  $('connection-select').disabled=creating;
   $('new-thread').disabled = !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels;
   $('connect-button').disabled = state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release');
   $('welcome-connect').disabled = connectionPending() || state.busy.has('connect') || state.busy.has('disconnect') || (connected() && (!ready || !state.models.length||!featureReady('create')));
@@ -316,13 +331,17 @@ function renderControls() {
   $('running-indicator').firstElementChild.hidden=!active&&background.state!=='running';
   $('running-indicator').lastElementChild.textContent=active?'正在执行':background.state==='running'?'后台命令仍在运行（'+background.terminals.length+'）':'后台命令状态待确认';
   $('running-indicator').title=active?'':background.state==='running'?background.terminals.map(t=>t.command).filter(Boolean).join('\n'):background.state==='unknown'?'连接恢复或下次同步后重新核对。':'';
-  const createReason = !ready ? '连接目标机器并恢复实时通道后才能创建。' : !featureReady('create') ? '当前引擎不支持创建会话：'+(state.status?.service?.protocolValidation?.features?.create?.reason || '请查看连接诊断') : !$('new-cwd').value ? '请先选择项目。' : !$('new-model').value || !$('new-effort').value ? '请选择可用的模型与思考档位。' : '';
-  $('create-thread').disabled = creating || Boolean(createReason);
-  $('create-thread').replaceChildren(icon(creating ? 'refresh' : 'plus'),el('span','',creating ? '正在创建…' : '创建会话'));
-  $('new-thread-form').setAttribute('aria-busy',String(creating));
-  setText('new-thread-status',creating ? '正在等待目标机器创建会话，请勿重复提交。' : createReason);
-  $('new-thread-status').hidden = !creating && !createReason;
-  ['new-cwd','new-model','new-effort','close-new-dialog','cancel-new-dialog'].forEach(id => $(id).disabled = creating);
+  if(newChatOpen){
+    const reason=!ready?'连接恢复后可发送，草稿已保留。':newDraft.phase==='uncertain'?'创建结果未确认，请刷新侧栏核对，避免重复创建。':!newDraft.cwd?'选择一个项目后开始。':creating?'正在创建会话…':'';
+    $('send-message').disabled ||= !featureReady('create')||!newDraft.cwd||newDraft.phase!=='editing';
+    $('send-message').setAttribute('aria-label',creating?'正在创建会话':'发送并开始会话');
+    input.disabled=!ready||posting;input.placeholder='描述你想完成的任务…';
+    availability.textContent=reason;availability.hidden=!reason;
+    $('new-retry-create').hidden=newDraft.phase!=='uncertain';
+    $('new-cwd').disabled=creating||newDraft.phase==='uncertain';$('close-new-chat').disabled=creating;
+    $('interrupt').hidden=true;$('takeover').hidden=true;$('toggle-message-details').hidden=true;
+    $('thread-title').hidden=false;setText('thread-title','新会话');
+  }
   document.querySelectorAll('.project-create').forEach(button => { button.disabled = $('new-thread').disabled; });
   setText('composer-model-label',(modelFor(state.model)?.displayName || state.model || '模型')+' · '+(effortNames[state.effort] || state.effort || '档位'));
   composer?.render(); attachments?.render();
@@ -380,15 +399,15 @@ function fillEfforts(select, model, effort) {
 }
 function renderModels(preferThread = false) {
   const t = currentThread();
-  if (preferThread && t?.model) state.model = modelFor(t.model) ? modelId(modelFor(t.model)) : t.model;
-  if (preferThread && t?.reasoningEffort) state.effort = t.reasoningEffort;
+  if (preferThread && !newChatOpen && t?.model) state.model = modelFor(t.model) ? modelId(modelFor(t.model)) : t.model;
+  if (preferThread && !newChatOpen && t?.reasoningEffort) state.effort = t.reasoningEffort;
   // Preserve restored preferences until the model catalog arrives.
   if (!state.models.length) {
     fillModels($('model-select'),state.model); fillEfforts($('effort-select'),state.model,state.effort);
     renderControls(); return;
   }
   if (!modelFor(state.model)) state.model = state.models.length ? modelId(state.models.find(m => m.isDefault) || state.models[0]) : '';
-  if (preferThread && t?.reasoningEffort) state.effort = t.reasoningEffort;
+  if (preferThread && !newChatOpen && t?.reasoningEffort) state.effort = t.reasoningEffort;
   if (!effortsFor(state.model).some(e => e.value === state.effort)) state.effort = defaultEffort(state.model);
   fillModels($('model-select'),state.model); fillEfforts($('effort-select'),state.model,state.effort);
   renderControls();
@@ -808,10 +827,12 @@ function applyDetail(data, resetModels = false) {
   if (resetModels) renderModels(true); renderThread(); renderRequests(); if(!data.recovering)saveDetailSoon();
 }
 async function selectThread(id) {
+  if(state.busy.has('create')){toast('正在创建会话，请稍候。');return;}
+  closeNewChat();
 
   toggleInspector(false);
   $('messages').style.paddingBottom = '';
-  if (state.selectedId) state.drafts.set(state.selectedId,$('message-input').value);
+  if (inputId()) state.drafts.set(inputId(),$('message-input').value);
   const seq = ++state.selectionVersion; state.selectedId = id; state.detail = null; state.historyCursor = null; state.loadedOlderHistory = false; state.loadingDetail = true; state.historyError = ''; saveView();
   $('message-input').value = state.drafts.get(id) || ''; resizeInput(); renderThread(); renderThreads(); if (compactLayout()) toggleSidebar(false, false);
   await restoreDetail(id,seq);
@@ -837,10 +858,10 @@ async function readSelectedDetail(id,isCurrent){
 }
 const detailReads = new Map();
 async function refreshSelected() {
-  if (!state.selectedId) return;
+  if (newChatOpen||!state.selectedId) return;
   const id = state.selectedId, seq = state.selectionVersion, version = state.detailVersion;
   const key=JSON.stringify([id,seq,version]);
-  const isCurrent=()=>id===state.selectedId&&seq===state.selectionVersion&&version===state.detailVersion;
+  const isCurrent=()=>!newChatOpen&&id===state.selectedId&&seq===state.selectionVersion&&version===state.detailVersion;
   if(detailReads.has(key)) return detailReads.get(key);
   const read=(async()=>{
   if(!state.detail)await restoreDetail(id,seq);
@@ -996,45 +1017,52 @@ async function respondRequest(r, answer) {
   });
 }
 function openNewDialog(projectRoot) {
-
-  if (!usable() || !state.models.length) { toast('连接目标机器并读取模型目录后，再新建会话。',true); return; }
-  const project = state.projects.find(p => p.id === state.projectId);
+  if(state.busy.has('create'))return;
+  flushDrafts();
   const select=clear($('new-cwd'));
   const options=state.projects.flatMap(p=>(p.roots||[]).map(root=>({root,name:p.name||baseName(root)})));
-  options.forEach(p=>{const option=el('option','',p.name);option.value=p.root;select.append(option);});
-  const preferred=(typeof projectRoot === 'string' ? projectRoot : null)||project?.roots?.[0]||currentThread()?.cwd;
+  for(const p of options){const option=el('option','',p.name);option.value=p.root;select.append(option);}
+  const preferred=(typeof projectRoot==='string'?projectRoot:null)||newDraft.cwd||state.projects.find(p=>p.id===state.projectId)?.roots?.[0]||currentThread()?.cwd;
   if(options.some(p=>p.root===preferred))select.value=preferred;
-  select.onchange=()=>{setText('new-project-path',select.value||'此连接暂无项目。请先在 Codex 中添加项目。');renderControls();};select.onchange();
-  $('new-thread-error').hidden = true;
-  fillModels($('new-model'),state.model); fillEfforts($('new-effort'),$('new-model').value,state.effort);
-  $('new-thread-dialog').showModal(); renderControls(); setTimeout(() => $('new-cwd').focus(),0);
+  newDraft.cwd=select.value;rememberNewDraft();
+  select.onchange=()=>{newDraft.cwd=select.value;rememberNewDraft();renderControls();};
+  state.selectionVersion++;newChatOpen=true;$('new-chat-page').hidden=false;document.querySelector('.main-panel').classList.add('new-chat-open');
+  $('new-composer-slot').append(document.querySelector('.composer-region'));
+  $('message-input').value=state.drafts.get(newDraftId)||'';
+  $('new-chat-error').hidden=true;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);
+  renderModels();renderControls();resizeInput();mobileUI?.syncDrawers();$('message-input').focus();
 }
-async function createThread(e) {
-  e.preventDefault(); if ($('create-thread').disabled) return; const cwd = $('new-cwd').value.trim();
-  $('new-thread-error').hidden = true;
-  if (!cwd.startsWith('/')) { $('new-thread-error').textContent = '请选择一个项目。'; $('new-thread-error').hidden = false; return; }
-  await action('create',async () => {
-    try {
-      const d = await api('/api/threads',{method:'POST',body:{cwd,model:$('new-model').value,effort:$('new-effort').value,access:WEB_ACCESS}});
-      state.sidebarArchived=false;state.selectedArchived=false;
-      const id = d.thread?.id || d.id; if (!id) throw new Error('服务未返回新会话 ID。请刷新列表核对结果。');
-      flushDrafts(); $('new-thread-dialog').close(); if (compactLayout()) toggleSidebar(false, false); state.model = $('new-model').value; state.effort = $('new-effort').value;
-      const thread = {...d.thread,id,cwd,name:d.thread?.name || '新会话'};
-      createdThreads.set(id,thread); state.threads.unshift(thread);
-      const project = state.projects.find(p => p.roots?.includes(cwd));
-      state.projectId = project?.id || null; if (project) sidebar.expandProject(project.id);
-      state.search = ''; $('thread-search').value = '';
-      state.historyCursor = null; state.loadedOlderHistory = false; state.historyError = '';
-      state.selectionVersion++;
-      state.selectedId = id; toggleInspector(false); saveView(); state.loadingDetail = false; state.drafts.set(id,''); $('message-input').value = ''; applyDetail({...d,thread:{...d.thread,name:d.thread?.name || '新会话'},controlled:true},true);
-      renderThreads(); toast('目标机器会话已创建。'); $('message-input').focus();
-      void Promise.allSettled([loadThreads(),loadStatus()]);
-    } catch (err) { $('new-thread-error').textContent = messageOf(err); $('new-thread-error').hidden = false; recordError(err,'create'); }
+async function createThreadFromDraft(){
+  if(state.busy.has('create')||newDraft.phase!=='editing')return;
+  const cwd=newDraft.cwd,model=state.model,effort=state.effort,text=$('message-input').value;
+  if(!cwd||(!text.trim()&&!attachments.has())||attachments.pending())return;
+  state.drafts.set(newDraftId,text);$('new-chat-error').hidden=true;
+  let created=false;
+  await action('create',async()=>{
+    try{
+      newDraft.begin();
+      const d=await api('/api/threads',{method:'POST',body:{cwd,model,effort,access:WEB_ACCESS}});
+      const id=d.thread?.id||d.id;if(!id)throw Error('未返回会话 ID，请刷新侧栏核对创建结果。');
+      const thread={...d.thread,id,cwd,name:d.thread?.name||'新会话'};
+      createdThreads.set(id,thread);state.threads.unshift(thread);
+      attachments.moveDraft(newDraftId,id);composer.moveDraft(newDraftId,id);
+      closeNewChat(false);state.drafts.set(id,text);state.drafts.delete(newDraftId);
+      state.sidebarArchived=false;state.selectedArchived=false;state.selectedId=id;state.selectionVersion++;
+      state.model=model;state.effort=effort;state.loadingDetail=false;
+      const project=state.projects.find(p=>p.roots?.includes(cwd));state.projectId=project?.id||null;if(project)sidebar.expandProject(project.id);
+      state.search='';$('thread-search').value='';state.historyCursor=null;state.loadedOlderHistory=false;state.historyError='';
+      saveView();$('message-input').value=text;applyDetail({...d,thread,controlled:true},true);renderThreads();
+      newDraft.complete();created=true;
+    }catch(error){
+      newDraft.failed(error);$('new-chat-error').textContent=messageOf(error);$('new-chat-error').hidden=false;recordError(error,'create');
+    }
   });
+  if(created){await sendMessage();void Promise.allSettled([loadThreads(),loadStatus()]);}
 }
 async function sendMessage(e) {
   e?.preventDefault();
   if ($('send-message').disabled) return;
+  if(newChatOpen){await createThreadFromDraft();return;}
   const text = $('message-input').value.trim(), id = state.selectedId;
   if ((!text&&!attachments?.has()) || attachments?.pending() || !id || !usable() || !controlled() || state.busy.has('message')) return;
   const active = running(), selection = state.selectionVersion;
@@ -1246,9 +1274,9 @@ function toggleMessageDetails(show) {
   if (atBottom) scroller.scrollTop = scroller.scrollHeight;
 }
 function wireEvents() {
-  attachments=installAttachments({host:targetHost,context:()=>({id:state.selectedId,ready:usable()&&controlled()&&!state.selectedArchived,busy:state.busy.has('message')}),changed:renderControls,notify:toast});
+  attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady(),busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});
-  composer=installComposer({host:targetHost,api,context:()=>({id:state.selectedId,cwd:currentThread()?.cwd,ready:usable()&&controlled()&&!state.selectedArchived,busy:state.busy.size>0,active:running(),goal:state.detail?.goal,goalError:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
+  composer=installComposer({host:targetHost,api,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
   const settings = $('composer-settings');
   document.addEventListener('click',event => { if (!settings.contains(event.target)) settings.open = false; });
   settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); settings.open = false; settings.querySelector('summary').focus(); } });
@@ -1266,7 +1294,7 @@ function wireEvents() {
   window.addEventListener('pageshow', event => { if (event.persisted) setAutoRefresh($('auto-refresh').checked); });
   document.addEventListener('visibilitychange',() => { if (document.hidden) flushDrafts(); });
   installThreadSync({window,document,
-    canSync:()=>connected()&&!state.status?.service?.releasing&&!!state.selectedId&&!state.busy.has('handoff:'+state.selectedId),
+    canSync:()=>!newChatOpen&&connected()&&!state.status?.service?.releasing&&!!state.selectedId&&!state.busy.has('handoff:'+state.selectedId),
     refresh:refreshSelected,resume:resumeWorkspace,
     onError:error=>{const message='自动同步暂未成功，将自动重试：'+messageOf(error);if(state.historyError!==message){state.historyError=message;recordError(error,'sync');renderThread();}},
   });
@@ -1295,19 +1323,16 @@ function wireEvents() {
   historyScroller.addEventListener('keydown',event => { if (['ArrowUp','PageUp','Home'].includes(event.key)) loadEarlierNearTop(); });
   let searchTimer; $('thread-search').oninput = e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.search = e.target.value.trim(); loadThreads(); },300); };
   $('message-form').onsubmit = sendMessage; $('interrupt').onclick = interruptThread;
-  $('message-input').oninput = () => { if (state.selectedId && !draftWritesSuspended) state.drafts.set(state.selectedId,$('message-input').value); resizeInput(); renderControls(); };
+  $('message-input').oninput = () => { if (inputId() && !draftWritesSuspended) state.drafts.set(inputId(),$('message-input').value); resizeInput(); renderControls(); };
   let composing = false, compositionEnded = -Infinity;
   $('message-input').addEventListener('compositionstart',() => { composing = true; });
   $('message-input').addEventListener('compositionend',() => { composing = false; compositionEnded = performance.now(); });
   $('message-input').onkeydown = e => { if (shouldSendOnEnter(e,{touch:touchInput(),composing,compositionEnded})) { e.preventDefault(); if (!$('send-message').disabled) sendMessage(); } };
   $('model-select').onchange = e => { state.model = e.target.value; state.effort = defaultEffort(state.model); fillEfforts($('effort-select'),state.model,state.effort); renderControls(); };
   $('effort-select').onchange = e => { state.effort = e.target.value; renderControls(); };
-  $('new-model').onchange = e => { fillEfforts($('new-effort'),e.target.value); renderControls(); };
-  $('new-effort').onchange = renderControls;
-  $('new-thread-dialog').addEventListener('cancel',e => { if (state.busy.has('create')) e.preventDefault(); });
-  $('new-thread-form').onsubmit = createThread;
-  ['close-new-dialog','cancel-new-dialog'].forEach(id => $(id).onclick = () => $('new-thread-dialog').close());
-  $('new-thread-dialog').addEventListener('click',e => { if (e.target === $('new-thread-dialog') && !state.busy.has('create')) { const b = e.target.getBoundingClientRect(); if (e.clientX < b.left || e.clientX > b.right || e.clientY < b.top || e.clientY > b.bottom) e.target.close(); } });
+  $('new-retry-create').onclick=()=>{newDraft.complete();$('new-chat-error').hidden=true;renderControls();$('message-input').focus();};
+  $('close-new-chat').onclick=()=>{if(!state.busy.has('create'))closeNewChat();};
+
   $('toggle-inspector').onclick = () => toggleInspector(); $('close-inspector').onclick = () => toggleInspector(false);
   $('open-sidebar').onclick = () => toggleSidebar();
   $('close-sidebar').onclick = () => { toggleSidebar(false); $('open-sidebar').focus(); };
@@ -1354,7 +1379,7 @@ if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)|
 init();
 
 $('connection-select').value=targetHost;
-$('connection-select').onchange=()=>{rememberHost($('connection-select').value);if(state.selectedId)state.drafts.set(state.selectedId,$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',$('connection-select').value);location.assign(url);};
+$('connection-select').onchange=()=>{if(state.busy.has('create'))return;rememberHost($('connection-select').value);if(inputId())state.drafts.set(inputId(),$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',$('connection-select').value);location.assign(url);};
 
 const clearRecovery=el('button','text-button','清除日志缓存并重新加载');
 clearRecovery.type='button';
