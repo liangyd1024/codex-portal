@@ -31,10 +31,11 @@ export function sidebarGroups(snapshot){
 }
 export class Sidebar {
   constructor(options){
-    this.o=options;this.node=options.node;this.snapshot=null;this.pending=false;this.menu=null;this.dialog=null;this.scope=null;this.collapsed=new Set();
+    this.o=options;this.node=options.node;this.snapshot=null;this.pending=false;this.menu=null;this.dialog=null;this.scope=null;this.expanded=new Set();this.searchOverrides=new Map();this.searchExpanded=true;
     this.toolbar=make('div','sidebar-tools');
     const archive=make('button','sidebar-view','已归档');archive.type='button';archive.onclick=()=>options.onArchiveView(!this.snapshot?.archived);this.archiveButton=archive;
     const more=make('button','icon-button','⋯');more.type='button';more.setAttribute('aria-label','侧边栏设置');more.onclick=()=>this.openMenu(more,[
+      {label:'全部折叠',run:()=>{this.collapseAll();more.focus({preventScroll:true});}},
       this.entry('新建分区','createSection',()=>this.edit('createSection',null,'新建分区')),
       {label:'排序：'+(this.snapshot?.preferences.chats==='manual'?'手动':'最近更新'),disabled:true,reason:this.snapshot?.capabilities.preferences.reason},
       {label:'调整分区或项目顺序',disabled:true,reason:this.snapshot?.capabilities.reorderSection.reason},
@@ -46,14 +47,22 @@ export class Sidebar {
     window.visualViewport?.addEventListener('resize',()=>this.positionMenu());
     window.visualViewport?.addEventListener('scroll',()=>this.positionMenu());
   }
-  key(){return 'rcm.sidebar.collapsed.'+this.o.host+'.'+(this.scope||'unknown');}
-  save(){try{localStorage.setItem(this.key(),JSON.stringify([...this.collapsed]));}catch{}}
-  expandProject(id){this.collapsed.delete('project:'+id);this.save();}
+  // Persist explicit expansions so newly discovered groups also start collapsed.
+  key(){return 'rcm.sidebar.expanded.'+this.o.host+'.'+(this.scope||'unknown');}
+  save(){try{localStorage.setItem(this.key(),JSON.stringify([...this.expanded]));}catch{}}
+  expandProject(id){
+    this.expanded.add('project:'+id);
+    const group=this.snapshot&&sidebarGroups({...this.snapshot,archived:false}).find(g=>g.items.some(i=>i.kind==='project'&&i.value.id===id));
+    this.expanded.add('section:'+(group?.id||'threads'));this.save();
+  }
+  isExpanded(key){return this.view?.search?(this.searchOverrides.get(key)??this.searchExpanded):this.expanded.has(key);}
+  collapseAll(){this.expanded.clear();this.searchOverrides.clear();this.searchExpanded=false;this.save();this.render(this.snapshot,this.view);}
   entry(label,action,run,extra={}){const c=this.snapshot?.capabilities[action];return {label,run,disabled:!this.o.connected()||this.pending||!c?.supported,reason:!this.o.connected()?'连接目标机器后可操作。':c?.reason,...extra};}
   render(snapshot,view={}){
+    if(this.view?.search!==view.search){this.searchOverrides.clear();this.searchExpanded=true;}
     this.view=view;if(!snapshot)return;if(this.drag){this.snapshot=snapshot;return;}
     this.snapshot=snapshot;
-    if(this.scope!==snapshot.accountScope){this.scope=snapshot.accountScope;try{this.collapsed=new Set(JSON.parse(localStorage.getItem(this.key())||'[]'));}catch{this.collapsed=new Set();}this.closeMenu(false);this.undoNode?.remove();}
+    if(this.scope!==snapshot.accountScope){this.scope=snapshot.accountScope;try{const saved=JSON.parse(localStorage.getItem(this.key())||'[]');this.expanded=new Set(Array.isArray(saved)?saved.filter(k=>typeof k==='string'):[]);}catch{this.expanded=new Set();}this.searchOverrides.clear();this.searchExpanded=true;this.closeMenu(false);this.undoNode?.remove();}
     this.archiveButton.textContent=snapshot.archived?'返回会话':'已归档';this.archiveButton.setAttribute('aria-pressed',String(snapshot.archived));
     const focused=document.activeElement?.dataset?.focusKey,scroll=this.node.parentElement.scrollTop;
     this.node.replaceChildren();
@@ -62,7 +71,7 @@ export class Sidebar {
       if(view.search&&!items.length)continue;
       const wrap=make('section','sidebar-group'),header=make('div','sidebar-group-heading');
       const disclosure=make('button','sidebar-section-button');disclosure.type='button';disclosure.dataset.focusKey='section:'+group.id;
-      const expanded=!!view.search||!this.collapsed.has('section:'+group.id);disclosure.setAttribute('aria-expanded',String(expanded));disclosure.append(this.o.icon('chevron'),make('span','',group.name));
+      const expanded=this.isExpanded('section:'+group.id);disclosure.setAttribute('aria-expanded',String(expanded));disclosure.append(this.o.icon('chevron'),make('span','',group.name));
       const children=make('div','sidebar-group-items');children.id='sidebar-section-'+group.id;children.hidden=!expanded;disclosure.setAttribute('aria-controls',children.id);
       disclosure.onclick=()=>{this.toggle('section:'+group.id);};this.disclosureKeys(disclosure,'section:'+group.id);header.append(disclosure);
       if(group.section)this.addMenu(header,disclosure,()=>this.sectionMenu(group.section));
@@ -75,12 +84,12 @@ export class Sidebar {
     this.node.parentElement.scrollTop=scroll;this.setBusy(this.pending);
   }
   setBusy(pending){this.node.setAttribute('aria-busy',String(pending));this.progress.hidden=!pending;this.archiveButton.disabled=pending;this.toolbar.querySelector('.icon-button').disabled=pending;for(const b of this.node.querySelectorAll('.sidebar-item-menu'))b.disabled=pending;}
-  toggle(key){if(this.collapsed.has(key))this.collapsed.delete(key);else this.collapsed.add(key);this.save();this.render(this.snapshot,this.view);}
-  disclosureKeys(button,key){button.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();const collapse=e.key==='ArrowLeft';if(collapse)this.collapsed.add(key);else this.collapsed.delete(key);this.save();this.render(this.snapshot,this.view);}});}
+  toggle(key){if(this.view?.search)this.searchOverrides.set(key,!this.isExpanded(key));else{if(this.expanded.has(key))this.expanded.delete(key);else this.expanded.add(key);this.save();}this.render(this.snapshot,this.view);}
+  disclosureKeys(button,key){button.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();if(this.isExpanded(key)!==(e.key==='ArrowRight'))this.toggle(key);}});}
   renderProject(parent,item){
     const p=item.value,group=make('div','project-group'),header=make('div','project-heading');
     const button=make('button','project-button');button.type='button';button.dataset.projectId=p.id;button.dataset.focusKey='project:'+p.id;button.title=p.roots.join('\n');
-    const expanded=!!this.view.search||!this.collapsed.has('project:'+p.id);button.setAttribute('aria-expanded',String(expanded));button.append(this.o.icon('chevron','project-chevron'),this.o.icon('folder'),make('span','project-name',p.name));
+    const expanded=this.isExpanded('project:'+p.id);button.setAttribute('aria-expanded',String(expanded));button.append(this.o.icon('chevron','project-chevron'),this.o.icon('folder'),make('span','project-name',p.name));
     const children=make('div','project-threads');children.id='sidebar-project-'+p.id;children.hidden=!expanded;button.setAttribute('aria-controls',children.id);button.onclick=()=>this.toggle('project:'+p.id);this.disclosureKeys(button,'project:'+p.id);header.append(button);
     this.addMenu(header,button,()=>[
       {label:'在项目中新建会话',disabled:!this.o.connected(),run:()=>this.o.newThread(p.roots[0])},
