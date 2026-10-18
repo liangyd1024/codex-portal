@@ -29,3 +29,11 @@
 使用 ego-browser 在正式入口重新接管专用验收会话后，点击直接显示的“交还桌面端”按钮，6355ms 后页面显示释放完成，草稿保持不变。接管操作尚未完成时首次交还被安全检查拒绝；完成后重试通过。最终只读检查引擎已加载会话为 0，原用户验收会话保持 released，未自动接管。截图：`/tmp/rcm-five-second-handoff.png`。本次没有在桌面 UI 中发送消息；跨引擎恢复能力沿用上述独立引擎实测证据。
 
 已有 3 条找不到 rollout 的旧订阅在重连时继续报错，未修改或删除；连接和专用验收均成功。本次仅修改运行配置及验收记录，没有新增应用代码，沿用已通过的代码测试。
+
+## Ally 正式激活与验收
+
+2026-10-18 12:56（北京时间），用户确认其他入口已断开后，核验 Ally 身份并分页检查全部已加载会话：1 个会话空闲，无活动目标、后台命令和排队输入；切换前复查及现有维护释放检查均通过。仅重启 Ally 的管理器专用 Codex app-server，PID 7202 → 51520。实际启动参数确认 `thread_unload_delay_secs=5`，本机 Marco 引擎 PID 保持 26281。
+
+配置备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T045626788576Z.tar.gz.age`。安装备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T045654566726Z.tar.gz.age`。远程原启动配置保留在 `/Users/ally/Library/LaunchAgents/local.remote-codex-manager.app-server.plist.before-five-second-20261018`。沿用正式版本 `dbb45bd187c898b1d2db2134ad7eb7ebcf796e8c` 重载网页配置，未修改应用代码。
+
+创建专用空白测试会话 `01a14d5f-522a-79e2-b935-5e6005fad13d`（RCM Ally 五秒交还验收 20261018），使用 ego-browser 确认文字按钮直接可见、可点击；点击后 5403ms 页面显示释放完成，草稿保留。截图 `/tmp/rcm-ally-five-second-handoff.png`。最终实际引擎已加载会话 0，测试交还状态 released，两个连接均无受控会话及待处理请求。未向原有会话发送消息，未在 Ally 桌面 UI 中验证续聊；未将此项标为通过。浏览器验收空间已关闭。
