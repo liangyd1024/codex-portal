@@ -5,8 +5,17 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 3
+PROTOCOL_POLICY = 4
 REQUEST_FIELDS = {
+    'account/read': set(),
+    'thread/archive': {'threadId'},
+    'thread/unarchive': {'threadId'},
+    'thread/metadata/update': {'threadId','projectId'},
+    'thread/section/move': {'threadId','sectionId','beforeThreadId'},
+    'thread/readState/update': {'threadId','expectedRevision','operation'},
+    'threadSection/create': {'name'},
+    'threadSection/update': {'sectionId','name'},
+    'threadSection/delete': {'sectionId'},
     'initialize': {'clientInfo', 'capabilities'},
     'model/list': {'limit', 'cursor', 'includeHidden'},
     'thread/list': {'limit', 'cursor', 'sortKey', 'sortDirection', 'useStateDbOnly', 'sourceKinds', 'searchTerm', 'cwd', 'archived'},

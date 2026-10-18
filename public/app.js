@@ -1,3 +1,4 @@
+import {Sidebar} from './sidebar.js';
 import {installBrowserBackup} from './browser-backup.js';
 import {installVoice} from './voice.js';
 import {installMobile} from './mobile.js';
@@ -31,7 +32,7 @@ function applyStatus(status){
 const $ = id => document.getElementById(id);
 const state = {
   status: null, models: [], projects: [], threads: [], selectedId: savedView().selectedId || null, detail: null,
-  projectId: savedView().projectId || null, search: '', threadCursor: null, historyCursor: null, loadedOlderHistory: false,
+  sidebar:null, sidebarArchived:false, selectedArchived:false, projectId: savedView().projectId || null, search: '', threadCursor: null, historyCursor: null, loadedOlderHistory: false,
   model: '', effort: '', csrf: '', transport: false, busy: new Set(), loadingThreads: false, loadingModels: false, loadingProjects: false, threadListSource: null,
   runtimeNotices: new Map(), loadingDetail: false, errors: [], localRequests: [], drafts: new Map(), selectionVersion: 0,
   listVersion: 0, threadPageError: false, historyError: '', eventSource: null, lastSync: null, refreshScope: '', refreshMessage: '', refreshing: false, streamRender: false, requestSignature: '',
@@ -243,7 +244,7 @@ function renderControlOverview() {
   });
 }
 function renderControls() {
-  const ready = usable(), own = controlled(), active = running();
+  const ready = usable(), own = controlled()&&!state.selectedArchived, active = running();
   const posting = state.busy.has('message'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
   $('new-thread').disabled = !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels;
   $('connect-button').disabled = state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release');
@@ -255,13 +256,13 @@ function renderControls() {
   $('model-select').disabled = !ready || !state.models.length || state.loadingModels;
   $('effort-select').disabled = !ready || !state.model || !effortsFor(state.model).length || state.loadingModels;
   const input = $('message-input'); input.disabled = !ready || !own || posting;
-  input.placeholder = !ready ? '连接后继续…' : !own ? '接管后发送消息…' : active ? '补充要求…' : '发送消息…';
+  input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? '补充要求…' : '发送消息…';
   const hasModel = Boolean(state.model && state.models.some(m => modelId(m) === state.model));
   const hasEffort = effortsFor(state.model).some(e => e.value === state.effort);
   $('send-message').disabled = Boolean(voice?.active) || !ready || !own || !featureReady(active?'steer':'message') || posting || !input.value.trim() || (!active && (!hasModel || !hasEffort));
   $('send-message').setAttribute('aria-label',active ? '补充当前轮次' : '发送消息');
   $('interrupt').hidden = !active&&!backgroundRunning(); $('interrupt').disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt');
-  $('takeover').hidden = own || !state.selectedId; $('takeover').disabled = !ready || !featureReady('takeover') || switching || !state.selectedId;
+  $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || !state.selectedId;
   $('takeover').querySelector('span').textContent = switching ? '正在接管…' : '接管会话';
   $('running-indicator').hidden = !active&&!backgroundRunning();
   $('running-indicator').lastElementChild.textContent=active?'正在执行':'后台命令仍在运行';
@@ -280,67 +281,22 @@ function renderControls() {
   setText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
   document.querySelectorAll('.request-card button,.request-card input,.request-card textarea').forEach(n => { n.disabled = !ready || state.busy.has('request:' + n.closest('.request-card').dataset.requestId); });
 }
-const collapsedProjects = new Set(readLayout('collapsedProjects.'+targetHost,[]));
-function projectForThread(thread) {
-  return state.projects.find(project => project.id === thread.projectId);
-}
+const sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadName,relativeTime,api,toast,
+  connected:usable,selectedId:()=>state.selectedId,newThread:openNewDialog,
+  select:t=>{state.projectId=t.projectId;state.selectedArchived=!!t.archived;saveView();selectThread(t.id);},
+  onArchiveView:archived=>{state.sidebarArchived=archived;state.threadCursor=null;state.threads=[];loadThreads();},
+  refresh:()=>loadThreads(false,true),
+  changed:async(action,t)=>{if(t?.id===state.selectedId&&['archive','restore'].includes(action))state.selectedArchived=action==='archive';await Promise.all([loadThreads(false,true),loadStatus()]);if(t?.id===state.selectedId&&['rename','archive','restore'].includes(action))await refreshSelected();renderControls();},
+});
 function renderProjects() { renderThreads(); }
 function renderThreads() {
-  const scroller = $('project-list'), scrollTop = scroller.scrollTop;
-  const focusedProject = document.activeElement?.dataset.projectId;
-  const n = clear($('thread-list'));
-  setText('projects-heading',state.loadingProjects || state.loadingThreads ? '项目 · 同步中' : state.threadListSource === 'snapshot' ? '项目 · 历史快照' : '项目');
-  const groups = state.projects.map(p => ({...p,threads:[]}));
-  // Unassigned chats stay chats: working directories never create projects.
-  for (const t of state.threads) {
-    const project = projectForThread(t);
-    if (project) groups.find(p => p.id === project.id).threads.push(t);
-    else appendThread(n,t,null);
-  }
-  for (const p of groups) {
-    if (state.search && !p.threads.length) continue;
-    const group = el('div','project-group');
-    const expanded = Boolean(state.search) || !collapsedProjects.has(p.id);
-    const b = el('button','project-button' + (state.projectId === p.id ? ' selected' : ''));
-    b.dataset.projectId = p.id;
-    b.setAttribute('aria-expanded',String(expanded)); b.title = (p.roots || []).join('\n');
-    b.append(icon('chevron','project-chevron'),icon('folder'),el('span','project-name',p.name || baseName(p.roots?.[0])));
-    const children = el('div','project-threads'); children.hidden = !expanded;
-    children.id = 'project-children-'+n.childElementCount; b.setAttribute('aria-controls',children.id);
-    b.onclick = () => {
-      if (expanded) collapsedProjects.add(p.id); else collapsedProjects.delete(p.id);
-      state.projectId = state.projects.some(item => item.id === p.id) ? p.id : null;
-      saveLayout('collapsedProjects.'+targetHost,[...collapsedProjects]); saveView(); renderThreads();
-      requestAnimationFrame(loadVisibleThreads);
-    };
-    for (const t of p.threads) appendThread(children,t,state.projects.some(item => item.id === p.id) ? p.id : null);
-    if (!p.threads.length) children.append(el('p','project-empty',state.loadingThreads || state.threadCursor ? '正在读取会话…' : state.threadPageError ? '会话读取失败，请刷新重试' : '暂无会话'));
-    const heading = el('div','project-heading'); heading.append(b);
-    if (p.roots?.length && state.projects.some(item => item.id === p.id)) {
-      const add = el('button','icon-button project-create'); add.type = 'button';
-      add.title = '在 '+p.name+' 中新建会话'; add.setAttribute('aria-label',add.title); add.append(icon('plus'));
-      add.disabled = $('new-thread').disabled; add.onclick = () => openNewDialog(p.roots[0]); heading.append(add);
-    }
-    group.append(heading,children); n.append(group);
-  }
-  if (!n.childElementCount) n.append(el('p','sidebar-empty',state.loadingThreads || state.loadingProjects ? '正在读取项目与会话…' : state.search ? '没有匹配的会话' : '连接后读取项目与会话'));
-  const project = state.projects.find(p => p.id === state.projectId);
-  setText('breadcrumb-project',project?.name || '工作区');
-  $('more-threads').hidden = !state.loadingThreads && !state.threadPageError && !state.threadCursor;
-  $('more-threads').textContent = state.threadPageError ? '加载失败，点击重试' : state.loadingThreads ? '正在加载会话…' : '加载更多会话';
-  $('more-threads').disabled = state.loadingThreads;
-  $('more-threads').onclick = () => loadThreads(Boolean(state.threadCursor));
-  if (focusedProject) [...n.querySelectorAll('.project-button')].find(b => b.dataset.projectId === focusedProject)?.focus({preventScroll:true});
-  scroller.scrollTop = scrollTop;
-}
-function appendThread(n,t,projectId) {
-    const b = el('button','thread-row' + (state.selectedId === t.id ? ' selected' : '')); b.dataset.threadId = t.id; b.title = threadName(t); if (state.selectedId === t.id) b.setAttribute('aria-current','true');
-    const title = el('div','thread-name'); title.append(el('span','',threadName(t)));
-    const session=state.status?.controlledSessions?.find(item=>item.id===t.id);
-    if (typeOf(t.status) === 'active' && t.historySource !== 'snapshot' && state.threadListSource !== 'snapshot') title.append(el('span','thread-running'));
-    const meta = el('div','thread-meta'); meta.append(el('span','thread-preview',''),el('span','thread-time',relativeTime(t.recencyAt || t.updatedAt || t.createdAt)));
-    if (session) b.title += ' · '+sessionLabel(session); b.append(title,meta); b.onclick = () => { state.projectId = projectId; saveView(); selectThread(t.id); }; n.append(b);
-
+  setText('projects-heading',state.loadingProjects||state.loadingThreads?'工作区 · 同步中':'工作区');
+  if(state.sidebar)sidebar.render({...state.sidebar,data:state.threads},{search:state.search,loading:state.loadingThreads});
+  setText('breadcrumb-project',state.projects.find(p=>p.id===state.projectId)?.name||'工作区');
+  $('more-threads').hidden=!state.loadingThreads&&!state.threadPageError&&!state.threadCursor;
+  $('more-threads').textContent=state.threadPageError?'加载失败，点击重试':state.loadingThreads?'正在加载会话…':'加载更多会话';
+  $('more-threads').disabled=state.loadingThreads;
+  $('more-threads').onclick=()=>loadThreads(Boolean(state.threadCursor));
 }
 function modelId(m) { return m.model || m.id; }
 function modelFor(id) { return state.models.find(m => modelId(m) === id || m.id === id); }
@@ -720,19 +676,11 @@ async function loadModels(force = false) {
   try { await modelLoadPromise; }
   finally { modelLoadPromise = null; state.loadingModels = false; renderModels(); }
 }
-async function loadProjects() {
-  if (projectLoadPromise) return projectLoadPromise;
-  state.loadingProjects = true; renderProjects();
-  projectLoadPromise = (async () => { const d = await api('/api/projects'); state.projects = d.data || []; if (state.projectId && !state.projects.some(p => p.id === state.projectId)) state.projectId = null; })();
-  try { await projectLoadPromise; }
-  finally { projectLoadPromise = null; state.loadingProjects = false; renderProjects(); }
-}
+async function loadProjects() { if(!state.sidebar)await loadThreads(false,true); }
 const createdThreads = new Map();
 let threadSearch = '';
 async function loadThreads(append = false, reportFailure = false) {
   if (!connected() || (append && (state.loadingThreads || !state.threadCursor))) return;
-  // Restore project metadata before grouping the cross-project thread list.
-  if (state.projectId && !state.projects.length) await loadProjects();
   const seq = ++state.listVersion; state.loadingThreads = true; state.threadPageError = false;
   if (!append) {
     if (threadSearch !== state.search) {
@@ -742,17 +690,19 @@ async function loadThreads(append = false, reportFailure = false) {
     threadSearch = state.search; state.threadCursor = null;
   }
   renderThreads();
-  const q = new URLSearchParams(); if (state.search) q.set('search',state.search);
+  const q = new URLSearchParams(); if (state.search) q.set('search',state.search); if(state.selectedId)q.set('selectedId',state.selectedId);
   if (append && state.threadCursor) q.set('cursor',state.threadCursor);
   try {
-    const d = await api('/api/threads?' + q); if (seq !== state.listVersion) return;
+    if(state.sidebarArchived)q.set('archived','true');
+    const d = await api('/api/sidebar?' + q); if (seq !== state.listVersion) return;
+    state.sidebar=d;state.projects=d.projects||[];if(d.selectedThread?.id===state.selectedId)state.selectedArchived=!!d.selectedThread.archived;
     state.threadListSource = d.historySource || null;
     for (const thread of d.data || []) createdThreads.delete(thread.id);
-    const pending = [...createdThreads.values()].filter(t => !state.search || threadName(t).includes(state.search));
+    const pending = state.sidebarArchived?[]:[...createdThreads.values()].filter(t => !state.search || threadName(t).includes(state.search));
     const all = append ? [...state.threads,...(d.data || [])] : [...pending,...(d.data || [])];
     const seen = new Set(); state.threads = all.filter(t => !seen.has(t.id) && seen.add(t.id)); state.threadCursor = d.nextCursor || null;
   } catch (e) { if (seq === state.listVersion) { state.threadPageError = true; recordError(e,'threads'); toast(messageOf(e),true); } if (reportFailure) throw e; }
-  finally { if (seq === state.listVersion) { state.loadingThreads = false; renderThreads(); if (!state.threadPageError) requestAnimationFrame(loadVisibleThreads); } }
+  finally { if (seq === state.listVersion) { state.loadingThreads = false; renderThreads(); renderControls(); if (!state.threadPageError) requestAnimationFrame(loadVisibleThreads); } }
 }
 function loadVisibleThreads() {
   const list = $('project-list');
@@ -831,7 +781,7 @@ async function refreshWorkspace(forceModels = false) {
   if (workspaceRefreshPromise) return workspaceRefreshPromise;
   workspaceRefreshPromise = showRefresh('工作区', async () => {
     await loadStatus(); if (!connected()) throw new Error('目标机器未连接。请先连接，再刷新。');
-    const results = await Promise.allSettled([loadModels(forceModels),loadProjects(),loadThreads(false,true),refreshSelected()]);
+    const results = await Promise.allSettled([loadModels(forceModels),loadThreads(false,true),refreshSelected()]);
     const labels = ['模型列表','项目列表','会话列表','当前会话'];
     const failures = results.flatMap((r,i) => r.status === 'rejected' ? [labels[i] + '：' + (r.reason?.message || String(r.reason))] : []);
     if (failures.length) throw new Error(failures.join('；'));
@@ -972,13 +922,13 @@ async function createThread(e) {
   await action('create',async () => {
     try {
       const d = await api('/api/threads',{method:'POST',body:{cwd,model:$('new-model').value,effort:$('new-effort').value}});
+      state.sidebarArchived=false;state.selectedArchived=false;
       const id = d.thread?.id || d.id; if (!id) throw new Error('服务未返回新会话 ID。请刷新列表核对结果。');
       $('new-thread-dialog').close(); if (window.innerWidth <= 700) toggleSidebar(false, false); state.model = $('new-model').value; state.effort = $('new-effort').value;
       const thread = {...d.thread,id,cwd,name:d.thread?.name || '新会话'};
       createdThreads.set(id,thread); state.threads.unshift(thread);
       const project = state.projects.find(p => p.roots?.includes(cwd));
-      state.projectId = project?.id || null; if (project) collapsedProjects.delete(project.id);
-      saveLayout('collapsedProjects.'+targetHost,[...collapsedProjects]);
+      state.projectId = project?.id || null; if (project) sidebar.expandProject(project.id);
       state.search = ''; $('thread-search').value = '';
       state.historyCursor = null; state.loadedOlderHistory = false; state.historyError = '';
       state.selectionVersion++;
@@ -1068,6 +1018,7 @@ function handleEvent(event) {
     const rid = p.requestId ?? p.id, resolvedKey = p.key ?? (typeof rid + ':' + String(rid)); const filter = list => (list || []).filter(r => requestKey(r) !== resolvedKey);
     state.localRequests = filter(state.localRequests); if (state.status) state.status.pendingRequests = filter(state.status.pendingRequests); if (state.detail) state.detail.pendingRequests = filter(state.detail.pendingRequests); renderRequests(); return;
   }
+  if (method==='manager/sidebarChanged'||/thread\/(section|readState)\//.test(method)||method.startsWith('threadSection/'))scheduleListRefresh();
   if (/thread\/(started|name\/updated|archived|unarchived)|turn\/(started|completed)/.test(method)) scheduleListRefresh();
   const threadId = p.threadId || p.thread?.id;
   if (threadId !== state.selectedId || !state.detail) return;
@@ -1223,7 +1174,7 @@ function wireEvents() {
   $('connect-button').onclick = () => connected()||connectionPending() ? disconnectRemote() : connectRemote();
   $('welcome-connect').onclick = () => connected() ? openNewDialog() : connectRemote();
   $('new-thread').onclick = openNewDialog; $('takeover').onclick = takeoverThread; $('release-service').onclick = releaseService;
-  $('refresh-all').onclick = () => action('refresh',() => refreshWorkspace(true)); $('refresh-projects').onclick = () => action('projects',() => showRefresh('项目列表',loadProjects));
+  $('refresh-all').onclick = () => action('refresh',() => refreshWorkspace(true)); $('refresh-projects').onclick = () => action('projects',() => showRefresh('侧边栏',()=>loadThreads(false,true)));
   $('project-list').addEventListener('scroll',loadVisibleThreads,{passive:true});
   new ResizeObserver(loadVisibleThreads).observe($('project-list'));
   const historyScroller = $('messages-scroller');
@@ -1263,6 +1214,7 @@ function wireEvents() {
   window.addEventListener('online',() => refreshWorkspace().catch(e => recordError(e,'sync')));
 }
 async function init() {
+  setInterval(()=>{if(connected()&&!state.loadingThreads&&!sidebar.pending&&!sidebar.drag&&!sidebar.menu&&!sidebar.dialog&&!document.hidden)loadThreads();},15000);
   $('messages').addEventListener('click',e=>{
     const summary=e.target.closest('summary');if(!summary)return;
     const detail=summary.closest('details[data-item-id]');if(!detail)return;
