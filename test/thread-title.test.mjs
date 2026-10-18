@@ -12,6 +12,7 @@ function setup({titleStore=null,read,write,send}={}) {
   m.connection.state='connected';
   m.rpc={connected:true,async request(method,params){
     calls.push({method,params});
+    if(method==='account/read')return {account:{type:'chatgpt'}};
     if(method==='thread/start')return {thread:{id:'t',cwd:'/project',status:{type:'idle'}}};
     if(method==='turn/start')return send?send():{turn:{id:'turn',status:'completed'}};
     if(method==='thread/read')return read?read():{thread:{id:'t',name:null}};

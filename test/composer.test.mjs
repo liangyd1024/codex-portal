@@ -18,7 +18,7 @@ function fixture(){
 }
 test('full access applies to creation and turns, can be returned to default, rejects invalid modes',async()=>{
   const {m,calls}=fixture();await m.newThread({cwd:'/project',access:'full'});
-  assert.equal(calls[0].params.approvalPolicy,'never');assert.equal(calls[0].params.sandbox,'danger-full-access');
+  const start=calls.find(c=>c.method==='thread/start');assert.equal(start.params.approvalPolicy,'never');assert.equal(start.params.sandbox,'danger-full-access');
   await m.message('new',{text:'test',access:'full',mode:'plan'});
   const turn=calls.find(c=>c.method==='turn/start').params;
   assert.equal(turn.approvalPolicy,'never');assert.equal(turn.sandboxPolicy.type,'dangerFullAccess');assert.equal(turn.collaborationMode.mode,'plan');
@@ -51,7 +51,7 @@ test('only known newly created threads fall back when a durable state row is not
   assert.equal((await m.readThreadMetadata('new',true)).thread.name,'persisted');assert.equal(m.createdSnapshots.has('new'),false);
 });
 test('a create timeout has an unknown outcome and is never retried automatically',async()=>{
-  const {m}=fixture();let calls=0;m.rpc.request=async()=>{calls++;throw Object.assign(Error('timeout'),{code:'RPC_TIMEOUT'});};
+  const {m}=fixture();let calls=0;m.rpc.request=async method=>{if(method==='account/read')return {};calls++;throw Object.assign(Error('timeout'),{code:'RPC_TIMEOUT'});};
   await assert.rejects(m.newThread({cwd:'/project'}),e=>e.code==='OUTCOME_UNKNOWN');assert.equal(calls,1);
 });
 test('optional goal timeout does not report the whole conversation as failed or emit repeated error toasts',async()=>{
