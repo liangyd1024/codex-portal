@@ -62,23 +62,24 @@ function sync() {
   trigger.textContent = name + ' ⌄';
   trigger.setAttribute('aria-label', '选择项目：' + name);
   trigger.disabled = select.disabled || !select.options.length;
-  if (dialog.open && (page.hidden || select.disabled || !media.matches)) close();
+  if (dialog.open && (page.hidden || select.disabled)) close();
   else if (dialog.open && renderedOptions !== optionSignature()) renderList();
 }
 trigger.addEventListener('click', () => {
   sync();
-  if (trigger.disabled || page.hidden || !media.matches) return;
+  if (trigger.disabled || page.hidden) return;
   search.value = '';
   renderList();
   dialog.showModal();
   trigger.setAttribute('aria-expanded', 'true');
+  if (!media.matches) search.focus({preventScroll:true});
   list.querySelector('[aria-pressed="true"]')?.scrollIntoView({block:'nearest'});
 });
 dialog.querySelector('header button').addEventListener('click', close);
 dialog.addEventListener('cancel', event => {if (composing || Date.now() - compositionEnded < 100) event.preventDefault();});
 dialog.addEventListener('close', () => {
   trigger.setAttribute('aria-expanded', 'false');
-  if (!page.hidden) (media.matches ? trigger : select).focus({preventScroll:true});
+  if (!page.hidden) trigger.focus({preventScroll:true});
 });
 let backdropDown = false;
 dialog.addEventListener('pointerdown', event => {backdropDown = event.target === dialog;});
@@ -104,5 +105,5 @@ dialog.addEventListener('keydown', event => {
 select.addEventListener('change', sync);
 new MutationObserver(sync).observe(select, {childList:true,subtree:true,attributes:true,characterData:true});
 new MutationObserver(sync).observe(page, {attributes:true,attributeFilter:['hidden']});
-media.addEventListener('change', sync);
+media.addEventListener('change', () => {if (dialog.open) close(); sync();});
 sync();
