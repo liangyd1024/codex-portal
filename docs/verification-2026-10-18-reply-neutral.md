@@ -5,3 +5,5 @@
 发现基线遗漏上一轮 2ed04c8 的用户气泡样式，因此原样保留该条黑底白字规则。未改任何功能代码，保留基线的慢模型目录与并发读取修复。
 
 验证：独立 4327 预览、RCM_MOBILE=0、独立状态目录；ego-browser fixture 模拟消息，检查正文、标题、粗体、链接、引用、行内代码、代码块、表格的计算颜色均为 R=G=B。1280px 与 390px 无页面横向溢出，链接焦点可见，用户气泡黑底白字。截图见 reply-neutral-desktop.png、reply-neutral-mobile.png。全量 npm test 108 项 Node + 24 项 Python 通过。无真实消息发送，未进行实体手机/中文输入法测试；此次未改异步及输入逻辑。
+
+部署：ad9612b2f6923c24f6bdef1f7b797906323dafa9。标准空闲检查、加密备份和健康检查通过；正式 styles.css 与验收源码逐字节一致。备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T124004759423Z.tar.gz.age`。
