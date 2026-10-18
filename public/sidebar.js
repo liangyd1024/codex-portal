@@ -37,8 +37,6 @@ export class Sidebar {
     const more=make('button','icon-button','⋯');more.type='button';more.setAttribute('aria-label','侧边栏设置');more.onclick=()=>this.openMenu(more,[
       {label:'全部折叠',run:()=>{this.collapseAll();more.focus({preventScroll:true});}},
       this.entry('新建分区','createSection',()=>this.edit('createSection',null,'新建分区')),
-      {label:'排序：'+(this.snapshot?.preferences.chats==='manual'?'手动':'最近更新'),disabled:true,reason:this.snapshot?.capabilities.preferences.reason},
-      {label:'调整分区或项目顺序',disabled:true,reason:this.snapshot?.capabilities.reorderSection.reason},
     ]);
     this.progress=make('span','sidebar-progress','正在更新…');this.progress.setAttribute('role','status');this.progress.hidden=true;this.toolbar.append(archive,this.progress,more);options.node.before(this.toolbar);
     document.addEventListener('pointerdown',e=>{if(this.menu&&!this.menu.contains(e.target)&&!this.menuAnchor?.contains(e.target))this.closeMenu(false);});
@@ -57,7 +55,7 @@ export class Sidebar {
   }
   isExpanded(key){return this.view?.search?(this.searchOverrides.get(key)??this.searchExpanded):this.expanded.has(key);}
   collapseAll(){this.expanded.clear();this.searchOverrides.clear();this.searchExpanded=false;this.save();this.render(this.snapshot,this.view);}
-  entry(label,action,run,extra={}){const c=this.snapshot?.capabilities[action];return {label,run,disabled:!this.o.connected()||this.pending||!c?.supported,reason:!this.o.connected()?'连接目标机器后可操作。':c?.reason,...extra};}
+  entry(label,action,run,extra={}){const c=this.snapshot?.capabilities[action];return {label,run,disabled:!this.o.connected()||this.pending||!c?.supported,reason:!this.o.connected()?'连接目标机器后可操作。':c?.reason,...extra,hidden:!c?.supported};}
   render(snapshot,view={}){
     if(this.view?.search!==view.search){this.searchOverrides.clear();this.searchExpanded=true;}
     this.view=view;if(!snapshot)return;if(this.drag){this.snapshot=snapshot;return;}
@@ -93,8 +91,6 @@ export class Sidebar {
     const children=make('div','project-threads');children.id='sidebar-project-'+p.id;children.hidden=!expanded;button.setAttribute('aria-controls',children.id);button.onclick=()=>this.toggle('project:'+p.id);this.disclosureKeys(button,'project:'+p.id);header.append(button);
     this.addMenu(header,button,()=>[
       {label:'在项目中新建会话',disabled:!this.o.connected(),run:()=>this.o.newThread(p.roots[0])},
-      {label:'移动到分区 / 置顶项目',disabled:true,reason:this.snapshot.capabilities.moveProjectSection.reason},
-      {label:'调整项目顺序',disabled:true,reason:this.snapshot.capabilities.reorderProject.reason},
     ]);
     for(const child of item.children)this.renderThread(children,child.value);
     if(!item.children.length)children.append(make('p','project-empty','暂无会话'));
@@ -112,6 +108,7 @@ export class Sidebar {
     parent.append(row);
   }
   addMenu(container,anchor,entries){
+    if(!entries().some(item=>!item.hidden))return;
     const more=make('button','sidebar-item-menu','⋯');more.type='button';more.setAttribute('aria-label','更多操作：'+(anchor.title||anchor.textContent));more.dataset.focusKey='menu:'+anchor.dataset.focusKey;
     const open=e=>{e.preventDefault();this.openMenu(more,entries());};more.onclick=open;anchor.oncontextmenu=open;
     anchor.onkeydown=e=>{if(e.key==='ContextMenu'||e.key==='F10'&&e.shiftKey)open(e);};container.append(more);
@@ -126,11 +123,10 @@ export class Sidebar {
     }
     entries.push(this.entry('归档会话','archive',()=>this.run('archive',t),t.status?.type==='active'?{disabled:true,reason:'会话正在运行，请结束后再归档。'}:{}));return entries;
   }
-  sectionMenu(s){return [this.entry('重命名分区','renameSection',()=>this.edit('renameSection',s,'重命名分区',s.name)),this.entry('删除分区','deleteSection',()=>this.confirmDelete(s)),{label:'调整分区顺序',disabled:true,reason:this.snapshot.capabilities.reorderSection.reason}];}
+  sectionMenu(s){return [this.entry('重命名分区','renameSection',()=>this.edit('renameSection',s,'重命名分区',s.name)),this.entry('删除分区','deleteSection',()=>this.confirmDelete(s))];}
   openMenu(anchor,entries){
-    this.closeMenu(false);this.menuAnchor=anchor;const menu=make('div','sidebar-menu');menu.setAttribute('role','menu');
+    this.closeMenu(false);entries=entries.filter(item=>!item.hidden);if(!entries.length)return;this.menuAnchor=anchor;const menu=make('div','sidebar-menu');menu.setAttribute('role','menu');
     for(const [index,item] of entries.entries()){const button=make('button','',item.label);button.type='button';button.setAttribute('role','menuitem');button.disabled=!!item.disabled;if(item.reason&&item.disabled){button.title=item.reason;button.setAttribute('aria-description',item.reason);}button.onclick=()=>{this.closeMenu(false);item.run?.();};menu.append(button);if(item.reason&&item.disabled){const reason=make('span','control-reason',item.reason);reason.id='sidebar-reason-'+index;button.setAttribute('aria-describedby',reason.id);menu.append(reason);}}
-    if(entries.some(e=>e.disabled&&e.reason?.includes('桌面版')))menu.append(make('p','menu-note','部分组织设置需在桌面版修改，同步后会更新。'));
     document.body.append(menu);this.menu=menu;this.positionMenu();
     const focus=()=>[...menu.querySelectorAll('button:not(:disabled)')];focus()[0]?.focus();menu.onkeydown=e=>{const buttons=focus(),index=buttons.indexOf(document.activeElement);if(['ArrowDown','ArrowUp','Home','End','Tab'].includes(e.key)){e.preventDefault();const n=e.key==='Home'?0:e.key==='End'?buttons.length-1:(index+(e.key==='ArrowUp'||e.shiftKey?-1:1)+buttons.length)%buttons.length;buttons[n]?.focus();}};
   }
