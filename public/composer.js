@@ -75,7 +75,8 @@ export function installComposer({host,api,context,refresh,notify}) {
         checkbox.onchange=()=>{if(context().id!==id)return;if(checkbox.checked){dialog.close();insertReference(entry,kind);}else{for(const range of present().filter(r=>r.kind===kind&&r.key===key).reverse())input.setRangeText('',range.start,range.end,'end');syncReferences();save();render();input.dispatchEvent(new Event('input',{bubbles:true}));}checkbox.disabled=!entry.enabled&&!checkbox.checked;};
         label.dataset.search=[entry.name,entry.path,entry.id,body.textContent].filter(Boolean).join(' ').toLowerCase();label.append(checkbox,body);list.append(label);
       }
-      search.oninput=()=>{for(const row of list.querySelectorAll('label'))row.hidden=!row.dataset.search.includes(search.value.toLowerCase());};
+      const empty=text('p','没有匹配的'+(kind==='skills'?'技能':'插件')+'。');empty.hidden=true;empty.setAttribute('role','status');list.append(empty);
+      search.oninput=()=>{let visible=0;for(const row of list.querySelectorAll('label')){row.hidden=!row.dataset.search.includes(search.value.trim().toLowerCase());if(!row.hidden)visible++;}empty.hidden=visible>0||!items.length;};
       dialog.append(text('p','选择后在下一条消息中使用。插件安装及账号授权请在 Codex 中管理。'));search.focus();
     }catch(e){if(context().id===id&&context().cwd===current.cwd&&dialog.open&&version===dialogVersion){pending.remove();const failure=text('p','暂时无法加载'+(kind==='skills'?'技能':'插件')+'，请重试。你的草稿已保留。');failure.setAttribute('role','status');dialog.append(failure);const details=document.createElement('details');details.append(text('summary','错误详情'),text('p',e.message));dialog.append(details);const retry=text('button','重试');retry.type='button';retry.onclick=()=>{dialog.close();void picker(kind,button);};dialog.append(retry);}}
     finally{loading=false;}

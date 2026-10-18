@@ -370,7 +370,7 @@ const sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadNa
   refresh:()=>loadThreads(false,true),
   changed:async(action,t)=>{if(t?.id===state.selectedId&&['archive','restore'].includes(action))state.selectedArchived=action==='archive';await Promise.all([loadThreads(false,true),loadStatus()]);if(t?.id===state.selectedId)await refreshSelected();renderControls();},
 });
-function renderProjects() { renderThreads(); }
+function renderProjects() { renderThreads(); if(newChatOpen&&!state.busy.has('create')){updateNewProjects();renderControls();} }
 function renderThreads() {
   setText('projects-heading',state.loadingProjects||state.loadingThreads?'工作区 · 同步中':'工作区');
   if(state.sidebar)sidebar.render({...state.sidebar,data:state.threads},{search:state.search,loading:state.loadingThreads});
@@ -1016,16 +1016,18 @@ async function respondRequest(r, answer) {
     renderRequests(); await loadStatus(); toast('已提交处理结果。');
   });
 }
-function openNewDialog(projectRoot) {
-  if(state.busy.has('create'))return;
-  flushDrafts();
+function updateNewProjects(projectRoot) {
+  const preferred=(typeof projectRoot==='string'?projectRoot:null)||newDraft.cwd||state.projects.find(p=>p.id===state.projectId)?.roots?.[0]||currentThread()?.cwd;
   const select=clear($('new-cwd'));
   const options=state.projects.flatMap(p=>(p.roots||[]).map(root=>({root,name:p.name||baseName(root)})));
   for(const p of options){const option=el('option','',p.name);option.value=p.root;select.append(option);}
-  const preferred=(typeof projectRoot==='string'?projectRoot:null)||newDraft.cwd||state.projects.find(p=>p.id===state.projectId)?.roots?.[0]||currentThread()?.cwd;
   if(options.some(p=>p.root===preferred))select.value=preferred;
   newDraft.cwd=select.value;rememberNewDraft();
-  select.onchange=()=>{newDraft.cwd=select.value;rememberNewDraft();renderControls();};
+}
+function openNewDialog(projectRoot) {
+  if(state.busy.has('create'))return;
+  flushDrafts();updateNewProjects(projectRoot);
+  $('new-cwd').onchange=()=>{newDraft.cwd=$('new-cwd').value;rememberNewDraft();renderControls();};
   state.selectionVersion++;newChatOpen=true;$('new-chat-page').hidden=false;document.querySelector('.main-panel').classList.add('new-chat-open');
   $('new-composer-slot').append(document.querySelector('.composer-region'));
   $('message-input').value=state.drafts.get(newDraftId)||'';
