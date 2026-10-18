@@ -122,3 +122,12 @@ test('new chat draft ignores old detail replies and pauses history reads',async(
   f.requests[1].resolve({thread:{id:'a',name:'fresh'},turns:[]});await fresh;
   assert.equal(f.state.detail.thread.name,'fresh');
 });
+
+test('structured skill confirmation removes optimistic echo without dropping other image messages',()=>{
+  const echo={id:'accepted-t',type:'userMessage',localAccepted:true,content:[{type:'text',text:'$skill hello'},{type:'image',url:'data:image/png;base64,AA'}]};
+  const actual={id:'real',type:'userMessage',content:[...echo.content,{type:'skill',name:'skill',path:'/skill/SKILL.md'}]};
+  const other={...echo,id:'accepted-other',content:[{type:'text',text:'$skill hello'},{type:'image',url:'data:image/png;base64,BB'}]};
+  const result=mergeLiveTurns([{id:'t',items:[echo,other]}],[{id:'t',items:[actual]}]);
+  assert.deepEqual(result[0].items.map(i=>i.id),['accepted-other','real']);
+  assert.deepEqual(mergeLiveTurns(result,[{id:'t',items:[actual]}]),result);
+});
