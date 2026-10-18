@@ -1,0 +1,22 @@
+# 创建缓慢：专用引擎的后台调度限制
+
+## 可重复证据
+
+- 正式网页版本 753867c；用户仍遇到创建结果未知。前轮只修复预检与恢复语义，没有消除耗时根因。
+- 当前专用引擎 launchd plist 的 ProcessType 为 Background，PID 26281 已运行约 11 小时。macOS `launchd.plist(5)` 明确指出该类别会限制 CPU 和 I/O；Interactive 用于需要及时响应的用户交互服务。
+- 同一现有引擎：直接 Unix socket 的 thread/start 27439ms，经输出 relay 33431ms，排除仅由浏览器或 relay 引起。参数包括同一 cwd、gpt-6.1-sol、medium、serviceName、ephemeral=true；没有发送任务消息。
+- 新 stdio 引擎按同样参数测试：代理环境 152ms，移除代理变量 178ms。不能据此把此次延迟归因于代理差异；doctor 的环境检查会显示 shell 环境，两种运行方式均报告 HTTP / WebSocket 可达，不能冒充现有 launchd 进程的网络检查。
+- 关键控制实验 `/tmp/rcm-routing-scheduling-probe.py`：新进程、同样参数和环境，普通调度 thread/start 139ms；通过 `taskpolicy -c background -b` 强制后台调度为 21039ms，约 151 倍差异。这复现了后台 QoS 限制下的创建延迟。
+- 临时对原 PID 执行 taskpolicy -B 未解决（直接 21387ms、relay 30645ms），已恢复 -b。`taskpolicy -B` 仅移出 PRIO_DARWIN_BG，不能完整撤销启动时的 QoS clamp。没有重启、停止或发送消息给用户会话。
+- 所有测试引擎均仅创建临时会话；测试进程结束后逐个终止自己的进程，脚本和日志保留。另有前期命名的专用空白测试会话保留。
+
+## 修改与验证
+
+- scripts/remote-service.py：专用引擎启动类别改为 Interactive。保持运行中的服务不被自动重启，不修改 Codex 全局配置、网络验证或用户会话。
+- README 补充旧服务升级需要维护停止、恢复、重新连接的说明。
+- npm test：160 项 Node、36 项 Python 通过，日志 `/tmp/rcm-interactive-service-tests.log`；git diff --check 通过。无 UI 布局/输入变更，未做浏览器布局或真机测试。
+- 发布前只读检查：正式入口 active=0、pendingRequests=0；check-idle 检查 2 个已加载会话、目标、后台终端和队列，返回 idle=true。这不能证明其他入口已断开，不能替代维护确认。
+
+## 生效边界
+
+网页更新只安装新的启动脚本，现有引擎保持原进程和启动类别。按照 README“停止目标服务”流程，需要用户确认其他入口已断开后，重新核对空闲、停止专用引擎、解除维护并重新连接，最后验证实际 launchd ProcessType 和正式新建耗时。尚未完成该生产引擎切换，不能将隔离实验速度描述为正式速度。

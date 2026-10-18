@@ -103,7 +103,9 @@ def main():
             'WorkingDirectory': str(HOME),
             'RunAtLoad': True,
             'KeepAlive': {'SuccessfulExit': False},
-            'ProcessType': 'Background',
+            # Chat requests need interactive CPU/I/O QoS. Background applies a
+            # launch-time QoS clamp that taskpolicy -B cannot fully remove.
+            'ProcessType': 'Interactive',
             'Umask': 0o077,
             'EnvironmentVariables': {'HOME': str(HOME), 'CODEX_HOME': str(HOME / '.codex'), 'PATH': ':'.join(entries), 'LANG': 'en_US.UTF-8'},
             'StandardOutPath': str(ROOT / 'service.stdout.log'),
