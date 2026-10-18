@@ -14,7 +14,7 @@ export function installComposer({host,api,context,refresh,notify}) {
   tools.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();tools.open=false;summary.focus();}});
   document.addEventListener('pointerdown',e=>{if(!tools.contains(e.target))tools.open=false;});
   document.querySelector('.composer-bottom').prepend(bar);
-  const images=document.getElementById('add-images');images.textContent='添加图片';panel.prepend(images);images.addEventListener('click',()=>{tools.open=false;});
+  const images=document.getElementById('add-images');images.classList.remove('icon-button');images.textContent='添加图片';panel.prepend(images);images.addEventListener('click',()=>{tools.open=false;});
   panel.addEventListener('keydown',e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key)||e.target.tagName==='SELECT')return;const items=[...panel.querySelectorAll('button:not(:disabled):not([hidden]),select:not(:disabled)')];const i=items.indexOf(document.activeElement);e.preventDefault();items[e.key==='Home'?0:e.key==='End'?items.length-1:(i+(e.key==='ArrowDown'?1:-1)+items.length)%items.length]?.focus();});
   summary.addEventListener('click',e=>{if(summary.getAttribute('aria-disabled')==='true')e.preventDefault();});
   summary.addEventListener('keydown',e=>{if(summary.getAttribute('aria-disabled')==='true'){e.preventDefault();return;}if(e.key==='ArrowDown'){e.preventDefault();tools.open=true;panel.querySelector('button:not(:disabled)')?.focus();}});
