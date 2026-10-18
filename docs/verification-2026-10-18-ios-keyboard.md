@@ -8,7 +8,7 @@ Apple 官方说明 Safari 可能忽略 autocomplete=off：https://developer.appl
 
 ## 验证
 
-- npm test 已执行两次，首次测试证书生成超时；第二次 HTTP 路由及证书测试超时。改用 node --test --test-concurrency=1 test/*.test.mjs，154 项全部通过。Python 结果另补。
+- npm test 已执行两次，首次测试证书生成超时；第二次 HTTP 路由及证书测试超时。改用 node --test --test-concurrency=1 test/*.test.mjs，154 项全部通过。Python 36 项全部通过。
 - ego-browser 空间 86，4327、RCM_MOBILE=0、全新临时状态目录隔离预览；新会话只编辑草稿，没有发送/创建引擎会话。
 - 输入框属性在浏览器中正确读取；模拟 composition Enter 未提交且草稿保留；桌面 Tab 到更多输入工具，焦点轮廓 solid。
 - 桌面 1440×900 与手机模拟 390×844 均无横向溢出；390px 输入框 x=25..365，发送按钮 x=317..365。截图 /tmp/rcm-keyboard-desktop.png、/tmp/rcm-keyboard-mobile.png 已查看。
@@ -16,4 +16,4 @@ Apple 官方说明 Safari 可能忽略 autocomplete=off：https://developer.appl
 
 ## 交付状态
 
-本次改动单独提交，其他会话的 manager、app、composer、mobile-ui 与测试修改原样保留。正式基线 c89493ace9769e1f0ca6ea67671c00a28d279fd7 已包含在当前 master；有其他会话未提交改动时安装器拒绝部署，不能把预览记作正式上线。
+本次改动单独提交，其他会话的 manager、app、composer、mobile-ui 与测试修改原样保留。正式基线 c89493ace9769e1f0ca6ea67671c00a28d279fd7 已包含在当前 master；其他会话随后已提交改动。实际安装尝试被空闲检查阻止：当前入口有运行任务、待处理请求或正在连接；未停止任务或绕过检查，正式服务未变更。不能把预览记作正式上线。
