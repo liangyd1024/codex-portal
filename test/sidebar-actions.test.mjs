@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {sidebarAction,sidebarCapabilities,PINNED_SECTION} from '../lib/sidebar.mjs';
+import {readSidebar,sidebarAction,sidebarCapabilities,PINNED_SECTION} from '../lib/sidebar.mjs';
 import {sidebarGroups} from '../public/sidebar.js';
 function fixture(){
  const calls=[];const t={id:'t',name:'Original',revision:'r',archived:false,readRevision:'rr',sectionId:null};
@@ -50,4 +50,24 @@ test('archive refuses background activity and cannot reorder outside pinned manu
   await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='THREAD_BUSY');assert.ok(!calls.some(([m])=>m==='thread/archive'));
  }
  const {m,input,t}=fixture();t.sectionId='s';await assert.rejects(sidebarAction(m,input('reorderThread',{beforeThreadId:null})));
+});
+
+test('account read failures cannot publish an empty layout or reuse an old account',async()=>{
+ const {m}=fixture();const reads=[];const passive=m.passive;
+ m.passive=async(action,params)=>{reads.push(params.accountId);return passive(action,params);};
+ await readSidebar(m);assert.deepEqual(reads,['account']);
+ for(const code of ['RPC_TIMEOUT','RPC_DISCONNECTED']){
+  m.rpc.request=async()=>{throw Object.assign(Error('identity unavailable'),{code});};
+  await assert.rejects(readSidebar(m),e=>e.code===code);
+  assert.deepEqual(reads,['account']);
+ }
+ m.rpc.request=async()=>({workspaceRouting:{chatgptAccountId:'new-account'}});
+ await readSidebar(m);assert.deepEqual(reads,['account','new-account']);
+ m.rpc.request=async()=>({account:null,workspaceRouting:null});
+ await readSidebar(m);assert.deepEqual(reads,['account','new-account',null]);
+});
+test('first-load identity failure rejects instead of manufacturing a successful ungrouped sidebar',async()=>{
+ const {m}=fixture();let passiveReads=0;m.passive=async()=>{passiveReads++;};
+ m.rpc.request=async()=>{throw Object.assign(Error('timeout'),{code:'RPC_TIMEOUT'});};
+ await assert.rejects(readSidebar(m),e=>e.code==='RPC_TIMEOUT');assert.equal(passiveReads,0);
 });
