@@ -17,7 +17,7 @@ export function installSkillSuggestions({input,api,context,select}) {
     const stamp=version,id=context().id,cwd=context().cwd,value=input.value,caret=input.selectionStart;
     box.replaceChildren();box.hidden=false;input.setAttribute('aria-expanded','true');position();box.textContent='正在读取技能…';input.removeAttribute('aria-activedescendant');
     try{
-      const catalog=await api('/api/composer?cwd='+encodeURIComponent(cwd));
+      const catalog=await api('/api/composer?cwd='+encodeURIComponent(cwd)+'&kind=skills');
       if(stamp!==version||context().id!==id||context().cwd!==cwd||input.value!==value||input.selectionStart!==caret)return;
       if(catalog.skills.error)throw Error(catalog.skills.error);
       const seen=new Set();rows=(catalog.skills.data||[]).flatMap(e=>e.skills||[]).filter(e=>{if(!e.enabled||seen.has(e.path))return false;seen.add(e.path);return (e.name+' '+(e.description||'')).toLowerCase().includes(query.query);});
