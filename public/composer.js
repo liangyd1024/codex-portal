@@ -68,9 +68,9 @@ export function installComposer({host,api,context,refresh,notify}) {
         const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=present().some(r=>r.kind===kind&&r.key===key);checkbox.disabled=!entry.enabled&&!checkbox.checked;
         const body=document.createElement('span');body.append(text('strong',entry.interface?.displayName||entry.name),text('small',[entry.description||entry.interface?.shortDescription, !entry.enabled?(entry.missing?'目录中暂不可用，可取消选择后重试':(entry.disabledReason||'未启用')+'；已选项目可取消选择'):''].filter(Boolean).join(' · ')));
         checkbox.onchange=()=>{if(context().id!==id)return;if(checkbox.checked){dialog.close();insertReference(entry,kind);}else{for(const range of present().filter(r=>r.kind===kind&&r.key===key).reverse())input.setRangeText('',range.start,range.end,'end');syncReferences();save();render();input.dispatchEvent(new Event('input',{bubbles:true}));}checkbox.disabled=!entry.enabled&&!checkbox.checked;};
-        label.append(checkbox,body);list.append(label);
+        label.dataset.search=[entry.name,entry.path,entry.id,body.textContent].filter(Boolean).join(' ').toLowerCase();label.append(checkbox,body);list.append(label);
       }
-      search.oninput=()=>{for(const row of list.querySelectorAll('label'))row.hidden=!row.textContent.toLowerCase().includes(search.value.toLowerCase());};
+      search.oninput=()=>{for(const row of list.querySelectorAll('label'))row.hidden=!row.dataset.search.includes(search.value.toLowerCase());};
       dialog.append(text('p','选择后在下一条消息中使用。插件安装及账号授权请在 Codex 中管理。'));search.focus();
     }catch(e){if(context().id===id&&dialog.open&&version===dialogVersion){pending.remove();dialog.append(text('p','读取失败：'+e.message));const retry=text('button','重试');retry.type='button';retry.onclick=()=>{dialog.close();void picker(kind,button);};dialog.append(retry);}}
     finally{loading=false;}
