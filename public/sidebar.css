@@ -3,3 +3,5 @@
 .sidebar-thread .thread-name{display:flex;align-items:center;gap:5px;min-width:0;flex:1}.sidebar-thread .thread-name>span:not(.thread-unread):not(.thread-running){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.sidebar-thread .thread-meta{flex-shrink:0;font-size:11px;color:var(--muted)}
 
 .sidebar-progress{font-size:11px;color:var(--muted)}
+.sidebar .sidebar-thread .thread-row{display:flex;align-items:center;gap:8px;min-height:34px;padding:6px 32px 6px 9px}
+@media(max-width:700px),(hover:none){.sidebar .sidebar-thread .thread-row{min-height:44px;padding-right:38px}}
