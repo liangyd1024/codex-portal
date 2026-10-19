@@ -46,3 +46,28 @@ test('failed and timed-out notifications remain retryable; shown notifications d
  assert.equal(await deliverNotice(storage,'key',send('show')),true);assert.equal(calls,4);
  assert.equal(await deliverNotice(storage,'key',send('show')),true);assert.equal(calls,4);
 });
+
+test('iOS browser explains Home Screen requirement, installed app uses worker',async()=>{
+ const {notificationSupport}=await import('../public/notification-platform.js');
+ const env={navigator:{userAgent:'iPhone',serviceWorker:{}},isSecureContext:true};
+ assert.match(notificationSupport(env).message,/添加到主屏幕/);
+ env.navigator.standalone=true;env.Notification={permission:'default'};
+ assert.deepEqual(notificationSupport(env),{supported:true,worker:true});
+ env.navigator={userAgent:'Macintosh',platform:'MacIntel',maxTouchPoints:5};
+ assert.match(notificationSupport(env).message,/添加到主屏幕/);
+ env.isSecureContext=false;assert.match(notificationSupport(env).message,/HTTPS/);
+ env.isSecureContext=true;env.navigator={userAgent:'Desktop'};delete env.Notification;
+ assert.equal(notificationSupport(env).supported,false);
+ env.Notification={};assert.deepEqual(notificationSupport(env),{supported:true,worker:false});
+});
+test('worker rejection remains retryable; API acceptance allows deduplication',async()=>{
+ const {submitWorkerNotification}=await import('../public/notification-platform.js');
+ const {deliverNotice}=await import('../public/notification-delivery.js');
+ const entries=new Map(),storage={getItem:k=>entries.get(k),setItem:(k,v)=>entries.set(k,v)};
+ let fail=true,calls=0;
+ const registration={showNotification:async(title,options)=>{calls++;assert.equal(options.data.host,'local');if(fail)throw Error('blocked');}};
+ const send=()=>submitWorkerNotification(registration,'test',{data:{host:'local'}});
+ assert.equal(await deliverNotice(storage,'worker',send),false);assert.equal(entries.size,0);
+ fail=false;assert.equal(await deliverNotice(storage,'worker',send),true);
+ assert.equal(await deliverNotice(storage,'worker',send),true);assert.equal(calls,2);
+});

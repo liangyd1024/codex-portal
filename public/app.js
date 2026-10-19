@@ -1,3 +1,4 @@
+import {notificationSupport,prepareNotificationWorker,submitWorkerNotification} from './notification-platform.js';
 import {deliverNotice,submitNotification} from './notification-delivery.js';
 import {asyncQuestions,QuestionDrafts} from './questions.js';
 import {questionForm} from './question-form.js';
@@ -902,19 +903,32 @@ function setAutoRefresh(enabled) {
 let taskNotificationsEnabled = false;
 
 function renderTaskNotifications() {
-  const supported = 'Notification' in window && window.isSecureContext;
-  $('task-notifications').disabled = !supported;
+  const {supported,message} = notificationSupport();
+  $('task-notifications').disabled = !supported || notificationPending;
   $('task-notifications').checked = taskNotificationsEnabled && supported && Notification.permission === 'granted';
   $('test-notification').disabled = !$('task-notifications').checked;
-  setText('notification-status', !supported ? '当前浏览器不支持系统通知' : Notification.permission === 'denied' ? '通知已被阻止。请在浏览器网站设置中允许通知。' : $('task-notifications').checked ? '已开启：每次执行完成、失败、停止或需要你处理时都会通知，正在查看会话时也会通知；多个页面只提醒一次。页面关闭期间的提醒会在重新打开并恢复连接后补发。' : '通知未开启');
+  setText('notification-status', !supported ? message : Notification.permission === 'denied' ? '通知已被阻止。请在浏览器网站设置中允许通知。' : $('task-notifications').checked ? '已开启：每次执行完成、失败、停止或需要你处理时都会通知，正在查看会话时也会通知；多个页面只提醒一次。页面关闭或被系统暂停期间不能实时通知，重新打开并恢复连接后补发。' : '通知未开启');
 }
+let notificationPending = false;
+let notificationRegistration;
 async function setTaskNotifications(enabled) {
+  if(notificationPending)return;
+  const host=targetHost;
+  notificationPending=true;
+  $('task-notifications').disabled=true;
+  setText('notification-status',enabled?'正在申请通知权限…':'正在关闭通知…');
+  let failure;
   try {
-    if (enabled && 'Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
-    taskNotificationsEnabled = enabled && 'Notification' in window && Notification.permission === 'granted';
-    localStorage.setItem('rcm.taskNotifications.' + targetHost, String(taskNotificationsEnabled));
-  } catch (error) { taskNotificationsEnabled = false; recordError(error,'notifications'); }
-  renderTaskNotifications();
+    if(enabled && !notificationSupport().supported)throw Error(notificationSupport().message);
+    // Request synchronously from the user gesture before awaiting worker setup.
+    if(enabled && Notification.permission==='default')await Notification.requestPermission();
+    const allowed=enabled && Notification.permission==='granted';
+    if(allowed && notificationSupport().worker)notificationRegistration=await prepareNotificationWorker();
+    if(host!==targetHost)return;
+    taskNotificationsEnabled=allowed;
+    localStorage.setItem('rcm.taskNotifications.'+host,String(allowed));
+  } catch(error){failure=error.message;recordError(error,'notifications');}
+  finally {notificationPending=false;if(host===targetHost){renderTaskNotifications();if(failure)setText('notification-status','通知未开启：'+failure+'。请重试。');}}
 }
 const liveNotifications = new Set();
 function notificationDiagnostic(message) {
@@ -923,7 +937,13 @@ function notificationDiagnostic(message) {
   list.prepend(el('p','',dateTime(new Date()) + ' · ' + message));
   while (list.children.length > 8) list.lastElementChild.remove();
 }
-function sendTaskNotification(title, body, tag, threadId, host=targetHost) {
+async function sendTaskNotification(title, body, tag, threadId, host=targetHost) {
+  if(notificationSupport().worker){
+    try {
+      notificationRegistration ||= await prepareNotificationWorker();
+      return await submitWorkerNotification(notificationRegistration,title,{body,tag,data:{host,threadId}},{submitted:()=>notificationDiagnostic(title+'：已提交给系统；是否弹出取决于系统通知设置'),failed:message=>notificationDiagnostic(title+'：'+message)});
+    } catch(error){notificationDiagnostic(title+'：'+error.message);return false;}
+  }
   notificationDiagnostic(title + '：正在提交给浏览器');
   let notification;
   return submitNotification(()=>{
@@ -933,8 +953,8 @@ function sendTaskNotification(title, body, tag, threadId, host=targetHost) {
     notification.onclick = () => { window.focus(); notification.close(); if (threadId && host===targetHost) selectThread(threadId); };
     return notification;
   },{
-    shown:()=>notificationDiagnostic(title + '：浏览器报告已显示；若 Mac 未弹出，请检查系统的浏览器通知开关'),
-    failed:message=>{liveNotifications.delete(notification);notificationDiagnostic(title + '：' + message);setText('notification-status',message+'。请检查浏览器和 Mac 的通知设置。');},
+    shown:()=>notificationDiagnostic(title + '：浏览器报告已显示；若系统未弹出，请检查系统的浏览器通知开关'),
+    failed:message=>{liveNotifications.delete(notification);notificationDiagnostic(title + '：' + message);setText('notification-status',message+'。请检查浏览器和系统的通知设置。');},
   });
 }
 async function notifyTaskEvent(method, params, replayKey) {
@@ -1303,8 +1323,9 @@ function wireEvents() {
   try { taskNotificationsEnabled = localStorage.getItem('rcm.taskNotifications.' + targetHost) === 'true'; } catch {}
   renderTaskNotifications();
   $('task-notifications').onchange = event => setTaskNotifications(event.target.checked);
-  $('test-notification').onclick = () => { if (taskNotificationsEnabled && Notification.permission === 'granted') sendTaskNotification('Codex · 测试通知','浏览器通知已接入。请检查 Mac 通知中心。','codex-test'); };
+  $('test-notification').onclick = () => { if (taskNotificationsEnabled && Notification.permission === 'granted') sendTaskNotification('Codex · 测试通知','浏览器通知已接入。请检查设备通知中心。','codex-test'); };
   window.addEventListener('focus',renderTaskNotifications);
+  navigator.serviceWorker?.addEventListener('message',event=>{const data=event.data;if(data?.type==='rcm-notification-click' && data.host===targetHost && data.threadId)selectThread(data.threadId);});
   let autoRefresh = false;
   try { autoRefresh = localStorage.getItem('rcm.autoRefresh.' + targetHost) === 'true'; } catch {}
   setAutoRefresh(autoRefresh);
