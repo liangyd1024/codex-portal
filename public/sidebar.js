@@ -1,4 +1,4 @@
-import {activitySource,threadSourceIcon} from './activity.js';
+import {activitySource,activityIcon,threadSourceIcon} from './activity.js';
 const make=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
 function orderItems(items,keys=[],orderedThreadIds=null){
   const rank=new Map(keys.map((key,i)=>[key,i]));
@@ -70,7 +70,8 @@ export class Sidebar {
       if(view.search&&!items.length)continue;
       const wrap=make('section','sidebar-group'),header=make('div','sidebar-group-heading');
       const disclosure=make('button','sidebar-section-button');disclosure.type='button';disclosure.dataset.focusKey='section:'+group.id;
-      const expanded=this.isExpanded('section:'+group.id);disclosure.setAttribute('aria-expanded',String(expanded));disclosure.append(this.o.icon('chevron'),make('span','',group.name));
+      const expanded=this.isExpanded('section:'+group.id);disclosure.setAttribute('aria-expanded',String(expanded));disclosure.append(this.o.icon('chevron'),make('span','sidebar-section-name',group.name));
+      this.renderActivity(disclosure,group.items);
       const children=make('div','sidebar-group-items');children.id='sidebar-section-'+group.id;children.hidden=!expanded;disclosure.setAttribute('aria-controls',children.id);
       disclosure.onclick=()=>{this.toggle('section:'+group.id);};this.disclosureKeys(disclosure,'section:'+group.id);header.append(disclosure);
       if(group.section)this.addMenu(header,disclosure,()=>this.sectionMenu(group.section));
@@ -85,10 +86,20 @@ export class Sidebar {
   setBusy(pending){this.node.setAttribute('aria-busy',String(pending));this.progress.hidden=!pending;this.archiveButton.disabled=pending;this.toolbar.querySelector('.icon-button').disabled=pending;for(const b of this.node.querySelectorAll('.sidebar-item-menu'))b.disabled=pending;}
   toggle(key){if(this.view?.search)this.searchOverrides.set(key,!this.isExpanded(key));else{if(this.expanded.has(key))this.expanded.delete(key);else this.expanded.add(key);this.save();}this.render(this.snapshot,this.view);}
   disclosureKeys(button,key){button.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();if(this.isExpanded(key)!==(e.key==='ArrowRight'))this.toggle(key);}});}
+  source(t){return this.o.activitySource?this.o.activitySource(t):activitySource(t,{connected:this.o.connected(),webActive:t.status?.type==='active'});}
+  renderActivity(parent,items){
+    const counts=new Map();
+    const visit=item=>{if(item.kind==='project'){item.children.forEach(visit);return;}const source=this.source(item.value);if(source)counts.set(source,(counts.get(source)||0)+1);};
+    items.forEach(visit);
+    for(const source of ['web','desktop'])if(counts.has(source)){
+      const badge=activityIcon(source,this.o.icon);badge.title=counts.get(source)+' 个会话'+(source==='web'?'在网页端':'在桌面端')+'运行中';badge.setAttribute('aria-label',badge.title);parent.append(badge);
+    }
+  }
   renderProject(parent,item){
     const p=item.value,group=make('div','project-group'),header=make('div','project-heading');
     const button=make('button','project-button');button.type='button';button.dataset.projectId=p.id;button.dataset.focusKey='project:'+p.id;button.title=p.roots.join('\n');
     const expanded=this.isExpanded('project:'+p.id);button.setAttribute('aria-expanded',String(expanded));button.append(this.o.icon('chevron','project-chevron'),this.o.icon('folder'),make('span','project-name',p.name));
+    this.renderActivity(button,item.children);
     const children=make('div','project-threads');children.id='sidebar-project-'+p.id;children.hidden=!expanded;button.setAttribute('aria-controls',children.id);button.onclick=()=>this.toggle('project:'+p.id);this.disclosureKeys(button,'project:'+p.id);header.append(button);
     this.addMenu(header,button,()=>[
       {label:'在项目中新建会话',disabled:!this.o.connected(),run:()=>this.o.newThread(p.roots[0])},
@@ -101,7 +112,7 @@ export class Sidebar {
     const row=make('div','sidebar-thread'),button=make('button','thread-row'+(this.o.selectedId()===t.id?' selected':''));button.type='button';button.dataset.threadId=t.id;button.dataset.focusKey='thread:'+t.id;button.title=this.o.threadName(t);
     if(this.o.selectedId()===t.id)button.setAttribute('aria-current','true');
     const title=make('div','thread-name');if(t.isUnread){const dot=make('span','thread-unread');dot.setAttribute('aria-label','未读');title.append(dot);}title.append(make('span','',this.o.threadName(t)));
-    const source=this.o.activitySource?this.o.activitySource(t):activitySource(t,{connected:this.o.connected(),webActive:t.status?.type==='active'});
+    const source=this.source(t);
     title.append(threadSourceIcon(t,source,this.o.icon));
     const meta=make('div','thread-meta');meta.append(make('span','thread-time',this.o.relativeTime(t.recencyAt||t.updatedAt)));button.append(title,meta);button.onclick=()=>this.o.select(t);
     row.append(button);this.addMenu(row,button,()=>this.threadMenu(t));
