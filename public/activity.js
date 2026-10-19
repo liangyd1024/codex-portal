@@ -33,7 +33,7 @@ export function threadSourceIcon(thread, runningSource, icon) {
 export function conversationActivity(thread, {connected=false, controlled=false, active=false, background={state:'idle'}}={}) {
   const source=activitySource(thread,{connected,webActive:controlled&&active});
   if(source)return {kind:'turn',source,label:source==='desktop'?'桌面端正在运行':'正在运行',detail:'持续同步最新进展…'};
-  if(controlled&&connected&&background.state==='running')return {kind:'background',label:'后台命令运行中',detail:'当前没有轮次在执行'};
+  if(controlled&&connected&&background.state==='running')return {kind:'background',label:'本轮已结束',detail:`${background.terminals?.length || 1} 个后台命令仍在运行`,terminals:background.terminals || []};
   if(controlled&&background.state==='unknown')return {kind:'unknown',label:'后台命令状态待确认',detail:''};
   return null;
 }
@@ -41,6 +41,17 @@ export function renderConversationActivity(node, activity, icon) {
   node.hidden=!activity;
   node.replaceChildren();
   if(!activity)return;
+  if(activity.kind==='background') {
+    const details=document.createElement('details');details.className='background-processes';
+    const summary=document.createElement('summary');summary.textContent=activity.label+' · '+activity.detail;details.append(summary);
+    const hint=document.createElement('p');hint.textContent='回复已结束，预览服务等后台命令可继续运行。展开查看命令；停止按钮仅停止这些后台命令。';details.append(hint);
+    for(const terminal of activity.terminals){
+      const entry=document.createElement('div');entry.className='background-process';
+      const title=document.createElement('span');title.textContent='后台命令 '+terminal.processId;entry.append(title);
+      const command=document.createElement('pre');command.textContent=terminal.command || '命令内容暂不可用';entry.append(command);details.append(entry);
+    }
+    node.append(details);return;
+  }
   if(activity.kind==='turn')node.append(activityIcon(activity.source,icon));
   else {
     const badge=document.createElement('span');badge.className='activity-icon activity-unknown';
@@ -50,4 +61,17 @@ export function renderConversationActivity(node, activity, icon) {
     if(!text)continue;
     const span=document.createElement('span');span.className=cls;span.textContent=text;node.append(span);
   }
+}
+
+// Historical tool statuses are snapshots; only a live terminal proves continued execution.
+export function processGroupStatus(turn, items, {background={state:'idle'}, uncertain=false}={}) {
+  const status=value=>value?.type || value;
+  const pending=items.some(item=>['inProgress','in_progress','running'].includes(status(item.status)));
+  if(!pending)return '';
+  if(uncertain)return '状态未确认';
+  if(['completed','failed','interrupted'].includes(status(turn.status))){
+    if(background.terminals?.some(terminal=>terminal.itemId && items.some(item=>item.id===terminal.itemId)))return '后台命令仍在运行';
+    return background.state==='unknown'?'状态未确认':'';
+  }
+  return '执行中';
 }

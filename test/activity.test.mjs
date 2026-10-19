@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {activitySource,creationSource,conversationActivity} from '../public/activity.js';
+import {activitySource,creationSource,conversationActivity,processGroupStatus} from '../public/activity.js';
 const now=100000;
 const desktop={activity:{source:'desktop',state:'running',observedAt:now}};
 test('only a fresh desktop observation shows desktop activity',()=>{
@@ -46,10 +46,23 @@ test('completed turns with a live preview process are background work, not an ac
  assert.equal(conversationActivity({},options).kind,'turn');
  const ended=conversationActivity({}, {...options,active:false});
  assert.equal(ended.kind,'background');
- assert.equal(ended.label,'后台命令运行中');
+ assert.equal(ended.label,'本轮已结束');
+ assert.match(ended.detail,/1 个后台命令仍在运行/);
  assert.doesNotMatch(ended.detail,/同步最新进展/);
  assert.equal(conversationActivity({}, {...options,active:false,background:{state:'idle'}}),null);
  assert.equal(conversationActivity({}, {...options,active:false,controlled:false}),null);
  assert.equal(conversationActivity({}, {...options,connected:false}),null);
  assert.equal(conversationActivity({}, {...options,active:false,background:{state:'unknown'}}).kind,'unknown');
+});
+
+test('ended process summaries use live item identity instead of stale historical tool state',()=>{
+ const items=[{id:'old-command',status:'inProgress'}],turn={status:'completed'};
+ assert.equal(processGroupStatus(turn,items),'');
+ assert.equal(processGroupStatus({status:'inProgress'},items),'执行中');
+ assert.equal(processGroupStatus(turn,items,{background:{state:'running',terminals:[{itemId:'other'}]}}),'');
+ assert.equal(processGroupStatus(turn,items,{background:{state:'running',terminals:[{itemId:'old-command'}]}}),'后台命令仍在运行');
+ assert.equal(processGroupStatus(turn,items,{background:{state:'unknown'}}),'状态未确认');
+ assert.equal(processGroupStatus(turn,items,{uncertain:true}),'状态未确认');
+ const terminals=[{processId:'a'},{processId:'b'}];
+ assert.match(conversationActivity({}, {controlled:true,connected:true,background:{state:'running',terminals}}).detail,/2 个后台命令/);
 });

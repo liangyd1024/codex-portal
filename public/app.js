@@ -2,7 +2,7 @@ import {asyncQuestions,QuestionDrafts} from './questions.js';
 import {questionForm} from './question-form.js';
 import {fileLink,closeFileViewer} from './message-files.js';
 import {notifyManagerError, recoveryMessage, selectedRecoveryMessage} from './recovery-state.js';
-import {activitySource,conversationActivity,renderConversationActivity} from './activity.js';
+import {activitySource,conversationActivity,renderConversationActivity,processGroupStatus} from './activity.js';
 let scrollFollow,scrollContext;
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message-media.js';
 import {markdown, groupTurnItems} from './message-body.js';
@@ -586,9 +586,8 @@ function renderMessages() {
       processGroup.dataset.itemId = 'process-' + t.id + '-' + group.key;
       const summary = el('summary');
       summary.append(icon('chevron','chevron'),el('span','','查看过程'));
-      const active = group.items.some(value => ['inProgress','in_progress','running'].includes(typeOf(value.status)));
-      // Individual tool failures remain in their details, not the turn summary.
-      if (active) summary.append(el('span','process-status',uncertainHistory() ? '状态未确认' : '执行中'));
+      const processStatus = processGroupStatus(t,group.items,{uncertain:uncertainHistory(),background:backgroundActivity(state.detail,{controlled:controlled(),connected:usable()})});
+      if (processStatus) summary.append(el('span','process-status',processStatus));
       const body = el('div','activity-items');
       for (const item of group.items) { const message=renderItem(item); message.dataset.messageId=item.id; body.append(message); }
       processGroup.append(summary,body); turn.append(processGroup);
