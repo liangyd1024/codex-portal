@@ -3,6 +3,7 @@ import {activitySource,conversationActivity,renderConversationActivity} from './
 let scrollFollow,scrollContext;
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message-media.js';
 import {markdown, groupTurnItems} from './message-body.js';
+import {reconcileMessages} from './message-dom.js';
 import {NewChatDraft} from './new-chat.js';
 import {installAttachments} from './attachments.js';
 let attachments;
@@ -340,9 +341,12 @@ function renderControls() {
   $('interrupt').title=active?'停止当前轮次':'停止后台命令';
   $('interrupt').setAttribute('aria-label',state.busy.has('interrupt') ? '正在请求停止' : $('interrupt').title);
   $('interrupt').setAttribute('aria-busy',String(state.busy.has('interrupt')));
-  renderConversationActivity($('running-indicator'),newChatOpen?null:conversationActivity(currentThread(),{
+  const indicator=$('running-indicator'),nextIndicator=el('div');
+  renderConversationActivity(nextIndicator,newChatOpen?null:conversationActivity(currentThread(),{
     connected:ready,controlled:controlled(),active,background,
   }),icon);
+  indicator.hidden=nextIndicator.hidden;
+  reconcileMessages(indicator,nextIndicator);
   if(newChatOpen){
     const reason=!ready?'连接恢复后可发送，草稿已保留。':newDraft.phase==='uncertain'?'创建结果未确认，请刷新侧栏核对，避免重复创建。':!newDraft.cwd?'选择一个项目后开始。':creating?'正在创建会话…':'';
     $('send-message').disabled ||= !featureReady('create')||!newDraft.cwd||newDraft.phase!=='editing';
@@ -531,7 +535,7 @@ function renderMessages() {
   if(document.activeElement?.matches('.output-controls input')) return;
   const scroller = $('messages-scroller');
   const context=targetHost+':'+state.selectedId;
-  if(scrollContext!==context){scrollContext=context;scrollFollow?.reset();}
+  if(scrollContext!==context){scrollContext=context;scrollFollow?.reset();clear($('messages'));lastMessageShape=undefined;}
   const nearBottom = scrollFollow?.following ?? true;
   const shape=JSON.stringify([state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],turns()],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
   if(shape===lastMessageShape){
@@ -553,9 +557,10 @@ function renderMessages() {
   const anchor = state.busy.has('history') ? [...$('messages').querySelectorAll('.message-turn')].find(node => node.getBoundingClientRect().bottom > viewportTop) : null;
   const anchorId = anchor?.dataset.turnId, anchorOffset = anchor ? anchor.getBoundingClientRect().top - viewportTop : 0;
   const opened = new Set($('messages').querySelector('details[data-item-id]') ? [...$('messages').querySelectorAll('details[open][data-item-id]')].map(n => n.dataset.itemId) : savedOpenDetails());
-  const n = clear($('messages'));
-  if (state.loadingDetail) { n.append(el('div','empty-history loading','正在读取会话历史…')); return; }
-  if (state.historyError) { n.append(el('div','turn-error',state.historyError)); if(!turns().length)return; }
+  const n = el('div');
+  const commit = () => reconcileMessages($('messages'), n);
+  if (state.loadingDetail) { n.append(el('div','empty-history loading','正在读取会话历史…')); commit(); return; }
+  if (state.historyError) { n.append(el('div','turn-error',state.historyError)); if(!turns().length){commit();return;} }
   if(state.detail?.recovering)n.append(el('div','history-notice','已恢复本机保存的输出，正在同步最新内容…')); 
   for (const notice of state.runtimeNotices.get(state.selectedId)?.values() || []) n.append(renderExtensionNotice(notice));
   if (!turns().length) { const empty = el('div','empty-history'); empty.append(icon('chat'),el('p','','此会话暂无消息。'),el('p','',controlled() ? '输入要求，开始目标机器工作。' : '接管后，可以在此会话开始工作。')); n.append(empty); }
@@ -567,7 +572,7 @@ function renderMessages() {
     const turnStatus = uncertainHistory() && ['inProgress','in_progress','running'].includes(typeOf(t.status)) ? '状态未确认' : statusNames[typeOf(t.status)] || typeOf(t.status);
     meta.append(el('span','turn-status',turnStatus)); turn.append(meta);
     for (const group of groupTurnItems(t)) {
-      if (group.type === 'message') { turn.append(renderItem(group.item)); continue; }
+      if (group.type === 'message') { const message=renderItem(group.item); message.dataset.messageId=group.item.id; turn.append(message); continue; }
       const processGroup = el('details','activity-group process-group');
       processGroup.dataset.itemId = 'process-' + t.id + '-' + group.key;
       const summary = el('summary');
@@ -577,22 +582,24 @@ function renderMessages() {
       if (failed) summary.append(el('span','process-status error','有失败记录'));
       else if (active) summary.append(el('span','process-status',uncertainHistory() ? '状态未确认' : '执行中'));
       const body = el('div','activity-items');
-      for (const item of group.items) body.append(renderItem(item));
+      for (const item of group.items) { const message=renderItem(item); message.dataset.messageId=item.id; body.append(message); }
       processGroup.append(summary,body); turn.append(processGroup);
     }
     if (t.error) turn.append(el('div','turn-error',messageOf(t.error)));
     n.append(turn);
   });
   n.querySelectorAll('details[data-item-id]').forEach(d => { if (opened.has(d.dataset.itemId)) d.open = true; });
-  n.querySelectorAll('.tool-output[data-follow-tail="true"]').forEach(pre=>{pre.scrollTop=pre.scrollHeight;});
+  commit();
+  const rendered = $('messages');
+  rendered.querySelectorAll('.tool-output[data-follow-tail="true"]').forEach(pre=>{pre.scrollTop=pre.scrollHeight;});
   if (nearBottom && !state.busy.has('history')) scroller.scrollTop = scroller.scrollHeight;
   else if (state.busy.has('history')) {
-    const restored = [...n.querySelectorAll('.message-turn')].find(node => node.dataset.turnId === anchorId);
+    const restored = [...rendered.querySelectorAll('.message-turn')].find(node => node.dataset.turnId === anchorId);
     const targetTop = restored ? oldTop + restored.getBoundingClientRect().top - viewportTop - anchorOffset : oldTop + (scroller.scrollHeight - oldHeight);
     // A short initial page can leave blank space below the last message.
     // Retain that space so the browser does not clamp the restored position.
     const missingSpace = targetTop - (scroller.scrollHeight - scroller.clientHeight);
-    if (missingSpace > 0) n.style.paddingBottom = (parseFloat(n.style.paddingBottom) || 0) + Math.ceil(missingSpace) + 'px';
+    if (missingSpace > 0) rendered.style.paddingBottom = (parseFloat(rendered.style.paddingBottom) || 0) + Math.ceil(missingSpace) + 'px';
     scroller.scrollTop = targetTop;
   }
   else scroller.scrollTop = oldTop;

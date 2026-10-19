@@ -30,6 +30,7 @@ export function itemImageUrl(threadId,itemId,{part,reference,host}={}) {
 export function isRasterImage(value){return /\.(png|jpe?g|webp|gif)$/i.test(value)||/^data:image\/(png|jpeg|webp|gif);base64,/.test(value);}
 export function imageCard(src,alt='图片附件') {
   const card=node('span','message-image'),button=node('button','message-image-open'),image=node('img'),status=node('span','message-image-status','正在加载图片…'),retry=node('button','message-image-retry','重试图片');
+  card.dataset.source=src;
   button.type=retry.type='button';button.setAttribute('aria-label','放大查看：'+alt);button.disabled=true;
   image.alt=alt;image.loading='lazy';image.decoding='async';retry.hidden=true;status.setAttribute('role','status');
   image.onload=()=>{status.hidden=true;retry.hidden=true;button.disabled=false;image.hidden=false;};
