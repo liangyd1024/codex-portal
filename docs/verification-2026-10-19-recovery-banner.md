@@ -21,4 +21,6 @@
 
 ## 正式部署
 
-待执行现有安装脚本的空闲检查、备份与健康检查。
+修复提交 `ab0b3ed` 已推送 origin/master，包含当前正式版本 `6c71e92` 的全部改动。为保留另一聊天的未提交文件预览功能，在 `/tmp/rcm-recovery-release-20261019-1426` 创建 master 的干净本地副本；该提交再次运行 npm test，首次复现 Node runner 通信异常，重跑全部通过（日志 `/tmp/rcm-recovery-release-tests-retry.log`）。
+
+执行 `node scripts/install-local.mjs --ref ab0b3ed` 被空闲检查拒绝：正式入口仍有 1 个 active 会话。未进入备份、重启或健康检查阶段；正式版本未改变。再次核对仍有运行任务，未绕过检查或停止任务。需空闲后从最新且已验证的 master 继续安装，不能把本次预览描述为上线。浏览器复测 TaskSpace 已关闭，隔离预览服务已停止。
