@@ -1,4 +1,4 @@
-import {activitySource,activityIcon} from './activity.js';
+import {activitySource,threadSourceIcon} from './activity.js';
 const make=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
 function orderItems(items,keys=[],orderedThreadIds=null){
   const rank=new Map(keys.map((key,i)=>[key,i]));
@@ -102,7 +102,7 @@ export class Sidebar {
     if(this.o.selectedId()===t.id)button.setAttribute('aria-current','true');
     const title=make('div','thread-name');if(t.isUnread){const dot=make('span','thread-unread');dot.setAttribute('aria-label','未读');title.append(dot);}title.append(make('span','',this.o.threadName(t)));
     const source=this.o.activitySource?this.o.activitySource(t):activitySource(t,{connected:this.o.connected(),webActive:t.status?.type==='active'});
-    if(source)title.append(activityIcon(source,this.o.icon));
+    title.append(threadSourceIcon(t,source,this.o.icon));
     const meta=make('div','thread-meta');meta.append(make('span','thread-time',this.o.relativeTime(t.recencyAt||t.updatedAt)));button.append(title,meta);button.onclick=()=>this.o.select(t);
     row.append(button);this.addMenu(row,button,()=>this.threadMenu(t));
     const manual=t.isPinned&&this.snapshot.preferences.pinned==='manual'&&this.snapshot.capabilities.reorderThread.supported;

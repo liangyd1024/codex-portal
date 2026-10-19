@@ -40,6 +40,11 @@ class SidebarModelTest(unittest.TestCase):
 
     def read(self,**kw):return store.read_sidebar({'accountId':'account1',**kw})
 
+    def test_sidebar_keeps_creation_origin(self):
+        self.db.execute('ALTER TABLE threads ADD COLUMN originator TEXT')
+        self.add('web', originator='remote_codex_manager')
+        self.assertEqual(self.read()['data'][0]['originator'], 'remote_codex_manager')
+
     def test_null_project_root_does_not_break_sidebar_or_membership(self):
         self.db.executemany('INSERT INTO project_roots VALUES (?,?,?)', [('p1', None, 0), ('p1', '', 1), ('p2', '/valid', 2)])
         self.add('valid-chat', cwd='/valid/sub')

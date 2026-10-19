@@ -210,6 +210,11 @@ def sidebar_activity(threads):
         pass
 
 
+def thread_select_columns(connection):
+    columns = {r['name'] for r in connection.execute('PRAGMA table_info(threads)')}
+    return ', '.join(THREAD_COLUMNS) + (', originator' if 'originator' in columns else '')
+
+
 def normalized_thread(row):
     return {
         'id': row['id'],
@@ -223,6 +228,7 @@ def normalized_thread(row):
         'reasoningEffort': row['reasoning_effort'],
         'cliVersion': row['cli_version'],
         'source': row['source'],
+        'originator': row['originator'] if 'originator' in row.keys() else None,
         'projectId': row['project_id'],
         'threadSource': row['thread_source'],
         'sectionId': row['thread_section_id'],
@@ -283,8 +289,9 @@ def read_sidebar_metadata(payload):
     connection = connect_store('state_5.sqlite')
     try:
         resolve = desktop_membership(connection)
-        rows = connection.execute('SELECT id, project_id, cwd, thread_section_id FROM threads WHERE id IN (' + ','.join('?' for _ in identifiers) + ')', identifiers)
-        return {'data': {row['id']: {'projectId': resolve({'id': row['id'], 'projectId': row['project_id'], 'cwd': row['cwd'], 'sectionId': row['thread_section_id']})} for row in rows}}
+        origin_column = 'originator' if 'originator' in {r['name'] for r in connection.execute('PRAGMA table_info(threads)')} else 'NULL AS originator'
+        rows = connection.execute('SELECT id, project_id, cwd, thread_section_id, ' + origin_column + ' FROM threads WHERE id IN (' + ','.join('?' for _ in identifiers) + ')', identifiers)
+        return {'data': {row['id']: {'originator': row['originator'], 'projectId': resolve({'id': row['id'], 'projectId': row['project_id'], 'cwd': row['cwd'], 'sectionId': row['thread_section_id']})} for row in rows}}
     finally:
         connection.close()
 
@@ -308,7 +315,7 @@ def read_threads(payload):
         if search:
             conditions.append("(COALESCE(name, '') LIKE ? ESCAPE '\\' OR COALESCE(title, '') LIKE ? ESCAPE '\\')")
             parameters.extend([literal_like(search), literal_like(search)])
-        sql = 'SELECT ' + ', '.join(THREAD_COLUMNS) + ' FROM threads WHERE ' + ' AND '.join(conditions)
+        sql = 'SELECT ' + thread_select_columns(connection) + ' FROM threads WHERE ' + ' AND '.join(conditions)
         sql += ' ORDER BY updated_at DESC, id ASC LIMIT ? OFFSET ?'
         rows = connection.execute(sql, parameters + [51, offset]).fetchall()
         resolve = desktop_membership(connection)
@@ -329,7 +336,7 @@ def read_detail(payload):
     try:
         require_columns(connection, 'state_5.sqlite', 'threads', THREAD_COLUMNS)
         identifier = thread_id(payload)
-        row = connection.execute('SELECT ' + ', '.join(THREAD_COLUMNS) + ' FROM threads WHERE id = ?', (identifier,)).fetchone()
+        row = connection.execute('SELECT ' + thread_select_columns(connection) + ' FROM threads WHERE id = ?', (identifier,)).fetchone()
         if row is None:
             raise ValueError('未找到会话：' + identifier)
         thread = normalized_thread(row)
@@ -728,7 +735,7 @@ def read_sidebar(payload):
                         section['projectIds'].append(pid); placed_projects.add(pid)
         resolve = desktop_membership(db)
         columns = {r['name'] for r in db.execute('PRAGMA table_info(threads)')}
-        optional = ['recency_at', 'is_pinned', 'section_position', 'section_entered_at_ms']
+        optional = ['originator', 'recency_at', 'is_pinned', 'section_position', 'section_entered_at_ms']
         query_columns = list(THREAD_COLUMNS) + [c for c in optional if c in columns]
         rows = db.execute('SELECT ' + ','.join(query_columns) + " FROM threads WHERE source IN (?, ?, ?, ?) AND COALESCE(thread_source,'') != 'ambient_suggestions'", INTERACTIVE_SOURCES).fetchall()
         tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}

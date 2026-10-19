@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {activitySource} from '../public/activity.js';
+import {activitySource,creationSource} from '../public/activity.js';
 const now=100000;
 const desktop={activity:{source:'desktop',state:'running',observedAt:now}};
 test('only a fresh desktop observation shows desktop activity',()=>{
@@ -29,4 +29,14 @@ test('service setup transports the expanded Unicode reader without a long Unicod
  const decoded=spawnSync('python3',['-'],{input:'import base64,sys\n'+assignment+'\nsys.stdout.write(OUTPUT_READER_SOURCE)\n',encoding:'utf8'});
  assert.equal(decoded.status,0,decoded.stderr);
  assert.equal(decoded.stdout,await readFile(new URL('../scripts/passive-store.py',import.meta.url),'utf8'));
+});
+
+test('creation identity survives idle, disconnection, and execution in another entrance',()=>{
+ const web={originator:'remote_codex_manager',...desktop};
+ assert.equal(creationSource(web),'web');
+ assert.equal(activitySource(web,{now}),'desktop');
+ assert.equal(creationSource({...web,status:{type:'idle'},activity:null}),'web');
+ assert.equal(creationSource({originator:'Codex Desktop',status:{type:'active'}}),'desktop');
+ assert.equal(creationSource({source:'vscode'}),'unknown');
+ assert.equal(creationSource({originator:'another_client'}),'unknown');
 });

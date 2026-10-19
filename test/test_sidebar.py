@@ -37,6 +37,17 @@ class SidebarTest(unittest.TestCase):
     def state(self, **values):
         (self.root / '.codex-global-state.json').write_text(json.dumps(values))
 
+    def test_creation_origin_is_optional_and_preserved_in_all_reads(self):
+        self.add('legacy')
+        self.assertIsNone(passive.read_threads({})['data'][0]['originator'])
+        self.db.execute('ALTER TABLE threads ADD COLUMN originator TEXT')
+        self.add('web', originator='remote_codex_manager')
+        self.add('desktop', originator='Codex Desktop')
+        for identifier, expected in [('web', 'remote_codex_manager'), ('desktop', 'Codex Desktop')]:
+            self.assertEqual(passive.read_detail({'threadId': identifier})['thread']['originator'], expected)
+            self.assertEqual(passive.read_sidebar_metadata({'threadIds': [identifier]})['data'][identifier]['originator'], expected)
+            self.assertEqual(next(t for t in passive.read_threads({})['data'] if t['id'] == identifier)['originator'], expected)
+
     def test_sources_filter_before_pagination_and_search_without_deleting(self):
         for i in range(55):
             self.add('review-' + str(i), '{"subagent":{"other":"guardian"}}', title='Guardian review', updated_at=200)

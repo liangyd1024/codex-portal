@@ -344,7 +344,7 @@ function renderControls() {
   const indicator=$('running-indicator');
   const unknownBackground=!source&&controlled()&&background.state==='unknown';
   indicator.hidden=!source&&!unknownBackground;
-  indicator.replaceChildren(...(source?[activityIcon(source,icon)]:[]));
+  indicator.replaceChildren(...(source?[activityIcon(source,icon),el('span','running-label',source==='desktop'?'桌面端正在运行':'正在运行'),el('span','running-detail','持续同步最新进展…')]:[]));
   if(unknownBackground){const warning=el('span','activity-icon');warning.title='后台命令状态待确认';warning.setAttribute('role','img');warning.setAttribute('aria-label',warning.title);warning.classList.add('activity-unknown');warning.append(icon('alert'));indicator.append(warning);}
   if(newChatOpen){
     const reason=!ready?'连接恢复后可发送，草稿已保留。':newDraft.phase==='uncertain'?'创建结果未确认，请刷新侧栏核对，避免重复创建。':!newDraft.cwd?'选择一个项目后开始。':creating?'正在创建会话…':'';
