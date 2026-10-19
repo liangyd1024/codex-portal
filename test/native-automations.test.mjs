@@ -68,3 +68,11 @@ test('native HTTP routes keep CSRF, Origin and host isolation',async()=>{
   assert.equal((await fetch(base+'/automations.js')).status,200);assert.equal((await fetch(base+'/automations.css')).status,200);
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
 });
+
+
+test('management binding is fixed after first selection',async()=>{
+ const {a,calls}=fixture();a.state.threadId=null;
+ await a.bind(id);assert.equal(a.state.threadId,id);const previous=calls.length;
+ await assert.rejects(a.bind(tid),e=>e.code==='DESKTOP_BINDING_FIXED');
+ assert.equal(a.state.threadId,id);assert.equal(calls.length,previous);
+});

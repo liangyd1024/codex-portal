@@ -22,6 +22,8 @@ test('task browser renders native rows, retains expanded details and only prepar
   calls.push(path);if(broken)throw Error('offline');return {threadId:'thread',items:[{id:'native-id',name,status:'PAUSED',rrule:'FREQ=DAILY;BYHOUR=8',prompt:'native prompt',kind:'heartbeat'}],runs:[],observedAt:Date.now()};
  }});
  view.open();await new Promise(r=>setImmediate(r));const page=main.children[0],list=page.children[3];
+ assert.deepEqual(page.children[1].children.map(n=>n.tag),['button','input','select']);
+ assert.equal(page.children[1].children[0].textContent,'＋ 新建任务');
  assert.equal(list.children.length,1);const row=list.children[0];assert.equal(row.dataset.id,'native-id');assert.equal(row.children[0].textContent,'Task');
  await row.children[2].children[1].onclick();assert.equal(opened[0][0],'thread');assert.match(opened[0][1],/native-id/);assert.deepEqual(calls,['/api/automations']);
  row.children[3].open=true;name='Renamed';await view.refresh();assert.equal(list.children[0].children[0].textContent,'Renamed');assert.equal(list.children[0].children[3].open,true);
