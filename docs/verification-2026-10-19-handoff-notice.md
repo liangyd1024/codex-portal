@@ -15,4 +15,8 @@
 
 ## 部署
 
-正式基线 12a1b5e4d4593bcad24547cada9b2a420df7bd13 已包含在 master；待安装后补录。
+正式基线 12a1b5e4d4593bcad24547cada9b2a420df7bd13 已包含在 master。已推送并安装 f724ce5d2c4877845a4f65eae5950005a831b5bd；两次入口检查、加密备份、版本健康检查通过。
+
+备份：/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T083004550090Z.tar.gz.age。
+
+正式 local 恢复 connected，当前会话已恢复。原生引擎 PID 及启动时间均与部署前相同。静态资源确认消息详情入口已移除、交还提示挂在顶部连接提示之后；上线后没有再次进行真实交还操作或视觉验收。此结果补录为纯文档，不再次重启。
