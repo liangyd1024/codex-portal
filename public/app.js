@@ -1,3 +1,4 @@
+import {notifyManagerError, recoveryMessage} from './recovery-state.js';
 import {activitySource,activityIcon} from './activity.js';
 let scrollFollow,scrollContext;
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message-media.js';
@@ -279,10 +280,11 @@ function renderStatus() {
   $('connection-pill').querySelector('.connection-dot').className = 'connection-dot ' + variant;
   const banner = $('connection-banner');
   const error = c.error ? messageOf(c.error) : '';
-  if (error) { banner.hidden = false; banner.className = 'connection-banner error'; banner.textContent = error; }
-  else if (connected() && !state.transport) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '实时通道已中断。发送与审批已停用。恢复连接后，先核对目标机器状态。'; }
+  if (!state.transport) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '与网页服务的连接已中断，正在自动重连。已有内容和草稿保留，恢复后将自动同步。'; }
+  else if (error) { banner.hidden = false; banner.className = 'connection-banner error'; banner.textContent = error; }
   else if (['connecting','reconnecting'].includes(conn)) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '正在连接目标机器。' + (c.stage ? (stages[c.stage] || c.stage) + '…' : '正在核验连接状态…'); }
   else if(connected()&&service.protocolValidation?.status==='limited'){const names={create:'新建会话',takeover:'接管会话',message:'发送消息',steer:'补充要求',stop:'停止',queue:'排队输入',handoff:'交还桌面端',release:'释放控制'};const disabled=Object.entries(service.protocolValidation.features||{}).filter(([,v])=>!v.supported).map(([name])=>names[name]||name);banner.hidden=false;banner.className='connection-banner';banner.textContent='已连接。当前引擎暂不支持：'+(disabled.join('、')||'部分协议读取')+'。其他已核验功能仍可使用。详见连接诊断。';}
+  else if(connected()&&s.recoveryFailures?.length){banner.hidden=false;banner.className='connection-banner';banner.textContent=recoveryMessage(s.recoveryFailures);}
   else banner.hidden = true;
   const connect = $('connect-button'); clear(connect); connect.append(icon(connected()||connectionPending() ? 'close' : 'link'),el('span','',state.busy.has('disconnect') ? '正在断开…' : connectionPending()?'取消连接':connected() ? '断开本机连接' : '连接目标机器'));
   const welcome = $('welcome-connect'); clear(welcome); welcome.append(icon(connected() ? 'plus' : 'link'),el('span','',connectionPending() ? '正在连接…' : connected() ? '新建目标机器会话' : '连接 ' + (h.alias || '目标机器')));
@@ -1092,7 +1094,7 @@ function handleEvent(event) {
     if (!was && connected()) refreshWorkspace().catch(e => recordError(e,'sync'));
     return;
   }
-  if (method === 'manager/error') { recordError(p.message || p.error || p,p.stage || 'remote'); toast(messageOf(p.message || p.error || p),true,11000); return; }
+  if (method === 'manager/error') { recordError(p.message || p.error || p,p.stage || 'remote'); if(notifyManagerError(p))toast(messageOf(p.message || p.error || p),true,11000); return; }
   if (method === 'manager/request') {
     const r = p.request || p; if (r.id != null) state.localRequests = [...state.localRequests.filter(x => requestKey(x) !== requestKey(r)),r];
     renderRequests(); if (requests().some(r=>requestThread(r)!==state.selectedId)) { $('pending-requests').closest('details').open = true; }
