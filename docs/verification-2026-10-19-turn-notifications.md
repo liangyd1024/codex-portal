@@ -9,3 +9,5 @@
 ego-browser 独立预览 http://127.0.0.1:4327，状态目录 /tmp/rcm-notifications-20261019-1555；注入现有 fixture 拦截所有业务 API 和事件流，Notification 使用模拟实现。聚焦当前会话时成功/失败/停止各生成通知，重复事件不新增通知；测试按钮 Enter 可触发且焦点可见；桌面和 390px 窄屏无页面横向溢出。截图 /tmp/rcm-notifications-desktop.png、/tmp/rcm-notifications-mobile-final.png。未修改输入流程，未复测中文输入法。
 
 真实系统通知横幅及真实引擎完整执行未验；没有向现有会话发测试消息，没有停止或重启目标引擎。通知依赖浏览器权限和系统设置，页面关闭期间不实时推送，恢复连接后补发。
+
+正式部署：c26849bfbc46100bcfeb4584ebda493532034cd7 已推送 origin/master，并通过指定版本安装流程部署。两次空闲检查通过，仅豁免当前本机会话；已生成加密备份 /Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T085327840612Z.tar.gz.age。安装健康检查通过，重新读取 4317 正式静态资源确认已包含三种终态通知规则。仅重启 RCM 网页服务。
