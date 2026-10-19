@@ -20,3 +20,9 @@
 ego-browser 空间 135，4327 隔离预览使用 mobile-browser fixture 拦截所有 API/事件流，不向真实引擎发送模拟写入。桌面验证超过 5 秒等待提示、操作失败且刷新挂起时立即显示错误及解除忙碌；390×844 验证立即归档状态、成功反馈、Escape 返回菜单锚点、无横向溢出（scrollWidth=390），无浏览器脚本错误。截图 /tmp/rcm-archive-mobile-pending.png。未改动输入流程，未重复中文输入法检查。未操作真实手机或真实会话归档，未验证 Ally 原生写入耗时及双端视觉同步。
 
 正式基线 5353174 已包含在本次 master；本次部署记录后补。
+
+## 正式部署
+
+2bd9dd76797bcac5568fdd31af453930ccab49b9 已推送 origin/master，并通过既有安装流程部署：部署前及重启前空闲检查通过，仅豁免当前本机会话；加密备份 /Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T132223995976Z.tar.gz.age；版本健康检查通过，/api/version 返回该提交。
+
+浏览器同一空间新增无 fixture 的正式页 p2，观察 Ally 自动重新连接及侧栏菜单恢复（10 个项目/会话菜单）；未打开或操作业务会话。加载仍有远程等待，不能宣称网络提速。Ally 引擎 PID 51520 保持不变。空间 135 已关闭。没有进行真实手机与真实归档写入验收。
