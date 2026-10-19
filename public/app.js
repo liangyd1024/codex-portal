@@ -1234,9 +1234,8 @@ function toggleMessageDetails(show) {
   const atBottom = scrollFollow?.following;
   $('conversation').classList.toggle('show-message-details',show);
   $('toggle-message-details').setAttribute('aria-pressed',String(show));
-  $('toggle-message-details').textContent = show ? '收起消息信息' : '显示消息信息';
+  $('toggle-message-details').textContent = '消息详情';
   $('toggle-message-details').setAttribute('aria-label',$('toggle-message-details').textContent);
-  saveLayout('messageDetails',show);
   if (atBottom) scroller.scrollTop = scroller.scrollHeight;
 }
 function wireEvents() {
@@ -1270,7 +1269,7 @@ function wireEvents() {
     const width = entries[0].contentRect.width;
     if (width !== composerWidth) { composerWidth = width; requestAnimationFrame(resizeInput); }
   }).observe($('message-input'));
-  toggleMessageDetails(readLayout('messageDetails',false));
+  toggleMessageDetails(false);
   $('toggle-message-details').onclick = () => toggleMessageDetails(!$('conversation').classList.contains('show-message-details'));
   $('connect-button').onclick = () => connected()||connectionPending() ? disconnectRemote() : connectRemote();
   $('welcome-connect').onclick = () => connected() ? openNewDialog() : connectRemote();

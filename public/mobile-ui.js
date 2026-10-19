@@ -12,10 +12,11 @@ export function installMobileUI({closeDrawers, layoutChanged}) {
   summary.textContent = '⋯'; summary.setAttribute('aria-label','更多操作');
   const panel = document.createElement('div'); panel.className = 'mobile-more-panel';
   more.append(summary,panel); byId('toggle-inspector').before(more);
+  panel.append(byId('toggle-message-details'));
   const toasts=byId('toasts'),toastMarker=document.createComment('desktop notifications');toasts.before(toastMarker);
   const takeoverSlot = document.createElement('div'); takeoverSlot.className = 'mobile-takeover';
   byId('message-form').before(takeoverSlot);
-  const relocations = [byId('refresh-all'), byId('auto-refresh').closest('label'), byId('toggle-message-details'), byId('handoff-thread'), byId('takeover')].map(node => {
+  const relocations = [byId('refresh-all'), byId('auto-refresh').closest('label'), byId('handoff-thread'), byId('takeover')].map(node => {
     const marker = document.createComment('desktop control'); node.before(marker); return {node,marker};
   });
   const refreshLabel = document.createElement('span'); refreshLabel.textContent = '刷新状态与会话';
