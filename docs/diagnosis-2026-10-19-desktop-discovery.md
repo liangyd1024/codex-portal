@@ -34,3 +34,9 @@
 - 证据：`/tmp/rcm-discovery-probe.json`、`/tmp/rcm-discovery-tests.log`、`/tmp/rcm-discovery-change.diff`。
 
 最终全量验证：203 Node + 47 Python 全通过（`/tmp/rcm-discovery-tests-final.log`）。专用测试会话通过预览的原生归档接口返回 HTTP 200，随后仅关闭本次 4327 预览进程，未停止目标引擎。正式部署前核对当前线上 0146f8b 为 master 的祖先；其他会话新建的 scripts/desktop-session.py 不纳入本次提交。
+
+## 正式部署
+
+功能提交 ad26f135eb3763da8511a76a609fa3d0c53aed20 已推送 origin/master。共享工作区存在另一会话未提交的 scripts/desktop-session.py，安装程序按规则拒绝脏目录；随后从当前 master 创建只含已提交内容的独立本地克隆，使用原安装脚本部署该同一提交，未修改或暂存其他会话文件。
+
+安装通过两次入口空闲检查、加密备份及版本健康检查。备份 `~/Library/Application Support/RemoteCodexManager/backups/marco-20261019T090454000525Z.tar.gz.age`。仅重启 RCM 网页，未停止 Codex 应用或引擎。正式版本接口确认 ad26f13；正式环境没有再次发送模型消息，不宣称正式桌面项目归属端到端通过。
