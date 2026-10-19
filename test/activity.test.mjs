@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {activitySource,creationSource} from '../public/activity.js';
+import {activitySource,creationSource,conversationActivity} from '../public/activity.js';
 const now=100000;
 const desktop={activity:{source:'desktop',state:'running',observedAt:now}};
 test('only a fresh desktop observation shows desktop activity',()=>{
@@ -39,4 +39,17 @@ test('creation identity survives idle, disconnection, and execution in another e
  assert.equal(creationSource({originator:'Codex Desktop',status:{type:'active'}}),'desktop');
  assert.equal(creationSource({source:'vscode'}),'unknown');
  assert.equal(creationSource({originator:'another_client'}),'unknown');
+});
+
+test('completed turns with a live preview process are background work, not an active answer',()=>{
+ const options={connected:true,controlled:true,active:true,background:{state:'running'}};
+ assert.equal(conversationActivity({},options).kind,'turn');
+ const ended=conversationActivity({}, {...options,active:false});
+ assert.equal(ended.kind,'background');
+ assert.equal(ended.label,'后台命令运行中');
+ assert.doesNotMatch(ended.detail,/同步最新进展/);
+ assert.equal(conversationActivity({}, {...options,active:false,background:{state:'idle'}}),null);
+ assert.equal(conversationActivity({}, {...options,active:false,controlled:false}),null);
+ assert.equal(conversationActivity({}, {...options,connected:false}),null);
+ assert.equal(conversationActivity({}, {...options,active:false,background:{state:'unknown'}}).kind,'unknown');
 });

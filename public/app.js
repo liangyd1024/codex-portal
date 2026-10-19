@@ -1,5 +1,5 @@
 import {notifyManagerError, recoveryMessage} from './recovery-state.js';
-import {activitySource,activityIcon} from './activity.js';
+import {activitySource,conversationActivity,renderConversationActivity} from './activity.js';
 let scrollFollow,scrollContext;
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message-media.js';
 import {markdown, groupTurnItems} from './message-body.js';
@@ -340,12 +340,9 @@ function renderControls() {
   $('interrupt').title=active?'停止当前轮次':'停止后台命令';
   $('interrupt').setAttribute('aria-label',state.busy.has('interrupt') ? '正在请求停止' : $('interrupt').title);
   $('interrupt').setAttribute('aria-busy',String(state.busy.has('interrupt')));
-  const source=activitySource(currentThread(),{connected:usable(),webActive:controlled()&&(active||background.state==='running')});
-  const indicator=$('running-indicator');
-  const unknownBackground=!source&&controlled()&&background.state==='unknown';
-  indicator.hidden=!source&&!unknownBackground;
-  indicator.replaceChildren(...(source?[activityIcon(source,icon),el('span','running-label',source==='desktop'?'桌面端正在运行':'正在运行'),el('span','running-detail','持续同步最新进展…')]:[]));
-  if(unknownBackground){const warning=el('span','activity-icon');warning.title='后台命令状态待确认';warning.setAttribute('role','img');warning.setAttribute('aria-label',warning.title);warning.classList.add('activity-unknown');warning.append(icon('alert'));indicator.append(warning);}
+  renderConversationActivity($('running-indicator'),newChatOpen?null:conversationActivity(currentThread(),{
+    connected:ready,controlled:controlled(),active,background,
+  }),icon);
   if(newChatOpen){
     const reason=!ready?'连接恢复后可发送，草稿已保留。':newDraft.phase==='uncertain'?'创建结果未确认，请刷新侧栏核对，避免重复创建。':!newDraft.cwd?'选择一个项目后开始。':creating?'正在创建会话…':'';
     $('send-message').disabled ||= !featureReady('create')||!newDraft.cwd||newDraft.phase!=='editing';
