@@ -1,3 +1,4 @@
+import {deliverNotice,submitNotification} from './notification-delivery.js';
 import {asyncQuestions,QuestionDrafts} from './questions.js';
 import {questionForm} from './question-form.js';
 import {fileLink,closeFileViewer} from './message-files.js';
@@ -25,7 +26,7 @@ import {installMobile} from './mobile.js';
 let composer;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from './detail-cache.js';
 import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
-import {updateExtensionNotice, renderExtensionNotice, selectConnectionStatus, userContentKey, mergeLiveTurns, taskNotice, claimNotice, backgroundActivity} from './connection-state.js';
+import {updateExtensionNotice, renderExtensionNotice, selectConnectionStatus, userContentKey, mergeLiveTurns, taskNotice, backgroundActivity} from './connection-state.js';
 function savedHost() { try { return localStorage.getItem('rcm.connection'); } catch { return null; } }
 const requestedHost = new URL(location.href).searchParams.get('host');
 const response=await fetch('/api/connections');
@@ -922,33 +923,36 @@ function notificationDiagnostic(message) {
   list.prepend(el('p','',dateTime(new Date()) + ' · ' + message));
   while (list.children.length > 8) list.lastElementChild.remove();
 }
-function sendTaskNotification(title, body, tag, threadId) {
+function sendTaskNotification(title, body, tag, threadId, host=targetHost) {
   notificationDiagnostic(title + '：正在提交给浏览器');
-  try {
-    const notification = new Notification(title,{body,tag});
+  let notification;
+  return submitNotification(()=>{
+    notification = new Notification(title,{body,tag});
     liveNotifications.add(notification);
-    notification.onshow = () => notificationDiagnostic(title + '：浏览器报告已显示');
     notification.onclose = () => { liveNotifications.delete(notification); notificationDiagnostic(title + '：通知已关闭'); };
-    notification.onclick = () => { window.focus(); notification.close(); if (threadId) selectThread(threadId); };
-    notification.onerror = () => { liveNotifications.delete(notification); notificationDiagnostic(title + '：浏览器报告发送失败'); setText('notification-status','通知发送失败。请检查浏览器和 Mac 的通知设置。'); };
-  } catch (error) { notificationDiagnostic(title + '：' + error.message); setText('notification-status','通知发送失败：' + error.message); }
+    notification.onclick = () => { window.focus(); notification.close(); if (threadId && host===targetHost) selectThread(threadId); };
+    return notification;
+  },{
+    shown:()=>notificationDiagnostic(title + '：浏览器报告已显示；若 Mac 未弹出，请检查系统的浏览器通知开关'),
+    failed:message=>{liveNotifications.delete(notification);notificationDiagnostic(title + '：' + message);setText('notification-status',message+'。请检查浏览器和 Mac 的通知设置。');},
+  });
 }
-async function notifyTaskEvent(method, params) {
+async function notifyTaskEvent(method, params, replayKey) {
   if (!taskNotificationsEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
+  const host=targetHost;
   const threadId = params.threadId || params.thread?.id || (params.request || params).params?.threadId;
   const thread = state.threads.find(t => t.id === threadId) || (state.selectedId === threadId ? currentThread() : null);
-  const notice = taskNotice(method, params, {host:targetHost, known:!!thread || state.status?.controlledThreads?.includes(threadId) || state.status?.subscribedThreads?.includes(threadId)});
+  const notice = taskNotice(method, params, {host, known:!!thread || state.status?.controlledThreads?.includes(threadId) || state.status?.subscribedThreads?.includes(threadId)});
   if (!notice) return;
+  const body=(state.status?.host?.alias || host) + ' · ' + (thread ? threadName(thread) : '会话 ' + threadId.slice(0,8));
   try {
-    const delivered = await navigator.locks.request('rcm.task-notifications', () => {
-      if (localStorage.getItem('rcm.taskNotifications.' + targetHost) !== 'true') return;
-      if (!claimNotice(localStorage,notice.key)) return true;
-      sendTaskNotification('Codex · ' + notice.label, (state.status?.host?.alias || targetHost) + ' · ' + (thread ? threadName(thread) : '会话 ' + threadId.slice(0,8)), notice.key, threadId);
-      return true;
+    const delivered = await navigator.locks.request('rcm.task-notifications', async () => {
+      if (host!==targetHost || localStorage.getItem('rcm.taskNotifications.' + host) !== 'true') return false;
+      return deliverNotice(localStorage,notice.key,()=>sendTaskNotification('Codex · ' + notice.label,body,notice.key,threadId,host));
     });
-    if(delivered)await api('/api/notices/ack',{method:'POST',body:{key:notice.key}});
+    if(delivered && host===targetHost)await api('/api/notices/ack',{method:'POST',body:{key:replayKey || notice.key}});
     return delivered;
-  } catch (error) { recordError(error,'notifications'); }
+  } catch (error) { notificationDiagnostic('通知处理失败：'+error.message);recordError(error,'notifications'); }
 }
 
 async function connectRemote() {
@@ -1144,7 +1148,7 @@ function handleEvent(event) {
   const method = data.method || event.type, p = data.params || {};
   if (method==='manager/sidebarChanged'||/thread\/(section|readState)\//.test(method)||method.startsWith('threadSection/'))scheduleListRefresh();
   if(method==='manager/taskNotice'){
-    notifyTaskEvent(p.event.method,p.event.params);return;
+    notifyTaskEvent(p.event.method,p.event.params,p.key);return;
   }
   notifyTaskEvent(method,p);
   if (method === 'manager/status') {

@@ -90,6 +90,11 @@ export function taskNotice(method, params, {host, known}) {
   }
   return null;
 }
+export function hasClaimedNotice(storage,key) {
+  let entries;
+  try { entries=JSON.parse(storage.getItem('rcm.notifiedTasks.v2') || '[]'); } catch { return false; }
+  return Array.isArray(entries) && entries.includes(key);
+}
 // Caller holds a Web Lock, shared by all tabs at this origin.
 export function claimNotice(storage, key) {
   const name = 'rcm.notifiedTasks.v2';

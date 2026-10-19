@@ -26,3 +26,23 @@ test('reconnect recovers all recent terminal turns across pages, excluding old a
  assert.deepEqual([...manager.notices.values()].map(e=>e.params.turn.id),['ok','failed','stopped']);
  await manager.recoverNotices(rpc,'chat',100);assert.equal(manager.notices.size,3);
 });
+
+test('server keys use stable connection ID and acknowledge legacy alias records',()=>{
+ const manager=new Manager({host:{id:'local',alias:'Display name'}});manager.subscriptions.set('chat',{});
+ const p=event('stable','completed');manager.publish('turn/completed',p);
+ const key=taskNotice('turn/completed',p,{host:'local',known:true}).key;
+ assert.ok(manager.notices.has(key));assert.deepEqual(manager.acknowledgeNotice(key),{acknowledged:true});
+ const legacy=taskNotice('turn/completed',p,{host:'Old display name',known:true}).key;
+ manager.notices.set(legacy,{method:'turn/completed',params:p});
+ assert.deepEqual(manager.acknowledgeNotice(key),{acknowledged:true});assert.equal(manager.notices.size,0);
+ assert.deepEqual(manager.acknowledgeNotice('missing'),{acknowledged:false});
+});
+test('failed and timed-out notifications remain retryable; shown notifications deduplicate',async()=>{
+ const {deliverNotice,submitNotification}=await import('../public/notification-delivery.js');
+ const values=new Map(),storage={getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)};
+ let calls=0;
+ const send=mode=>()=>submitNotification(()=>{calls++;if(mode==='throw')throw Error('denied');const n={};if(mode!=='timeout')queueMicrotask(()=>n[mode==='show'?'onshow':'onerror']());return n;},{timeoutMs:5});
+ for(const mode of ['throw','error','timeout']){assert.equal(await deliverNotice(storage,'key',send(mode)),false);assert.equal(values.size,0);}
+ assert.equal(await deliverNotice(storage,'key',send('show')),true);assert.equal(calls,4);
+ assert.equal(await deliverNotice(storage,'key',send('show')),true);assert.equal(calls,4);
+});
