@@ -586,10 +586,9 @@ function renderMessages() {
       processGroup.dataset.itemId = 'process-' + t.id + '-' + group.key;
       const summary = el('summary');
       summary.append(icon('chevron','chevron'),el('span','','查看过程'));
-      const failed = group.items.some(value => ['failed','declined','systemError'].includes(typeOf(value.status)) || (value.exitCode != null && value.exitCode !== 0));
       const active = group.items.some(value => ['inProgress','in_progress','running'].includes(typeOf(value.status)));
-      if (failed) summary.append(el('span','process-status error','有失败记录'));
-      else if (active) summary.append(el('span','process-status',uncertainHistory() ? '状态未确认' : '执行中'));
+      // Individual tool failures remain in their details, not the turn summary.
+      if (active) summary.append(el('span','process-status',uncertainHistory() ? '状态未确认' : '执行中'));
       const body = el('div','activity-items');
       for (const item of group.items) { const message=renderItem(item); message.dataset.messageId=item.id; body.append(message); }
       processGroup.append(summary,body); turn.append(processGroup);
