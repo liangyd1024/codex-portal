@@ -13,4 +13,8 @@
 
 ## 部署
 
-待安装后补录正式版本、备份和恢复状态。
+- 正式基线 129a99b0327539600a0758d5edfd0bc62b20a5ae 为 master 祖先；已推送并安装 12a1b5e4d4593bcad24547cada9b2a420df7bd13。
+- 备份前和重启前检查通过，仅豁免当前部署会话；备份 /Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T082212348918Z.tar.gz.age。
+- 版本健康检查通过，local connected，当前部署会话已恢复。原生引擎 PID 1596 和启动时间保持不变。
+- 正式静态资源确认消息详情按钮放入菜单、默认收起逻辑生效；本次上线后未再次做浏览器视觉验收。
+- 此部署结果补录为纯文档，不再重启网页。
