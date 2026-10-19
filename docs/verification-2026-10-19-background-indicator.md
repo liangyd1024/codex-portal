@@ -9,3 +9,5 @@
 验证：相关 9 项测试通过，npm test 首次 168 Node + 38 Python 通过。ego-browser 空间 98 使用真实 activity 模块及样式模拟 active→background→idle/unknown，1500px 与 390px 无溢出，键盘焦点有描边，截图 /tmp/rcm-background-desktop.png、/tmp/rcm-background-mobile.png；浏览器空间已关闭。未执行真实模型轮次生命周期或实体手机验收，未改中文输入处理。
 
 当前工作区另一会话正在修改消息 DOM 更新逻辑，本次提交仅包含运行提示修复；共享工作区的渲染调用已兼容其增量更新，未覆盖其修改。
+
+已提交 3356cd4 并推送 master。在 /tmp/rcm-background-deploy-20261019-1438 的干净提交副本重新运行全套测试通过；真实接口核对后台命令数量已为 0。标准安装器因当前网页轮次仍执行而拒绝部署；安排最多 15 分钟空闲等待后按原安装流程重试，日志 /tmp/rcm-background-deploy-20261019.log。此处不将待执行部署记为已上线。
