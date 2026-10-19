@@ -17,12 +17,14 @@ import {createLocalTransport} from './lib/local.mjs';
 import {createSshTransport} from './lib/ssh.mjs';
 import {loadConfig,publicHost} from './lib/config.mjs';
 import { Manager, AppError } from './lib/manager.mjs';
+import {NativeAutomations} from './lib/native-automations.mjs';
 
 const ROOT=path.dirname(fileURLToPath(import.meta.url));
 let BUILD_VERSION='development';try{BUILD_VERSION=(await readFile(path.join(ROOT,'VERSION'),'utf8')).trim();}catch{}
 export function createApp({mobileConfig=null,setupMobile=null,access=new MobileAccess(null),config=loadConfig(),stateDir=process.env.RCM_STATE_DIR||path.join(homedir(),'.codex/remote-codex-manager'),managers:providedManagers}={}) {
  const managers=providedManagers||new Map(config.connections.map(host=>[host.id,new Manager({titleStore:path.join(stateDir,`web-titles-${host.id}.json`),host:publicHost(host),...(host.kind==='local'?createLocalTransport(host):createSshTransport(host))})]));
  const manager=managers.get(config.defaultConnection);
+ const automations=new Map([...managers].map(([id,m])=>[id,new NativeAutomations(m)]));
   const broadcasts=new Map();
   const csrf=randomBytes(32).toString('hex'); const clients=new Set();
 
@@ -75,6 +77,10 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
         req.on('close',()=>{clearInterval(heartbeat);clients.delete(res);});return;
       }
       if(req.method==='GET'&&p==='/api/status')return json(res,200,manager.status());
+      if(req.method==='GET'&&p==='/api/automations')return json(res,200,await automations.get(targetKey).list());
+      if(req.method==='GET'&&p==='/api/automations/candidates')return json(res,200,await automations.get(targetKey).candidates(url.searchParams.get('search')||''));
+      if(req.method==='GET'&&p==='/api/automations/history')return json(res,200,await automations.get(targetKey).history(url.searchParams.get('cursor'),url.searchParams.get('threadId')));
+      if(req.method==='GET'&&p==='/api/automations/session')return json(res,200,await automations.get(targetKey).detail());
       if(req.method==='GET'&&p==='/api/composer')return json(res,200,await composerCatalog(manager,url.searchParams.get('cwd'),url.searchParams.get('kind')));
       if(req.method==='GET'&&p==='/api/models'){manager.requireConnected();return json(res,200,{data:url.searchParams.get('refresh')==='1'||!manager.models.length?await manager.refreshCatalog('models'):manager.models,nextCursor:null});}
       if(req.method==='GET'&&p==='/api/sidebar')return json(res,200,await readSidebar(manager,Object.fromEntries(url.searchParams)));
@@ -95,6 +101,11 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
         const token=req.headers['x-csrf-token']||'';
         if(typeof token!=='string'||Buffer.byteLength(token)!==Buffer.byteLength(csrf)||!timingSafeEqual(Buffer.from(token),Buffer.from(csrf)))throw new AppError('本机会话已变化。请刷新页面。',403,'CSRF');
         const data=await body(req,/^\/api\/threads\/[A-Za-z0-9_-]+\/(message|steer)$/.test(p)?6*1024*1024:1024*1024);
+        if(p==='/api/automations/binding')return json(res,200,await automations.get(targetKey).bind(data.threadId));
+        if(p==='/api/automations/interrupt')return json(res,200,await automations.get(targetKey).interrupt(data));
+        if(p==='/api/automations/message')return json(res,200,await automations.get(targetKey).send(data));
+        if(p==='/api/automations/acknowledge')return json(res,200,await automations.get(targetKey).acknowledge(data));
+        if(match&&match[1]===automations.get(targetKey).state.threadId&&match[2])throw new AppError('此管理会话由桌面执行，请从定时任务入口继续。',409,'DESKTOP_MANAGED');
         if(p==='/api/sidebar/actions')return json(res,200,await sidebarAction(manager,data));
         if(p==='/api/access/setup'&&!remote){if(!setupMobile)throw new AppError('此入口不支持配置手机访问。请在本机正式服务中操作。',409);if(data.mode!==undefined&&!['lan','tailscale'].includes(data.mode))throw new AppError('未知手机访问方式。');mobileConfig=await setupMobile(data.mode||'lan');return json(res,200,{ok:true});}
         if(p==='/api/access/code'&&!remote){if(!mobileConfig?.origins?.length)throw new AppError('请先配置手机访问地址，再生成配对码。',409,'MOBILE_NOT_CONFIGURED');return json(res,200,access.createCode(data.ttlSeconds,data.sessionTtlSeconds));}
@@ -114,7 +125,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       }
       if(p.startsWith('/api/'))return json(res,404,{error:{message:'找不到此接口。',code:'NOT_FOUND'}});
       if(req.method!=='GET'&&req.method!=='HEAD')throw new AppError('不支持此请求方法。',405);
-      const file={'/questions.js':'questions.js','/question-form.js':'question-form.js','/message-files.js':'message-files.js','/recovery-state.js':'recovery-state.js','/activity.js':'activity.js','/project-picker.js':'project-picker.js','/project-picker.css':'project-picker.css','/message-media.js':'message-media.js','/message-body.js':'message-body.js','/message-dom.js':'message-dom.js','/new-chat.js':'new-chat.js','/new-chat.css':'new-chat.css','/inline-mentions.js':'inline-mentions.js','/skill-suggestions.js':'skill-suggestions.js','/attachments.js':'attachments.js','/composer.js':'composer.js','/composer.css':'composer.css','/':'index.html','/index.html':'index.html','/app.js':'app.js','/mobile-ui.js':'mobile-ui.js','/mobile-ui.css':'mobile-ui.css','/input-state.js':'input-state.js','/thread-sync.js':'thread-sync.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
+      const file={'/automations.js':'automations.js','/automations.css':'automations.css','/questions.js':'questions.js','/question-form.js':'question-form.js','/message-files.js':'message-files.js','/recovery-state.js':'recovery-state.js','/activity.js':'activity.js','/project-picker.js':'project-picker.js','/project-picker.css':'project-picker.css','/message-media.js':'message-media.js','/message-body.js':'message-body.js','/message-dom.js':'message-dom.js','/new-chat.js':'new-chat.js','/new-chat.css':'new-chat.css','/inline-mentions.js':'inline-mentions.js','/skill-suggestions.js':'skill-suggestions.js','/attachments.js':'attachments.js','/composer.js':'composer.js','/composer.css':'composer.css','/':'index.html','/index.html':'index.html','/app.js':'app.js','/mobile-ui.js':'mobile-ui.js','/mobile-ui.css':'mobile-ui.css','/input-state.js':'input-state.js','/thread-sync.js':'thread-sync.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
       if(!file){res.writeHead(404);res.end('Not found');return;}
       const content=await readFile(path.join(ROOT,'public',file));
       res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);

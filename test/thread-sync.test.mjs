@@ -57,7 +57,7 @@ function detailFixture() {
   const state={selectedId:'a',selectionVersion:1,detailVersion:1,detail:{thread:{id:'a'},turns:[]},loadedOlderHistory:false,
     status:{instanceId:'one',connection:{state:'connected'},controlledThreads:[],handoffs:[]}};
   const requests=[],applied=[];
-  const context=vm.createContext({state,newChatOpen:false,performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
+  const context=vm.createContext({state,newChatOpen:false,automations:null,desktopSends:{},performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
     turns:()=>state.detail?.turns||[],outputBases:()=>new Map(),decodeOutputs:async x=>x,hydrateOutputs:x=>x,
     restoreDetail:async()=>{},scheduleDetailRefresh:()=>{},
     api:path=>new Promise((resolve,reject)=>requests.push({path,resolve,reject})),
@@ -130,4 +130,14 @@ test('structured skill confirmation removes optimistic echo without dropping oth
   const result=mergeLiveTurns([{id:'t',items:[echo,other]}],[{id:'t',items:[actual]}]);
   assert.deepEqual(result[0].items.map(i=>i.id),['accepted-other','real']);
   assert.deepEqual(mergeLiveTurns(result,[{id:'t',items:[actual]}]),result);
+});
+
+
+test('native management replies cannot replace a newly selected ordinary chat',async()=>{
+  const f=detailFixture();f.state.desktopMode=true;
+  const old=f.read();assert.equal(f.requests[0].path,'/api/automations/session');
+  f.state.desktopMode=false;f.state.selectedId='b';f.state.selectionVersion++;
+  f.requests[0].resolve({thread:{id:'a'},turns:[],desktop:{receipts:{}}});await old;
+  assert.equal(f.applied.length,0);
+  f.context.automations={opened:true};await f.read();assert.equal(f.requests.length,1);
 });

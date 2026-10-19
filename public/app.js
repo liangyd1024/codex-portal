@@ -12,6 +12,8 @@ import {installAttachments} from './attachments.js';
 let attachments;
 import {Sidebar} from './sidebar.js';
 import {DraftStore, shouldSendOnEnter, coalesceRefresh} from './input-state.js';
+import {installAutomations} from './automations.js';
+let automations;
 import {installThreadSync} from './thread-sync.js';
 import {installMobileUI, compactLayout, touchInput, installScrollFollow} from './mobile-ui.js';
 let mobileUI, draftWritesSuspended = false;
@@ -33,7 +35,10 @@ const connectionIds=connectionConfig.data.map(c=>c.id);
 const targetHost=connectionIds.includes(requestedHost)?requestedHost:connectionIds.includes(savedHost())?savedHost():connectionConfig.defaultConnection;
 document.getElementById('connection-select').replaceChildren(...connectionConfig.data.map(c=>new Option(c.host.alias,c.id)));
 function savedView() { try { return JSON.parse(sessionStorage.getItem('rcm.view.'+targetHost)||'{}'); } catch { return {}; } }
-function saveView() { try { sessionStorage.setItem('rcm.view.'+targetHost,JSON.stringify({selectedId:state.selectedId,projectId:state.projectId})); } catch {} }
+function pendingDesktopSends(){try{return JSON.parse(sessionStorage.getItem('rcm.desktopSends.'+targetHost)||'{}');}catch{return {};}}
+const desktopSends=pendingDesktopSends();
+function saveDesktopSends(){try{sessionStorage.setItem('rcm.desktopSends.'+targetHost,JSON.stringify(desktopSends));}catch{toast('浏览器无法保存发送回执，请先核对原始会话再重试。',true);}}
+function saveView() { try { sessionStorage.setItem('rcm.view.'+targetHost,JSON.stringify({selectedId:state.selectedId,projectId:state.projectId,desktopMode:state.desktopMode})); } catch {} }
 function rememberHost(host) { try { localStorage.setItem('rcm.connection',host); } catch {} }
 rememberHost(targetHost);
 const targetUrl=path=>path+(path.includes('?')?'&':'?')+'host='+targetHost;
@@ -53,7 +58,7 @@ function applyStatus(status){
 
 const $ = id => document.getElementById(id);
 const state = {
-  status: null, models: [], projects: [], threads: [], selectedId: savedView().selectedId || null, detail: null,
+  desktopMode:Boolean(savedView().desktopMode), status: null, models: [], projects: [], threads: [], selectedId: savedView().selectedId || null, detail: null,
   sidebar:null, sidebarArchived:false, selectedArchived:false, projectId: savedView().projectId || null, search: '', threadCursor: null, historyCursor: null, loadedOlderHistory: false,
   model: '', effort: '', csrf: '', transport: false, busy: new Set(), loadingThreads: false, loadingModels: false, loadingProjects: false, threadListSource: null,
   runtimeNotices: new Map(), loadingDetail: false, errors: [], localRequests: [], drafts: new DraftStore({storage:()=>sessionStorage,host:targetHost,onError:()=>toast('浏览器无法保存草稿，请先复制重要内容。',true)}), selectionVersion: 0,
@@ -64,13 +69,13 @@ const newDraftId='local:new-chat-draft';
 const newDraft=new NewChatDraft(sessionStorage,'rcm.new-chat.'+targetHost);
 let newChatOpen=false;
 const inputId=()=>newChatOpen?newDraftId:state.selectedId;
-const inputReady=()=>newChatOpen?usable()&&Boolean(newDraft.cwd):usable()&&controlled()&&!state.selectedArchived;
+const inputReady=()=>state.desktopMode&&!newChatOpen?false:newChatOpen?usable()&&Boolean(newDraft.cwd):usable()&&controlled()&&!state.selectedArchived;
 function rememberNewDraft(){try{newDraft.save();}catch{toast('新会话草稿设置暂未保存，请保留当前页面。',true);}}
 function closeNewChat(restore=true){
   if(!newChatOpen)return;
   state.drafts.set(newDraftId,$('message-input').value);newChatOpen=false;
   $('conversation').append(document.querySelector('.composer-region'));
-  $('new-chat-page').hidden=true;document.querySelector('.main-panel').classList.remove('new-chat-open');
+  $('new-chat-page').hidden=true;document.querySelector('.main-panel').classList.remove('new-chat-open');document.querySelector('.main-panel').classList.toggle('desktop-chat',restore&&state.desktopMode);
   if(restore){$('message-input').value=state.drafts.get(state.selectedId)||'';renderThread();resizeInput();}
 }
 function flushDrafts() {
@@ -143,8 +148,9 @@ function currentHandoff() {
   return state.detail?.handoff||null;
 }
 function snapshotHistory() { return state.detail?.historySource === 'snapshot' || currentThread()?.historySource === 'snapshot'; }
-function uncertainHistory() { return snapshotHistory() && !controlled(); }
+function uncertainHistory() { return snapshotHistory() && !controlled() && !state.desktopMode; }
 function running() {
+  if(state.desktopMode)return typeOf(currentThread()?.status)==='active';
   if (uncertainHistory()) return false;
   return turns().some(t => ['inProgress','in_progress','running'].includes(typeOf(t.status))) || typeOf(currentThread()?.status) === 'active';
 }
@@ -381,6 +387,20 @@ function renderControls() {
     feedback.textContent = pending ? '正在提交，请稍候…' : card.dataset.asyncQuestion==='true'&&!state.status?.controlledThreads?.includes(card.dataset.threadId) ? '查看模式，请在原操作入口回答。' : !ready ? '连接恢复后可处理此请求，已填内容会保留。' : '';
     feedback.hidden = !feedback.textContent;
   });
+  if($('desktop-review'))$('desktop-review').hidden=true;
+  if(state.desktopMode&&!newChatOpen){
+    const desktop=state.detail?.desktop,online=state.transport&&desktop?.available,unconfirmed=desktop?.unconfirmed||desktopSends[state.selectedId]?.messageId;
+    input.disabled=posting;input.placeholder=active?'任务执行中，可先输入下一条要求…':'描述要创建、修改或删除的定时任务…';
+    $('takeover').hidden=true;
+    $('send-message').disabled=!online||!desktop?.canSend||!!unconfirmed||posting||!input.value.trim();
+    $('send-message').title='发送到桌面会话';$('send-message').setAttribute('aria-label','发送到桌面会话');
+    $('interrupt').hidden=!active;$('interrupt').disabled=!online||state.busy.has('interrupt');
+    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'正在发送到桌面…':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复创建任务。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
+    availability.textContent=reason;availability.hidden=!reason;
+    $('desktop-review').hidden=!unconfirmed;$('desktop-review').disabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
+    setText('composer-hint','使用桌面会话的模型与设置。发送成功仅代表会话已接收，任务结果以原始回复为准。');
+  }
+  if(automations?.opened){$('thread-title').hidden=false;setText('thread-title','定时任务');}
 }
 function controlReason(id, text) {
   const button = $(id); let note = $('reason-' + id);
@@ -624,6 +644,7 @@ function renderThread() {
   note.className = 'control-note' + (busy ? ' error' : '');
   note.textContent = own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话仍在另一个入口中使用。请在原入口结束此会话的使用并等待释放，再重试。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
   if (snapshotHistory()) note.textContent = (own ? '历史来自快照。实时状态由目标机器控制连接确认。' : '历史快照，运行状态需接管后确认。') + (busy ? ' ' + note.textContent : '');
+  if(state.desktopMode){badge.textContent='桌面托管';note.textContent='消息由 Codex 桌面执行，定时任务与桌面共用。';}
   renderMessages(); renderSession(); renderFiles(); renderControls(); resizeInput();
 }
 function renderSession() {
@@ -786,10 +807,11 @@ function applyDetail(data, resetModels = false) {
   state.historyCursor = data.nextCursor || data.historyCursor || null; state.historyError = '';
   if (resetModels) renderModels(true); renderThread(); renderRequests(); if(!data.recovering)saveDetailSoon();
 }
-async function selectThread(id) {
+async function selectThread(id,options={}) {
   if(state.busy.has('create')){toast('正在创建会话，请稍候。');return;}
   closeNewChat();
-
+  automations?.close();state.desktopMode=Boolean(options.desktop||id===automations?.threadId);
+  document.querySelector('.main-panel').classList.toggle('desktop-chat',state.desktopMode);
   toggleInspector(false);
   $('messages').style.paddingBottom = '';
   if (inputId()) state.drafts.set(inputId(),$('message-input').value);
@@ -801,6 +823,15 @@ async function selectThread(id) {
   catch (e) { if (seq !== state.selectionVersion) return; state.loadingDetail = false; state.historyError = messageOf(e); recordError(e,'thread'); renderThread(); }
 }
 async function readSelectedDetail(id,isCurrent){
+  if(state.desktopMode){
+    const data=await api('/api/automations/session');if(data.thread.id!==id)throw new Error('管理会话已更换，请从定时任务入口重新打开。');
+    const pending=desktopSends[id];
+    if(pending&&data.desktop?.receipts?.[pending.messageId]?.status==='accepted'){
+      if(state.drafts.get(id)===pending.text){state.drafts.set(id,'');if(isCurrent()&&$('message-input').value===pending.text){$('message-input').value='';resizeInput();}}
+      delete desktopSends[id];saveDesktopSends();
+    }
+    return data;
+  }
   const cold=!state.detail,started=performance.now();let firstMs=null;
   if(!state.detail){
     const preview=await api('/api/threads/'+encodeURIComponent(id)+'?preview=1');
@@ -818,7 +849,7 @@ async function readSelectedDetail(id,isCurrent){
 }
 const detailReads = new Map();
 async function refreshSelected() {
-  if (newChatOpen||!state.selectedId) return;
+  if (automations?.opened||newChatOpen||!state.selectedId) return;
   const id = state.selectedId, seq = state.selectionVersion, version = state.detailVersion;
   const key=JSON.stringify([id,seq,version]);
   const isCurrent=()=>!newChatOpen&&id===state.selectedId&&seq===state.selectionVersion&&version===state.detailVersion;
@@ -985,6 +1016,7 @@ function updateNewProjects(projectRoot) {
 }
 function openNewDialog(projectRoot) {
   if(state.busy.has('create'))return;
+  automations?.close();document.querySelector('.main-panel').classList.remove('desktop-chat');
   flushDrafts();updateNewProjects(projectRoot);
   $('new-cwd').onchange=()=>{newDraft.cwd=$('new-cwd').value;rememberNewDraft();renderControls();};
   state.selectionVersion++;newChatOpen=true;$('new-chat-page').hidden=false;document.querySelector('.main-panel').classList.add('new-chat-open');
@@ -1007,7 +1039,7 @@ async function createThreadFromDraft(){
       const thread={...d.thread,id,cwd,name:d.thread?.name||'新会话'};
       createdThreads.set(id,thread);state.threads.unshift(thread);
       attachments.moveDraft(newDraftId,id);composer.moveDraft(newDraftId,id);
-      closeNewChat(false);state.drafts.set(id,text);state.drafts.delete(newDraftId);
+      closeNewChat(false);state.desktopMode=false;state.drafts.set(id,text);state.drafts.delete(newDraftId);
       state.sidebarArchived=false;state.selectedArchived=false;state.selectedId=id;state.selectionVersion++;
       state.model=model;state.effort=effort;state.loadingDetail=false;
       const project=state.projects.find(p=>p.roots?.includes(cwd));state.projectId=project?.id||null;if(project)sidebar.expandProject(project.id);
@@ -1024,6 +1056,7 @@ async function sendMessage(e) {
   e?.preventDefault();
   if ($('send-message').disabled) return;
   if(newChatOpen){await createThreadFromDraft();return;}
+  if(state.desktopMode){await sendDesktopMessage();return;}
   const text = $('message-input').value.trim(), id = state.selectedId;
   if ((!text&&!attachments?.has()) || attachments?.pending() || !id || !usable() || !controlled() || state.busy.has('message')) return;
   const active = running(), selection = state.selectionVersion;
@@ -1040,7 +1073,29 @@ async function sendMessage(e) {
     try { if (id === state.selectedId && selection === state.selectionVersion) await refreshSelected(); } catch (err) { recordError(err,'thread'); }
   });
 }
+async function sendDesktopMessage(){
+  const id=state.selectedId,selection=state.selectionVersion,text=$('message-input').value.trim();
+  if(!text||state.busy.has('message')||!state.detail?.desktop?.canSend)return;
+  if(desktopSends[id])return;
+  const sent=state.drafts.capture(id,$('message-input').value),messageId=crypto.randomUUID();
+  desktopSends[id]={messageId,text:sent.text};saveDesktopSends();
+  await action('message',async()=>{
+    try{
+      await api('/api/automations/message',{method:'POST',body:{threadId:id,messageId,text}});
+      delete desktopSends[id];saveDesktopSends();
+      const cleared=state.drafts.acknowledge(sent);
+      if(id===state.selectedId&&selection===state.selectionVersion&&cleared&&$('message-input').value===sent.text){$('message-input').value='';resizeInput();}
+    }finally{
+      if(id===state.selectedId&&selection===state.selectionVersion)await refreshSelected();
+    }
+  });
+}
 async function interruptThread() {
+  if(state.desktopMode){
+    const threadId=state.selectedId,turnId=[...turns()].reverse().find(t=>['inProgress','in_progress','running'].includes(typeOf(t.status)))?.id;
+    if(!turnId)return;
+    await action('interrupt',async()=>{await api('/api/automations/interrupt',{method:'POST',body:{threadId,turnId}});toast('停止请求已交给桌面，等待状态确认。');if(threadId===state.selectedId)await refreshSelected();});return;
+  }
   if (!state.selectedId || !controlled()) return;
   const id = state.selectedId;
   await action('interrupt',async () => { await api('/api/threads/' + encodeURIComponent(id) + '/interrupt',{method:'POST'}); toast('已请求停止。等待目标机器确认。'); await refreshSelected(); });
@@ -1051,7 +1106,7 @@ async function moreHistory() {
   $('messages-scroller').setAttribute('aria-busy','true');
   try { await action('history',async () => {
     let d;
-    try{d=await api('/api/threads/' + encodeURIComponent(id) + '/history?cursor=' + encodeURIComponent(state.historyCursor));}
+    try{d=await api((state.desktopMode?'/api/automations/history':'/api/threads/'+encodeURIComponent(id)+'/history')+'?cursor='+encodeURIComponent(state.historyCursor)+(state.desktopMode?'&threadId='+encodeURIComponent(id):''));}
     catch(error){if(error.code==='HISTORY_CURSOR_CHANGED')throw new Error('历史记录已更新。请刷新会话后再向上滚动。');throw error;}
     if (id !== state.selectedId || version !== state.selectionVersion) return;
     const old = new Map(turns().map(t => [t.id,t])); const all = [...[...(d.data || [])].reverse(),...turns()]; const seen = new Set(); state.detail.turns = all.filter(t => !seen.has(t.id) && seen.add(t.id)).map(t => old.get(t.id) || t);
@@ -1223,6 +1278,16 @@ function toggleInspector(open) {
   if (show && compactLayout()) toggleSidebar(false, false);
 }
 function wireEvents() {
+  automations=installAutomations({api,onOpen:()=>{flushDrafts();closeNewChat();state.selectionVersion++;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);queueMicrotask(renderControls);},
+    openSession:async(id,prompt)=>{await selectThread(id,{desktop:true});if(prompt&&state.selectedId===id){const previous=$('message-input').value;$('message-input').value=previous?previous+'\n'+prompt:prompt;state.drafts.set(id,$('message-input').value);resizeInput();renderControls();}$('message-input').focus();},
+    openThread:id=>selectThread(id),notify:toast});
+  const scheduleNav=el('button','automations-nav');scheduleNav.id='open-automations';scheduleNav.type='button';scheduleNav.append(icon('clock'),el('span','','定时任务'));scheduleNav.onclick=()=>automations.open();$('new-thread').after(scheduleNav);
+  const review=el('button','text-button','已核对会话记录，解锁发送');review.id='desktop-review';review.type='button';review.hidden=true;
+  review.onclick=()=>action('desktop-review',async()=>{const threadId=state.selectedId;await api('/api/automations/acknowledge',{method:'POST',body:{threadId,messageId:state.detail?.desktop?.unconfirmed||desktopSends[threadId]?.messageId}});delete desktopSends[threadId];saveDesktopSends();await refreshSelected();});
+  $('composer-availability').after(review);
+  document.querySelector('.main-panel').classList.toggle('desktop-chat',state.desktopMode);
+  setInterval(()=>{if(automations.opened&&!document.hidden)void automations.refresh();},15000);
+
   scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
   attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady(),busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});
@@ -1244,7 +1309,7 @@ function wireEvents() {
   window.addEventListener('pageshow', event => { if (event.persisted) setAutoRefresh($('auto-refresh').checked); });
   document.addEventListener('visibilitychange',() => { if (document.hidden) flushDrafts(); });
   installThreadSync({window,document,
-    canSync:()=>!newChatOpen&&connected()&&!state.status?.service?.releasing&&!!state.selectedId&&!state.busy.has('handoff:'+state.selectedId),
+    canSync:()=>!automations?.opened&&!newChatOpen&&(state.desktopMode?state.transport:connected())&&!state.status?.service?.releasing&&!!state.selectedId&&!state.busy.has('handoff:'+state.selectedId),
     refresh:refreshSelected,resume:resumeWorkspace,
     onError:error=>{const message='自动同步暂未成功，将自动重试：'+messageOf(error);if(state.historyError!==message){state.historyError=message;recordError(error,'sync');renderThread();}},
   });
