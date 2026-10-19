@@ -1283,9 +1283,9 @@ function toggleInspector(open) {
 }
 function wireEvents() {
   automations=installAutomations({api,onOpen:()=>{flushDrafts();closeNewChat();state.selectionVersion++;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);queueMicrotask(renderControls);},
-    openSession:async(id,prompt)=>{await selectThread(id,{desktop:true});if(prompt&&state.selectedId===id){const previous=$('message-input').value;$('message-input').value=previous?previous+'\n'+prompt:prompt;state.drafts.set(id,$('message-input').value);resizeInput();renderControls();}$('message-input').focus();},
+    openSession:async(id,prompt)=>{await selectThread(id,{desktop:true});if(prompt&&state.selectedId===id){const previous=$('message-input').value;if(previous&&previous!==prompt){toast('管理会话已有未发送草稿，请先处理草稿，再返回定时任务继续。');$('message-input').focus();return;}$('message-input').value=prompt;state.drafts.set(id,$('message-input').value);resizeInput();renderControls();}$('message-input').focus();},
     openThread:id=>selectThread(id),notify:toast});
-  const scheduleNav=el('button','automations-nav');scheduleNav.id='open-automations';scheduleNav.type='button';scheduleNav.append(icon('clock'),el('span','','定时任务'));scheduleNav.onclick=()=>automations.open();$('new-thread').after(scheduleNav);
+  const scheduleNav=el('button','automations-nav');scheduleNav.id='open-automations';scheduleNav.type='button';scheduleNav.textContent='定时任务';scheduleNav.onclick=()=>automations.open();document.querySelector('.inspector-nav').append(scheduleNav);
   const review=el('button','text-button','已核对会话记录，解锁发送');review.id='desktop-review';review.type='button';review.hidden=true;
   review.onclick=()=>action('desktop-review',async()=>{const threadId=state.selectedId;await api('/api/automations/acknowledge',{method:'POST',body:{threadId,messageId:state.detail?.desktop?.unconfirmed||desktopSends[threadId]?.messageId}});delete desktopSends[threadId];saveDesktopSends();await refreshSelected();});
   $('composer-availability').after(review);
