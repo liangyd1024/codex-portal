@@ -18,4 +18,11 @@
 
 ## 部署结果
 
-待提交并执行安装后补录。
+- 已从干净 master 提交 129a99b0327539600a0758d5edfd0bc62b20a5ae 安装，推送 origin/master 后执行。
+- 备份前与重启前均精确豁免当前部署会话，其他会话空闲；加密备份及版本健康检查通过。
+- 备份：/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T081338937858Z.tar.gz.age。
+- 正式 /api/version 返回上述提交；local 恢复 connected，部署前两条已接管会话均恢复。
+- 部署前后原生引擎 PID 均为 1596，startedAt 均为 Mon Oct 19 11:58:56 2026，原生引擎未重启，当前会话继续执行验证。
+- 正式 /app.js 已无“有失败记录”汇总，首页 refresh-status 位于 header 内。此为真实静态资源核对，不冒充重新执行浏览器视觉验收。
+- 恢复诊断仍列出 8 个其他历史订阅的 no rollout found 错误，均不是当前两条已恢复会话；未删除订阅、伪造恢复或修补原生记录。不能将整个历史订阅恢复宣称全部成功。
+- 部署结果补录为纯文档提交，不需要再次重启。
