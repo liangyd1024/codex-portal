@@ -30,7 +30,7 @@ export function installAutomations({api,onOpen,openSession,openThread,notify}){
   select.onchange=()=>{filter=select.value;render();};search.oninput=render;
   toolbar.append(create,chooser,search,select);page.append(header,toolbar,feedback,list);
   function render(){
-    const expanded=new Set([...list.querySelector('details[open]')].map(n=>n.closest('article').dataset.id));
+    const expanded=new Set([...list.querySelectorAll('details[open]')].map(n=>n.closest('article').dataset.id));
     list.replaceChildren();if(!snapshot)return;
     const items=snapshot.items.filter(t=>(filter==='all'||t.status===filter)&&t.name.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase()));
     items.sort((a,b)=>(a.next_run_at??Infinity)-(b.next_run_at??Infinity));
@@ -52,7 +52,7 @@ export function installAutomations({api,onOpen,openSession,openThread,notify}){
   }
   async function load(){
     if(loading)return;loading=true;const version=++seq;refresh.disabled=true;feedback.textContent='正在同步原生定时任务…';
-    try{const data=await api('/api/automations');if(version!==seq)return;snapshot=data;threadId=data.threadId;chooser.textContent=threadId?'更换管理会话':'选择管理会话';const next=JSON.stringify([data.items,data.runs]);if(signature!==next){signature=next;render();}feedback.textContent=data.pendingNativeRefresh?'部分任务等待桌面同步，请在桌面打开定时任务后刷新。':data.truncated?'当前显示最近 500 个任务。':'与目标机器 Codex 共用任务 · '+time(data.observedAt)+' 同步';}
+    try{const data=await api('/api/automations');if(version!==seq)return;snapshot=data;threadId=data.threadId;chooser.textContent=threadId?'更换管理会话':'选择管理会话';const next=JSON.stringify([data.items,data.runs]);if(signature!==next){render();signature=next;}feedback.textContent=data.pendingNativeRefresh?'部分任务等待桌面同步，请在桌面打开定时任务后刷新。':data.truncated?'当前显示最近 500 个任务。':'与目标机器 Codex 共用任务 · '+time(data.observedAt)+' 同步';}
     catch(error){if(version===seq)feedback.textContent='同步失败：'+error.message+' 已有列表保留。';}
     finally{loading=false;refresh.disabled=false;}
   }
