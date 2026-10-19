@@ -460,3 +460,5 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .background-process{margin:8px 0;padding:8px 10px;border:1px solid #e5eae5;border-radius:8px}
 .background-process pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto;margin:6px 0 0;font-size:12px}
 @media(max-width:700px){.background-processes>summary{min-height:44px;display:list-item;align-content:center}}
+
+.startup-status{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:100;padding:12px 16px;background:var(--surface,#fff);border-bottom:1px solid var(--line,#ddd);font-size:14px;line-height:1.6;overflow-wrap:anywhere}.startup-status[hidden]{display:none}.startup-status a{color:inherit;text-decoration:underline;margin-left:8px}

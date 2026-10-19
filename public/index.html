@@ -9,7 +9,7 @@
   <link rel="manifest" crossorigin="use-credentials" href="/manifest.webmanifest">
   <title>Codex 工作台</title>
   <link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/new-chat.css">
-  <script type="module" src="/app.js"></script>
+  <script defer src="/bootstrap.js"></script>
   <link rel="stylesheet" href="/sidebar.css">
   <link rel="stylesheet" href="/mobile-ui.css">
   <link rel="stylesheet" href="/project-picker.css">
@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="/automations.css">
 </head>
 <body>
+  <div id="startup-status" class="startup-status" role="status"><span id="startup-message">正在加载工作台…</span> <a href="" id="startup-retry">重新加载</a></div>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
     <symbol id="i-mark" viewBox="0 0 24 24"><path d="m12 2 8.66 5v10L12 22l-8.66-5V7Z"/><path d="m3.34 7 8.66 5 8.66-5M12 12v10M7.7 4.5l8.6 5v5l-4.3 2.5-4.3-2.5v-5l8.6-5"/></symbol>
     <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></symbol>

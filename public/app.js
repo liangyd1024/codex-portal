@@ -36,9 +36,16 @@ navigator.serviceWorker?.addEventListener('message',event=>{
   if(data?.type!=='rcm-notification-click'||!data.threadId)return;
   if(notificationNavigationReady)openNotificationThread(data);else pendingNotification=data;
 });
-const response=await fetch('/api/connections');
-if(!response.ok)throw new Error('无法读取连接配置。');
-const connectionConfig=await response.json();
+const connectionConfig=await readConnections();
+async function readConnections(){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+  try {
+    const response=await fetch('/api/connections',{credentials:'same-origin',cache:'no-store',signal:controller.signal});
+    if(response.status===401){location.reload();throw new Error('登录已失效，请重新配对。');}
+    if(!response.ok)throw new Error('无法读取连接配置。');
+    return await response.json();
+  } finally {clearTimeout(timer);}
+}
 const connectionIds=connectionConfig.data.map(c=>c.id);
 const targetHost=connectionIds.includes(requestedHost)?requestedHost:connectionIds.includes(savedHost())?savedHost():connectionConfig.defaultConnection;
 document.getElementById('connection-select').replaceChildren(...connectionConfig.data.map(c=>new Option(c.host.alias,c.id)));
@@ -1425,6 +1432,7 @@ async function init() {
   showInspectorView('session');
   installMobile(api).catch(e=>{$('mobile-access-body').textContent=messageOf(e);});
   wireEvents(); renderStatus(); renderThread(); renderThreads(); setupEvents();
+  window.dispatchEvent(new Event('rcm-ready'));
   notificationNavigationReady=true;
   const linkedThread=new URL(location.href).searchParams.get('thread');
   const notification=pendingNotification || (linkedThread && requestedHost===targetHost?{host:targetHost,threadId:linkedThread}:null);
@@ -1435,7 +1443,7 @@ async function init() {
   catch (e) { recordError(e,'init'); const n = $('connection-banner'); n.hidden = false; n.className = 'connection-banner error'; n.textContent = messageOf(e); }
 }
 if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
-init();
+await init();
 
 $('connection-select').value=targetHost;
 $('connection-select').onchange=()=>{if(state.busy.has('create'))return;rememberHost($('connection-select').value);if(inputId())state.drafts.set(inputId(),$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',$('connection-select').value);url.searchParams.delete('thread');location.assign(url);};
