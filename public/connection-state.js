@@ -102,6 +102,9 @@ export function claimNotice(storage, key) {
 export function updateExtensionNotice(threads, event) {
   const {threadId,name,status,error}=event;
   if (!threadId || !name) return;
+  // Apps initialize in the background. Failures belong in connection diagnostics,
+  // not the conversation; actual tool-call results still render normally.
+  if (name === 'codex_apps') return;
   const notices=threads.get(threadId)||new Map();
   if(status==='ready'||status==='cancelled')notices.delete(name);
   else if(status==='starting'||status==='failed') {
