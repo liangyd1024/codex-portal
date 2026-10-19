@@ -7,3 +7,7 @@
 @media(max-width:700px),(hover:none){.sidebar .sidebar-thread .thread-row{min-height:44px;padding-right:38px}}
 
 .sidebar-section-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sidebar-section-button>.icon{flex-shrink:0}.sidebar-section-button .activity-icon,.project-button .activity-icon{flex-shrink:0}.sidebar-section-button .activity-icon .icon{transform:none}
+
+.sidebar .activity-icon{width:16px;height:16px;flex-basis:16px;border-radius:4px}
+.sidebar .activity-icon>.icon{width:12px;height:12px}
+.sidebar .activity-running::after{width:5px;height:5px}
