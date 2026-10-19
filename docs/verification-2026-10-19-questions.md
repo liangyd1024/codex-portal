@@ -34,4 +34,10 @@
 
 ## 提交与部署
 
-部署前正式版本 `6c71e92cc1649fc65268ee5765e72fe813ef86d1` 是当前 master 的祖先。保留其他会话已提交的文件预览功能 `8fde9e9`。完整测试和空闲核对通过后按 README 指定版本安装；最终部署结果另补录。
+部署前正式版本 `6c71e92cc1649fc65268ee5765e72fe813ef86d1` 是当前 master 的祖先。保留其他会话已提交的文件预览功能 `8fde9e9`。完整测试和空闲核对通过后按 README 指定版本安装。
+
+- 功能提交与正式部署：`db88b2d4a979e1330b22fac2a8bc245991b26116`，已推送 origin/master。
+- 安装前加密备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T064621183901Z.tar.gz.age`。
+- 安装脚本健康检查通过；正式 `/api/version` 返回上述提交，questions.js、question-form.js 和原有 message-files.js 均返回 200。
+- 正式静态资源通过 ego-browser 的隔离模拟接口复验：双问题卡片正常，无语音控件、无横向溢出、无 JS 错误；未用模拟结果代替上文真实预览闭环。真实任务没有在正式入口重复执行。
+- 已关闭本轮 ego-browser task space。后续仅补录此文档，不再次部署。
