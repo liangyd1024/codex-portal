@@ -1,3 +1,5 @@
+import {asyncQuestions,QuestionDrafts} from './questions.js';
+import {questionForm} from './question-form.js';
 import {fileLink,closeFileViewer} from './message-files.js';
 import {notifyManagerError, recoveryMessage, selectedRecoveryMessage} from './recovery-state.js';
 import {activitySource,conversationActivity,renderConversationActivity} from './activity.js';
@@ -57,6 +59,7 @@ const state = {
   runtimeNotices: new Map(), loadingDetail: false, errors: [], localRequests: [], drafts: new DraftStore({storage:()=>sessionStorage,host:targetHost,onError:()=>toast('浏览器无法保存草稿，请先复制重要内容。',true)}), selectionVersion: 0,
   listVersion: 0, detailVersion: 0, threadPageError: false, historyError: '', eventSource: null, lastSync: null, refreshScope: '', refreshMessage: '', refreshing: false, streamRender: false, requestSignature: '',
 };
+const questionDrafts=new QuestionDrafts(sessionStorage,targetHost,()=>toast('问题草稿暂未保存，请先复制回答。',true));
 const newDraftId='local:new-chat-draft';
 const newDraft=new NewChatDraft(sessionStorage,'rcm.new-chat.'+targetHost);
 let newChatOpen=false;
@@ -147,7 +150,7 @@ function running() {
 }
 function requestThread(r) { return r.threadId || r.params?.threadId; }
 function requests() {
-  const all = [...(state.status?.pendingRequests || []), ...(state.detail?.pendingRequests || []), ...state.localRequests];
+  const all = [...(state.status?.pendingRequests || []), ...(state.detail?.pendingRequests || []), ...state.localRequests, ...asyncQuestions(turns(),state.selectedId)];
   const map = new Map(); all.forEach(r => { if (r?.id != null) map.set(requestKey(r), r); });
   return [...map.values()];
 }
@@ -369,13 +372,13 @@ function renderControls() {
   const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '查看模式。接管后可在原会话继续工作。';
   setText('composer-hint',state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
   setText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
-  document.querySelectorAll('.request-card button,.request-card input,.request-card textarea').forEach(n => { n.disabled = !ready || state.busy.has('request:' + n.closest('.request-card').dataset.requestId); });
+  document.querySelectorAll('.request-card button,.request-card input,.request-card textarea').forEach(n => { const card=n.closest('.request-card');n.disabled = state.busy.has('request:' + card.dataset.requestId) || (n.dataset.local!=='true'&&(!ready||(card.dataset.asyncQuestion==='true'&&!state.status?.controlledThreads?.includes(card.dataset.threadId)))); });
   document.querySelectorAll('.request-card').forEach(card => {
     const pending = state.busy.has('request:' + card.dataset.requestId);
     card.setAttribute('aria-busy',String(pending));
     let feedback = card.querySelector('.request-feedback');
     if (!feedback) { feedback = el('p','request-feedback subtle'); feedback.setAttribute('role','status'); card.append(feedback); }
-    feedback.textContent = pending ? '正在提交，请稍候…' : !ready ? '连接恢复后可处理此请求，已填内容会保留。' : '';
+    feedback.textContent = pending ? '正在提交，请稍候…' : card.dataset.asyncQuestion==='true'&&!state.status?.controlledThreads?.includes(card.dataset.threadId) ? '查看模式，请在原操作入口回答。' : !ready ? '连接恢复后可处理此请求，已填内容会保留。' : '';
     feedback.hidden = !feedback.textContent;
   });
 }
@@ -611,6 +614,7 @@ function renderMessages() {
   else scroller.scrollTop = oldTop;
 }
 function renderThread() {
+  renderRequests();
   const t = currentThread(); $('welcome').hidden = Boolean(state.selectedId); $('conversation').hidden = !state.selectedId;
   $('thread-title').hidden = !state.selectedId;
   $('breadcrumb-project').hidden = Boolean(state.selectedId);
@@ -659,7 +663,7 @@ function renderDiagnostics() {
   if (!n.childNodes.length) n.append(el('p','subtle','暂无错误记录。连接后显示服务状态。'));
 }
 function renderRequests() {
-  const list = requests(), signature = JSON.stringify([state.selectedId,list]);
+  const list = requests().filter(r=>!questionDrafts.get(r).sent), signature = JSON.stringify([state.selectedId,list]);
   if (signature === state.requestSignature) { renderControls(); return; }
   state.requestSignature = signature;
   const saved = new Map([...document.querySelectorAll('.request-card')].map(card => [card.dataset.requestId, {fields:[...card.querySelectorAll('input,textarea')].map(f => ({name:f.name,value:f.value,checked:f.checked})),open:Boolean(card.querySelector('details[open]'))}]));
@@ -671,7 +675,8 @@ function renderRequests() {
     const knownApproval = /requestApproval|approval|requestPermissions/i.test(method) || ['approval','commandApproval','fileApproval','command','file','permissions'].includes(r.kind);
     const card = el('div','request-card'); card.dataset.requestId = requestPath(r);
     const title = question ? '需要你的回答' : /commandExecution/i.test(method) ? '命令执行审批' : /fileChange/i.test(method) ? '文件修改审批' : /requestPermissions/i.test(method) ? '权限请求' : knownApproval ? '操作审批' : '工具请求待处理';
-    card.append(el('h4','',title));
+    if(!question)card.append(el('h4','',title));
+    card.dataset.asyncQuestion=String(r.kind==='asyncQuestion');card.dataset.threadId=requestThread(r)||'';
     if (requestThread(r)) {
       const target = currentThread()?.id===requestThread(r)?currentThread():state.threads.find(t => t.id === requestThread(r));
       card.append(el('p','request-origin','会话：' + (target ? threadName(target) : requestThread(r))));
@@ -682,18 +687,10 @@ function renderRequests() {
     if (p.cwd) card.append(el('p','','目标机器目录：' + p.cwd));
     if (Array.isArray(p.changes)) p.changes.forEach(c => card.append(el('p','',c.path)));
     if (question) {
-      const form = el('form');
-      p.questions.forEach((q,qi) => {
-        const group = el('fieldset','question-group'); group.append(el('legend','question-label',q.question || q.header || q.id));
-        (q.options || []).forEach((opt,oi) => {
-          const label = el('label','question-option'); const input = el('input'); input.type = 'radio'; input.name = 'q-' + qi; input.value = opt.label || opt.value || String(oi);
-          const copy = el('span','',opt.label || opt.value); if (opt.description) copy.append(el('small','',opt.description)); label.append(input,copy); group.append(label);
-        });
-        const other = el('textarea','question-other'); other.name = 'other-' + qi; other.placeholder = '输入补充回答'; other.rows = 2; group.append(other); form.append(group);
-      });
-      const actions = el('div','request-actions'); const submit = el('button','accept','提交回答'); submit.type = 'submit'; actions.append(submit);
-      form.onsubmit = e => { e.preventDefault(); const answers = {}; const fd = new FormData(form); let valid = true; p.questions.forEach((q,qi) => { const own = String(fd.get('other-' + qi) || '').trim(), chosen = fd.get('q-' + qi); const values = own ? [own] : chosen ? [String(chosen)] : []; if (!values.length) valid = false; answers[q.id] = {answers:values}; }); if (!valid) { toast('请回答所有问题。',true); return; } respondRequest(r,{answers}); };
-      form.append(actions); card.append(form);
+      if(questionDrafts.get(r).skipped){
+        card.append(el('p','subtle','已跳过问题'));
+        const restore=el('button','text-button','重新回答');restore.dataset.local='true';restore.onclick=()=>{questionDrafts.set(r,{skipped:false,collapsed:false});state.requestSignature='';renderRequests();};card.append(restore);
+      }else card.append(questionForm(r,{drafts:questionDrafts,submit:answer=>respondRequest(r,answer),rerender:()=>{state.requestSignature='';renderRequests();}}));
     } else {
       if (!knownApproval) card.append(el('p','','此工具需要专用实现。请查看请求详情。可以取消请求，避免会话一直等待。'));
       const detail = el('details','request-detail'); detail.append(el('summary','','请求详情'),el('pre','',pretty({method,params:p}))); card.append(detail);
@@ -976,10 +973,14 @@ async function releaseService() {
 }
 async function respondRequest(r, answer) {
   await action('request:' + requestPath(r), async () => {
-    await api('/api/requests/' + encodeURIComponent(requestPath(r)) + '/respond',{method:'POST',body:answer});
+    const instance=state.status?.instanceId,returnFocus=document.activeElement?.closest('.request-card')?.dataset.requestId===requestPath(r);
+    if(r.kind==='asyncQuestion')await api('/api/threads/'+encodeURIComponent(r.threadId)+'/question-answer',{method:'POST',body:{...answer,turnId:r.params.turnId,itemId:r.params.itemId}});
+    else await api('/api/requests/' + encodeURIComponent(requestPath(r)) + '/respond',{method:'POST',body:answer});
+    questionDrafts.clear(r);if(r.kind==='asyncQuestion')questionDrafts.set(r,{sent:true});
+    if(instance!==state.status?.instanceId)return;
     const remove = list => (list || []).filter(x => requestKey(x) !== requestKey(r));
     state.localRequests = remove(state.localRequests); if (state.status) state.status.pendingRequests = remove(state.status.pendingRequests); if (state.detail) state.detail.pendingRequests = remove(state.detail.pendingRequests);
-    renderRequests(); await loadStatus(); toast('已提交处理结果。');
+    renderRequests();if(returnFocus&&state.selectedId===requestThread(r))$('message-input').focus();await loadStatus(); toast('已提交处理结果。');
   });
 }
 function updateNewProjects(projectRoot) {
@@ -1086,7 +1087,7 @@ function ensureTurn(id) {
 function upsertItem(turnId,item) { const t = ensureTurn(turnId); if (!t) return; if (item.type === 'userMessage') t.items = t.items.filter(old => !old.localAccepted || userContentKey(old.content) !== userContentKey(item.content)); const i = t.items.findIndex(x => x.id === item.id); if (i >= 0) t.items[i] = mergeLiveTurns([{id:turnId,items:[t.items[i]]}],[{id:turnId,items:[item]}])[0].items[0]; else t.items.push(item); }
 function scheduleStreamRender() {
   if (state.streamRender) return; state.streamRender = true;
-  setTimeout(() => { state.streamRender = false; renderMessages(); renderSession(); renderFiles(); renderControls(); },80);
+  setTimeout(() => { state.streamRender = false; renderRequests(); renderMessages(); renderSession(); renderFiles(); renderControls(); },80);
 }
 let detailRefreshTimer, listRefreshTimer;
 function scheduleDetailRefresh() { if(detailRefreshTimer)return; detailRefreshTimer = setTimeout(() => { detailRefreshTimer=null; if (usable() && state.selectedId) refreshSelected().catch(e => recordError(e,'thread')); },650); }
