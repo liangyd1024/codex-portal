@@ -875,7 +875,7 @@ function renderTaskNotifications() {
   $('task-notifications').disabled = !supported;
   $('task-notifications').checked = taskNotificationsEnabled && supported && Notification.permission === 'granted';
   $('test-notification').disabled = !$('task-notifications').checked;
-  setText('notification-status', !supported ? '当前浏览器不支持系统通知' : Notification.permission === 'denied' ? '通知已被阻止。请在浏览器网站设置中允许通知。' : $('task-notifications').checked ? '已开启：仅提醒整个任务完成、执行失败或需要你处理；普通轮次结束不提醒；多个页面只提醒一次。页面关闭期间的提醒会在重新打开后补发。' : '通知未开启');
+  setText('notification-status', !supported ? '当前浏览器不支持系统通知' : Notification.permission === 'denied' ? '通知已被阻止。请在浏览器网站设置中允许通知。' : $('task-notifications').checked ? '已开启：每次执行完成、失败、停止或需要你处理时都会通知，正在查看会话时也会通知；多个页面只提醒一次。页面关闭期间的提醒会在重新打开并恢复连接后补发。' : '通知未开启');
 }
 async function setTaskNotifications(enabled) {
   try {
@@ -909,14 +909,10 @@ async function notifyTaskEvent(method, params) {
   const thread = state.threads.find(t => t.id === threadId) || (state.selectedId === threadId ? currentThread() : null);
   const notice = taskNotice(method, params, {host:targetHost, known:!!thread || state.status?.controlledThreads?.includes(threadId) || state.status?.subscribedThreads?.includes(threadId)});
   if (!notice) return;
-  const focused = !notice.urgent && document.visibilityState === 'visible' && document.hasFocus() && state.selectedId === threadId;
-  // Let a foreground viewer claim the event before background tabs try to display it.
-  if (!focused) await new Promise(resolve => setTimeout(resolve,200));
   try {
     const delivered = await navigator.locks.request('rcm.task-notifications', () => {
       if (localStorage.getItem('rcm.taskNotifications.' + targetHost) !== 'true') return;
       if (!claimNotice(localStorage,notice.key)) return true;
-      if (focused) return true;
       sendTaskNotification('Codex · ' + notice.label, (state.status?.host?.alias || targetHost) + ' · ' + (thread ? threadName(thread) : '会话 ' + threadId.slice(0,8)), notice.key, threadId);
       return true;
     });
