@@ -116,6 +116,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
           return json(res,202,manager.status());
         }
         if(p==='/api/notices/ack')return json(res,200,manager.acknowledgeNotice(data.key));
+        if(p==='/api/diagnostics/clear')return json(res,200,manager.clearDiagnosticHistory());
         if(p==='/api/disconnect')return json(res,200,manager.disconnect());
         if(p==='/api/service/release')return json(res,200,await manager.release(data));
         if(p==='/api/threads')return json(res,201,await manager.newThread(data));

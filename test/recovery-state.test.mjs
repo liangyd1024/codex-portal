@@ -63,3 +63,42 @@ test('historical recovery failures only warn for the selected affected thread',(
   assert.equal(selectedRecoveryMessage([],'missing'),'');
   assert.match(recoveryMessage(failures),/上次连接恢复.*不代表当前连接中断/);
 });
+
+test('clearing diagnostic history preserves live state and subscriptions; future failures are recorded again',async()=>{
+  const {m,events}=fixture();await m.connect();
+  const before=m.status(),subscriptions=[...m.subscriptions];
+  const cleared=m.clearDiagnosticHistory();
+  assert.deepEqual(cleared.errors,[]);
+  assert.deepEqual(cleared.recoveryFailures,[]);
+  assert.deepEqual(cleared.connection,before.connection);
+  assert.deepEqual(cleared.controlledSessions,before.controlledSessions);
+  assert.deepEqual([...m.subscriptions],subscriptions);
+  assert.equal(events.at(-1).method,'manager/status');
+  assert.deepEqual(events.at(-1).params.errors,[]);
+  m.record(new Error('new failure'),'test');
+  assert.equal(m.status().errors[0].message,'new failure');
+  m.connection.state='disconnected';await m.connect();
+  assert.equal(m.status().recoveryFailures.length,2);
+});
+
+test('diagnostic clearing requires CSRF, matching Origin and only clears the selected connection',async()=>{
+  const {createApp}=await import('../server.mjs');
+  const first=fixture(),second=fixture();
+  first.m.restoreOnStart=false;second.m.restoreOnStart=false;
+  first.m.record(new Error('first'));second.m.record(new Error('second'));
+  const {server}=createApp({config:{defaultConnection:'one',connections:[]},managers:new Map([['one',first.m],['two',second.m]])});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const base='http://127.0.0.1:'+server.address().port;
+  try{
+    const route=base+'/api/diagnostics/clear?host=two';
+    assert.equal((await fetch(route,{method:'POST',body:'{}'})).status,403);
+    const {token}=await fetch(base+'/api/csrf').then(r=>r.json());
+    const options={method:'POST',headers:{'x-csrf-token':token},body:'{}'};
+    assert.equal((await fetch(route,{...options,headers:{...options.headers,origin:'https://wrong.example'}})).status,403);
+    assert.equal(second.m.errors.length,1);
+    const response=await fetch(route,options);
+    assert.equal(response.status,200);
+    assert.deepEqual((await response.json()).errors,[]);
+    assert.equal(first.m.errors.length,1);
+  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+});
