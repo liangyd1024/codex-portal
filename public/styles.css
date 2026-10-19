@@ -136,8 +136,6 @@
 }
 
 /* Keep repeated authors and turn metadata behind one conversation control. */
-.message-details-toggle{padding:2px 6px;background:transparent;border-radius:4px;color:var(--muted);font-size:11px;line-height:18px}
-.message-details-toggle:hover,.message-details-toggle[aria-pressed=true]{background:#edf1ef;color:var(--ink)}
 .conversation:not(.show-message-details) .message-author,
 .conversation:not(.show-message-details) .turn-meta:not(.needs-attention){display:none}
 .conversation:not(.show-message-details) .turn-meta.needs-attention>:not(.turn-status){display:none}
@@ -182,7 +180,6 @@
 .topbar-actions{flex-shrink:0;gap:5px}
 .topbar #takeover{font-size:12px;line-height:18px;padding:4px 8px;white-space:nowrap;margin:0}
 .topbar #takeover .icon{width:14px;height:14px}
-.topbar .message-details-toggle{white-space:nowrap}
 .conversation-details{padding:6px 24px 0;display:flex;align-items:center;gap:8px;min-width:0}
 .conversation-details .remote-path{margin:0}
 .conversation:not(.show-message-details) .conversation-details{display:none}
@@ -190,8 +187,6 @@
  .topbar .breadcrumb-slash{display:inline}.topbar{gap:4px;padding:0 8px}
  .topbar .breadcrumb{gap:4px;font-size:12px}.topbar #thread-title{font-size:13px}
  .topbar-actions{gap:2px}.topbar-actions>.icon-button{width:26px;height:28px}
- .topbar .message-details-toggle{font-size:0;padding:0;width:24px;height:26px}
- .topbar .message-details-toggle:after{content:'⋯';font-size:18px}
  .topbar #takeover{padding:4px 6px;font-size:11px}.topbar #takeover .icon{display:none}
  .topbar .connection-pill{font-size:11px;gap:3px}
  .conversation-details{padding:6px 16px 0}

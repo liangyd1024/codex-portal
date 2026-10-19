@@ -1,14 +1,6 @@
 /* Loaded after the shared styles. .mobile-layout is driven by COMPACT_QUERY. */
 .mobile-control-label,.mobile-takeover:empty{display:none}
-/* Share the existing More menu across desktop and compact layouts. */
-#mobile-more{display:block;position:relative}
-:root:not(.mobile-layout) #mobile-more:has(#toggle-message-details[hidden]){display:none}
-#mobile-more>summary{display:grid;place-items:center;list-style:none;font-size:22px}
-#mobile-more>summary::-webkit-details-marker{display:none}
-.mobile-more-panel{position:absolute;z-index:45;top:calc(100% + 8px);right:0;width:200px;max-width:calc(100vw - 16px);padding:6px;border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:0 8px 30px #0002}
-#mobile-more #toggle-message-details{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;height:auto;min-height:36px;padding:8px 12px;text-align:left;font-size:13px;color:var(--ink);border-radius:6px}
-#mobile-more #toggle-message-details:after{content:'';width:16px;font-size:14px}
-#mobile-more #toggle-message-details[aria-pressed=true]:after{content:'✓'}
+#mobile-more{display:none}
 #reason-takeover{display:none}
 .mobile-layout #reason-takeover{display:block}
 .control-reason{display:block;font-size:12px;line-height:1.6;color:#687168;white-space:normal;margin:0 8px 8px}
@@ -44,8 +36,6 @@
 .mobile-layout .mobile-control-label{display:inline}
 .mobile-layout #refresh-all{width:100%!important;height:auto!important}
 .mobile-layout .auto-refresh-inline span{display:inline}
-.mobile-layout #toggle-message-details{font-size:15px;width:100%;height:auto}
-.mobile-layout #toggle-message-details:after{content:none}
 .mobile-layout .mobile-takeover:has(#takeover[hidden]){display:none}
 .mobile-layout .mobile-takeover{max-width:880px;width:100%;margin:0 auto 8px}
 .mobile-layout #takeover{width:100%;font-size:16px}

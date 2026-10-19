@@ -16,21 +16,32 @@ export function createHandoffControls({endUse}) {
   const button=document.createElement('button');button.type='button';button.id='handoff-thread';button.className='text-button handoff-button';button.textContent='交还桌面端';
   document.getElementById('takeover').after(button);
   const banner=document.createElement('div');banner.className='handoff-status';banner.hidden=true;banner.tabIndex=-1;banner.id='handoff-status';
+  let current={},notice=null;
   const message=document.createElement('span');message.setAttribute('role','status');message.setAttribute('aria-live','polite');
   const retry=document.createElement('button');retry.type='button';retry.className='text-button';retry.textContent='重试交还';
-  banner.append(message,retry);document.getElementById('message-form').before(banner);
-  const run=()=>{void endUse();};button.onclick=run;retry.onclick=run;
-  return {
+  const close=document.createElement('button');close.type='button';close.className='icon-button handoff-dismiss';close.textContent='×';close.setAttribute('aria-label','关闭交还提示');
+  banner.append(message,retry,close);document.getElementById('connection-banner').after(banner);
+  const run=()=>{
+    if(current.running){notice={kind:'running',text:'当前任务正在运行，请在任务结束后再交还桌面端。你可以继续补充要求。'};controls.render(current);return;}
+    notice=null;void endUse();
+  };button.onclick=run;retry.onclick=run;
+  close.onclick=()=>{notice=null;controls.render(current);if(!button.hidden&&button.checkVisibility?.())button.focus();else document.getElementById('message-input').focus();};
+  const controls = {
     focus(){(banner.hidden?button:banner).focus();},
-    render({id,owned,handoff,connected,supported,busy,archived,conflict}) {
+    showError(text){notice={kind:'error',text};controls.render(current);},
+    render({id,context=id,owned,handoff,connected,supported,busy,archived,conflict,running=false}) {
+      if(id!==current.id||context!==current.context||notice?.kind==='running'&&!running)notice=null;
+      current={id,context,owned,handoff,connected,supported,busy,archived,conflict,running};
       button.hidden=!id||archived||(!owned&&!['unknown','checking'].includes(handoff?.state));
       button.disabled=!connected||!supported||busy||handoff?.state==='checking'||(!owned&&handoff?.state!=='unknown');
       button.textContent=busy||handoff?.state==='checking'?'正在检查…':handoff?.state==='unknown'?'重试交还':'交还桌面端';
       button.title=!supported?'当前引擎尚未核验交还能力，请重连后检查。':'只结束此会话的网页使用，其他会话继续运行。';
-      banner.hidden=!id||(!handoff&&!conflict);
-      message.textContent=handoffMessage(handoff,connected)||(conflict?'此会话仍在另一个入口中使用。请在原入口结束使用并等待释放，然后重试；其他会话无需关闭。':'');
-      retry.hidden=handoff?.state!=='unknown';retry.disabled=!connected||busy;
+      banner.hidden=!id||(!notice&&!handoff&&!conflict);
+      message.textContent=notice?.text||handoffMessage(handoff,connected)||(conflict?'此会话仍在另一个入口中使用。请在原入口结束使用并等待释放，然后重试；其他会话无需关闭。':'');
+      retry.hidden=notice?.kind!=='error'&&handoff?.state!=='unknown';retry.disabled=!connected||busy||running;
+      close.hidden=!notice;banner.classList.toggle('error',notice?.kind==='error');
       banner.setAttribute('aria-busy',String(busy||handoff?.state==='checking'));
     },
   };
+  return controls;
 }

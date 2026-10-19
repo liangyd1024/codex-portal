@@ -315,7 +315,7 @@ function renderControls() {
   const background = backgroundActivity(state.detail,{controlled:own,connected:ready});
   const handoff=currentHandoff(),handing=state.busy.has('handoff:'+state.selectedId)||handoff?.state==='checking';
   handoffControls??=createHandoffControls({endUse:endThreadUse});
-  handoffControls.render({id:state.selectedId,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId)),handoff,connected:ready,
+  handoffControls.render({id:newChatOpen?null:state.selectedId,context:targetHost+':'+state.selectedId+':'+state.selectionVersion,running:active,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId)),handoff,connected:ready,
     supported:state.status?.service?.protocolValidation?.features?.handoff?.supported===true,busy:handing,archived:state.selectedArchived,conflict:state.detail?.controlState==='conflict'});
   const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
   $('connection-select').disabled=creating;
@@ -363,7 +363,7 @@ function renderControls() {
     availability.textContent=reason;availability.hidden=!reason;
     $('new-retry-create').hidden=newDraft.phase!=='uncertain';
     $('new-cwd').disabled=creating||newDraft.phase==='uncertain';$('close-new-chat').disabled=creating;
-    $('interrupt').hidden=true;$('takeover').hidden=true;$('toggle-message-details').hidden=true;
+    $('interrupt').hidden=true;$('takeover').hidden=true;
     $('thread-title').hidden=false;setText('thread-title','新会话');
   }
   document.querySelectorAll('.project-create').forEach(button => { button.disabled = $('new-thread').disabled; });
@@ -617,7 +617,6 @@ function renderThread() {
   const t = currentThread(); $('welcome').hidden = Boolean(state.selectedId); $('conversation').hidden = !state.selectedId;
   $('thread-title').hidden = !state.selectedId;
   $('breadcrumb-project').hidden = Boolean(state.selectedId);
-  $('toggle-message-details').hidden = !state.selectedId;
   if (!state.selectedId) { renderSession(); renderFiles(); renderControls(); return; }
   setText('thread-title',t ? threadName(t) : '正在读取会话…'); $('thread-title').title = $('thread-title').textContent; setText('thread-path',t?.cwd ? '目标机器 · ' + t.cwd : '');
   const own = controlled(), control = typeOf(state.detail?.controlState), busy = ['busy','occupied','active_writer','conflict'].includes(control);
@@ -959,8 +958,7 @@ async function endThreadUse() {
       if(id===state.selectedId&&selection===state.selectionVersion&&state.detail){state.detail.controlled=false;state.detail.handoff=handoff;state.detail.controlState='viewing';}
       await loadStatus();renderThread();
       if(id===state.selectedId&&selection===state.selectionVersion)handoffControls.focus();
-      if(id===state.selectedId&&selection===state.selectionVersion)toast(handoff.state==='released'?'已确认释放，可在桌面端重试。':'已退出网页使用，正在等待释放。');
-    }catch(error){await loadStatus().catch(()=>{});renderThread();if(id===state.selectedId&&selection===state.selectionVersion)handoffControls.focus();throw error;}
+    }catch(error){recordError(error,'handoff');await loadStatus().catch(()=>{});renderThread();if(id===state.selectedId&&selection===state.selectionVersion)handoffControls.showError(messageOf(error));}
   });
 }
 async function releaseService() {
@@ -1229,15 +1227,6 @@ function toggleInspector(open) {
   shell.classList.toggle('inspector-hidden', !show); $('toggle-inspector').setAttribute('aria-expanded',String(show));
   if (show && compactLayout()) toggleSidebar(false, false);
 }
-function toggleMessageDetails(show) {
-  const scroller = $('messages-scroller');
-  const atBottom = scrollFollow?.following;
-  $('conversation').classList.toggle('show-message-details',show);
-  $('toggle-message-details').setAttribute('aria-pressed',String(show));
-  $('toggle-message-details').textContent = '消息详情';
-  $('toggle-message-details').setAttribute('aria-label',$('toggle-message-details').textContent);
-  if (atBottom) scroller.scrollTop = scroller.scrollHeight;
-}
 function wireEvents() {
   scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
   attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady(),busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
@@ -1269,8 +1258,6 @@ function wireEvents() {
     const width = entries[0].contentRect.width;
     if (width !== composerWidth) { composerWidth = width; requestAnimationFrame(resizeInput); }
   }).observe($('message-input'));
-  toggleMessageDetails(false);
-  $('toggle-message-details').onclick = () => toggleMessageDetails(!$('conversation').classList.contains('show-message-details'));
   $('connect-button').onclick = () => connected()||connectionPending() ? disconnectRemote() : connectRemote();
   $('welcome-connect').onclick = () => connected() ? openNewDialog() : connectRemote();
   $('new-thread').onclick = openNewDialog; $('takeover').onclick = takeoverThread; $('release-service').onclick = releaseService;
