@@ -171,12 +171,27 @@ export class Sidebar {
   focusAnchor(){const key=this.menuAnchor?.dataset.focusKey;[...this.node.querySelectorAll('[data-focus-key]')].find(n=>n.dataset.focusKey===key)?.focus({preventScroll:true});if(!document.activeElement||document.activeElement===document.body)this.node.querySelector('button')?.focus({preventScroll:true});}
   async run(action,target,extra={},propagate=false){
     if(this.pending){if(propagate)throw Error('正在更新，请等待操作完成。');return;}if(this.dialog&&this.dialog.dataset.accountScope!==(this.snapshot.accountScope||''))throw Error('目标账号已变化，请取消后刷新；输入内容已保留。');this.pending=true;this.setBusy(true);
+    const label=action==='archive'?'正在归档会话…':action==='restore'?'正在恢复会话…':'正在更新…';
+    this.progress.textContent=label;
+    const notice=this.o.toast(label,false,0);
+    const slow=setTimeout(()=>{this.progress.textContent='仍在等待目标机器…';if(notice)notice.querySelector('p').textContent='仍在等待目标机器，请勿重复操作。';},5000);
+    let completed=false;
     try{await this.o.api('/api/sidebar/actions',{method:'POST',body:{action,id:target?.id,expectedRevision:target?.revision,accountScope:this.snapshot.accountScope,...extra}});
-      await this.o.changed(action,target);this.o.toast(action==='archive'?'会话已归档':action==='restore'?'会话已恢复':'已更新');
+      completed=true;clearTimeout(slow);notice?.remove();
+      this.o.toast(action==='archive'?'会话已归档':action==='restore'?'会话已恢复':'已更新');
+      this.progress.textContent='正在刷新列表…';
+      await this.o.changed(action,target);
       if(action==='archive')this.undo(target.id);if(action==='restore'&&this.undoId===target.id)this.undoNode?.remove();
-    }catch(error){await this.o.refresh().catch(()=>{});if(propagate)throw error;this.o.toast(error.message,true);}
-    finally{this.pending=false;this.setBusy(false);if(!this.dialog)this.focusAnchor();}
+    }catch(error){
+      // Show the outcome before another potentially slow remote read.
+      clearTimeout(slow);notice?.remove();
+      this.o.toast(completed?'操作已完成，但刷新失败：'+error.message:error.message,true);
+      void this.o.refresh().catch(()=>{});
+      if(propagate)throw error;
+    }
+    finally{clearTimeout(slow);notice?.remove();this.pending=false;this.setBusy(false);this.progress.textContent='正在更新…';if(!this.dialog)this.focusAnchor();}
   }
+
   undo(id){
     const scope=this.snapshot.accountScope;this.undoId=id;
     this.undoNode?.remove();const node=make('div','sidebar-undo');node.setAttribute('role','status');node.append(make('span','','会话已归档'));const button=make('button','','撤销');button.type='button';button.onclick=async()=>{button.disabled=true;try{const s=await this.o.api('/api/sidebar?archived=true&search=');if(s.accountScope!==scope)throw Error('目标账号已变化，请在已归档列表核对。');let t=s.data.find(t=>t.id===id),cursor=s.nextCursor;while(!t&&cursor){const p=await this.o.api('/api/sidebar?archived=true&cursor='+encodeURIComponent(cursor));t=p.data.find(t=>t.id===id);cursor=p.nextCursor;}if(!t)throw Error('归档状态已变化，请刷新列表。');await this.o.api('/api/sidebar/actions',{method:'POST',body:{action:'restore',id,expectedRevision:t.revision,accountScope:s.accountScope}});await this.o.changed('restore',t);node.remove();this.focusAnchor();}catch(e){this.o.toast(e.message,true);button.disabled=false;}};node.append(button);this.toolbar.after(node);this.undoNode=node;

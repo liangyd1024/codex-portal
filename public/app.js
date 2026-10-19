@@ -236,7 +236,7 @@ function toast(message, error = false, duration = 7500) {
   const n = el('div','toast' + (error ? ' error' : '')); n.setAttribute('role', error ? 'alert' : 'status');
   n.append(icon(error ? 'alert' : 'check'), el('p','', message));
   const close = el('button','icon-button'); close.type = 'button'; close.setAttribute('aria-label','关闭提示'); close.append(icon('close')); close.onclick = () => n.remove(); n.append(close);
-  $('toasts').append(n); setTimeout(() => n.remove(), duration);
+  $('toasts').append(n); if(duration>0)setTimeout(() => n.remove(), duration); return n;
 }
 async function api(path, options = {}) {
   path=targetUrl(path);
