@@ -414,10 +414,21 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .activity-icon{display:inline-flex;align-items:center;justify-content:center;position:relative;width:22px;height:22px;flex:0 0 22px;border-radius:5px;color:#2563a6;background:#eaf2fb;vertical-align:middle}
 .activity-icon>.icon{width:16px;height:16px}
 .activity-web{color:#33764c;background:#eaf5ee}
-.activity-icon::after{content:"";position:absolute;right:0;top:0;width:5px;height:5px;border-radius:50%;background:currentColor;animation:pulse 1.3s infinite}
+.activity-running::after{content:"";position:absolute;right:0;top:0;width:7px;height:7px;border:1px solid #fff;border-radius:50%;background:currentColor;animation:pulse 1.3s infinite}
 .thread-name>.activity-icon{margin-left:5px}
 .running-indicator{min-height:26px}
 @media(max-width:700px){.activity-icon{width:22px;height:22px;flex-basis:22px}.thread-name>.activity-icon{margin-left:4px}}
 @media(prefers-reduced-motion:reduce){.activity-icon::after{animation:none}}
 
 .activity-unknown::after{display:none}
+
+.extension-notice{margin:8px 0 16px;padding:10px 13px;border:1px solid var(--line);border-radius:8px;color:#687066;font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.extension-notice p{margin:0}.extension-notice p+p{margin-top:3px}.extension-notice details{margin-top:6px}.extension-notice summary{cursor:pointer;width:fit-content}.extension-notice pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.6 ui-monospace,monospace;margin:8px 0 0}
+
+/* Preserve creation identity at rest; highlight execution without a second badge. */
+.activity-icon:not(.activity-running){background:transparent;color:#78828b}
+.activity-running{box-shadow:0 0 0 1px currentColor}
+.running-indicator{display:flex;align-items:center;gap:9px;min-height:38px;padding:8px 2px;color:#365c44}
+.running-label{font-size:14px;font-weight:600}
+.running-detail{font-size:12px;color:#767f78}
+@media(max-width:700px){.running-indicator{gap:8px}.running-detail{font-size:11px}}

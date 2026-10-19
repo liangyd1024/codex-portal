@@ -18,7 +18,7 @@ import {installMobile} from './mobile.js';
 let composer;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from './detail-cache.js';
 import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
-import {selectConnectionStatus, userContentKey, mergeLiveTurns, taskNotice, claimNotice, backgroundActivity} from './connection-state.js';
+import {updateExtensionNotice, renderExtensionNotice, selectConnectionStatus, userContentKey, mergeLiveTurns, taskNotice, claimNotice, backgroundActivity} from './connection-state.js';
 function savedHost() { try { return localStorage.getItem('rcm.connection'); } catch { return null; } }
 const requestedHost = new URL(location.href).searchParams.get('host');
 const response=await fetch('/api/connections');
@@ -558,7 +558,7 @@ function renderMessages() {
   if (state.loadingDetail) { n.append(el('div','empty-history loading','正在读取会话历史…')); return; }
   if (state.historyError) { n.append(el('div','turn-error',state.historyError)); if(!turns().length)return; }
   if(state.detail?.recovering)n.append(el('div','history-notice','已恢复本机保存的输出，正在同步最新内容…')); 
-  for (const notice of state.runtimeNotices.get(state.selectedId)?.values() || []) n.append(el('div','turn-error',notice));
+  for (const notice of state.runtimeNotices.get(state.selectedId)?.values() || []) n.append(renderExtensionNotice(notice));
   if (!turns().length) { const empty = el('div','empty-history'); empty.append(icon('chat'),el('p','','此会话暂无消息。'),el('p','',controlled() ? '输入要求，开始目标机器工作。' : '接管后，可以在此会话开始工作。')); n.append(empty); }
   turns().forEach(t => {
     const turn = el('section','message-turn'); turn.dataset.turnId = t.id;
@@ -1104,14 +1104,12 @@ function handleEvent(event) {
   }
   if (/thread\/(started|name\/updated|archived|unarchived)|turn\/(started|completed)/.test(method)) scheduleListRefresh();
   const threadId = p.threadId || p.thread?.id;
-  if (threadId !== state.selectedId || !state.detail) return;
   if (method === 'mcpServer/startupStatus/updated') {
-    const notices = state.runtimeNotices.get(threadId) || new Map();
-    if (p.status === 'failed') notices.set(p.name, '扩展 ' + p.name + ' 启动失败：' + messageOf(p.error || '未知原因'));
-    else if (p.status === 'ready') notices.delete(p.name);
-    else if (p.status === 'starting') notices.set(p.name, '正在启动扩展：' + p.name);
-    state.runtimeNotices.set(threadId,notices); scheduleStreamRender(); return;
+    updateExtensionNotice(state.runtimeNotices,p);
+    if (threadId === state.selectedId && state.detail) scheduleStreamRender();
+    return;
   }
+  if (threadId !== state.selectedId || !state.detail) return;
   if (method === 'thread/tokenUsage/updated' || method === 'turn/moderationMetadata') return;
   if (method === 'thread/queue/changed') { scheduleDetailRefresh(); return; }
   if (method === 'thread/status/changed') { state.detail.thread.status = p.status; scheduleStreamRender(); return; }
