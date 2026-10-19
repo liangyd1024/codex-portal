@@ -21,10 +21,11 @@ export function creationSource(thread) {
   return 'unknown';
 }
 export function threadSourceIcon(thread, runningSource, icon) {
-  const source=creationSource(thread);
+  const created=creationSource(thread);
+  const source=runningSource || created;
   const node=document.createElement('span');
   node.className='activity-icon activity-'+source+(runningSource?' activity-running':'');
-  node.title=({web:'网页端创建',desktop:'桌面端创建',unknown:'创建来源未知'})[source]+(runningSource?' · '+(runningSource==='web'?'网页端':'桌面端')+'正在运行':'');
+  node.title=({web:'网页端创建',desktop:'桌面端创建',unknown:'创建来源未知'})[created]+(runningSource?' · '+(runningSource==='web'?'网页端':'桌面端')+'正在运行':'');
   node.setAttribute('role','img');node.setAttribute('aria-label',node.title);
   node.append(icon(source==='desktop'?'monitor':source==='web'?'globe':'mark'));
   return node;

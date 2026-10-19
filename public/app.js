@@ -30,6 +30,12 @@ import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
 import {updateExtensionNotice, renderExtensionNotice, selectConnectionStatus, userContentKey, mergeLiveTurns, taskNotice, backgroundActivity} from './connection-state.js';
 function savedHost() { try { return localStorage.getItem('rcm.connection'); } catch { return null; } }
 const requestedHost = new URL(location.href).searchParams.get('host');
+let pendingNotification=null, notificationNavigationReady=false;
+navigator.serviceWorker?.addEventListener('message',event=>{
+  const data=event.data;
+  if(data?.type!=='rcm-notification-click'||!data.threadId)return;
+  if(notificationNavigationReady)openNotificationThread(data);else pendingNotification=data;
+});
 const response=await fetch('/api/connections');
 if(!response.ok)throw new Error('无法读取连接配置。');
 const connectionConfig=await response.json();
@@ -811,6 +817,7 @@ function applyDetail(data, resetModels = false) {
 }
 async function selectThread(id,options={}) {
   if(state.busy.has('create')){toast('正在创建会话，请稍候。');return;}
+  const url=new URL(location.href);url.searchParams.delete('thread');history.replaceState(null,'',url);
   closeNewChat();
   automations?.close();state.desktopMode=Boolean(options.desktop||id===automations?.threadId);
   document.querySelector('.main-panel').classList.toggle('desktop-chat',state.desktopMode);
@@ -937,6 +944,14 @@ function notificationDiagnostic(message) {
   list.prepend(el('p','',dateTime(new Date()) + ' · ' + message));
   while (list.children.length > 8) list.lastElementChild.remove();
 }
+function openNotificationThread({host,threadId}) {
+  if(host!==targetHost){
+    if(!connectionIds.includes(host))return;
+    flushDrafts();
+    const url=new URL(location.href);url.searchParams.set('host',host);url.searchParams.set('thread',threadId);location.assign(url);return;
+  }
+  selectThread(threadId);
+}
 async function sendTaskNotification(title, body, tag, threadId, host=targetHost) {
   if(notificationSupport().worker){
     try {
@@ -950,7 +965,7 @@ async function sendTaskNotification(title, body, tag, threadId, host=targetHost)
     notification = new Notification(title,{body,tag});
     liveNotifications.add(notification);
     notification.onclose = () => { liveNotifications.delete(notification); notificationDiagnostic(title + '：通知已关闭'); };
-    notification.onclick = () => { window.focus(); notification.close(); if (threadId && host===targetHost) selectThread(threadId); };
+    notification.onclick = () => { window.focus(); notification.close(); if(threadId)openNotificationThread({host,threadId}); };
     return notification;
   },{
     shown:()=>notificationDiagnostic(title + '：浏览器报告已显示；若系统未弹出，请检查系统的浏览器通知开关'),
@@ -1325,7 +1340,7 @@ function wireEvents() {
   $('task-notifications').onchange = event => setTaskNotifications(event.target.checked);
   $('test-notification').onclick = () => { if (taskNotificationsEnabled && Notification.permission === 'granted') sendTaskNotification('Codex · 测试通知','浏览器通知已接入。请检查设备通知中心。','codex-test'); };
   window.addEventListener('focus',renderTaskNotifications);
-  navigator.serviceWorker?.addEventListener('message',event=>{const data=event.data;if(data?.type==='rcm-notification-click' && data.host===targetHost && data.threadId)selectThread(data.threadId);});
+
   let autoRefresh = false;
   try { autoRefresh = localStorage.getItem('rcm.autoRefresh.' + targetHost) === 'true'; } catch {}
   setAutoRefresh(autoRefresh);
@@ -1410,7 +1425,12 @@ async function init() {
   showInspectorView('session');
   installMobile(api).catch(e=>{$('mobile-access-body').textContent=messageOf(e);});
   wireEvents(); renderStatus(); renderThread(); renderThreads(); setupEvents();
-  if(state.selectedId)restoreDetail(state.selectedId,state.selectionVersion);
+  notificationNavigationReady=true;
+  const linkedThread=new URL(location.href).searchParams.get('thread');
+  const notification=pendingNotification || (linkedThread && requestedHost===targetHost?{host:targetHost,threadId:linkedThread}:null);
+  pendingNotification=null;
+  if(notification)openNotificationThread(notification);
+  else if(state.selectedId)restoreDetail(state.selectedId,state.selectionVersion);
   try { const c = await api('/api/csrf'); state.csrf = c.token; await loadStatus(); if (connected()) await refreshWorkspace(); else if (!connectionPending()) await connectRemote(); }
   catch (e) { recordError(e,'init'); const n = $('connection-banner'); n.hidden = false; n.className = 'connection-banner error'; n.textContent = messageOf(e); }
 }
@@ -1418,7 +1438,7 @@ if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)|
 init();
 
 $('connection-select').value=targetHost;
-$('connection-select').onchange=()=>{if(state.busy.has('create'))return;rememberHost($('connection-select').value);if(inputId())state.drafts.set(inputId(),$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',$('connection-select').value);location.assign(url);};
+$('connection-select').onchange=()=>{if(state.busy.has('create'))return;rememberHost($('connection-select').value);if(inputId())state.drafts.set(inputId(),$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',$('connection-select').value);url.searchParams.delete('thread');location.assign(url);};
 
 const clearRecovery=el('button','text-button','清除日志缓存并重新加载');
 clearRecovery.type='button';
