@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {Manager} from '../lib/manager.mjs';
-import {notifyManagerError,recoveryMessage} from '../public/recovery-state.js';
+import {notifyManagerError,recoveryMessage,selectedRecoveryMessage} from '../public/recovery-state.js';
 
 function fixture(){
   const host={alias:'test',user:'tester',home:'/test'};
@@ -52,4 +52,14 @@ test('cancelled recovery does not install a stale failure in the current connect
   const {m,rpc}=fixture();rpc.request=async()=>{m.generation++;throw Error('cancelled');};
   await assert.rejects(m.connect(),/cancelled/);
   assert.deepEqual(m.status().recoveryFailures,[]);
+});
+
+test('historical recovery failures only warn for the selected affected thread',()=>{
+  const failures=[{threadId:'missing',message:'no rollout found for thread id missing'},{threadId:'timeout',message:'RPC timeout'}];
+  assert.equal(selectedRecoveryMessage(failures,'healthy'),'');
+  assert.equal(selectedRecoveryMessage(failures,null),'');
+  assert.match(selectedRecoveryMessage(failures,'missing'),/找不到.*历史记录/);
+  assert.match(selectedRecoveryMessage(failures,'timeout'),/可重试接管/);
+  assert.equal(selectedRecoveryMessage([],'missing'),'');
+  assert.match(recoveryMessage(failures),/上次连接恢复.*不代表当前连接中断/);
 });

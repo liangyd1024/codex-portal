@@ -1,4 +1,4 @@
-import {notifyManagerError, recoveryMessage} from './recovery-state.js';
+import {notifyManagerError, recoveryMessage, selectedRecoveryMessage} from './recovery-state.js';
 import {activitySource,conversationActivity,renderConversationActivity} from './activity.js';
 let scrollFollow,scrollContext;
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message-media.js';
@@ -279,14 +279,6 @@ function renderStatus() {
   ['machine-dot','inspector-dot'].forEach(id => $(id).className = 'connection-dot ' + variant);
   $('connection-pill').className = 'connection-pill ' + variant;
   $('connection-pill').querySelector('.connection-dot').className = 'connection-dot ' + variant;
-  const banner = $('connection-banner');
-  const error = c.error ? messageOf(c.error) : '';
-  if (!state.transport) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '与网页服务的连接已中断，正在自动重连。已有内容和草稿保留，恢复后将自动同步。'; }
-  else if (error) { banner.hidden = false; banner.className = 'connection-banner error'; banner.textContent = error; }
-  else if (['connecting','reconnecting'].includes(conn)) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '正在连接目标机器。' + (c.stage ? (stages[c.stage] || c.stage) + '…' : '正在核验连接状态…'); }
-  else if(connected()&&service.protocolValidation?.status==='limited'){const names={create:'新建会话',takeover:'接管会话',message:'发送消息',steer:'补充要求',stop:'停止',queue:'排队输入',handoff:'交还桌面端',release:'释放控制'};const disabled=Object.entries(service.protocolValidation.features||{}).filter(([,v])=>!v.supported).map(([name])=>names[name]||name);banner.hidden=false;banner.className='connection-banner';banner.textContent='已连接。当前引擎暂不支持：'+(disabled.join('、')||'部分协议读取')+'。其他已核验功能仍可使用。详见连接诊断。';}
-  else if(connected()&&s.recoveryFailures?.length){banner.hidden=false;banner.className='connection-banner';banner.textContent=recoveryMessage(s.recoveryFailures);}
-  else banner.hidden = true;
   const connect = $('connect-button'); clear(connect); connect.append(icon(connected()||connectionPending() ? 'close' : 'link'),el('span','',state.busy.has('disconnect') ? '正在断开…' : connectionPending()?'取消连接':connected() ? '断开本机连接' : '连接目标机器'));
   const welcome = $('welcome-connect'); clear(welcome); welcome.append(icon(connected() ? 'plus' : 'link'),el('span','',connectionPending() ? '正在连接…' : connected() ? '新建目标机器会话' : '连接 ' + (h.alias || '目标机器')));
   setText('welcome-footnote',connected() ? '已连接。选择左侧会话，或新建目标机器会话。' : '等待连接。此页面不包含演示会话。');
@@ -302,7 +294,19 @@ function renderControlOverview() {
     badge.textContent=session?sessionLabel(session):'查看模式';
   });
 }
+function renderConnectionBanner() {
+  const s=state.status||{}, c=s.connection||{}, service=s.service||{}, conn=c.state||'disconnected';
+  const banner = $('connection-banner');
+  const error = c.error ? messageOf(c.error) : '';
+  if (!state.transport) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '与网页服务的连接已中断，正在自动重连。已有内容和草稿保留，恢复后将自动同步。'; }
+  else if (error) { banner.hidden = false; banner.className = 'connection-banner error'; banner.textContent = error; }
+  else if (['connecting','reconnecting'].includes(conn)) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '正在连接目标机器。' + (c.stage ? (stages[c.stage] || c.stage) + '…' : '正在核验连接状态…'); }
+  else if(connected()&&service.protocolValidation?.status==='limited'){const names={create:'新建会话',takeover:'接管会话',message:'发送消息',steer:'补充要求',stop:'停止',queue:'排队输入',handoff:'交还桌面端',release:'释放控制'};const disabled=Object.entries(service.protocolValidation.features||{}).filter(([,v])=>!v.supported).map(([name])=>names[name]||name);banner.hidden=false;banner.className='connection-banner';banner.textContent='已连接。当前引擎暂不支持：'+(disabled.join('、')||'部分协议读取')+'。其他已核验功能仍可使用。详见连接诊断。';}
+  else if(connected()&&selectedRecoveryMessage(s.recoveryFailures,newChatOpen?null:state.selectedId)){banner.hidden=false;banner.className='connection-banner';banner.textContent=selectedRecoveryMessage(s.recoveryFailures,state.selectedId);}
+  else banner.hidden = true;
+}
 function renderControls() {
+  renderConnectionBanner();
   const ready = usable(), own = newChatOpen||controlled()&&!state.selectedArchived, active = !newChatOpen&&running();
   const background = backgroundActivity(state.detail,{controlled:own,connected:ready});
   const handoff=currentHandoff(),handing=state.busy.has('handoff:'+state.selectedId)||handoff?.state==='checking';
@@ -643,6 +647,7 @@ function renderFiles() {
 }
 function renderDiagnostics() {
   const n = clear($('diagnostic-content')), s = state.status || {}, c = s.connection || {};
+  if(s.recoveryFailures?.length){const d=el('div','diagnostic-entry');d.append(el('time','','历史会话恢复'),el('p','',recoveryMessage(s.recoveryFailures)));for(const failure of s.recoveryFailures)d.append(el('p','',failure.threadId+'：'+failure.message));n.append(d);}
   if (c.stage) { const d = el('div','diagnostic-entry'); d.append(el('time','','当前阶段'),el('p','',stages[c.stage] || c.stage)); n.append(d); }
   if (s.service?.pid) { const d = el('div','diagnostic-entry'); d.append(el('time','','目标机器服务'),el('p','','PID ' + s.service.pid + (s.service.running ? ' · 运行中' : ' · 未运行'))); n.append(d); }
   if(s.service?.protocolValidation){const v=s.service.protocolValidation,d=el('div','diagnostic-entry');d.append(el('time','','协议兼容性'),el('p','',`${v.version} · 已核验 ${v.methods} 项接口${v.cached?' · 使用已核验缓存':''}`));Object.entries(v.features||{}).filter(([,feature])=>!feature.supported).forEach(([,feature])=>d.append(el('p','',feature.reason)));n.append(d);}
