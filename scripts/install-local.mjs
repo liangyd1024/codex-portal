@@ -5,6 +5,7 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {loadConfig,supportDir} from '../lib/config.mjs';
 import {launchdService} from '../lib/launchd.mjs';
+import {assertDeploymentIdle} from '../lib/deployment-check.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const label='local.remote-codex-manager.web',domain=`gui/${process.getuid()}`,job=path.join(homedir(),'Library/LaunchAgents',label+'.plist');
 const lifecycle=launchdService(domain,label);
@@ -18,10 +19,19 @@ const app=path.join(supportDir,'releases',commit),logs=path.join(supportDir,'log
 await mkdir(logs,{recursive:true,mode:0o700});await mkdir(path.dirname(job),{recursive:true});
 // Check this entrance only. Do not interrupt tasks running through another entrance.
 const existing=spawnSync('/bin/launchctl',['print',domain+'/'+label],{encoding:'utf8'}).status===0;
-if(existing){
- const connections=await fetch('http://127.0.0.1:4317/api/connections',{signal:AbortSignal.timeout(5000)}).then(r=>{if(!r.ok)throw Error('无法核对网页服务状态');return r.json();});
- for(const {id} of connections.data){const s=await fetch('http://127.0.0.1:4317/api/status?host='+encodeURIComponent(id),{signal:AbortSignal.timeout(5000)}).then(r=>r.json());if(s.pendingRequests?.length||s.controlledSessions?.some(t=>t.status?.type==='active')||['connecting','reconnecting'].includes(s.connection?.state))throw Error('当前入口有运行任务、待处理请求或正在连接，请空闲后再部署。');}
+const deployingThreadId=process.env.CODEX_THREAD_ID;
+const localConnectionId=config.connections.find(h=>h.kind==='local').id;
+async function checkEntrance(){
+ const read=async url=>{const r=await fetch(url,{signal:AbortSignal.timeout(5000)});if(!r.ok)throw Error('无法核对网页服务状态');return r.json();};
+ const connections=await read('http://127.0.0.1:4317/api/connections');
+ if(!Array.isArray(connections.data)||!connections.data.some(h=>h.id===localConnectionId))throw Error('无法核对网页连接列表');
+ for(const {id} of connections.data){
+  const s=await read('http://127.0.0.1:4317/api/status?host='+encodeURIComponent(id));
+  const own=assertDeploymentIdle(s,{connectionId:id,localConnectionId,deployingThreadId});
+  if(own)console.log('当前部署会话不阻塞网页重启：'+own);
+ }
 }
+if(existing)await checkEntrance();
 const backup=JSON.parse(run('/usr/bin/python3',[path.join(root,'scripts/data-backup.py'),'backup']));
 console.log('部署前加密备份：'+backup.archive);
 try{await stat(app);if((await readFile(path.join(app,'VERSION'),'utf8')).trim()!==commit)throw Error('已有版本目录不完整，请手动检查：'+app);}catch(error){if(error.code!=='ENOENT')throw error;await mkdir(app,{recursive:true,mode:0o700});const archive=spawnSync('git',['-C',root,'archive',commit],{maxBuffer:64*1024*1024});if(archive.status!==0)throw Error('无法导出版本');run('/usr/bin/tar',['-xf','-','-C',app],{input:archive.stdout});await writeFile(path.join(app,'VERSION'),commit+'\n',{mode:0o600});}
@@ -31,7 +41,7 @@ let previous=null;try{previous=await readFile(job);}catch(e){if(e.code!=='ENOENT
 const previousFile=path.join(supportDir,'install-history',Date.now()+'.plist');
 await mkdir(path.dirname(previousFile),{recursive:true,mode:0o700});
 if(previous)await writeFile(previousFile,previous,{mode:0o600});
-if(existing)await lifecycle.stop();
+if(existing){await checkEntrance();await lifecycle.stop();}
 try{
  await writeFile(job,plist,{mode:0o600});await chmod(job,0o600);
  await lifecycle.start(job);

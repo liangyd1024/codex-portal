@@ -1,0 +1,9 @@
+.handoff-status{display:flex;align-items:center;gap:12px;flex-shrink:0;max-height:min(30dvh,180px);overflow:auto;margin:0;padding:10px 20px;border-bottom:1px solid var(--line,#ddd);background:#f7f8f6;color:var(--ink);font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.handoff-status span{flex:1;min-width:0}
+.handoff-status button{flex:none;min-height:32px}
+.handoff-status.error{background:#fff8f2;color:#975635}
+.handoff-status:focus-visible{outline:2px solid #738b73;outline-offset:-2px}
+.handoff-button[hidden],.handoff-status[hidden]{display:none}
+.handoff-button{flex:none;white-space:nowrap}
+.handoff-dismiss{font-size:20px;align-self:flex-start}
+@media(max-width:700px){.handoff-button{min-height:44px}.handoff-status{flex-wrap:wrap;gap:4px 8px;padding:8px 12px}.handoff-status span{flex-basis:calc(100% - 52px)}.handoff-status .handoff-dismiss{order:1}.handoff-status span{order:0}.handoff-status .text-button{order:2}}

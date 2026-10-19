@@ -14,7 +14,7 @@ STORE = HOME / '.codex'
 MAX_SQLITE_INTEGER = 9223372036854775807
 THREAD_COLUMNS = (
     'id', 'name', 'title', 'cwd', 'created_at', 'updated_at', 'preview',
-    'archived', 'model', 'reasoning_effort', 'cli_version',
+    'archived', 'model', 'reasoning_effort', 'cli_version', 'source', 'project_id', 'thread_source', 'thread_section_id',
 )
 TURN_COLUMNS = (
     'thread_id', 'turn_id', 'rollout_ordinal', 'status', 'error_json',
@@ -91,6 +91,130 @@ def archived_flag(payload):
     raise ValueError('archived 必须是布尔值。')
 
 
+def desktop_activity(identifiers):
+    """Observe existing desktop owners briefly; never resume or claim a thread.
+
+    Only a versioned live snapshot is evidence. Missing owners, old versions and
+    timeouts remain unknown, regardless of persisted inProgress history.
+    """
+    import os
+    import socket
+    import stat
+    import struct
+    import time
+    import uuid
+    identifiers = set(identifiers)
+    if not identifiers:
+        return {}
+    result = {}
+    client = None
+    source = None
+    try:
+        endpoint = None
+        for candidate in [STORE / 'ipc/ipc.sock', pathlib.Path('/tmp/codex-ipc') / ('ipc-' + str(os.getuid()) + '.sock')]:
+            try:
+                info, parent = candidate.lstat(), candidate.parent.lstat()
+            except FileNotFoundError:
+                continue
+            if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid() or not stat.S_ISDIR(parent.st_mode) or parent.st_uid != os.getuid() or parent.st_mode & 0o022:
+                return {}
+            endpoint = candidate
+            break
+        if endpoint is None:
+            return {}
+        deadline = time.monotonic() + 1.2
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.settimeout(1.2)
+        client.connect(str(endpoint))
+
+        def send(value):
+            data = json.dumps(value).encode('utf-8')
+            client.sendall(struct.pack('<I', len(data)) + data)
+
+        def exact(size):
+            data = bytearray()
+            while len(data) < size:
+                client.settimeout(max(0.001, deadline - time.monotonic()))
+                part = client.recv(size - len(data))
+                if not part:
+                    raise EOFError()
+                data.extend(part)
+            return data
+
+        def receive():
+            size = struct.unpack('<I', exact(4))[0]
+            if not 0 < size <= 16 * 1024 * 1024:
+                raise ValueError('Invalid activity frame')
+            return json.loads(exact(size))
+
+        def following(identifier, value):
+            send({'type': 'broadcast', 'sourceClientId': source, 'version': 1,
+                  'method': 'thread-stream-following-changed',
+                  'params': {'hostId': 'local', 'conversationId': identifier, 'following': value}})
+
+        request = str(uuid.uuid4())
+        send({'type': 'request', 'requestId': request, 'sourceClientId': 'initializing-client',
+              'version': 0, 'method': 'initialize', 'params': {'clientType': 'remote-codex-manager'}})
+        while time.monotonic() < deadline:
+            message = receive()
+            if message.get('type') == 'response' and message.get('requestId') == request:
+                if message.get('resultType') != 'success':
+                    return {}
+                source = message['result']['clientId']
+                break
+        if source is None:
+            return {}
+        for identifier in identifiers:
+            following(identifier, True)
+        while time.monotonic() < deadline and len(result) < len(identifiers):
+            message = receive()
+            if message.get('type') != 'broadcast' or message.get('method') != 'thread-stream-state-changed' or message.get('version') != 11:
+                continue
+            params = message.get('params', {})
+            identifier = params.get('conversationId')
+            change = params.get('change', {})
+            if identifier not in identifiers or params.get('hostId') != 'local' or change.get('type') != 'snapshot':
+                continue
+            state = change.get('conversationState', {})
+            status = state.get('threadRuntimeStatus', {}).get('type')
+            if state.get('id') == identifier and status in ('active', 'idle', 'systemError', 'notLoaded'):
+                result[identifier] = {'source': 'desktop', 'state': 'running' if status == 'active' else 'idle', 'observedAt': int(time.time() * 1000)}
+                following(identifier, False)
+    except (OSError, EOFError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+    finally:
+        if client is not None:
+            if source is not None:
+                for identifier in identifiers:
+                    try:
+                        following(identifier, False)
+                    except OSError:
+                        break
+            client.close()
+    return result
+
+
+def sidebar_activity(threads):
+    # The persisted latest turn selects candidates only; it never proves activity.
+    try:
+        db = connect_store('thread_history_1.sqlite')
+        try:
+            candidates = {r[0] for r in db.execute("SELECT t.thread_id FROM thread_turns t WHERE t.status='inProgress' AND NOT EXISTS (SELECT 1 FROM thread_turns newer WHERE newer.thread_id=t.thread_id AND newer.rollout_ordinal>t.rollout_ordinal)")}
+        finally:
+            db.close()
+        activity = desktop_activity([t['id'] for t in threads if t['id'] in candidates])
+        for thread in threads:
+            if thread['id'] in activity:
+                thread['activity'] = activity[thread['id']]
+    except (RuntimeError, sqlite3.Error):
+        pass
+
+
+def thread_select_columns(connection):
+    columns = {r['name'] for r in connection.execute('PRAGMA table_info(threads)')}
+    return ', '.join(THREAD_COLUMNS) + (', originator' if 'originator' in columns else '')
+
+
 def normalized_thread(row):
     return {
         'id': row['id'],
@@ -103,9 +227,73 @@ def normalized_thread(row):
         'model': row['model'],
         'reasoningEffort': row['reasoning_effort'],
         'cliVersion': row['cli_version'],
+        'source': row['source'],
+        'originator': row['originator'] if 'originator' in row.keys() else None,
+        'projectId': row['project_id'],
+        'threadSource': row['thread_source'],
+        'sectionId': row['thread_section_id'],
         # Persisted history does not establish another process's live status.
         'status': {'type': 'notLoaded'},
     }
+
+
+# Codex Desktop uses the default interactive thread/list sources. Background exec
+# and all subagent variants belong to storage, not the user's sidebar.
+INTERACTIVE_SOURCES = ('cli', 'vscode', 'appServer', 'unknown')
+
+
+def desktop_membership(connection):
+    try:
+        state = json.loads((STORE / '.codex-global-state.json').read_text())
+    except FileNotFoundError:
+        state = {}
+    # Do not silently infer memberships from cwd when the desktop state is broken.
+    projects = {row['id'] for row in connection.execute('SELECT id FROM projects')}
+    host_key = 'local:' + str(STORE)
+    mapping = state.get('app-server-project-id-by-legacy-project-id-by-host', {}).get(host_key, {})
+    migration = state.get('app-server-projects-migration-by-host', {}).get(host_key, {})
+    assignments = state.get('thread-project-assignments', {})
+    hints = state.get('thread-workspace-root-hints', {})
+    roots = sorted((r for r in connection.execute('SELECT project_id, path FROM project_roots') if isinstance(r['path'], str) and r['path'].startswith('/')), key=lambda r: len(r['path']), reverse=True)
+    projectless = set(state.get('projectless-thread-ids', []))
+
+    def resolve(thread):
+        if thread.get('sectionId'):
+            return None
+        project = thread.get('projectId')
+        if project is not None:
+            return project if project in projects else None
+        if thread['id'] in projectless:
+            return None
+        if not migration.get('threadAssignmentsMigrated', False):
+            assignment = assignments.get(thread['id'], {})
+            if assignment.get('projectKind') == 'local':
+                legacy = assignment.get('projectId')
+                project = mapping.get(legacy, legacy)
+                return project if project in projects else None
+            # Legacy desktop chats can belong to a saved root before assignment
+            # migration. Only registered roots qualify; never invent a project.
+            cwd = (hints.get(thread['id']) or thread.get('cwd') or '').rstrip('/')
+            for root in roots:
+                path = root['path'].rstrip('/')
+                if cwd == path or cwd.startswith(path + '/'):
+                    return root['project_id']
+        return None
+    return resolve
+
+
+def read_sidebar_metadata(payload):
+    identifiers = payload.get('threadIds', [])
+    if not isinstance(identifiers, list) or len(identifiers) > 100 or not all(isinstance(i, str) for i in identifiers):
+        raise ValueError('threadIds 必须为至多 100 个会话 ID。')
+    connection = connect_store('state_5.sqlite')
+    try:
+        resolve = desktop_membership(connection)
+        origin_column = 'originator' if 'originator' in {r['name'] for r in connection.execute('PRAGMA table_info(threads)')} else 'NULL AS originator'
+        rows = connection.execute('SELECT id, project_id, cwd, thread_section_id, ' + origin_column + ' FROM threads WHERE id IN (' + ','.join('?' for _ in identifiers) + ')', identifiers)
+        return {'data': {row['id']: {'originator': row['originator'], 'projectId': resolve({'id': row['id'], 'projectId': row['project_id'], 'cwd': row['cwd'], 'sectionId': row['thread_section_id']})} for row in rows}}
+    finally:
+        connection.close()
 
 
 def literal_like(value):
@@ -117,8 +305,8 @@ def read_threads(payload):
     try:
         require_columns(connection, 'state_5.sqlite', 'threads', THREAD_COLUMNS)
         offset = cursor_number(payload) or 0
-        conditions = ['archived = ?']
-        parameters = [int(archived_flag(payload))]
+        conditions = ['archived = ?', 'source IN (?, ?, ?, ?)', "COALESCE(thread_source, '') != 'ambient_suggestions'"]
+        parameters = [int(archived_flag(payload)), *INTERACTIVE_SOURCES]
         cwd = optional_text(payload, 'cwd')
         search = optional_text(payload, 'search')
         if cwd:
@@ -127,11 +315,15 @@ def read_threads(payload):
         if search:
             conditions.append("(COALESCE(name, '') LIKE ? ESCAPE '\\' OR COALESCE(title, '') LIKE ? ESCAPE '\\')")
             parameters.extend([literal_like(search), literal_like(search)])
-        sql = 'SELECT ' + ', '.join(THREAD_COLUMNS) + ' FROM threads WHERE ' + ' AND '.join(conditions)
+        sql = 'SELECT ' + thread_select_columns(connection) + ' FROM threads WHERE ' + ' AND '.join(conditions)
         sql += ' ORDER BY updated_at DESC, id ASC LIMIT ? OFFSET ?'
         rows = connection.execute(sql, parameters + [51, offset]).fetchall()
+        resolve = desktop_membership(connection)
+        data = [normalized_thread(row) for row in rows[:50]]
+        for thread in data:
+            thread['projectId'] = resolve(thread)
         return {
-            'data': [normalized_thread(row) for row in rows[:50]],
+            'data': data,
             'nextCursor': 'db:' + str(offset + 50) if len(rows) > 50 else None,
             'historySource': 'snapshot',
         }
@@ -144,10 +336,14 @@ def read_detail(payload):
     try:
         require_columns(connection, 'state_5.sqlite', 'threads', THREAD_COLUMNS)
         identifier = thread_id(payload)
-        row = connection.execute('SELECT ' + ', '.join(THREAD_COLUMNS) + ' FROM threads WHERE id = ?', (identifier,)).fetchone()
+        row = connection.execute('SELECT ' + thread_select_columns(connection) + ' FROM threads WHERE id = ?', (identifier,)).fetchone()
         if row is None:
             raise ValueError('未找到会话：' + identifier)
-        return {'thread': normalized_thread(row), 'historySource': 'snapshot'}
+        thread = normalized_thread(row)
+        activity = desktop_activity([identifier])
+        if identifier in activity:
+            thread['activity'] = activity[identifier]
+        return {'thread': thread, 'historySource': 'snapshot'}
     finally:
         connection.close()
 
@@ -171,6 +367,63 @@ def history_item(item, identifier):
     return value
 
 
+MAX_IMAGE_BYTES = 24 * 1024 * 1024
+
+
+def stored_image_bytes(value, payload):
+    # Client selects a part/reference within this persisted item, never a free file.
+    part = payload.get('part')
+    reference = payload.get('reference')
+    if part is not None and reference is not None:
+        raise ValueError('图片来源不能同时指定。')
+    if part is not None:
+        if not isinstance(part, str) or not re.fullmatch(r'\d{1,5}', part):
+            raise ValueError('图片附件序号无效。')
+        parts = value.get('content', [])
+        if value.get('type') != 'userMessage' or not isinstance(parts, list) or int(part) >= len(parts):
+            raise ValueError('未找到图片附件。')
+        source = parts[int(part)]
+        if source.get('type') == 'localImage':
+            image_path = source.get('path')
+        elif source.get('type') == 'image' and isinstance(source.get('url'), str):
+            match = re.fullmatch(r'data:image/(?:png|jpeg|webp|gif);base64,([A-Za-z0-9+/=\s]+)', source['url'])
+            if not match or len(match[1]) > MAX_IMAGE_BYTES * 4 // 3 + 4:
+                raise ValueError('该附件不包含可读取的图片。')
+            return base64.b64decode(match[1], validate=True)
+        else:
+            raise ValueError('该附件不是本地图片。')
+    elif reference is not None:
+        if value.get('type') not in ('agentMessage', 'plan') or not isinstance(reference, str):
+            raise ValueError('图片引用无效。')
+        # Match only Markdown image destinations, not ordinary links or tool output.
+        text = value.get('text') or ''
+        refs = re.findall(r'!\[[^\]\n]*\]\((<[^>\n]+>|(?:\\.|[^\s()\\]|\([^()\n]*\))+?)\)', text)
+        refs = [re.sub(r'\\([!"#$%&\'()*+,\-./:;<=>?@[\]\\^_`{|}~])', r'\1', ref[1:-1] if ref.startswith('<') else ref) for ref in refs]
+        if reference not in refs:
+            raise ValueError('图片未在该消息中引用。')
+        image_path = reference
+    elif value.get('type') == 'imageGeneration' and isinstance(value.get('result'), str):
+        if len(value['result']) > MAX_IMAGE_BYTES * 4 // 3 + 4:
+            raise ValueError('图片超过 24 MiB 限制。')
+        return base64.b64decode(value['result'], validate=True)
+    else:
+        raise ValueError('该记录不包含可读取的图片。')
+    if not isinstance(image_path, str) or not pathlib.Path(image_path).is_absolute():
+        raise ValueError('仅支持目标机器上的绝对图片路径。')
+    import os
+    import stat
+    # Do not read device files, FIFOs or a replacement symlink.
+    fd = os.open(image_path, os.O_RDONLY | os.O_NONBLOCK | getattr(os, 'O_NOFOLLOW', 0))
+    with os.fdopen(fd, 'rb') as image_file:
+        info = os.fstat(image_file.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_IMAGE_BYTES:
+            raise ValueError('图片不是普通文件或超过 24 MiB 限制。')
+        content = image_file.read(MAX_IMAGE_BYTES + 1)
+    if len(content) > MAX_IMAGE_BYTES:
+        raise ValueError('图片超过 24 MiB 限制。')
+    return content
+
+
 def read_image(payload):
     connection = connect_store('thread_history_1.sqlite')
     try:
@@ -181,13 +434,13 @@ def read_image(payload):
         if row is None:
             raise ValueError('未找到图片记录。')
         value = decode_json(row['item_json'], 'thread_items.item_json', item_id)
-        if value.get('type') != 'imageGeneration' or not isinstance(value.get('result'), str):
-            raise ValueError('该记录不是生成图片。')
-        content = base64.b64decode(value['result'], validate=True)
+        content = stored_image_bytes(value, payload)
         if content.startswith(b'\x89PNG\r\n\x1a\n'):
             mime, extension = 'image/png', 'png'
         elif content.startswith(b'\xff\xd8\xff'):
             mime, extension = 'image/jpeg', 'jpg'
+        elif content.startswith((b'GIF87a', b'GIF89a')):
+            mime, extension = 'image/gif', 'gif'
         elif content.startswith(b'RIFF') and content[8:12] == b'WEBP':
             mime, extension = 'image/webp', 'webp'
         else:
@@ -319,6 +572,8 @@ def read_outputs(payload):
         db.commit()
         for entry in data:
             item = entry['item']; output = item.get('aggregatedOutput') or ''
+            # Engine command records may explicitly contain JSON null until output arrives.
+            item['aggregatedOutput'] = output
             if preview:
                 output = output[:limit]
                 item['aggregatedOutput'] = output
@@ -345,6 +600,10 @@ def read_outputs(payload):
 
 
 def read_history(payload):
+    # On a new installation even the history database is absent until the first
+    # turn. Only the manager's successful new-thread path may allow that absence.
+    if payload.get('allowMissingStore') is True and not (STORE / 'thread_history_1.sqlite').exists():
+        return {'data': [], 'nextCursor': None, 'historySource': 'snapshot'}
     connection = connect_store('thread_history_1.sqlite')
     try:
         require_columns(connection, 'thread_history_1.sqlite', 'thread_turns', TURN_COLUMNS)
@@ -411,12 +670,159 @@ def read_notices(payload):
     finally: db.close()
 
 
+PINNED_SECTION = '01984de2-8f74-7c91-a3b2-5c5e937cf318'
+
+
+def sidebar_revision(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:24]
+
+
+def read_sidebar(payload):
+    """One read transaction; only desktop-owned metadata is returned, never credentials."""
+    db = connect_store('state_5.sqlite')
+    try:
+        try:
+            state = json.loads((STORE / '.codex-global-state.json').read_text())
+        except FileNotFoundError:
+            state = {}
+        account = payload.get('accountId')
+        atoms = state.get('electron-persisted-atom-state', {})
+        buckets = atoms.get('sidebar-custom-sections-v3', {})
+        layout = buckets.get(account, {}) if account else {}
+        prefs = atoms.get('flat-project-sidebar-preferences-v1', {})
+        # Desktop normalizes obsolete/manual-v0 preferences before using them.
+        def sort_mode(key):
+            return 'manual' if prefs.get(key) == 'manual' and prefs.get('manualSortVersion') == 1 and atoms.get('codex-sidebar-sort-mode-v1') is None else 'updated_at'
+        preferences = {'grouping': prefs.get('mode') if prefs.get('mode') in ('project','list','connection') else 'project',
+                       'chats': sort_mode('chatSortMode'), 'projects': sort_mode('projectSortMode'),
+                       'pinned': 'manual' if atoms.get('pinned-sidebar-sort-mode-v1', 'manual') == 'manual' else 'updated_at'}
+        host_key = 'local:' + str(STORE)
+        mapping = state.get('app-server-project-id-by-legacy-project-id-by-host', {}).get(host_key, {})
+        reverse = {server: legacy for legacy, server in mapping.items()}
+        def item_key(key):
+            if key.startswith('codex:project:'): return 'project:' + mapping.get(key[14:], key[14:])
+            if key.startswith('codex:thread:local:'): return 'thread:' + key[19:]
+            return key
+        projects = [dict(row) for row in db.execute('SELECT id,name,position FROM projects ORDER BY position,id')]
+        roots = [r for r in db.execute('SELECT project_id,path FROM project_roots ORDER BY position') if isinstance(r['path'], str) and r['path'].startswith('/')]
+        project_ids = {p['id'] for p in projects}
+        project_orders = state.get('sidebar-project-thread-orders', {})
+        for project in projects:
+            project.update(roots=[r['path'] for r in roots if r['project_id'] == project['id']],
+                           legacyId=reverse.get(project['id'], project['id']), recencyAt=0, threadIds=[])
+        project_by_id = {p['id']: p for p in projects}
+        sections_db = {r['id']: dict(r) for r in db.execute('SELECT id,name FROM thread_sections')}
+        sections = []
+        for section in layout.get('sections', []):
+            server_id = section.get('hostSectionIds', {}).get('local')
+            # A removed server section must not be revived by stale desktop metadata.
+            if server_id not in sections_db or server_id == PINNED_SECTION:
+                continue
+            sections.append({'id': server_id, 'desktopId': section['id'], 'name': sections_db[server_id]['name'],
+                             'itemKeys': section.get('itemKeys', []), 'itemOrder': [item_key(k) for k in section.get('itemKeys', [])], 'projectIds': [], 'threadIds': []})
+        sections_by_id = {s['id']: s for s in sections}
+        placed_projects = set()
+        pinned_projects = []
+        for legacy in state.get('pinned-project-ids', []) if account else []:
+            pid = mapping.get(legacy, legacy)
+            if pid in project_ids and pid not in placed_projects:
+                pinned_projects.append(pid); placed_projects.add(pid)
+        for section in sections:
+            for key in section['itemKeys']:
+                if key.startswith('codex:project:'):
+                    pid = mapping.get(key[14:], key[14:])
+                    if pid in project_ids and pid not in placed_projects:
+                        section['projectIds'].append(pid); placed_projects.add(pid)
+        resolve = desktop_membership(db)
+        columns = {r['name'] for r in db.execute('PRAGMA table_info(threads)')}
+        optional = ['originator', 'recency_at', 'is_pinned', 'section_position', 'section_entered_at_ms']
+        query_columns = list(THREAD_COLUMNS) + [c for c in optional if c in columns]
+        rows = db.execute('SELECT ' + ','.join(query_columns) + " FROM threads WHERE source IN (?, ?, ?, ?) AND COALESCE(thread_source,'') != 'ambient_suggestions'", INTERACTIVE_SOURCES).fetchall()
+        tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        receipts = {r['thread_id']: dict(r) for r in db.execute('SELECT thread_id,first_unread_turn,revision FROM thread_read_receipts')} if 'thread_read_receipts' in tables else {}
+        migrated_pins = set(state.get('app-server-migrated-pinned-thread-ids-by-host', {}).get(host_key, []))
+        legacy_pin_order = state.get('pinned-thread-ids', []) if account else []
+        legacy_pin_positions = {tid:i for i,tid in enumerate(legacy_pin_order)}
+        legacy_pins = set(legacy_pin_order) - migrated_pins
+        threads = []
+        for row in rows:
+            values = dict(row)
+            t = normalized_thread(row)
+            # Keep membership and placement distinct. Section placement wins only in rendering.
+            t['projectId'] = resolve({**t, 'sectionId': None})
+            t['preview'] = t['preview'][:200]
+            t['recencyAt'] = values.get('recency_at') or t['updatedAt']
+            t['isPinned'] = t['sectionId'] == PINNED_SECTION or bool(values.get('is_pinned')) or t['id'] in legacy_pins
+            t['sectionPosition'] = values.get('section_position')
+            receipt = receipts.get(t['id'])
+            t['readRevision'] = receipt['revision'] if receipt else None
+            # Desktop uses identity-scoped host read state, not the engine receipt.
+            # Without the desktop read-state API, do not display a guessed unread dot.
+            t['isUnread'] = None
+            t['revision'] = sidebar_revision([t['id'],t['name'],t['projectId'],t['sectionId'],t['archived'],t['isPinned'],t['sectionPosition'],t['readRevision']])
+            threads.append(t)
+            if not t['archived'] and t['projectId'] in project_by_id:
+                p = project_by_id[t['projectId']]
+                p['recencyAt'] = max(p['recencyAt'], t['recencyAt'])
+        sidebar_activity(threads)
+        by_id = {t['id']: t for t in threads}
+        for s in sections:
+            s['revision'] = sidebar_revision([s['name'],sorted(t['id'] for t in threads if t['sectionId'] == s['id'])])
+        # Preserve manual ordering, including legacy project thread order during migration.
+        def recent(t): return (-t['recencyAt'], t['id'])
+        def section_order(t): return (t['sectionPosition'] if t['sectionPosition'] is not None else legacy_pin_positions.get(t['id'], MAX_SQLITE_INTEGER), t['id'])
+        active = sorted((t for t in threads if not t['archived']), key=recent)
+        pinned = [t for t in active if t['isPinned']]
+        pinned.sort(key=recent if preferences['pinned'] == 'updated_at' else section_order)
+        root_threads = []
+        for t in active:
+            if t['isPinned']: continue
+            if t['sectionId'] in sections_by_id:
+                sections_by_id[t['sectionId']]['threadIds'].append(t['id'])
+            elif t['projectId'] in project_by_id:
+                project_by_id[t['projectId']]['threadIds'].append(t['id'])
+            else: root_threads.append(t['id'])
+        for p in projects:
+            order = project_orders.get(p['legacyId'], {}).get('threadIds', [])
+            if preferences['chats'] == 'manual':
+                positions = {tid: index for index, tid in enumerate(order)}
+                p['threadIds'].sort(key=lambda tid: (positions.get(tid, MAX_SQLITE_INTEGER), section_order(by_id[tid])))
+            p['revision'] = sidebar_revision([p['name'],p['roots'],p['position']])
+        for s in sections:
+            s['threadIds'].sort(key=lambda tid: section_order(by_id[tid]))
+        if preferences['chats'] == 'manual':
+            order = {item_key(key): i for i,key in enumerate(atoms.get('unified-sidebar-chat-order-v1', []))}
+            root_threads.sort(key=lambda tid: (order.get('thread:'+tid, MAX_SQLITE_INTEGER), section_order(by_id[tid])))
+        if preferences['projects'] == 'updated_at': projects.sort(key=lambda p: (-p['recencyAt'],p['position'],p['id']))
+        else:
+            order = {item_key(key): i for i,key in enumerate(atoms.get('unified-sidebar-project-order-v1', []))}
+            projects.sort(key=lambda p: (order.get('project:'+p['id'], MAX_SQLITE_INTEGER),p['position'],p['id']))
+        ordered_sections = layout.get('sectionOrder', [])
+        section_positions = {key: index for index,key in enumerate(ordered_sections)}
+        sections.sort(key=lambda s: section_positions.get('custom:' + s['desktopId'], MAX_SQLITE_INTEGER))
+        archived = archived_flag(payload)
+        search = (optional_text(payload, 'search') or '').casefold()
+        visible = [t for t in (threads if archived else active) if t['archived'] == archived and (not search or search in (t['name'] or t['preview']).casefold())]
+        visible.sort(key=recent)
+        offset = cursor_number(payload) or 0
+        page = visible[offset:offset+50] if archived else visible
+        return {'data': page, 'nextCursor': 'db:' + str(offset+50) if archived and len(visible)>offset+50 else None,
+                'projects': projects, 'sections': sections, 'pinnedThreadIds': [t['id'] for t in pinned], 'pinnedProjectIds': pinned_projects,
+                'rootThreadIds': root_threads, 'rootProjectIds': [p['id'] for p in projects if p['id'] not in placed_projects],
+                'sectionOrder': ordered_sections, 'pinnedOrder': [item_key(k) for k in atoms.get('unified-sidebar-pinned-order-v1', [])] if account else [],
+                'chatOrder': [item_key(k) for k in atoms.get('unified-sidebar-chat-order-v1', [])] if account else [], 'preferences': preferences, 'archived': archived,
+                'accountScope': sidebar_revision(account) if account else None, 'accountLayoutAvailable': bool(account),
+                'historySource': 'snapshot', 'total': len(visible), 'selectedThread': by_id.get(payload.get('selectedId'))}
+    finally:
+        db.close()
+
+
 def main():
     payload = globals().get('PAYLOAD')
     if not isinstance(payload, dict):
         raise ValueError('PAYLOAD 必须是 JSON 对象。')
     action = payload.get('action')
-    handlers = {'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
+    handlers = {'sidebar': read_sidebar, 'sidebarMetadata': read_sidebar_metadata, 'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
     if action not in handlers:
         raise ValueError('不支持的只读操作。')
     return handlers[action](payload)

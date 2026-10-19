@@ -22,7 +22,7 @@ export class VoiceCapture {
     try {
       const rec = run.rec = new this.Recognition();
       rec.lang = 'zh-CN'; rec.continuous = true; rec.interimResults = true;
-      rec.onstart = () => { if (current() && !run.stopping) this.status('正在听写… 点击 ✓ 完成，Esc 取消', true); };
+      rec.onstart = () => { if (current() && !run.stopping) this.status('正在听写… 点击 ✓ 完成，× 取消', true); };
       rec.onresult = event => {
         if (!current()) return;
         let interim = '';
@@ -78,7 +78,7 @@ export function installVoice({input, context, render}) {
   let capture, focusAfterStop=false;
   const sync = () => {
     if (input.disabled && capture?.active) capture.interrupt();
-    button.disabled = !supported || input.disabled || Boolean(capture?.active?.stopping);
+    button.disabled = input.disabled || Boolean(capture?.active?.stopping);
     if (!supported) button.title='此浏览器不支持网页听写，可使用系统或手机键盘听写。';
     else if (input.disabled) button.title='连接并接管会话后可使用语音输入。';
     else if (!capture?.active) button.title='语音输入：转写后可编辑，再手动发送。语音可能使用浏览器厂商的云服务。';
@@ -98,11 +98,11 @@ export function installVoice({input, context, render}) {
   }});
   capture.sync=sync;
   const focusInput=()=>{input.focus();input.setSelectionRange(input.value.length,input.value.length);};
-  button.onclick=()=>{if(capture.active){focusAfterStop=true;capture.stop();}else if(!button.disabled)capture.start();};
+  button.onclick=()=>{if(!supported){label.textContent='此浏览器不支持网页听写，请使用手机键盘上的麦克风。';feedback.hidden=false;dismiss.hidden=false;return;}if(capture.active){focusAfterStop=true;capture.stop();}else if(!button.disabled)capture.start();};
   cancel.onclick=()=>{capture.interrupt(true);focusInput();};
   dismiss.onclick=()=>{feedback.hidden=true;focusInput();};
   form.addEventListener('keydown',event=>{
-    if (event.key==='Escape' && capture.active) {event.preventDefault();capture.interrupt(true);focusInput();}
+    if (event.key==='Escape' && capture.active) {event.preventDefault();event.stopPropagation();capture.interrupt(true);focusInput();}
   });
   input.addEventListener('input',()=>{if(!capture.active)feedback.hidden=true;});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)capture.interrupt();});

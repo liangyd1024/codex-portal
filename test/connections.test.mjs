@@ -28,3 +28,9 @@ test('browser import checks machine identity, target mapping and app-only keys',
  assert.equal(validateBrowser(data,config),data);
  for(const mutate of [d=>d.machineId='b',d=>d.connections[0].home='/Users/wrong',d=>d.localStorage.cookie='bad',d=>d.cache.database='other',d=>d.version=99]){const d=structuredClone(data);mutate(d);assert.throws(()=>validateBrowser(d,config));}
 });
+test('unload delay is scoped to a connection and rejects invalid values',()=>{
+ const c=sample();c.connections[0].threadUnloadDelaySecs=5;validateConfig(c,{checkLocal:false});
+ assert.match(pythonPrefix(c.connections[0]),/SERVICE_THREAD_UNLOAD_DELAY_SECS=5\n/);
+ assert.match(pythonPrefix(c.connections[1]),/SERVICE_THREAD_UNLOAD_DELAY_SECS=None\n/);
+ for(const value of [-1,1.5,86401,'5',NaN]){const bad=sample();bad.connections[0].threadUnloadDelaySecs=value;assert.throws(()=>validateConfig(bad,{checkLocal:false}));}
+});

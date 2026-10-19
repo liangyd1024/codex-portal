@@ -1,0 +1,22 @@
+.new-project-picker{display:none}
+#project-picker-trigger{display:block;max-width:100%;margin:0 auto 20px;min-height:44px;padding:8px 14px;border-radius:10px;background:var(--soft);font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mobile-layout #project-picker-dialog{top:auto;bottom:max(0px,calc(100dvh - var(--visual-top,0px) - var(--visual-height,100dvh)));transform:none;width:100%;max-width:100%;max-height:min(70dvh,calc(var(--visual-height,100dvh) - 12px));margin:0;padding:16px 16px max(16px,env(safe-area-inset-bottom));border:1px solid var(--line);border-radius:20px 20px 0 0;background:#fff;color:var(--ink);overflow:hidden;box-shadow:0 -8px 32px #0002}
+#project-picker-dialog[open]{display:flex;flex-direction:column;gap:12px}
+#project-picker-dialog::backdrop{background:#0005}
+#project-picker-dialog header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#project-picker-dialog h2{font-size:18px;margin:0;font-weight:600}
+#project-picker-dialog header button{font-size:26px;width:44px;height:44px}
+#project-picker-search{flex-shrink:0;width:100%;min-height:44px;padding:10px 12px;font-size:16px;border:1px solid var(--line);border-radius:10px;background:var(--soft);color:var(--ink)}
+#project-picker-list{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.project-picker-option{position:relative;display:block;width:100%;min-height:48px;padding:12px 40px 12px 12px;text-align:left;border-radius:10px;background:transparent;font-size:16px;line-height:1.5;overflow-wrap:anywhere}
+.project-picker-option[aria-pressed="true"]{background:var(--green-light);color:var(--green)}
+.project-picker-option[aria-pressed="true"]::after{content:'✓';position:absolute;right:14px;top:12px}
+.project-picker-option small{display:block;color:var(--muted);font-size:12px}
+#project-picker-empty{text-align:center;color:var(--muted);padding:20px 0;margin:0}
+
+/* Desktop uses a bounded searchable chooser; the compact bottom sheet stays unchanged. */
+#project-picker-dialog{width:440px;max-width:calc(100vw - 32px);max-height: min(560px,calc(100dvh - 48px));padding:16px;border:1px solid var(--line);border-radius:16px;overflow:hidden;color:var(--ink)}
+#project-picker-trigger:hover:not(:disabled){background:var(--green-light)}
+#project-picker-trigger:disabled{opacity:.55;cursor:default}
+#project-picker-dialog :focus-visible{outline:2px solid #377cf6;outline-offset:-2px}
+.project-picker-option:hover:not(:disabled){background:var(--soft)}

@@ -1,0 +1,23 @@
+.automations-open #welcome,.automations-open #conversation,.automations-open #new-chat-page{display:none!important}
+.automations-page{flex:1;overflow:auto;padding:32px clamp(20px,5vw,64px);min-height:0}
+.automations-heading,.automations-toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.automations-heading{justify-content:space-between}.automations-heading h1{font-size:28px;margin:0 0 20px}
+.automations-toolbar{margin-bottom:24px}.automations-search{margin-left:auto;width:200px}
+.automations-page input,.automations-page select,.automation-picker input,.automation-picker select{font:inherit;border:1px solid var(--border,#ddd);border-radius:8px;padding:9px;background:var(--surface,#fff);min-width:0;max-width:100%}
+.automation-row{padding:22px 0;border-bottom:1px solid var(--border,#e5e5e5);overflow-wrap:anywhere}
+.automation-name{font:inherit;font-weight:600;font-size:18px;background:none;border:0;padding:0;text-align:left;cursor:pointer;color:inherit}
+.automation-actions{display:flex;gap:16px}.automation-details{margin-top:12px}.automation-details summary{cursor:pointer;color:var(--muted,#777)}
+.automation-prompt{white-space:pre-wrap;line-height:1.7}.automation-details button{display:block;margin-top:8px;text-align:left}
+.automation-picker{width:min(480px,calc(100vw - 32px));border:1px solid #ddd;border-radius:16px;padding:24px;box-sizing:border-box}.automation-picker::backdrop{background:#0005}
+.automation-picker input,.automation-picker select{display:block;width:100%;margin-bottom:14px}.automation-picker>button{margin:8px 12px 0 0}
+.desktop-chat .composer-tools,.desktop-chat #composer-settings,.desktop-chat #composer-model-label{display:none}
+.automations-nav{display:flex;align-items:center;gap:8px;width:100%;margin:8px 0;padding:10px 12px;background:none;border:0;border-radius:8px;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.automations-nav:hover{background:#00000008}.automations-page button:focus-visible,.automation-picker :focus-visible{outline:2px solid #3578e5;outline-offset:3px}
+@media(max-width:600px){.automations-page{padding:20px}.automations-toolbar{gap:10px}.automations-search{margin-left:0;width:100%;flex-basis:100%}.automations-heading h1{font-size:25px}.automation-picker{padding:18px}}
+
+.automation-row{position:relative;padding:16px 56px 16px 14px;border:0;border-radius:14px}.automation-row:hover{background:var(--hover,#f3f3f3)}
+.automation-row>.subtle{margin:5px 0 0}.automation-actions{position:absolute;right:12px;top:14px;display:block;z-index:1}.automation-actions[open]{z-index:3}
+.automation-actions>summary{list-style:none;cursor:pointer;border-radius:10px;font-size:24px;width:36px;height:36px;text-align:center;line-height:30px}.automation-actions>summary::-webkit-details-marker{display:none}.automation-actions>summary:hover,.automation-actions[open]>summary{background:#00000008}
+.automation-menu{position:absolute;right:0;top:40px;width:180px;padding:8px;border:1px solid var(--border,#ddd);border-radius:16px;background:var(--surface,#fff);box-shadow:0 8px 30px #0002}.automation-menu>button{display:block;width:100%;padding:10px 14px;text-align:left;border-radius:10px;font-size:15px}.automation-menu>button:hover{background:#00000008}.automation-menu>.danger{color:#c93838}
+.automation-task-panel{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 40px);padding:0;border:1px solid var(--border,#ddd);border-radius:20px;color:inherit;background:var(--surface,#fff);box-sizing:border-box;overflow:auto}.automation-task-panel::backdrop{background:#0003}.automation-task-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 24px;border-bottom:1px solid var(--border,#ddd)}.automation-task-heading h2{font-size:20px;margin:0;overflow-wrap:anywhere}.automation-task-heading>button{flex-shrink:0}.automation-task-content{padding:4px 24px 24px;overflow-wrap:anywhere}.automation-task-content h3{font-size:15px;margin-top:24px}.automation-task-content .subtle{line-height:1.65}.automation-task-content>.text-button{display:block;text-align:left;margin-top:10px}
+.automation-task-panel :focus-visible,.automation-actions :focus-visible{outline:2px solid #3578e5;outline-offset:3px}.inspector-nav .automations-nav{display:block;width:auto;margin:0;padding:8px 6px;white-space:nowrap}.inspector-nav .automations-nav .icon{width:14px;height:14px}
