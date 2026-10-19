@@ -74,3 +74,7 @@ test('Markdown images render through scoped resolver; code examples do not load 
  assert.equal(all(body,'IMG').length,1);assert.deepEqual(calls,[{path:'/tmp/a b.png',alt:'图'}]);
  assert.equal(groupTurnItems({status:'completed',items:[{type:'imageGeneration',result:'image'}]})[0].type,'message');
 });
+test('file resolver preserves formatted link labels and ignores fenced code and unsafe URLs',()=>{
+ const calls=[];const body=markdown('[**视频**](</tmp/中文 (1).mp4>)\n\n`[例子](/tmp/no.mp4)`\n\n```md\n[代码](/tmp/no.mp4)\n```',0,{file:(path,label)=>{calls.push({path,label});return new Node('a');}});
+ assert.equal(all(body,'A').length,1);assert.equal(all(body,'A')[0].textContent,'视频');assert.equal(all(body,'STRONG').length,1);assert.deepEqual(calls,[{path:'/tmp/中文 (1).mp4',label:'**视频**'}]);
+});

@@ -1,3 +1,4 @@
+import {fileLink,closeFileViewer} from './message-files.js';
 import {notifyManagerError, recoveryMessage, selectedRecoveryMessage} from './recovery-state.js';
 import {activitySource,conversationActivity,renderConversationActivity} from './activity.js';
 let scrollFollow,scrollContext;
@@ -468,7 +469,8 @@ function renderCommandOutput(item) {
 }
 function renderItem(item) {
   const imageUrl=options=>itemImageUrl(state.selectedId,item.id,{...options,host:targetHost});
-  const bodyMarkdown=text=>markdown(text,0,{image:(path,label)=>{
+  const fileContext={threadId:state.selectedId,itemId:item.id,host:targetHost};
+  const bodyMarkdown=text=>markdown(text,0,{file:(path,label)=>fileLink(path,label,fileContext),image:(path,label)=>{
     if(!isRasterImage(path))return null;
     if(path.startsWith('/')&&!path.startsWith('//'))return imageCard(imageUrl({reference:path}),label||'回复图片');
     if(/^data:image\/(png|jpeg|webp|gif);base64,/.test(path))return imageCard(path,label||'回复图片');
@@ -539,7 +541,7 @@ function renderMessages() {
   if(document.activeElement?.matches('.output-controls input')) return;
   const scroller = $('messages-scroller');
   const context=targetHost+':'+state.selectedId;
-  if(scrollContext!==context){scrollContext=context;scrollFollow?.reset();clear($('messages'));lastMessageShape=undefined;}
+  if(scrollContext!==context){closeFileViewer();scrollContext=context;scrollFollow?.reset();clear($('messages'));lastMessageShape=undefined;}
   const nearBottom = scrollFollow?.following ?? true;
   const shape=JSON.stringify([state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],turns()],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
   if(shape===lastMessageShape){

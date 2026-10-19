@@ -1,3 +1,4 @@
+import {fileResponse} from './lib/file-response.mjs';
 import {readSidebar,sidebarAction} from './lib/sidebar.mjs';
 import {composerCatalog,setGoal} from './lib/composer.mjs';
 import {homedir,networkInterfaces} from 'node:os';
@@ -79,6 +80,8 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       if(req.method==='GET'&&p==='/api/sidebar')return json(res,200,await readSidebar(manager,Object.fromEntries(url.searchParams)));
       if(req.method==='GET'&&p==='/api/projects')return json(res,200,{data:await manager.refreshCatalog('projects')});
       if(req.method==='GET'&&p==='/api/threads')return json(res,200,await manager.threads(Object.fromEntries(url.searchParams)));
+      const fileMatch=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})\/items\/([A-Za-z0-9_-]{1,160})\/file$/);
+      if(['GET','HEAD'].includes(req.method)&&fileMatch){await fileResponse(manager,req,res,fileMatch[1],fileMatch[2],url);return;}
       const image=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})\/items\/([A-Za-z0-9_-]{1,160})\/image$/);
       if(req.method==='GET'&&image){
         const result=await manager.image(image[1],image[2],{preview:url.searchParams.get('preview')==='1',part:url.searchParams.get('part'),reference:url.searchParams.get('reference')});
@@ -111,11 +114,11 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       }
       if(p.startsWith('/api/'))return json(res,404,{error:{message:'找不到此接口。',code:'NOT_FOUND'}});
       if(req.method!=='GET'&&req.method!=='HEAD')throw new AppError('不支持此请求方法。',405);
-      const file={'/recovery-state.js':'recovery-state.js','/activity.js':'activity.js','/project-picker.js':'project-picker.js','/project-picker.css':'project-picker.css','/message-media.js':'message-media.js','/message-body.js':'message-body.js','/message-dom.js':'message-dom.js','/new-chat.js':'new-chat.js','/new-chat.css':'new-chat.css','/inline-mentions.js':'inline-mentions.js','/skill-suggestions.js':'skill-suggestions.js','/attachments.js':'attachments.js','/composer.js':'composer.js','/composer.css':'composer.css','/':'index.html','/index.html':'index.html','/app.js':'app.js','/mobile-ui.js':'mobile-ui.js','/mobile-ui.css':'mobile-ui.css','/input-state.js':'input-state.js','/thread-sync.js':'thread-sync.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
+      const file={'/message-files.js':'message-files.js','/recovery-state.js':'recovery-state.js','/activity.js':'activity.js','/project-picker.js':'project-picker.js','/project-picker.css':'project-picker.css','/message-media.js':'message-media.js','/message-body.js':'message-body.js','/message-dom.js':'message-dom.js','/new-chat.js':'new-chat.js','/new-chat.css':'new-chat.css','/inline-mentions.js':'inline-mentions.js','/skill-suggestions.js':'skill-suggestions.js','/attachments.js':'attachments.js','/composer.js':'composer.js','/composer.css':'composer.css','/':'index.html','/index.html':'index.html','/app.js':'app.js','/mobile-ui.js':'mobile-ui.js','/mobile-ui.css':'mobile-ui.css','/input-state.js':'input-state.js','/thread-sync.js':'thread-sync.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
       if(!file){res.writeHead(404);res.end('Not found');return;}
       const content=await readFile(path.join(ROOT,'public',file));
       res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);
-    }catch(error){if(res.headersSent){res.end();return;}json(res,error.status||502,{error:{message:error.message,code:error.code||'REMOTE_ERROR',...(error.details?{details:error.details}:{})}});}
+    }catch(error){if(res.headersSent){res.destroy();return;}json(res,error.status||502,{error:{message:error.message,code:error.code||'REMOTE_ERROR',...(error.details?{details:error.details}:{})}});}
   };
   const server=http.createServer((req,res)=>handler(req,res));
   const proxyServer=http.createServer((req,res)=>handler(req,res,true));
