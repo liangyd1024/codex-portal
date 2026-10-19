@@ -383,11 +383,17 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .message-body hr{border:0;border-top:1px solid #e5e5e5;margin:16px 0}
 .message-body .table-scroll:focus-visible{outline:2px solid #666;outline-offset:2px}
 
-#refresh-compact{display:none}
-@media(max-width:700px),(pointer:coarse) and (max-width:1050px) and (max-height:600px){
-  .refresh-status{padding:6px 16px}
-  #refresh-message,#refresh-time{display:none}
-  #refresh-compact{display:inline}
+/* Refresh feedback belongs to the header, without shifting conversation content. */
+.topbar #refresh-status{position:relative;display:flex;align-items:center;flex:0 1 auto;min-width:0;max-width:160px;padding:3px 6px;border-radius:5px;background:transparent;font-size:12px;line-height:20px;white-space:nowrap;overflow:visible}
+.topbar #refresh-status.error{color:#9c4425;background:#fff3eb}
+#refresh-compact{display:block;overflow:hidden;text-overflow:ellipsis}
+.refresh-details{position:absolute;right:0;top:calc(100% + 8px);z-index:60;width:max-content;max-width:min(340px,calc(100vw - 32px));padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:var(--shadow);white-space:normal;overflow-wrap:anywhere;clip-path:inset(50%);pointer-events:none;opacity:0}
+.refresh-details span{display:block}
+.refresh-status:is(:hover,:focus-visible) .refresh-details{clip-path:none;opacity:1}
+.refresh-status:focus-visible{outline:2px solid #60876a;outline-offset:2px}
+@media(max-width:700px){
+  .topbar #refresh-status{max-width:70px;padding:2px;font-size:11px}
+  .topbar .refresh-details{position:fixed;top:58px;right:12px;max-width:calc(100vw - 24px)}
 }
 
 /* Message attachments stay with their text; original files are scoped to stored items. */
