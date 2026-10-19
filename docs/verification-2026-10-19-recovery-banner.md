@@ -24,3 +24,9 @@
 修复提交 `ab0b3ed` 已推送 origin/master，包含当前正式版本 `6c71e92` 的全部改动。为保留另一聊天的未提交文件预览功能，在 `/tmp/rcm-recovery-release-20261019-1426` 创建 master 的干净本地副本；该提交再次运行 npm test，首次复现 Node runner 通信异常，重跑全部通过（日志 `/tmp/rcm-recovery-release-tests-retry.log`）。
 
 执行 `node scripts/install-local.mjs --ref ab0b3ed` 被空闲检查拒绝：正式入口仍有 1 个 active 会话。未进入备份、重启或健康检查阶段；正式版本未改变。再次核对仍有运行任务，未绕过检查或停止任务。需空闲后从最新且已验证的 master 继续安装，不能把本次预览描述为上线。浏览器复测 TaskSpace 已关闭，隔离预览服务已停止。
+
+## 重新部署完成（2026-10-19 14:50 北京时间）
+
+用户要求重新部署后，确认 local / ally 均无活动任务和待处理请求，工作目录干净，拉取 origin/master 无新增提交。正式原版本 db88b2d，最新 master 0fafc97 包含该版本及 ab0b3ed 恢复提示修复。部署前 npm test 全部通过：186 Node + 45 Python，日志 `/tmp/rcm-redeploy-tests-20261019.log`。
+
+执行现有安装脚本成功安装 `0fafc97ab2829d8570a8cac06a32b01fb51466a2`，部署前加密备份 `/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T064955462179Z.tar.gz.age`。脚本健康检查通过，随后真实 `/api/version` 返回目标提交，`/api/status` 显示 connected、service.running=true；正式 recovery-state.js 已为修复版。8 条缺失历史记录的恢复错误仍保留，未删除或声称修复其历史数据。手机浏览器刷新一次加载新版后，正常会话不再显示这些无关恢复失败的全局横幅。本轮未追加 iPhone Chrome 真机验证。
