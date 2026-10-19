@@ -39,7 +39,7 @@ class DesktopNotifyTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, '权限不符'):
                 module.notify({'threadId': 'test', 'archived': True})
 
-    def test_framing_notification_and_ordered_acknowledgement(self):
+    def check_notification(self, payload, expected_count):
         received = []
         errors = []
         with socket.socket(socket.AF_UNIX) as server:
@@ -61,7 +61,7 @@ class DesktopNotifyTest(unittest.TestCase):
                                 data += part
                             return data
 
-                        for _ in range(3):
+                        for _ in range(expected_count):
                             msg = json.loads(exact(struct.unpack('<I', exact(4))[0]))
                             received.append(msg)
                             if msg['method'] == 'initialize':
@@ -75,11 +75,30 @@ class DesktopNotifyTest(unittest.TestCase):
             thread = threading.Thread(target=serve)
             thread.start()
             try:
-                self.assertEqual(module.notify({'threadId': 'test', 'archived': True}), {'status': 'notified'})
+                self.assertEqual(module.notify(payload), {'status': 'notified'})
             finally:
                 thread.join(6)
             self.assertEqual(errors, [])
-            self.assertEqual([m['method'] for m in received], ['initialize', 'thread-archived', 'initialize'])
-            self.assertEqual(received[1]['version'], 2)
-            self.assertEqual(received[1]['sourceClientId'], 'assigned')
-            self.assertEqual(received[1]['params'], {'hostId': 'local', 'conversationId': 'test', 'cwd': '/project'})
+            return received
+
+    def test_framing_notification_and_ordered_acknowledgement(self):
+        received = self.check_notification({'threadId': 'test', 'archived': True}, 3)
+        self.assertEqual([m['method'] for m in received], ['initialize', 'thread-archived', 'initialize'])
+        self.assertEqual(received[1]['version'], 2)
+        self.assertEqual(received[1]['sourceClientId'], 'assigned')
+        self.assertEqual(received[1]['params'], {'hostId': 'local', 'conversationId': 'test', 'cwd': '/project'})
+
+    def test_creation_waits_for_persistence(self):
+        with patch.object(module.socket, 'socket') as connect:
+            self.assertEqual(module.notify({'threadId': 'missing', 'action': 'created'}), {'status': 'pendingPersistence'})
+            connect.assert_not_called()
+
+    def test_creation_invalidates_discovery_only(self):
+        with sqlite3.connect(self.home / '.codex/state_5.sqlite') as db:
+            db.execute('UPDATE threads SET archived=0')
+        received = self.check_notification({'threadId': 'test', 'action': 'created'}, 5)
+        self.assertEqual([m['method'] for m in received], ['initialize'] + ['query-cache-invalidate'] * 3 + ['initialize'])
+        self.assertEqual([m['params']['queryKey'] for m in received[1:-1]], [['recent-conversations'], ['recent-conversations-meta'], ['command-menu-thread-search', 'local']])
+        self.assertTrue(all(m['version'] == 0 for m in received[1:-1]))
+        with sqlite3.connect(self.home / '.codex/state_5.sqlite') as db:
+            self.assertEqual(db.execute('SELECT * FROM threads').fetchall(), [('test', 0, '/project')])
