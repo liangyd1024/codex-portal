@@ -56,7 +56,7 @@ export class Sidebar {
   }
   isExpanded(key){return this.view?.search?(this.searchOverrides.get(key)??this.searchExpanded):this.expanded.has(key);}
   collapseAll(){this.expanded.clear();this.searchOverrides.clear();this.searchExpanded=false;this.save();this.render(this.snapshot,this.view);}
-  entry(label,action,run,extra={}){const c=this.snapshot?.capabilities[action];return {label,run,disabled:!this.o.connected()||this.pending||!c?.supported,reason:!this.o.connected()?'连接目标机器后可操作。':c?.reason,...extra,hidden:!c?.supported};}
+  entry(label,action,run,extra={}){const c=this.snapshot?.capabilities[action];return {label,run,disabled:!this.o.connected()||!c?.supported,reason:!this.o.connected()?'连接目标机器后可操作。':c?.reason,...extra,hidden:!c?.supported};}
   render(snapshot,view={}){
     if(this.view?.search!==view.search){this.searchOverrides.clear();this.searchExpanded=true;}
     this.view=view;if(!snapshot)return;if(this.drag){this.snapshot=snapshot;return;}
@@ -83,7 +83,21 @@ export class Sidebar {
     if(focused)[...this.node.querySelectorAll('[data-focus-key]')].find(n=>n.dataset.focusKey===focused)?.focus({preventScroll:true});
     this.node.parentElement.scrollTop=scroll;this.setBusy(this.pending);
   }
-  setBusy(pending){this.node.setAttribute('aria-busy',String(pending));this.progress.hidden=!pending;this.archiveButton.disabled=pending;this.toolbar.querySelector('.icon-button').disabled=pending;for(const b of this.node.querySelectorAll('.sidebar-item-menu'))b.disabled=pending;}
+  setBusy(pending){
+    this.node.setAttribute('aria-busy',String(pending));this.progress.hidden=!pending;
+    this.archiveButton.disabled=false;this.toolbar.querySelector('.icon-button').disabled=false;
+    for(const b of this.node.querySelectorAll('.sidebar-item-menu')){
+      const id=b.dataset.focusKey?.replace(/^menu:thread:/,'');
+      b.disabled=!!this.operations?.has(this.snapshot.accountScope+':'+id);
+      b.setAttribute('aria-busy',String(b.disabled));
+    }
+  }
+  // Queue only native mutations; a slow list refresh must not block the next item.
+  enqueue(work){
+    const next=(this.operationQueue||Promise.resolve()).then(work);
+    this.operationQueue=next.catch(()=>{});return next;
+  }
+
   toggle(key){if(this.view?.search)this.searchOverrides.set(key,!this.isExpanded(key));else{if(this.expanded.has(key))this.expanded.delete(key);else this.expanded.add(key);this.save();}this.render(this.snapshot,this.view);}
   disclosureKeys(button,key){button.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();if(this.isExpanded(key)!==(e.key==='ArrowRight'))this.toggle(key);}});}
   source(t){return this.o.activitySource?this.o.activitySource(t):activitySource(t,{connected:this.o.connected(),webActive:t.status?.type==='active'});}
@@ -131,6 +145,7 @@ export class Sidebar {
     anchor.onkeydown=e=>{if(e.key==='ContextMenu'||e.key==='F10'&&e.shiftKey)open(e);};container.append(more);
   }
   threadMenu(t){
+    if(this.operations?.has(this.snapshot.accountScope+':'+t.id))return [{label:'正在处理此会话…',disabled:true}];
     if(t.archived)return [this.entry('恢复会话','restore',()=>this.run('restore',t))];
     const entries=[this.entry('重命名','rename',()=>this.edit('rename',t,'重命名会话',t.name)),this.entry(t.isPinned?'取消置顶':'置顶','pin',()=>this.run('pin',t,{pinned:!t.isPinned})),this.entry('移动到项目','moveProject',()=>this.choose('moveProject',t)),this.entry('移动到分区','moveSection',()=>this.choose('moveSection',t)),this.entry(t.isUnread?'标记已读':'标记未读','read',()=>this.run('read',t,{read:!!t.isUnread}),{disabled:!this.o.connected()||!t.readRevision||!this.snapshot.capabilities.read.supported,reason:this.snapshot.capabilities.read.reason})];
     if(t.isPinned&&this.snapshot.preferences.pinned==='manual'){
@@ -158,46 +173,58 @@ export class Sidebar {
   modal(title){
     const dialog=make('dialog','sidebar-dialog'),form=make('form');form.onsubmit=e=>e.preventDefault();form.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.isComposing||e.keyCode===229))e.preventDefault();});const h=make('h2','',title);h.id='sidebar-dialog-title';dialog.setAttribute('aria-labelledby',h.id);form.append(h);dialog.append(form);document.body.append(dialog);
     const actions=make('div','sidebar-dialog-actions'),cancel=make('button','secondary-button','取消'),submit=make('button','primary-button','保存');cancel.type='button';submit.type='submit';actions.append(cancel,submit);const error=make('p','sidebar-dialog-error');error.setAttribute('role','alert');
-    const close=()=>{dialog.close();dialog.remove();this.dialog=null;this.focusAnchor();};cancel.onclick=close;dialog.oncancel=e=>{if(this.pending)e.preventDefault();};dialog.addEventListener('close',()=>{if(dialog.isConnected){dialog.remove();this.dialog=null;this.focusAnchor();}});this.dialog=dialog;dialog.dataset.accountScope=this.snapshot.accountScope||'';
-    dialog.addEventListener('click',e=>{if(e.target!==dialog||this.pending)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close();});
+    const close=()=>{dialog.close();dialog.remove();this.dialog=null;this.focusAnchor();};cancel.onclick=close;dialog.oncancel=e=>{if(dialog.dataset.busy==='true')e.preventDefault();};dialog.addEventListener('close',()=>{if(dialog.isConnected){dialog.remove();this.dialog=null;this.focusAnchor();}});this.dialog=dialog;dialog.dataset.accountScope=this.snapshot.accountScope||'';
+    dialog.addEventListener('click',e=>{if(e.target!==dialog||dialog.dataset.busy==='true')return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close();});
     return {dialog,form,actions,submit,cancel,error,close,finish:()=>{form.append(error,actions);dialog.showModal();form.querySelector('input,select,button')?.focus();}};
   }
   edit(action,target,title,value=''){
     const m=this.modal(title),label=make('label','',title),input=make('input');input.value=value||'';input.required=true;input.maxLength=200;label.append(input);m.form.append(label);
-    m.form.onsubmit=async e=>{e.preventDefault();if(this.pending)return;const label=m.submit.textContent;m.submit.textContent='正在处理…';m.submit.disabled=m.cancel.disabled=true;try{await this.run(action,target,{name:input.value},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.textContent=label;m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();input.select();
+    m.form.onsubmit=async e=>{e.preventDefault();if(m.submit.disabled)return;const label=m.submit.textContent;m.submit.textContent='正在处理…';m.submit.disabled=m.cancel.disabled=true;try{await this.run(action,target,{name:input.value},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.textContent=label;m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();input.select();
   }
   choose(action,target){
     const project=action==='moveProject',m=this.modal(project?'移动到项目':'移动到分区'),label=make('label','',project?'项目':'分区'),select=make('select');select.append(new Option(project?'不关联项目':'移出分区',''));
     for(const item of project?this.snapshot.projects:this.snapshot.sections)select.append(new Option(item.name,item.id));select.value=(project?target.projectId:target.sectionId)||'';label.append(select);m.form.append(label);
-    m.form.onsubmit=async e=>{e.preventDefault();if(this.pending)return;const label=m.submit.textContent;m.submit.textContent='正在处理…';m.submit.disabled=m.cancel.disabled=true;try{await this.run(action,target,{[project?'projectId':'sectionId']:select.value||null},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.textContent=label;m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();
+    m.form.onsubmit=async e=>{e.preventDefault();if(m.submit.disabled)return;const label=m.submit.textContent;m.submit.textContent='正在处理…';m.submit.disabled=m.cancel.disabled=true;try{await this.run(action,target,{[project?'projectId':'sectionId']:select.value||null},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.textContent=label;m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();
   }
-  confirmDelete(section){const m=this.modal('删除分区');m.form.append(make('p','','删除“'+section.name+'”分区，其中的会话和项目会保留。'));m.submit.textContent='删除分区';m.form.onsubmit=async e=>{e.preventDefault();if(this.pending)return;const label=m.submit.textContent;m.submit.textContent='正在处理…';m.submit.disabled=m.cancel.disabled=true;try{await this.run('deleteSection',section,{},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.textContent=label;m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();}
+  confirmDelete(section){const m=this.modal('删除分区');m.form.append(make('p','','删除“'+section.name+'”分区，其中的会话和项目会保留。'));m.submit.textContent='删除分区';m.form.onsubmit=async e=>{e.preventDefault();if(m.submit.disabled)return;const label=m.submit.textContent;m.submit.textContent='正在处理…';m.submit.disabled=m.cancel.disabled=true;try{await this.run('deleteSection',section,{},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.textContent=label;m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();}
   focusAnchor(){const key=this.menuAnchor?.dataset.focusKey;[...this.node.querySelectorAll('[data-focus-key]')].find(n=>n.dataset.focusKey===key)?.focus({preventScroll:true});if(!document.activeElement||document.activeElement===document.body)this.node.querySelector('button')?.focus({preventScroll:true});}
   async run(action,target,extra={},propagate=false){
-    if(this.pending){if(propagate)throw Error('正在更新，请等待操作完成。');return;}if(this.dialog&&this.dialog.dataset.accountScope!==(this.snapshot.accountScope||''))throw Error('目标账号已变化，请取消后刷新；输入内容已保留。');this.pending=true;this.setBusy(true);
+    const scope=this.snapshot.accountScope,key=scope+':'+(target?.id||action);
+    this.operations??=new Map();
+    if(this.operations.has(key)){if(propagate)throw Error('此项正在处理，请等待完成。');return;}
+    if(this.dialog&&this.dialog.dataset.accountScope!==(scope||''))throw Error('目标账号已变化，请取消后刷新；输入内容已保留。');
+    const anchor=this.menuAnchor,dialog=propagate?this.dialog:null;
+    if(dialog)dialog.dataset.busy='true';
+    this.operations.set(key,action);this.pending=true;this.setBusy(true);
+    const current=()=>this.snapshot.accountScope===scope;
+
     const label=action==='archive'?'正在归档会话…':action==='restore'?'正在恢复会话…':'正在更新…';
     this.progress.textContent=label;
-    const notice=this.o.toast(label,false,0);
-    const slow=setTimeout(()=>{this.progress.textContent='仍在等待目标机器…';if(notice)notice.querySelector('p').textContent='仍在等待目标机器，请勿重复操作。';},5000);
+    const notice=this.o.toast((target?.name?target.name+'：':'')+(this.operations.size>1?'已排队…':label),false,0);
+    let started=false;
+    const slow=setTimeout(()=>{if(!current())return;this.progress.textContent='正在处理会话…';if(notice)notice.querySelector('p').textContent=(target?.name?target.name+'：':'')+(started?'仍在等待目标机器…':'已排队，等待前面的操作完成…');},5000);
     let completed=false;
-    try{await this.o.api('/api/sidebar/actions',{method:'POST',body:{action,id:target?.id,expectedRevision:target?.revision,accountScope:this.snapshot.accountScope,...extra}});
+    try{await this.enqueue(()=>{if(!current()||!this.o.connected())throw Error('连接或账号已变化，未执行排队操作。');started=true;if(notice?.querySelector)notice.querySelector('p').textContent=(target?.name?target.name+'：':'')+label;return this.o.api('/api/sidebar/actions',{method:'POST',body:{action,id:target?.id,expectedRevision:target?.revision,accountScope:scope,...extra}});});
+      if(!current())return;
       completed=true;clearTimeout(slow);notice?.remove();
       this.o.toast(action==='archive'?'会话已归档':action==='restore'?'会话已恢复':'已更新');
       this.progress.textContent='正在刷新列表…';
       await this.o.changed(action,target);
+      if(!current())return;
       if(action==='archive')this.undo(target.id);if(action==='restore'&&this.undoId===target.id)this.undoNode?.remove();
     }catch(error){
       // Show the outcome before another potentially slow remote read.
       clearTimeout(slow);notice?.remove();
+      if(!current())return;
       this.o.toast(completed?'操作已完成，但刷新失败：'+error.message:error.message,true);
       void this.o.refresh().catch(()=>{});
       if(propagate)throw error;
     }
-    finally{clearTimeout(slow);notice?.remove();this.pending=false;this.setBusy(false);this.progress.textContent='正在更新…';if(!this.dialog)this.focusAnchor();}
+    finally{clearTimeout(slow);notice?.remove();this.operations.delete(key);this.pending=this.operations.size>0;this.setBusy(this.pending);this.progress.textContent=this.pending?'正在处理会话…':'正在更新…';if(dialog)dialog.dataset.busy='false';if(!this.dialog&&globalThis.document?.activeElement===globalThis.document?.body&&this.menuAnchor===anchor)this.focusAnchor();}
   }
 
   undo(id){
     const scope=this.snapshot.accountScope;this.undoId=id;
-    this.undoNode?.remove();const node=make('div','sidebar-undo');node.setAttribute('role','status');node.append(make('span','','会话已归档'));const button=make('button','','撤销');button.type='button';button.onclick=async()=>{button.disabled=true;try{const s=await this.o.api('/api/sidebar?archived=true&search=');if(s.accountScope!==scope)throw Error('目标账号已变化，请在已归档列表核对。');let t=s.data.find(t=>t.id===id),cursor=s.nextCursor;while(!t&&cursor){const p=await this.o.api('/api/sidebar?archived=true&cursor='+encodeURIComponent(cursor));t=p.data.find(t=>t.id===id);cursor=p.nextCursor;}if(!t)throw Error('归档状态已变化，请刷新列表。');await this.o.api('/api/sidebar/actions',{method:'POST',body:{action:'restore',id,expectedRevision:t.revision,accountScope:s.accountScope}});await this.o.changed('restore',t);node.remove();this.focusAnchor();}catch(e){this.o.toast(e.message,true);button.disabled=false;}};node.append(button);this.toolbar.after(node);this.undoNode=node;
+    this.undoNode?.remove();const node=make('div','sidebar-undo');node.setAttribute('role','status');node.append(make('span','','会话已归档'));const button=make('button','','撤销');button.type='button';button.onclick=async()=>{button.disabled=true;try{const s=await this.o.api('/api/sidebar?archived=true&search=');if(s.accountScope!==scope)throw Error('目标账号已变化，请在已归档列表核对。');let t=s.data.find(t=>t.id===id),cursor=s.nextCursor;while(!t&&cursor){const p=await this.o.api('/api/sidebar?archived=true&cursor='+encodeURIComponent(cursor));t=p.data.find(t=>t.id===id);cursor=p.nextCursor;}if(!t)throw Error('归档状态已变化，请刷新列表。');await this.run('restore',t,{},true);node.remove();this.focusAnchor();}catch(e){this.o.toast(e.message,true);button.disabled=false;}};node.append(button);this.toolbar.after(node);this.undoNode=node;
   }
 }

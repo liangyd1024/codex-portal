@@ -127,13 +127,13 @@ test('sidebar reads do not wait for pending desktop notification delivery',async
 });
 test('sidebar failure is visible and controls unlock before a stalled refresh completes',async()=>{
  const events=[];let finish;
- const ui={pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(value){events.push(['busy',value]);},focusAnchor(){},
- o:{api:async()=>{throw Error('目标响应超时');},toast:message=>{events.push(message);return {remove(){}};},refresh:()=>new Promise(resolve=>{events.push('refresh');finish=resolve;})}};
+ const ui={enqueue:Sidebar.prototype.enqueue,pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(value){events.push(['busy',value]);},focusAnchor(){},
+ o:{connected:()=>true,api:async()=>{throw Error('目标响应超时');},toast:message=>{events.push(message);return {remove(){}};},refresh:()=>new Promise(resolve=>{events.push('refresh');finish=resolve;})}};
  await Sidebar.prototype.run.call(ui,'archive',{id:'t',revision:'r'});
  assert.ok(events.indexOf('目标响应超时')<events.indexOf('refresh'));assert.equal(ui.pending,false);assert.deepEqual(events.at(-1),['busy',false]);finish();
 });
 test('successful mutation is acknowledged before slow list refresh, and not reported as failed if refresh rejects',async()=>{
- const events=[];const ui={pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(){},focusAnchor(){},o:{api:async()=>{},toast:message=>{events.push(message);return {remove(){}};},changed:async()=>{assert.ok(events.includes('会话已归档'));throw Error('列表超时');},refresh:async()=>{}}};
+ const events=[];const ui={enqueue:Sidebar.prototype.enqueue,pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(){},focusAnchor(){},o:{connected:()=>true,api:async()=>{},toast:message=>{events.push(message);return {remove(){}};},changed:async()=>{assert.ok(events.includes('会话已归档'));throw Error('列表超时');},refresh:async()=>{}}};
  await Sidebar.prototype.run.call(ui,'archive',{id:'t'});
  assert.ok(events.includes('操作已完成，但刷新失败：列表超时'));assert.equal(ui.pending,false);
 });
@@ -160,4 +160,32 @@ test('archive refuses unavailable native history without attempting a write',asy
  const {m,input,calls}=fixture();m.service.protocolValidation.unsupportedMethods.push('thread/turns/list');
  await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='FEATURE_UNAVAILABLE');
  assert.ok(!calls.some(([name])=>['thread/turns/list','thread/archive','desktop-notify'].includes(name)));
+});
+
+function queuedUI(api,changed=async()=>{}){
+ const messages=[];
+ const ui=Object.assign(Object.create(Sidebar.prototype),{snapshot:{accountScope:'a'},progress:{},setBusy(){},focusAnchor(){},undo(){},o:{connected:()=>true,api,changed,refresh:async()=>{},toast:message=>{messages.push(message);return {remove(){}};}}});
+ return {ui,messages};
+}
+test('sidebar queues different targets, rejects duplicate clicks, and proceeds before a stalled refresh',async()=>{
+ const writes=[];let finishFirst,finishRefresh;
+ const refresh=new Promise(resolve=>{finishRefresh=resolve;});
+ const {ui}=queuedUI(async(_url,{body})=>{writes.push(body.id);if(body.id==='a')await new Promise(resolve=>{finishFirst=resolve;});},async(_action,t)=>{if(t.id==='a')await refresh;});
+ const a=ui.run('archive',{id:'a'}),b=ui.run('archive',{id:'b'});
+ await ui.run('archive',{id:'a'});await new Promise(setImmediate);
+ assert.deepEqual(writes,['a']);assert.equal(ui.operations.size,2);
+ finishFirst();await b;assert.deepEqual(writes,['a','b']);assert.equal(ui.operations.size,1);
+ finishRefresh();await a;assert.equal(ui.pending,false);
+});
+test('a failed archive does not cancel the next operation or replay the failed write',async()=>{
+ const writes=[];const {ui,messages}=queuedUI(async(_url,{body})=>{writes.push(body.id);if(body.id==='a')throw Error('归档失败');});
+ await Promise.all([ui.run('archive',{id:'a'}),ui.run('archive',{id:'b'})]);
+ assert.deepEqual(writes,['a','b']);assert.ok(messages.includes('归档失败'));assert.equal(ui.pending,false);
+});
+test('account change cancels queued writes and ignores late success',async()=>{
+ let finish;const writes=[],changes=[];
+ const {ui,messages}=queuedUI(async(_url,{body})=>{writes.push(body.id);await new Promise(resolve=>{finish=resolve;});},async()=>changes.push('changed'));
+ const a=ui.run('archive',{id:'a'}),b=ui.run('archive',{id:'b'});await new Promise(setImmediate);
+ ui.snapshot={accountScope:'new'};finish();await Promise.all([a,b]);
+ assert.deepEqual(writes,['a']);assert.deepEqual(changes,[]);assert.ok(!messages.includes('会话已归档'));assert.equal(ui.pending,false);
 });
