@@ -31,7 +31,7 @@ export async function installMobile(api){
   const status=node('p','','subtle');status.setAttribute('role','status');
   if(info.canSetup){
    const setup=node('button','开启同一 Wi-Fi 访问','primary-button full-width');
-   setup.onclick=async()=>{setup.disabled=true;setup.textContent='正在配置…';status.textContent='正在创建证书并启动手机入口，请稍候。';try{await api('/api/access/setup',{method:'POST',body:{}});await installMobile(api);}catch(e){status.textContent='配置未完成：'+e.message;setup.textContent='重试配置';setup.disabled=false;}};
+   setup.onclick=async()=>{setup.disabled=true;setup.textContent='正在配置…';status.textContent='正在创建证书并启动手机入口，请稍候。';try{await api('/api/access/setup',{timeout:120000,method:'POST',body:{}});await installMobile(api);}catch(e){status.textContent='配置未完成：'+e.message;setup.textContent='重试配置';setup.disabled=false;}};
    empty.append(setup,node('p','开启后需在手机安装并信任本机证书。Mac 需保持开机且连接网络。','subtle'));
   }else empty.append(node('p','请在这台 Mac 的正式工作台开启手机访问；开发预览不开放手机入口。','subtle'));
   const refresh=node('button','重新检查','secondary-button');refresh.onclick=()=>installMobile(api);empty.append(refresh,status);body.append(empty);
@@ -39,7 +39,7 @@ export async function installMobile(api){
  if(info.canSetup&&!info.origins.some(origin=>new URL(origin).hostname.endsWith('.ts.net'))){
   const tail=node('details',null,'mobile-address');tail.append(node('summary','Tailscale · 跨网络访问'),node('p','Mac 和手机需登录同一 Tailscale 网络。开启后可跨网络扫码配对，无需安装局域网证书。'));
   const setup=node('button','开启 Tailscale 访问','secondary-button full-width'),status=node('p','','subtle');status.setAttribute('role','status');
-  setup.onclick=async()=>{setup.disabled=true;setup.textContent='正在配置…';status.textContent='正在检查 Tailscale 和 HTTPS 转发…';try{await api('/api/access/setup',{method:'POST',body:{mode:'tailscale'}});await installMobile(api);}catch(e){status.textContent='配置未完成：'+e.message;setup.textContent='重试 Tailscale 配置';setup.disabled=false;}};
+  setup.onclick=async()=>{setup.disabled=true;setup.textContent='正在配置…';status.textContent='正在检查 Tailscale 和 HTTPS 转发…';try{await api('/api/access/setup',{timeout:120000,method:'POST',body:{mode:'tailscale'}});await installMobile(api);}catch(e){status.textContent='配置未完成：'+e.message;setup.textContent='重试 Tailscale 配置';setup.disabled=false;}};
   tail.append(setup,status);body.append(tail);
  }
  if(info.origins.length){const refresh=node('button','重新检查连接','secondary-button');refresh.onclick=()=>installMobile(api);body.append(refresh);}

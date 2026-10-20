@@ -6,14 +6,14 @@ import {fileURLToPath} from 'node:url';
 import {checkServe} from '../lib/tailscale-serve.mjs';
 const dir=path.join(homedir(),'Library/Application Support/RemoteCodexManager/mobile');
 mkdirSync(dir,{recursive:true,mode:0o700});chmodSync(dir,0o700);
-function run(cmd,args){const r=spawnSync(cmd,args,{encoding:'utf8',timeout:10000});if(r.status!==0)throw Error(r.stderr||r.stdout||r.error?.message||'命令失败：'+cmd);return r.stdout.trim();}
+function run(cmd,args,timeout=10000){const r=spawnSync(cmd,args,{encoding:'utf8',timeout});if(r.error?.code==='ETIMEDOUT')throw Error('命令超时（'+timeout/1000+' 秒）：'+cmd);if(r.status!==0)throw Error(r.stderr||r.stdout||r.error?.message||'命令失败：'+cmd);return r.stdout.trim();}
 const route=run('/sbin/route',['-n','get','default']);const iface=/interface:\s*(\S+)/.exec(route)?.[1]||'en0';
 const ip=run('/usr/sbin/ipconfig',['getifaddr',iface]);if(!/^\d+\.\d+\.\d+\.\d+$/.test(ip))throw Error('没有可用的局域网 IPv4 地址。');
 // LAN access must work without Tailscale. Preserve only previously configured
 // Tailscale entrances: a DNS name alone does not establish HTTPS Serve.
 
 const ca=path.join(dir,'Codex-Local-CA.crt'),caKey=path.join(dir,'ca.key'),key=path.join(dir,'server.key'),cert=path.join(dir,'server.crt');
-if(!existsSync(ca)){run('/usr/bin/openssl',['req','-x509','-newkey','rsa:3072','-nodes','-keyout',caKey,'-out',ca,'-days','3650','-subj','/CN=Codex Local Access CA','-addext','basicConstraints=critical,CA:TRUE','-addext','keyUsage=critical,keyCertSign,cRLSign']);chmodSync(caKey,0o600);}
+if(!existsSync(ca)){run('/usr/bin/openssl',['req','-x509','-newkey','rsa:3072','-nodes','-keyout',caKey,'-out',ca,'-days','3650','-subj','/CN=Codex Local Access CA','-addext','basicConstraints=critical,CA:TRUE','-addext','keyUsage=critical,keyCertSign,cRLSign'],30000);chmodSync(caKey,0o600);}
 let old={};try{old=JSON.parse(readFileSync(path.join(dir,'config.json'),'utf8'));}catch{}
 if(old.lanIP!==ip||!existsSync(cert)||spawnSync('/usr/bin/openssl',['x509','-checkend','2592000','-noout','-in',cert]).status!==0){
  run('/usr/bin/openssl',['req','-new','-newkey','rsa:2048','-nodes','-keyout',key,'-out',path.join(dir,'server.csr'),'-subj','/CN=Codex Local Workbench']);chmodSync(key,0o600);

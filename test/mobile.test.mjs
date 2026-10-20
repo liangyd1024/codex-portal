@@ -41,7 +41,7 @@ test('Tailscale configuration rejects conflicting routes and public Funnel',()=>
 test('macOS LAN setup creates trusted TLS and usable QR without Tailscale or Python', {skip:process.platform!=='darwin'},async()=>{
  const {mkdtemp,readFile}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{execFile}=await import('node:child_process'),{promisify}=await import('node:util'),{default:path}=await import('node:path'),{default:https}=await import('node:https');
  const home=await mkdtemp(path.join(tmpdir(),'rcm-mobile-tls-'));
- await promisify(execFile)(process.execPath,['scripts/setup-mobile.mjs'],{env:{...process.env,HOME:home},timeout:30000});
+ await promisify(execFile)(process.execPath,['scripts/setup-mobile.mjs'],{env:{...process.env,HOME:home},timeout:90000});
  const config=JSON.parse(await readFile(path.join(home,'Library/Application Support/RemoteCodexManager/mobile/config.json'),'utf8'));
  const ca=await readFile(config.ca),qr=await readFile(path.join(path.dirname(config.ca),'lan.png'));assert.equal(qr.subarray(1,4).toString(),'PNG');
  await fixture({mobileConfig:config},async(base,post,app)=>{

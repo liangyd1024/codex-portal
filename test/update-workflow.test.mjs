@@ -38,7 +38,7 @@ test('web launch records queued state before starting a distinct launchd job; du
  const calls=[],launch={stop:async()=>calls.push('stop'),start:async(file)=>{calls.push(await readFile(file,'utf8'));assert.equal(JSON.parse(await readFile(path.join(dir,'web-update.json'))).phase,'queued');}};
  const u=new WebUpdate({supportDir:dir,root,version:baseline,launch});
  if(process.platform!=='darwin'){assert.equal((await u.status()).available,false);return;}
- await u.start();await u.start();assert.equal(calls.length,2);assert.match(calls[1],/local.remote-codex-manager.update/);assert.ok(!calls[1].includes('KeepAlive'));
+ await u.start();await u.start();assert.equal(calls.length,2);assert.match(calls[1],/local.remote-codex-manager.update/);assert.ok(!calls[1].includes('KeepAlive'));assert.match(calls[1],/<key>ProcessType<\/key><string>Standard<\/string>/);
  await writeUpdate(u.file,{phase:'queued',startedAt:0});assert.equal((await u.status()).job.phase,'failed');
 });
 test('an abnormal deployment lock is not stolen or deleted',async()=>{

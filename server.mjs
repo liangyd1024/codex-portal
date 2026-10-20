@@ -152,7 +152,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   const access=new MobileAccess(path.join(homedir(),'Library/Application Support/RemoteCodexManager/mobile/sessions.json'));
   let setupPending;
   const setupMobile=process.env.RCM_MOBILE==='0'?null:(mode='lan')=>{if(setupPending)throw new AppError('手机入口正在配置，请稍后重新检查。',409);return setupPending=(async()=>{
-    await promisify(execFile)(process.execPath,[path.join(ROOT,'scripts/setup-mobile.mjs'),...(mode==='tailscale'?['--tailscale']:[])],{timeout:60000});
+    await promisify(execFile)(process.execPath,[path.join(ROOT,'scripts/setup-mobile.mjs'),...(mode==='tailscale'?['--tailscale']:[])],{timeout:90000});
     const next=JSON.parse(await readFile(configPath,'utf8'));
     if(!mobileConfig){await startMobile(next);mobileConfig=next;}else{mobileConfig.origins=next.origins;}
     return mobileConfig;
@@ -171,7 +171,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
       if(!ips.length||tls.listening&&ips.includes(mobileConfig.lanIP)&&Date.now()-lastRenewal<86400000)return;
       renewing=true;
       try{
-        await promisify(execFile)(process.execPath,[path.join(ROOT,'scripts/setup-mobile.mjs')],{timeout:30000});
+        await promisify(execFile)(process.execPath,[path.join(ROOT,'scripts/setup-mobile.mjs')],{timeout:90000});
         const next=JSON.parse(await readFile(configPath,'utf8'));
         const credentials={key:await readFile(next.key),cert:await readFile(next.cert)};
         if(next.lanIP!==mobileConfig.lanIP||!tls.listening){
