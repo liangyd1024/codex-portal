@@ -23,3 +23,9 @@
 专用测试会话 `01a15704-b08e-7431-9c80-f8f68a3bd546`：通过现有原生接口以 plan 模式发送无工具、无文件变更的验收要求。引擎完成后返回真实 plan 项；浏览器自动显示执行选项并清除预置的计划标记。点击确认后收到第二个 completed 轮次及原始回复“计划执行验收完成”；输入框中的“这条验收草稿不要发送”完整保留。仅操作该测试会话，未中断其他任务。
 
 交付前完整测试曾有一次 Node test runner 的 `Unable to deserialize cloned data` 进程通信异常；未改测试或绕过检查，完整重跑通过（245 Node、53 Python）。真实结果截图 `/tmp/rcm-plan-native-complete.png`。切换会话迟到响应按选择版本校验实现，本次未完成该场景的浏览器验收。
+
+## 正式部署
+
+功能提交 `01664aca21b569ddf07652cf93869f93f94dea15` 已推送 origin/master；确认包含原正式版本 `5e727102e2f486102fbfae6273376d1b67b7d5fa` 以及其后目标输入和 favicon 修改。标准安装流程两次空闲检查通过，仅精确豁免当前部署会话。
+
+部署前备份：`~/Library/Application Support/RemoteCodexManager/backups/marco-20261020T015841760543Z.tar.gz.age`。安装与健康检查成功，4317 `/api/version` 返回上述功能提交。仅重启本机 RCM 网页服务，未停止目标引擎或任务。正式页面未再次发起执行；真实端到端行为验证在独立预览完成。
