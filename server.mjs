@@ -1,3 +1,4 @@
+import {deploymentStatus} from './lib/deployment-status.mjs';
 import {WebUpdate} from './lib/web-update.mjs';
 import {supportDir} from './lib/config.mjs';
 import {readAccountUsage} from './lib/account-usage.mjs';
@@ -81,6 +82,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
         req.on('close',()=>{clearInterval(heartbeat);clients.delete(res);});return;
       }
       if(req.method==='GET'&&p==='/api/account/usage')return json(res,200,await readAccountUsage(manager));
+      if(req.method==='GET'&&p==='/api/system/deployment-status'){if(remote)throw new AppError('仅限本机部署检查。',403);return json(res,200,await deploymentStatus(manager));}
       if(req.method==='GET'&&p==='/api/status')return json(res,200,manager.status());
       if(req.method==='GET'&&p==='/api/automations')return json(res,200,await automations.get(targetKey).list());
       if(req.method==='GET'&&p==='/api/automations/candidates')return json(res,200,await automations.get(targetKey).candidates(url.searchParams.get('search')||''));

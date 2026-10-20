@@ -6,6 +6,7 @@ export function installSystemUpdate({api,flush,resetCsrf}){
  const reload=document.createElement('button');reload.type='button';reload.className='text-button';reload.textContent='刷新页面使用新版本';reload.hidden=true;reload.onclick=()=>{flush();location.reload();};
  const progress=document.createElement('progress');progress.className='system-update-progress';progress.setAttribute('aria-label','更新进行中');progress.hidden=true;
  const steps=document.createElement('p');steps.className='system-update-steps';steps.hidden=true;
+ const versions=document.createElement('p');versions.className='subtle system-update-versions';
  const actions=document.createElement('div');actions.className='settings-actions';actions.append(button,reload);
  status.textContent='正在读取更新状态…';
  const active=job=>['queued','checking','pulling','testing','installing'].includes(job?.phase);
@@ -14,10 +15,13 @@ export function installSystemUpdate({api,flush,resetCsrf}){
   last=data;const running=active(data.job);button.disabled=submitting||uncertain||running||!data.available;
   button.textContent=submitting?'正在提交…':running?'正在更新…':'更新并重新部署';
   status.textContent=data.job?.phase==='failed'?'上次更新未完成：'+data.job.message:data.job?.message||data.reason||'更新入口已就绪。';
-  reload.hidden=data.job?.phase!=='succeeded';
+  reload.hidden=data.job?.phase!=='succeeded'||data.job?.unchanged===true;
+  const short=value=>value?value.slice(0,8):'尚未获取';
+  versions.textContent='当前版本 '+short(data.version)+'\n最新版本 '+short(data.job?.targetVersion)+(data.job?.fromVersion?'\n更新前 '+short(data.job.fromVersion):'');
+  versions.title='当前：'+(data.version||'未知')+'\n最新：'+(data.job?.targetVersion||'尚未获取')+'\n更新前：'+(data.job?.fromVersion||'未知');
   progress.hidden=!running;
   const phases=['checking','pulling','testing','installing','succeeded'],labels=['检查','拉取','验证','部署','完成'];
-  const index=phases.indexOf(data.job?.phase);steps.hidden=!data.job||data.job.phase==='failed';
+  const index=phases.indexOf(data.job?.phase);steps.hidden=!data.job||data.job.phase==='failed'||data.job.unchanged===true;
   steps.textContent=data.job?.phase==='failed'?'更新未完成，请查看上方原因。':labels.map((label,i)=>`${i<index?'✓ ':i===index?'● ':''}${label}`).join(' › ');
   progress.setAttribute('aria-valuetext',data.job?.message||'正在准备更新');
   if(running){clearTimeout(timer);timer=setTimeout(check,2000);}
@@ -34,6 +38,6 @@ export function installSystemUpdate({api,flush,resetCsrf}){
   catch(error){status.textContent=error.status?'更新未开始：'+error.message:'提交结果暂未确认，正在检查更新状态…';if(error.status){uncertain=false;progress.hidden=true;steps.textContent='更新未开始';}}
   finally{submitting=false;if(last&&!uncertain)button.disabled=active(last.job)||!last.available;button.textContent=active(last?.job)?'正在更新…':'更新并重新部署';clearTimeout(timer);timer=setTimeout(check,1500);}
  };
- area.append(description,status,progress,steps,actions);void check();
+ area.append(description,versions,status,progress,steps,actions);void check();
  window.addEventListener('online',check);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void check();});
 }

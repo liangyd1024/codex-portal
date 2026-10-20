@@ -482,3 +482,5 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .notification-controls{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px}
 #notification-status{flex-basis:100%;line-height:1.6}
 @media(prefers-reduced-motion:reduce){.system-update-progress{animation:none}}
+
+.system-update-versions{white-space:pre-line;font-size:12px;line-height:1.8;overflow-wrap:anywhere}

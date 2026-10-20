@@ -19,5 +19,7 @@ test('update automatically reads status, polls progress and recovers without a c
   const failed=poll();resolve({available:true,job:{phase:'failed',message:'测试未通过'}});await failed;
   assert.equal(nodes.find(n=>n.tag==='progress').hidden,true);assert.equal(deploy.disabled,false);assert.ok(nodes.some(n=>n.textContent==='上次更新未完成：测试未通过'));
   assert.equal(calls.filter(c=>c.method==='POST').length,1);
+  const unchanged=poll();resolve({available:true,version:'aaaaaaaa',job:{phase:'succeeded',unchanged:true,fromVersion:'aaaaaaaa',targetVersion:'aaaaaaaa',message:'已是最新版本，无需重新部署。'}});await unchanged;
+  assert.equal(nodes.find(n=>n.textContent==='刷新页面使用新版本').hidden,true);assert.equal(nodes.find(n=>n.tag==='progress').hidden,true);assert.ok(nodes.some(n=>n.textContent.includes('当前版本 aaaaaaaa')&&n.textContent.includes('最新版本 aaaaaaaa')));
  }finally{Object.assign(global,original);}
 });

@@ -23,3 +23,6 @@ test('unreadable status fails closed, ordinary idle deployment is allowed',()=>{
  for(const s of [null,{}, {connection:{},controlledSessions:[]}])assert.throws(()=>assertDeploymentIdle(s,options),/无法核对/);
  assert.equal(assertDeploymentIdle(status(),{...options,deployingThreadId:undefined}),null);
 });
+test('unknown own session state is not covered by the active-turn exemption',()=>{
+ const s=status([own]);s.controlledSessions[0].status={type:'unknown'};assert.throws(()=>assertDeploymentIdle(s,options),/状态待确认/);
+});

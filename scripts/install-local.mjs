@@ -6,7 +6,7 @@ import {spawnSync} from 'node:child_process';
 import {loadConfig,supportDir} from '../lib/config.mjs';
 import {launchdService} from '../lib/launchd.mjs';
 import {deploymentLock} from '../lib/deployment-lock.mjs';
-import {assertDeploymentIdle} from '../lib/deployment-check.mjs';
+import {checkDeploymentEntrance} from '../lib/deployment-entrance.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const label='local.remote-codex-manager.web',domain=`gui/${process.getuid()}`,job=path.join(homedir(),'Library/LaunchAgents',label+'.plist');
 const lifecycle=launchdService(domain,label);
@@ -25,14 +25,8 @@ const existing=spawnSync('/bin/launchctl',['print',domain+'/'+label],{encoding:'
 const deployingThreadId=process.env.CODEX_THREAD_ID;
 const localConnectionId=config.connections.find(h=>h.kind==='local').id;
 async function checkEntrance(){
- const read=async url=>{const r=await fetch(url,{signal:AbortSignal.timeout(5000)});if(!r.ok)throw Error('无法核对网页服务状态');return r.json();};
- const connections=await read('http://127.0.0.1:4317/api/connections');
- if(!Array.isArray(connections.data)||!connections.data.some(h=>h.id===localConnectionId))throw Error('无法核对网页连接列表');
- for(const {id} of connections.data){
-  const s=await read('http://127.0.0.1:4317/api/status?host='+encodeURIComponent(id));
-  const own=assertDeploymentIdle(s,{connectionId:id,localConnectionId,deployingThreadId});
-  if(own)console.log('当前部署会话不阻塞网页重启：'+own);
- }
+ const own=await checkDeploymentEntrance({localConnectionId,deployingThreadId,onWaiting:message=>console.log('正在重新核对：'+message)});
+ if(own)console.log('当前部署会话不阻塞网页重启：'+own);
 }
 if(existing)await checkEntrance();
 const backup=JSON.parse(run('/usr/bin/python3',[path.join(root,'scripts/data-backup.py'),'backup']));

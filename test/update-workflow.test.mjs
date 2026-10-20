@@ -7,7 +7,7 @@ function fixture(change={}){
  const run=async(command,args)=>{calls.push([command,args]);const operation=args[2];if(command==='git'){
   if(operation==='status')return change.dirty&&++cleanReads>=change.dirty?' M file':'';
   if(operation==='branch')return change.branch||'master';if(operation==='remote')return change.remote||'git@example:repo';
-  if(operation==='rev-parse')return args[3]==='HEAD'&&change.head?change.head:target;
+  if(operation==='rev-parse')return args[3]==='HEAD'&&change.head?change.head:change.target||target;
   if(operation==='merge-base'&&change.behind)throw Error('not ancestor');
   if(operation==='merge'&&change.diverged)throw Error('not ff');
  }
@@ -17,7 +17,7 @@ function fixture(change={}){
 }
 test('update fetches master, validates the production ancestor, tests and calls the version installer',async()=>{
  const f=fixture();assert.equal(await updateWorkflow(f.options),target);
- assert.deepEqual(f.stages.map(x=>x[0]),['checking','pulling','testing','installing']);
+ assert.deepEqual(f.stages.map(x=>x[0]),['checking','pulling','checking','testing','installing']);
  assert.ok(f.calls.some(([c,a])=>c==='git'&&a.includes('--ff-only')));
  assert.deepEqual(f.calls.at(-1),[process.execPath,['/source/scripts/install-local.mjs','--ref',target]]);
 });
@@ -52,4 +52,8 @@ test('a terminal worker still releasing its lock cannot be stopped by the next u
  await writeFile(path.join(dir,'installed.json'),JSON.stringify({app:root,commit:baseline,sourceRoot:'/source',sourceRemote:'origin'}));
  const u=new WebUpdate({supportDir:dir,root,version:baseline,launch:{stop:async()=>assert.fail('must not stop finishing worker')}});
  await writeUpdate(u.file,{phase:'succeeded',pid:process.pid});await assert.rejects(u.start(),/收尾/);
+});
+
+test('matching production version fetches and compares but never tests, checks targets or redeploys',async()=>{
+ const f=fixture({target:baseline,busy:true});assert.equal(await updateWorkflow(f.options),baseline);assert.ok(f.calls.some(([c,a])=>c==='git'&&a.includes('fetch')));assert.ok(!f.calls.some(([c])=>c==='npm'||c===process.execPath));assert.equal(f.stages.at(-1)[2].targetVersion,baseline);
 });
