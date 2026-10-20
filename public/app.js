@@ -1,3 +1,4 @@
+import {sendAfterGoal} from './goal-submit.js';
 import {notificationSupport,prepareNotificationWorker,submitWorkerNotification} from './notification-platform.js';
 import {deliverNotice,submitNotification} from './notification-delivery.js';
 import {asyncQuestions,QuestionDrafts} from './questions.js';
@@ -1075,6 +1076,7 @@ async function createThreadFromDraft(){
   if(state.busy.has('create')||newDraft.phase!=='editing')return;
   const cwd=newDraft.cwd,model=state.model,effort=state.effort,text=$('message-input').value;
   if(!cwd||(!text.trim()&&!attachments.has())||attachments.pending())return;
+  try{composer.validateSend(text,false);}catch(error){toast(error.message,true);return;}
   state.drafts.set(newDraftId,text);$('new-chat-error').hidden=true;
   let created=false;
   await action('create',async()=>{
@@ -1106,11 +1108,13 @@ async function sendMessage(e) {
   const text = $('message-input').value.trim(), id = state.selectedId;
   if ((!text&&!attachments?.has()) || attachments?.pending() || !id || !usable() || !controlled() || state.busy.has('message')) return;
   const active = running(), selection = state.selectionVersion;
+  try{composer.validateSend(text,active);}catch(error){toast(error.message,true);return;}
   const sent = state.drafts.capture(id,$('message-input').value), pictures=attachments.capture();
   await action('message',async () => {
     const images=pictures.items.map(i=>({url:i.url}));
     const payload = active ? {text,images} : {text,images,model:state.model,effort:state.effort,...composer.options()};
-    const d = await api('/api/threads/' + encodeURIComponent(id) + (active ? '/steer' : '/message'),{method:'POST',body:payload});
+    const goalStarted=await composer.prepareSend(id,text,active);
+    const d=await sendAfterGoal({goalStarted,id,payload,active,api});
     attachments.acknowledge(pictures);
     const cleared = state.drafts.acknowledge(sent);
     if (id === state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }

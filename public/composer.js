@@ -1,3 +1,4 @@
+import {validateGoalDraft,prepareGoalSubmission} from './goal-submit.js';
 import {installSkillSuggestions} from './skill-suggestions.js';
 import {installInlineMentions,mentionRanges} from './inline-mentions.js';
 export const WEB_ACCESS='full';
@@ -27,9 +28,9 @@ export function installComposer({host,api,context,refresh,notify}) {
   const selections=new Map(Array.isArray(savedSelections)?savedSelections.filter(v=>Array.isArray(v)&&typeof v[0]==='string'&&['default','plan'].includes(v[1]?.mode)&&Array.isArray(v[1]?.skills)&&Array.isArray(v[1]?.plugins)):[]);let selected,loading=false;
   const save=()=>{try{sessionStorage.setItem(selectionKey,JSON.stringify([...selections]));}catch{notify('输入工具选择暂未保存，刷新后请重新核对。',true);}};
   const choice=()=>{const id=context().id;if(!selections.has(id))selections.set(id,{mode:'default',skills:[],plugins:[]});return selections.get(id);};
-  mode.onclick=()=>{choice().mode=choice().mode==='plan'?'default':'plan';save();render();tools.open=false;summary.focus();};
+  mode.onclick=()=>{choice().mode=choice().mode==='plan'?'default':'plan';choice().goalPending=false;save();render();tools.open=false;summary.focus();};
   planBadge.onclick=()=>{choice().mode='default';save();render();summary.focus();};
-  goalBadge.onclick=()=>bar.querySelector('#goal-settings').click();
+  goalBadge.onclick=()=>{if(choice().goalPending){choice().goalPending=false;save();render();summary.focus();}else{tools.open=true;position();bar.querySelector('#goal-settings').focus();}};
   const input=document.getElementById('message-input');
   const references=()=>Array.isArray(choice().references)?choice().references.filter(r=>r&&['skills','plugins'].includes(r.kind)&&typeof r.key==='string'&&typeof r.token==='string'&&r.token.length>1):[];
   const present=()=>mentionRanges(input.value,references());
@@ -89,28 +90,25 @@ export function installComposer({host,api,context,refresh,notify}) {
   }
   bar.querySelector('#skill-picker').onclick=e=>void picker('skills',e.currentTarget);
   bar.querySelector('#plugin-picker').onclick=e=>void picker('plugins',e.currentTarget);
-  bar.querySelector('#goal-settings').onclick=e=>{
-    dialog.classList.remove('catalog-dialog');const current=open('目标',e.currentTarget),id=current.id,version=dialogVersion;
-    if(current.goalError){const note=text('p','目标状态暂未读取，聊天内容仍可使用。'),retry=text('button','重新读取目标');retry.type='button';retry.onclick=async()=>{retry.disabled=true;try{await refresh();note.textContent=context().goalError?'仍未读取成功，请稍后重试。':'状态已更新，请重新打开目标设置。';}catch(error){note.textContent=error.message;}finally{retry.disabled=false;}};dialog.append(note,retry);return;}
-    const form=document.createElement('form');form.className='composer-goal';
-    const label=text('label','目标描述'),objective=document.createElement('textarea');objective.required=true;objective.value=current.goal?.objective||'';label.append(objective);
-    const budgetLabel=text('label','Token 预算（可选）'),budget=document.createElement('input');budget.type='number';budget.min='1';budget.step='1';budget.value=current.goal?.tokenBudget||'';budgetLabel.append(budget);
-    const feedback=text('p','设置后发送消息开始执行。');feedback.setAttribute('role','status');
-    const save=text('button','保存目标');save.type='submit';form.append(label,budgetLabel,feedback,save);
-    let saving=false;
-    const update=async data=>{
-      if(context().id!==id||saving)return;saving=true;
-      for(const b of form.querySelectorAll('button'))b.disabled=true;
-      feedback.textContent='正在保存…';
-      try{await api('/api/threads/'+encodeURIComponent(id)+'/goal',{method:'POST',body:data});if(context().id!==id||version!==dialogVersion||!dialog.open)return;feedback.textContent='已保存';await refresh();if(version===dialogVersion)dialog.close();}
-      catch(error){if(context().id===id)feedback.textContent='结果未确认：'+error.message+' 请刷新状态后核对。';}
-      finally{saving=false;for(const b of form.querySelectorAll('button'))b.disabled=false;}
-    };
-    form.addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.isComposing||event.keyCode===229))event.preventDefault();});
-    form.onsubmit=event=>{event.preventDefault();void update({objective:objective.value,...(budget.value?{tokenBudget:Number(budget.value)}:{})});};
-    if(current.goal){for(const [value,name] of [['paused','暂停目标'],['active','继续目标'],['complete','标记完成']]){const b=text('button',name);b.type='button';b.onclick=()=>void update({status:value});form.append(b);}}
-    dialog.append(form);objective.focus();
+  const goalButton=bar.querySelector('#goal-settings');
+  goalButton.onclick=()=>{
+    const next=!choice().goalPending;
+    choice().goalPending=next;
+    if(next){choice().mode='default';delete choice().goalUncertain;}
+    save();render();tools.open=false;input.focus();
   };
+  let goalUpdating=false;
+  const goalActions=[];
+  for(const [value,name] of [['paused','暂停目标'],['active','继续目标'],['complete','完成目标']]){
+    const button=text('button',name);button.type='button';panel.append(button);goalActions.push({button,value});
+    button.onclick=async()=>{
+      if(goalUpdating)return;
+      const id=context().id;goalUpdating=true;tools.open=false;render();
+      try{await api('/api/threads/'+encodeURIComponent(id)+'/goal',{method:'POST',body:{status:value}});if(context().id===id)await refresh();}
+      catch(error){notify('目标状态未确认：'+error.message,true);}
+      finally{goalUpdating=false;render();}
+    };
+  }
   const suggestions=installSkillSuggestions({input,api,context,select:(entry,range)=>insertReference(entry,'skills',range)});
   function render(){
     const c=context();if(selected!==JSON.stringify([c.id,c.cwd])){selected=JSON.stringify([c.id,c.cwd]);suggestions.close();if(dialog.open)dialog.close();}
@@ -119,19 +117,19 @@ export function installComposer({host,api,context,refresh,notify}) {
     mode.title=choice().mode==='plan'?'退出计划模式':'计划：先制定方案';
     mode.setAttribute('aria-pressed',String(choice().mode==='plan'));
     planBadge.hidden=choice().mode!=='plan';
-    goalBadge.hidden=!c.goal&&!c.goalError;
-    goalBadge.textContent=c.goalError?'目标待确认':({active:'目标',paused:'目标已暂停',complete:'目标已完成'}[c.goal?.status]||'目标待确认');
-    goalBadge.title=c.goalError?'目标状态暂未读取，点击重新检查':c.goal?.objective||'查看目标';
-    goalBadge.setAttribute('aria-label',goalBadge.textContent+'，查看设置');
+    goalBadge.hidden=!choice().goalPending&&!c.goal&&!c.goalError;
+    goalBadge.textContent=choice().goalPending?'目标 ×':c.goalError?'目标待确认':({active:'目标',paused:'目标已暂停',complete:'目标已完成'}[c.goal?.status]||'目标待确认');
+    goalBadge.title=choice().goalPending?'发送时将输入内容设为目标，点击取消':c.goalError?'目标状态暂未读取，点击重新检查':c.goal?.objective||'查看目标';
+    goalBadge.setAttribute('aria-label',choice().goalPending?'取消本次目标设置':goalBadge.textContent+'，目标操作');
     badges.hidden=planBadge.hidden&&goalBadge.hidden;
     summary.textContent='＋';summary.title='添加图片、技能和工具';summary.dataset.mode=choice().mode;summary.setAttribute('aria-label',choice().mode==='plan'?'更多输入工具，计划模式':'更多输入工具');
     // Attachments can accompany a native turn/steer while the current turn runs.
-    for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||(control!==images&&c.active);
-    if(c.goalError){bar.querySelector('#goal-settings').textContent='目标（状态待确认）';bar.querySelector('#goal-settings').title='目标状态暂未读取，请刷新后重试。';}else{bar.querySelector('#goal-settings').textContent='目标';bar.querySelector('#goal-settings').title='设置目标';}
-    bar.querySelector('#goal-settings').disabled ||= c.draft;bar.querySelector('#goal-settings').hidden=Boolean(c.draft);
+    for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||goalUpdating||(control!==images&&c.active);
+    goalButton.title='用下一条输入设置目标';goalButton.setAttribute('aria-pressed',String(Boolean(choice().goalPending)));
+    for(const {button,value} of goalActions)button.hidden=c.draft||!c.goal||Boolean(c.goalError)||(value==='paused'?c.goal.status!=='active':value==='active'?c.goal.status!=='paused':c.goal.status==='complete');
     summary.setAttribute('aria-disabled',String(!c.ready||c.busy));if(!c.ready||c.busy)tools.open=false;
     status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
-  return {render,moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins}=choice();return {mode,skills:[...skills],plugins:[...plugins],access:WEB_ACCESS};},isLoading:()=>loading};
+  return {render,validateSend:(text,active)=>validateGoalDraft(choice(),text,active),prepareSend:async(id,text,active)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,api,save}):false;render();return started;},moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins}=choice();return {mode,skills:[...skills],plugins:[...plugins],access:WEB_ACCESS};},isLoading:()=>loading};
 }
