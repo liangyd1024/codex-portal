@@ -62,3 +62,13 @@
 .latest-message-button:focus-visible{outline:2px solid #377cf6;outline-offset:3px}
 @media(max-width:700px){.composer .stop-button{width:44px;height:44px}.latest-message-button{width:44px;height:44px}}
 @media(max-width:700px){.composer-options summary,.mobile-layout .composer-options summary{width:44px;min-height:44px}.composer-tools .composer-options-panel button,.composer-tools .composer-options-panel select{min-height:44px}.composer .composer-tools [role=status]{display:none}.composer .send-button{width:44px;height:44px}}
+
+/* Mode feedback remains visible beside +, including on phones. */
+.composer-mode-badges{display:flex;align-items:center;gap:4px;min-width:0;flex-wrap:wrap}
+.composer-mode-badges[hidden],.composer-mode-badge[hidden]{display:none}
+.composer-tools .composer-mode-badge{border:0;background:#edf2fb;color:#346ba8;border-radius:8px;min-height:32px;padding:4px 8px;white-space:nowrap;font-size:12px}
+.composer-mode-badge:disabled{opacity:.55}
+.composer-options-panel #execution-mode{display:flex;align-items:center;justify-content:space-between}
+.composer-options-panel #execution-mode[aria-pressed=true]::after{content:'✓';color:#346ba8}
+.composer .composer-tools{min-width:0;flex-shrink:1}
+@media(max-width:700px){.composer-tools .composer-mode-badge{min-height:44px;padding:4px 6px}.composer .composer-tools{gap:4px}}

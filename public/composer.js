@@ -5,10 +5,14 @@ export const WEB_ACCESS='full';
 export function installComposer({host,api,context,refresh,notify}) {
   const link=document.createElement('link');link.rel='stylesheet';link.href='/composer.css';document.head.append(link);
   const bar=document.createElement('div');bar.className='composer-tools';
-  bar.innerHTML='<label><span class="sr-only">执行模式</span><select id="execution-mode" aria-label="执行模式"><option value="default">默认</option><option value="plan">计划</option></select></label><button type="button" id="goal-settings">目标</button><button type="button" id="skill-picker">技能</button><button type="button" id="plugin-picker">插件</button><span id="composer-tools-status" role="status"></span>';
+  bar.innerHTML='<button type="button" id="execution-mode" aria-pressed="false">计划</button><button type="button" id="goal-settings">目标</button><button type="button" id="skill-picker">技能</button><button type="button" id="plugin-picker">插件</button><span id="composer-tools-status" role="status"></span>';
   const tools=document.createElement('details');tools.className='composer-options';
   const summary=document.createElement('summary');summary.textContent='＋';summary.setAttribute('aria-label','更多输入工具');const panel=document.createElement('div');panel.className='composer-options-panel';
-  for(const button of bar.querySelectorAll('button'))panel.append(button);tools.append(summary,panel);bar.querySelector('[role=status]').before(tools);panel.prepend(bar.querySelector('label'));
+  for(const button of bar.querySelectorAll('button'))panel.append(button);tools.append(summary,panel);bar.querySelector('[role=status]').before(tools);
+  const badges=document.createElement('div');badges.className='composer-mode-badges';
+  const planBadge=document.createElement('button');planBadge.type='button';planBadge.className='composer-mode-badge';planBadge.textContent='计划 ×';planBadge.setAttribute('aria-label','退出计划模式');
+  const goalBadge=document.createElement('button');goalBadge.type='button';goalBadge.className='composer-mode-badge';
+  badges.append(planBadge,goalBadge);tools.after(badges);
   const position=()=>{if(!tools.open)return;const v=window.visualViewport,top=v?.offsetTop||0,left=v?.offsetLeft||0,height=v?.height||innerHeight,width=v?.width||innerWidth;panel.style.maxHeight=Math.max(44,height-24)+'px';panel.style.maxWidth=Math.max(0,width-16)+'px';panel.style.right='auto';panel.style.left=Math.max(left+8,Math.min(summary.getBoundingClientRect().left,left+width-panel.offsetWidth-8))+'px';panel.style.top=Math.max(top+8,summary.getBoundingClientRect().top-panel.offsetHeight-8)+'px';};
   tools.addEventListener('toggle',()=>{summary.setAttribute('aria-expanded',String(tools.open));position();});window.visualViewport?.addEventListener('resize',position);window.visualViewport?.addEventListener('scroll',position);window.addEventListener('resize',position);window.addEventListener('scroll',position,true);
   tools.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();tools.open=false;summary.focus();}});
@@ -23,7 +27,9 @@ export function installComposer({host,api,context,refresh,notify}) {
   const selections=new Map(Array.isArray(savedSelections)?savedSelections.filter(v=>Array.isArray(v)&&typeof v[0]==='string'&&['default','plan'].includes(v[1]?.mode)&&Array.isArray(v[1]?.skills)&&Array.isArray(v[1]?.plugins)):[]);let selected,loading=false;
   const save=()=>{try{sessionStorage.setItem(selectionKey,JSON.stringify([...selections]));}catch{notify('输入工具选择暂未保存，刷新后请重新核对。',true);}};
   const choice=()=>{const id=context().id;if(!selections.has(id))selections.set(id,{mode:'default',skills:[],plugins:[]});return selections.get(id);};
-  mode.onchange=()=>{choice().mode=mode.value;save();render();tools.open=false;summary.focus();};
+  mode.onclick=()=>{choice().mode=choice().mode==='plan'?'default':'plan';save();render();tools.open=false;summary.focus();};
+  planBadge.onclick=()=>{choice().mode='default';save();render();summary.focus();};
+  goalBadge.onclick=()=>bar.querySelector('#goal-settings').click();
   const input=document.getElementById('message-input');
   const references=()=>Array.isArray(choice().references)?choice().references.filter(r=>r&&['skills','plugins'].includes(r.kind)&&typeof r.key==='string'&&typeof r.token==='string'&&r.token.length>1):[];
   const present=()=>mentionRanges(input.value,references());
@@ -110,13 +116,20 @@ export function installComposer({host,api,context,refresh,notify}) {
     const c=context();if(selected!==JSON.stringify([c.id,c.cwd])){selected=JSON.stringify([c.id,c.cwd]);suggestions.close();if(dialog.open)dialog.close();}
     if(!c.ready||c.busy||c.active)suggestions.close();
     syncReferences();mirror.render();
-    mode.title=choice().mode==='plan'?'计划：先制定方案':'默认：直接处理请求';
-    mode.value=choice().mode;summary.textContent='＋';summary.title='添加图片、技能和工具';summary.dataset.mode=choice().mode;summary.setAttribute('aria-label',choice().mode==='plan'?'更多输入工具，计划模式':'更多输入工具');
+    mode.title=choice().mode==='plan'?'退出计划模式':'计划：先制定方案';
+    mode.setAttribute('aria-pressed',String(choice().mode==='plan'));
+    planBadge.hidden=choice().mode!=='plan';
+    goalBadge.hidden=!c.goal&&!c.goalError;
+    goalBadge.textContent=c.goalError?'目标待确认':({active:'目标',paused:'目标已暂停',complete:'目标已完成'}[c.goal?.status]||'目标待确认');
+    goalBadge.title=c.goalError?'目标状态暂未读取，点击重新检查':c.goal?.objective||'查看目标';
+    goalBadge.setAttribute('aria-label',goalBadge.textContent+'，查看设置');
+    badges.hidden=planBadge.hidden&&goalBadge.hidden;
+    summary.textContent='＋';summary.title='添加图片、技能和工具';summary.dataset.mode=choice().mode;summary.setAttribute('aria-label',choice().mode==='plan'?'更多输入工具，计划模式':'更多输入工具');
     for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||c.active;
     if(c.goalError){bar.querySelector('#goal-settings').textContent='目标（状态待确认）';bar.querySelector('#goal-settings').title='目标状态暂未读取，请刷新后重试。';}else{bar.querySelector('#goal-settings').textContent='目标';bar.querySelector('#goal-settings').title='设置目标';}
     bar.querySelector('#goal-settings').disabled ||= c.draft;bar.querySelector('#goal-settings').hidden=Boolean(c.draft);
     summary.setAttribute('aria-disabled',String(!c.ready||c.busy||c.active));if(!c.ready||c.busy||c.active)tools.open=false;
-    status.textContent=[choice().mode==='plan'?'计划':'',choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:'',c.goalError?'目标状态暂不可用':c.goal?'目标：'+({active:'进行中',paused:'已暂停',complete:'已完成'}[c.goal.status]||c.goal.status):''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
+    status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
   return {render,moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins}=choice();return {mode,skills:[...skills],plugins:[...plugins],access:WEB_ACCESS};},isLoading:()=>loading};
