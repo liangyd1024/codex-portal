@@ -20,4 +20,7 @@
 
 ## 部署
 
-正式部署结果在完成标准安装及健康检查后补记。
+- 功能提交 `19a8a2fad4dfb4fb1b33db042465cf34f62939b2` 已推送 `origin/master`。包含此前正式版本 `2d4380a07dc137b7424452452814996ea2185e5e`，保留已有更新流程与设置功能。
+- 从永久 `update-source` 目录执行标准指定版本安装。部署锁、两次空闲检查、加密备份和健康检查通过，仅豁免当前本机部署会话；仅重启 RCM 网页服务。
+- 备份：`~/Library/Application Support/RemoteCodexManager/backups/marco-20261020T090825414629Z.tar.gz.age`。安装记录时间：`2026-10-20T09:08:31.387Z`。
+- 正式版本接口与安装提交一致。首页、`account-usage.js`、`app.js`、`styles.css` 的 SHA-256 与提交内容一致。正式账号接口返回真实 ChatGPT 邮箱和用量，身份字段仅有 `type`、`email`。本机与 Ally 连接均恢复 connected，无待处理请求。
