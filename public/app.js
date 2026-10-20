@@ -11,7 +11,8 @@ import {notifyManagerError, recoveryMessage, selectedRecoveryMessage} from './re
 import {activitySource,conversationActivity,renderConversationActivity,processGroupStatus} from './activity.js';
 let scrollFollow,scrollContext;
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message-media.js';
-import {markdown, groupTurnItems} from './message-body.js';
+import {markdown} from './message-body.js';
+import {userMessageTime, timedTurnGroups} from './message-time.js';
 import {reconcileMessages} from './message-dom.js';
 import {NewChatDraft} from './new-chat.js';
 import {installAttachments} from './attachments.js';
@@ -526,7 +527,14 @@ function renderItem(item) {
       const src=part.type==='image'&&/^data:image\/(png|jpeg|webp|gif);base64,/.test(part.url||'')?part.url:imageUrl({part:part.index});
       bubble.append(imageCard(src,'图片附件 '+(part.index+1)));
     }
-    m.append(bubble);return m;
+    m.append(bubble);
+    const sent = userMessageTime(item);
+    if (sent) {
+      const time = el('time','user-message-time',sent.label);
+      time.dateTime = sent.iso; time.title = '消息时间（北京时间）';
+      m.append(time);
+    }
+    return m;
   }
   if (['agentMessage','plan'].includes(item.type)) {
     const m = el('article','message agent'); m.setAttribute('aria-label',item.type === 'plan' ? '计划' : 'Codex 回复'); const label = el('div','agent-label' + (item.type === 'agentMessage' ? ' message-author' : '')); label.append(icon('mark'),el('span','',item.type === 'plan' ? '计划' : 'Codex')); m.append(label);
@@ -620,12 +628,17 @@ function renderMessages() {
     if (actualModel || actualEffort) meta.append(el('span','turn-model',[actualModel,actualEffort && '思考：' + (effortNames[actualEffort] || actualEffort)].filter(Boolean).join(' · ')));
     const turnStatus = uncertainHistory() && ['inProgress','in_progress','running'].includes(typeOf(t.status)) ? '状态未确认' : statusNames[typeOf(t.status)] || typeOf(t.status);
     meta.append(el('span','turn-status',turnStatus)); turn.append(meta);
-    for (const group of groupTurnItems(t)) {
+    for (const group of timedTurnGroups(t)) {
+      if (group.type === 'duration') { turn.append(el('div','turn-duration',group.label)); continue; }
       if (group.type === 'message') { const message=renderItem(group.item); message.dataset.messageId=group.item.id; turn.append(message); continue; }
       const processGroup = el('details','activity-group process-group');
       processGroup.dataset.itemId = 'process-' + t.id + '-' + group.key;
       const summary = el('summary');
-      summary.append(icon('chevron','chevron'),el('span','','查看过程'));
+      if (group.durationLabel) {
+        processGroup.classList.add('has-duration');
+        summary.append(el('span','',group.durationLabel),icon('chevron','chevron'));
+        summary.title = '展开或收起过程';
+      } else summary.append(icon('chevron','chevron'),el('span','','查看过程'));
       const processStatus = processGroupStatus(t,group.items,{uncertain:uncertainHistory(),background:backgroundActivity(state.detail,{controlled:controlled(),connected:usable()})});
       if (processStatus) summary.append(el('span','process-status',processStatus));
       const body = el('div','activity-items');

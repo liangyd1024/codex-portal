@@ -359,6 +359,8 @@ def decode_json(value, column, identifier):
 
 def history_item(item, identifier):
     value = decode_json(item['item_json'], 'thread_items.item_json', item['item_id'])
+    if value.get('type') == 'userMessage' and 'created_at_ms' in item.keys() and item['created_at_ms'] is not None:
+        value['createdAtMs'] = item['created_at_ms']
     # Image bytes remain available through a separate media request. History keeps
     # every item and all text, without transferring multi-megabyte base64 previews.
     if value.get('type') == 'imageGeneration' and isinstance(value.get('result'), str) and len(value['result']) > 100000:
@@ -608,6 +610,10 @@ def read_history(payload):
     try:
         require_columns(connection, 'thread_history_1.sqlite', 'thread_turns', TURN_COLUMNS)
         require_columns(connection, 'thread_history_1.sqlite', 'thread_items', ITEM_COLUMNS)
+        item_columns = {column['name'] for column in connection.execute('PRAGMA table_info(thread_items)')}
+        # Older native snapshots lack this column. Do not substitute a turn's
+        # start time: steered user messages can arrive much later in that turn.
+        item_time = ', created_at_ms' if 'created_at_ms' in item_columns else ''
         identifier = thread_id(payload)
         before = cursor_number(payload)
         conditions = ['thread_id = ?']
@@ -628,7 +634,7 @@ def read_history(payload):
         turns = []
         for row in rows[:5]:
             items = connection.execute(
-                'SELECT item_id, ' + item_sql + ' AS item_json FROM thread_items WHERE thread_id = ? AND turn_id = ? '
+                'SELECT item_id' + item_time + ', ' + item_sql + ' AS item_json FROM thread_items WHERE thread_id = ? AND turn_id = ? '
                 'ORDER BY rollout_ordinal ASC, item_id ASC',
                 [*journal_ids, identifier, row['turn_id']],
             ).fetchall()

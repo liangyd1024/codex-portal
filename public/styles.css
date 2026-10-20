@@ -228,6 +228,11 @@
 .process-group>summary{font-size:11px;min-height:22px;line-height:16px;padding:3px 0;color:var(--muted)}
 .process-status{font-size:11px;color:#7b847e}.process-status.error{color:#a65b44}
 .process-group .reasoning-block{margin:4px 0}
+.message.user{flex-direction:column;align-items:flex-end;gap:5px}
+.user-message-time{font-size:12px;line-height:18px;color:var(--muted);font-weight:400}
+.process-group.has-duration>summary,.turn-duration{font-size:13px;line-height:20px;color:var(--muted);padding:6px 0}
+.process-group.has-duration,.turn-duration{border-bottom:1px solid var(--line);margin:8px 0 12px}
+.process-group.has-duration>summary:focus-visible{outline:2px solid var(--green);outline-offset:3px;border-radius:4px}
 
 /* History prepends restore the visible turn explicitly. */
 .messages-scroller{overflow-anchor:none}
