@@ -926,7 +926,7 @@ function renderTaskNotifications() {
   $('task-notifications').disabled = !supported || notificationPending;
   $('task-notifications').checked = taskNotificationsEnabled && supported && Notification.permission === 'granted';
   $('test-notification').disabled = !$('task-notifications').checked;
-  setText('notification-status', !supported ? message : Notification.permission === 'denied' ? '通知已被阻止。请在浏览器网站设置中允许通知。' : $('task-notifications').checked ? '已开启：每次执行完成、失败、停止或需要你处理时都会通知，正在查看会话时也会通知；多个页面只提醒一次。页面关闭或被系统暂停期间不能实时通知，重新打开并恢复连接后补发。' : '通知未开启');
+  setText('notification-status', !supported ? message : Notification.permission === 'denied' ? '通知已被阻止。请在浏览器网站设置中允许通知。' : $('task-notifications').checked ? '已开启。任务完成或需要处理时通知；页面关闭后，恢复连接时补发。' : '通知未开启');
 }
 let notificationPending = false;
 let notificationRegistration;
@@ -1448,9 +1448,10 @@ async function init() {
   inspector.querySelector('.inspector-heading').after(navigation);
   const groups=[...inspector.querySelectorAll(':scope > details')];
   const category=group=>group.id==='mobile-access'?'mobile':group.id==='system-update'||group.id==='browser-backup'||group.classList.contains('connection-section')||group.id==='diagnostics'||group.querySelector('#task-notifications')?'settings':'session';
+  groups.forEach(group=>{group.open=group.id!=='diagnostics'&&group.id!=='browser-backup'&&!group.classList.contains('connection-section');});
   const views=[['session','会话'],['mobile','手机访问'],['settings','设置']];
   function showInspectorView(view){
-    groups.forEach(group=>{group.hidden=category(group)!==view;if(!group.hidden&&group.id!=='diagnostics')group.open=true;});
+    groups.forEach(group=>{group.hidden=category(group)!==view;});
     navigation.querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.view===view)));
     inspector.scrollTop = 0;
   }

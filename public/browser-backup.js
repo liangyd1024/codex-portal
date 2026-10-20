@@ -26,12 +26,14 @@ export async function importBrowser(data,config){
 }
 export function installBrowserBackup(config,flush,imported=()=>{}){
  const area=document.getElementById('browser-backup-body');
- const status=document.createElement('p');status.textContent='导出当前浏览器的本应用设置、当前标签页状态和详情缓存。其他浏览器和标签页需要分别导出；不包含 Cookie。';
+ const scope=document.createElement('details');scope.className='settings-help';const title=document.createElement('summary');title.textContent='备份范围';const explanation=document.createElement('p');explanation.textContent='导出当前浏览器的本应用设置、当前标签页状态和详情缓存。其他浏览器和标签页需要分别导出；不包含 Cookie。';
+ scope.append(title,explanation);
+ const status=document.createElement('p');status.className='subtle';status.setAttribute('role','status');
  const download=document.createElement('button');download.className='secondary-button';download.textContent='导出浏览器数据';
  const upload=document.createElement('input');upload.type='file';upload.accept='application/json';upload.hidden=true;
  const load=document.createElement('button');load.className='text-button';load.textContent='导入浏览器数据';load.onclick=()=>upload.click();
  download.onclick=async()=>{download.disabled=true;try{flush();const data=await exportBrowser(config);const url=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=`browser-export-${config.machineId}-${Date.now()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);status.textContent=`已导出：${data.capturedAt}。仅包含当前浏览器、当前标签页。${data.coverage.cacheError?'缓存读取失败：'+data.coverage.cacheError:''} 导出文件含草稿和缓存内容，请交给 backup --browser 加密保存。`;}catch(e){status.textContent=e.message;}finally{download.disabled=false;}};
  let importing=false;
  upload.onchange=async()=>{if(importing)return;try{const f=upload.files[0];if(!f)return;if(f.size>256*1024*1024)throw Error('浏览器备份超过 256 MiB。');const data=validateBrowser(JSON.parse(await f.text()),config);if(!confirm('连接目标已核对。将合并此备份中的应用设置、草稿和缓存，然后刷新页面。'))return;importing=true;load.disabled=download.disabled=true;load.textContent='正在导入…';flush();await importBrowser(data,config);imported();location.reload();}catch(e){status.textContent=e.message;}finally{importing=false;load.disabled=download.disabled=false;load.textContent='导入浏览器数据';upload.value='';}};
- area.append(status,download,load,upload);
+ const actions=document.createElement('div');actions.className='settings-actions';actions.append(download,load);area.append(actions,status,scope,upload);
 }

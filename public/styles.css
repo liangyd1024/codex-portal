@@ -468,3 +468,18 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 
 
 .brand .account-usage{padding:3px 4px;background:transparent;color:#000;font-size:13px;font-weight:500;line-height:1.3;white-space:nowrap;letter-spacing:0;flex-shrink:0;border-radius:4px}.brand:has(.account-usage:not([hidden])){gap:5px}.account-usage:hover{background:var(--line)}
+
+/* Settings share a compact heading and action layout on desktop and mobile. */
+.inspector-group>summary{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;min-height:32px}
+.settings-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.settings-actions button{min-height:44px}
+.system-update-progress{display:block;width:100%;height:6px;accent-color:var(--accent,#4b6541);margin:12px 0}
+.system-update-progress[hidden],.system-update-steps[hidden]{display:none}
+.system-update-steps{font-size:12px;line-height:1.8;color:#65735f;overflow-wrap:anywhere}
+.system-update-checked{min-height:18px;font-size:12px;margin-bottom:0}
+#system-update-body>[role=status]{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.settings-help{font-size:12px;color:#65735f;margin-top:8px;line-height:1.6}
+.settings-help summary{cursor:pointer}
+.notification-controls{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px}
+#notification-status{flex-basis:100%;line-height:1.6}
+@media(prefers-reduced-motion:reduce){.system-update-progress{animation:none}}
