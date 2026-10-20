@@ -15,3 +15,9 @@
 - 新增回归：缓存 active 但原生 idle、上一轮 completed 但原生 active、并发状态变化拒绝旧读、断开/重连时不发 RPC、短暂收尾重试、API 返回原生快照、未知自身状态不可豁免、同版本跳过部署及阻塞检查、无更新时隐藏刷新按钮。
 - ego-browser 空间 29，独立 4327 预览及 API fixture。桌面/390px 三组版本、更新完成与同版本分支、单次 Enter 提交、Tab solid 焦点、无横向溢出与脚本错误通过。截图 /tmp/rcm-version-desktop.png、/tmp/rcm-version-mobile.png 已查看。未改输入流程，未复测中文输入法或实体手机。
 - 真实旧服务原生只读核对完成；新版本完整更新重启分支仍未通过网页按钮端到端验收。标准安装及真实同版本验证结果另记下方。
+
+## 正式部署与同版本实测
+
+功能提交 2d4380a07dc137b7424452452814996ea2185e5e 已推送并通过标准安装上线。加密备份 backups/marco-20261020T085451848215Z.tar.gz.age，健康检查通过；保留现有功能和当前会话精确豁免，未停止目标服务或任务。
+
+正式 POST /api/system/update 实际启动 job 26a41233-6b4c-43dc-9c03-8420c2514b72，fetch 后 current/from/target 均为该提交；约 7.8 秒返回 succeeded、unchanged=true，“已是最新版本，无需重新部署”。前后网页 instanceId 相同，确认未重启。此时当前对话仍在运行，同版本分支无需执行空闲检查。证据 /tmp/rcm-version-noop-evidence.json。正式新原生状态接口成功返回当前本地受控会话名称和状态；未连接新的远程目标。浏览器正式 p2 只读检查三组版本及无更新文案通过，空间 29 已关闭。
