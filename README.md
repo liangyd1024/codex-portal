@@ -24,7 +24,9 @@
 node server.mjs
 ```
 
-默认网页为 `http://127.0.0.1:4317`，开发预览使用 `RCM_PORT=4327 RCM_MOBILE=0 RCM_STATE_DIR=/absolute/new/preview-state node server.mjs`，独立保存网页状态且不绑定手机端口，避免恢复既有订阅。仍连接同一目标引擎，请仅操作独立测试会话。
+本机正式网页固定为 `http://127.0.0.1:4317`。手机本地代理使用 `4318`，手机局域网 HTTPS 使用 `4319`。开发预览固定使用 `4327`。未经用户明确要求不得改动这些端口。端口占用时先查原因，不自动换端口。
+
+开发预览使用 `RCM_PORT=4327 RCM_MOBILE=0 RCM_STATE_DIR=/absolute/new/preview-state node server.mjs`，独立保存网页状态且不绑定手机端口，避免恢复既有订阅。仍连接同一目标引擎，请仅操作独立测试会话。
 
 ## 手机系统通知
 
