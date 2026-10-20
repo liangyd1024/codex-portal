@@ -33,6 +33,7 @@
     if(p==='/api/composer')return json({modes:{data:[{mode:'default'},{mode:'plan'}]},skills:{data:[{skills:[{name:'测试技能',path:'/test/SKILL.md',enabled:true}]}]},plugins:{marketplaces:[{plugins:[{id:'test-plugin',name:'测试插件',enabled:true,installed:true}]}]}});
     if(p==='/api/csrf')return json({token:'fixture-token'});
     if(p==='/api/status')return json(status());
+    if(p==='/api/account/usage')return json(f.accountUsage??{visible:false,account:null});
     if(p==='/api/system/update'){f.systemUpdate??={available:true,version:'fixture',job:null};if(method==='POST')f.systemUpdate.job={id:'fixture-update',phase:'queued',message:'已接收，正在准备更新…'};return json(f.systemUpdate);}
     if(p==='/api/models')return json({data:models});
     if(p==='/api/projects')return json({data:[{id:'qa-project',name:'验收项目',roots:['/test/project']}]});

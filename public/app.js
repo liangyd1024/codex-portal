@@ -1429,7 +1429,7 @@ function wireEvents() {
 }
 async function init() {
   installSystemUpdate({api,flush:flushDrafts,resetCsrf:()=>{state.csrf='';}});
-  refreshAccountUsage=installAccountUsage({node:$('account-usage'),api,connected,context:()=>targetHost+':'+state.status?.instanceId+':'+state.status?.connection?.connectedAt});
+  refreshAccountUsage=installAccountUsage({node:$('account-usage'),identityNode:$('account-identity'),api,connected,context:()=>targetHost+':'+state.status?.instanceId+':'+state.status?.connection?.connectedAt});
   $('account-usage').addEventListener('click',()=>toast($('account-usage').title));
   void refreshAccountUsage();
   setInterval(()=>{if(!document.hidden)void refreshAccountUsage();},15000);
