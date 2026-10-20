@@ -12,3 +12,7 @@
 - 已查看 /tmp/rcm-settings-desktop.png、/tmp/rcm-settings-mobile.png、/tmp/rcm-settings-mobile-final.png；最终手机截图通知为紧凑横排。未修改输入流程，未复测中文输入法；未使用实体手机。
 - 真实服务只读核对：用户发起 job 617bedc6-2b81-4737-99a3-f5e556ed00e4 已在测试阶段失败，未部署。旧日志只留 Command failed: npm test，无法定位当次原因。在永久 update-source 目录使用精简 PATH 复跑该版本，274 Node、53 Python 通过；不能据此宣称已查明或修复当次测试失败。
 - 网页按钮完整真实成功更新链路仍未验收，模拟反馈验证不等同真实部署。正式部署使用原安装程序，另记下方。
+
+## 部署状态
+
+功能提交 35a4ef4 已推送 origin/master，永久 update-source 已快进到该版本；该提交包含原正式 cd010569f4dafbe796d5fe69162a787473d92baa。标准安装在第一次空闲检查即拒绝：另一个本机会话 01a1585c-d00e-7312-ac31-d2086d95086f 仍 active。当前部署会话 ID 不同，未扩大豁免、未停止任务、未重启正式服务。此次仅代码交付和隔离预览通过，尚未正式上线。
