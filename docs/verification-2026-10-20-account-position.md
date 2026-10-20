@@ -7,3 +7,10 @@
 - 长邮箱与 API Key 使用 DOM 展示模拟，未切换真实登录。异步身份行为由既有单元测试验证。未改输入流程，未复测中文输入法、实体手机。
 - 已查看桌面、窄屏长邮箱和 API Key 截图。最终窄屏截图：`/tmp/rcm-account-position-mobile-final.png`。浏览器空间已关闭。
 - 原 Git SSH 代理连续超时；使用同一部署密钥、严格主机验证直接连接 GitHub，成功拉取最新 master。未修改持久 Git 配置。
+
+## 正式部署
+
+- 功能提交 `1f629fac28838929a7169e93f7737af46deeb3f5` 已推送 origin/master，包含此前正式版本 `8399014e6cdccc32436576cb5ae08aa1c2d6d59a`。
+- 永久 update-source 快进后通过标准安装流程完成部署；两次空闲检查、加密备份及健康检查通过，仅豁免当前本机部署会话。只重启 RCM 网页服务。
+- 备份：`~/Library/Application Support/RemoteCodexManager/backups/marco-20261020T153205438994Z.tar.gz.age`。
+- 正式版本接口与功能提交一致，正式首页及 styles.css 的 SHA-256 与源码一致。独立预览已停止。
