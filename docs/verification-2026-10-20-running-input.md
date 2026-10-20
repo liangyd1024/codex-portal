@@ -19,3 +19,5 @@
 ## 部署
 
 正式基线 66cc8db 已在当前 master，包含上一会话计划/目标菜单修改 b7b58d9 及记录 593099d。本次从合并全部修改的 master 部署，结果后补。
+
+正式部署成功：5e727102e2f486102fbfae6273376d1b67b7d5fa，标准安装器通过两次空闲检查、当前会话精确豁免、加密备份、网页重启及版本健康检查。/api/version 独立回读一致。备份：/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261020T001143108557Z.tar.gz.age。未重启原生引擎或停止任务。
