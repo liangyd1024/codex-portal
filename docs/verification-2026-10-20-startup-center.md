@@ -19,4 +19,4 @@
 
 ## 正式部署
 
-部署前基线为 16d096f096172b9edb181dbe2eaff21866cc5114，当前 master 包含它。正式部署结果另行补记。
+部署前基线为 16d096f096172b9edb181dbe2eaff21866cc5114，当前 master 包含它。正式部署版本 `694f0027c61d28aab8c54b8d9b337c711555fa98` 已提交并推送 origin/master。标准安装完成空闲检查、加密备份和版本健康检查，仅豁免当前部署会话，未停止原生引擎或任务。备份：`~/Library/Application Support/RemoteCodexManager/backups/marco-20261020T080253115094Z.tar.gz.age`。正式浏览器页核对版本一致、恢复面板位于 main 且正常启动后隐藏，新建入口恢复可用；空间 23 已关闭。
