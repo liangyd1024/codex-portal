@@ -23,7 +23,7 @@ let mobileUI, draftWritesSuspended = false;
 import {createHandoffControls} from './thread-handoff.js';
 let handoffControls;
 import {installBrowserBackup} from './browser-backup.js';
-import {installComposer, WEB_ACCESS} from './composer.js';
+import {installComposer, WEB_ACCESS,implementationText,completedPlan} from './composer.js';
 import {installMobile} from './mobile.js';
 let composer;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from './detail-cache.js';
@@ -1123,6 +1123,19 @@ async function sendMessage(e) {
     try { if (id === state.selectedId && selection === state.selectionVersion) await refreshSelected(); } catch (err) { recordError(err,'thread'); }
   });
 }
+async function implementPlan(id,plan){
+  if(id!==state.selectedId||newChatOpen||state.desktopMode||!usable()||!controlled()||running()||state.busy.size||completedPlan(turns())?.turnId!==plan.turnId)throw Object.assign(new Error('会话状态已变化，请重新核对计划。'),{status:409});
+  const selection=state.selectionVersion;
+  state.busy.add('message');renderControls();
+  try{
+    const d=await api('/api/threads/'+encodeURIComponent(id)+'/message',{method:'POST',body:{text:implementationText(plan),mode:'default',access:WEB_ACCESS,model:state.model,effort:state.effort}});
+    if(id===state.selectedId&&selection===state.selectionVersion){
+      if(d.turn)upsertTurn(d.turn);
+      renderThread();
+      try{await refreshSelected();}catch(error){recordError(error,'thread');}
+    }
+  }finally{state.busy.delete('message');renderControls();}
+}
 async function sendDesktopMessage(){
   const id=state.selectedId,selection=state.selectionVersion,text=$('message-input').value.trim();
   if(!text||state.busy.has('message')||!state.detail?.desktop?.canSend)return;
@@ -1341,7 +1354,7 @@ function wireEvents() {
   scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
   attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady(),busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});
-  composer=installComposer({host:targetHost,api,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
+  composer=installComposer({host:targetHost,api,implementPlan,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,desktop:state.desktopMode,turns:turns(),goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
   const settings = $('composer-settings');
   document.addEventListener('click',event => { if (!settings.contains(event.target)) settings.open = false; });
   settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); settings.open = false; settings.querySelector('summary').focus(); } });
