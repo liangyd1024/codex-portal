@@ -6,7 +6,7 @@
   "description": "通过浏览器管理本机与远程 Codex",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test test/*.test.mjs && python3 -m unittest discover -s test -p \"test_*.py\"",
+    "test": "node scripts/run-tests.mjs",
     "backup": "python3 scripts/data-backup.py backup",
     "restore": "python3 scripts/data-backup.py restore",
     "restore:apply": "python3 scripts/restore-apply.py apply",

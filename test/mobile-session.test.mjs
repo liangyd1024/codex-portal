@@ -21,7 +21,7 @@ async function entrance(file,run){
   try{await run(access,request);}finally{app.proxyServer.closeAllConnections();await new Promise(resolve=>app.proxyServer.close(resolve));}
 }
 
-test('paired phone survives server recreation while CSRF rotates; logout remains revoked after restart',async()=>{
+test('paired phone survives server recreation while CSRF rotates; logout remains revoked after restart',async(t)=>{
   const dir=await mkdtemp(path.join(tmpdir(),'rcm-phone-restart-')),file=path.join(dir,'sessions.json');let cookie,oldCsrf,usedCode;
   await entrance(file,async(access,request)=>{
     usedCode=access.createCode().code;
@@ -40,10 +40,10 @@ test('paired phone survives server recreation while CSRF rotates; logout remains
   });
   await entrance(file,async(access,request)=>assert.equal((await request('/api/access/status',{cookie})).status,401));
   assert.ok(!(await readFile(file,'utf8')).includes(cookie.slice('rcm_mobile='.length)));
-  console.log('保留手机重启测试目录：'+dir);
+  t.diagnostic('保留手机重启测试目录：'+dir);
 });
 
-test('restart preserves pending codes and permanent sessions without extending finite login expiry',async()=>{
+test('restart preserves pending codes and permanent sessions without extending finite login expiry',async(t)=>{
   const dir=await mkdtemp(path.join(tmpdir(),'rcm-phone-expiry-')),file=path.join(dir,'sessions.json');let now=1000;
   let access=new MobileAccess(file,()=>now);const code=access.createCode(600,86400).code;
   access=new MobileAccess(file,()=>now);const token=access.login(code),req={headers:{cookie:'rcm_mobile='+token}},expiry=access.expires(req);
@@ -52,11 +52,11 @@ test('restart preserves pending codes and permanent sessions without extending f
   const permanent=access.login(access.createCode(600,null).code),permanentReq={headers:{cookie:'rcm_mobile='+permanent}};
   now+=86400000*500;access=new MobileAccess(file,()=>now);assert.ok(access.valid(permanentReq));
   access.revoke();assert.equal(new MobileAccess(file,()=>now).valid(permanentReq),false);
-  console.log('保留手机有效期测试目录：'+dir);
+  t.diagnostic('保留手机有效期测试目录：'+dir);
 });
 
 
-test('login script remains executable across authentication changes and app entry stays protected',async()=>{
+test('login script remains executable across authentication changes and app entry stays protected',async(t)=>{
   const dir=await mkdtemp(path.join(tmpdir(),'rcm-phone-assets-'));
   await entrance(path.join(dir,'sessions.json'),async(access,request)=>{
     const page=await request('/');assert.match(page.text,/正在检查已有登录/);
@@ -71,5 +71,5 @@ test('login script remains executable across authentication changes and app entr
     assert.equal((await request('/bootstrap.js')).status,401);
     assert.equal((await request('/app.js')).status,401);
   });
-  console.log('保留手机资源测试目录：'+dir);
+  t.diagnostic('保留手机资源测试目录：'+dir);
 });

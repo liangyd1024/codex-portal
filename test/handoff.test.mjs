@@ -122,8 +122,8 @@ test('persistence failure refuses unsubscribe and retains control',async()=>{
   finally{m.disconnect();}
 });
 
-test('lost response persists non-resumption across a new Manager and reconnect',async()=>{
-  const root=mkdtempSync(path.join(tmpdir(),'rcm-handoff-test-'));console.log('保留测试目录：'+root);
+test('lost response persists non-resumption across a new Manager and reconnect',async(t)=>{
+  const root=mkdtempSync(path.join(tmpdir(),'rcm-handoff-test-'));t.diagnostic('保留测试目录：'+root);
   const titleStore=path.join(root,'web-titles-test.json'),{m,rpc}=fixture({titleStore});
   rpc.overrides['thread/unsubscribe']=()=>{throw Object.assign(Error('timeout'),{code:'RPC_TIMEOUT'});};
   try{

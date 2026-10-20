@@ -86,7 +86,7 @@ node scripts/install-local.mjs --ref <commit>
 
 右侧“工作区详情 → 设置 → 系统更新”的“更新并重新部署”，更新当前网页所在机器的 RCM 服务，不随所选 SSH 连接切换。已配对手机也可使用同一入口。
 
-安装程序记录源码目录和 origin 地址。网页更新仅接受固定的 master：检查干净工作目录和空闲状态，拉取 origin/master，确认包含当前正式版本，快进 master，运行 npm test，再使用现有版本安装程序完成加密备份、网页重启、健康检查和失败回退。已有未提交修改、未推送提交、分叉、测试失败或运行任务都会停止更新，不强制覆盖或中断任务。拉取后若 origin/master 与当前运行版本相同，提示已是最新版本，不执行测试、备份或重启。页面显示当前版本、最近拉取的最新版本和更新前版本。
+安装程序记录源码目录和 origin 地址。网页更新仅接受固定的 master：检查干净工作目录和空闲状态，拉取 origin/master，确认包含当前正式版本，快进 master，使用当前 Node 执行 scripts/run-tests.mjs（与 npm test 相同的完整测试），再使用现有版本安装程序完成加密备份、网页重启、健康检查和失败回退。已有未提交修改、未推送提交、分叉、测试失败或运行任务都会停止更新，不强制覆盖或中断任务。拉取后若 origin/master 与当前运行版本相同，提示已是最新版本，不执行测试、备份或重启。页面显示当前版本、最近拉取的最新版本和更新前版本。
 
 部署前通过已连接的原生接口重新读取会话状态，不主动连接目标；短暂收尾或重连会自动复查。仍在运行的会话、待处理请求或未稳定连接仍阻止部署。
 
@@ -202,3 +202,5 @@ python3 -m unittest discover -s test -p 'test_*.py'
 参考：[SQLite Online Backup API](https://www.sqlite.org/backup.html)、[age](https://github.com/FiloSottile/age)、[GitHub 大文件说明](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github)。
 
 实际部署版本、测试结果和最终备份位置见 [2026-10-18 双机验收记录](docs/verification-2026-10-18.md)。
+
+测试入口 `npm test` 与网页更新共用 `scripts/run-tests.mjs`。网页更新直接使用服务的 Node 路径，不依赖后台 PATH 中存在 npm。Node 测试的保留目录等诊断信息使用 `t.diagnostic()`，避免旧 Node 测试运行器混合解析中文 stdout 时的序列化缺陷；不要以跳过测试或失败自动重跑代替修复。

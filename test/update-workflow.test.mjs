@@ -11,7 +11,7 @@ function fixture(change={}){
   if(operation==='merge-base'&&change.behind)throw Error('not ancestor');
   if(operation==='merge'&&change.diverged)throw Error('not ff');
  }
- if(command==='npm'&&change.testFails)throw Error('test failed');return '';
+ if(args[0]==='/source/scripts/run-tests.mjs'&&change.testFails)throw Error('test failed');return '';
  };
  return {calls,stages,options:{source:'/source',remote:'git@example:repo',baseline,run,stage:async(...args)=>stages.push(args),idle:async()=>{if(change.busy)throw Error('busy');},installedVersion:async()=>change.installed||baseline}};
 }
@@ -23,7 +23,7 @@ test('update fetches master, validates the production ancestor, tests and calls 
 });
 test('dirty tree, wrong branch, changed remote, missing production baseline, divergence and failed tests never restart',async()=>{
  for(const change of [{dirty:1},{branch:'other'},{remote:'other'},{behind:true},{diverged:true},{testFails:true},{head:baseline},{installed:target},{busy:true},{dirty:3}]){
-  const f=fixture(change);await assert.rejects(updateWorkflow(f.options));assert.ok(!f.calls.some(([c])=>c===process.execPath),JSON.stringify(change));
+  const f=fixture(change);await assert.rejects(updateWorkflow(f.options));assert.ok(!f.calls.some(([,a])=>a[0]==='/source/scripts/install-local.mjs'),JSON.stringify(change));
  }
 });
 test('deployment lock serializes manual and web installs; delegated installer cannot release its parent lock',async()=>{

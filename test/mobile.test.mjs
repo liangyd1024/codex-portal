@@ -38,7 +38,7 @@ test('Tailscale configuration rejects conflicting routes and public Funnel',()=>
  for(const change of [c=>c.AllowFunnel={'test.ts.net:443':true},c=>c.Web['test.ts.net:443'].Handlers['/'].Proxy='http://localhost:9999',c=>c.Web['test.ts.net:443'].Handlers['/other']={Path:'/tmp'},c=>c.TCP[443]={TCPForward:'localhost:22'}]){const c=structuredClone(config);change(c);assert.throws(()=>checkServe(c,'test.ts.net'));}
 });
 
-test('macOS LAN setup creates trusted TLS and usable QR without Tailscale or Python', {skip:process.platform!=='darwin'},async()=>{
+test('macOS LAN setup creates trusted TLS and usable QR without Tailscale or Python', {skip:process.platform!=='darwin'},async(t)=>{
  const {mkdtemp,readFile}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{execFile}=await import('node:child_process'),{promisify}=await import('node:util'),{default:path}=await import('node:path'),{default:https}=await import('node:https');
  const home=await mkdtemp(path.join(tmpdir(),'rcm-mobile-tls-'));
  await promisify(execFile)(process.execPath,['scripts/setup-mobile.mjs'],{env:{...process.env,HOME:home},timeout:90000});
@@ -68,7 +68,7 @@ test('macOS LAN setup creates trusted TLS and usable QR without Tailscale or Pyt
    assert.equal((await request('/api/access/status',{cookie:secondCookie})).status,401);
   }finally{tls.closeAllConnections();await new Promise(r=>tls.close(r));}
  });
- console.log('手机测试数据保留：'+home);
+ t.diagnostic('手机测试数据保留：'+home);
 });
 
 test('Tailscale health distinguishes connection and certificate/DNS issues',()=>{

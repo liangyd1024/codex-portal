@@ -61,8 +61,8 @@ test('existing engine title, manual rename, and connection changes prevent late 
     assert.equal(calls.filter(c=>c.method==='thread/name/set').length,0,action);
   }
 });
-test('legacy titles are preserved and completed first-message state survives restart',async()=>{
-  const dir=mkdtempSync(path.join(tmpdir(),'rcm-title-'));console.log('保留测试目录：'+dir);
+test('legacy titles are preserved and completed first-message state survives restart',async(t)=>{
+  const dir=mkdtempSync(path.join(tmpdir(),'rcm-title-'));t.diagnostic('保留测试目录：'+dir);
   const titleStore=path.join(dir,'titles.json');const {m,calls}=setup({titleStore});
   await m.newThread({cwd:'/project'});await m.message('t',{text:'首次任务'});await flush(m);
   assert.equal(JSON.parse(readFileSync(titleStore))[0][1].pendingFirstMessage,false);
