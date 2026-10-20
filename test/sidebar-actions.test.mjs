@@ -137,3 +137,27 @@ test('successful mutation is acknowledged before slow list refresh, and not repo
  await Sidebar.prototype.run.call(ui,'archive',{id:'t'});
  assert.ok(events.includes('操作已完成，但刷新失败：列表超时'));assert.equal(ui.pending,false);
 });
+
+test('archive reads native history without opening passive history or taking ownership',async()=>{
+ const {m,input,calls}=fixture(),passive=m.passive,rpc=m.rpc.request;
+ m.passive=async(action,p)=>{if(action==='history')assert.fail('must not open the passive history database');return passive(action,p);};
+ m.rpc.request=async(method,p)=>{if(method==='thread/turns/list'){calls.push([method,p]);return {data:[{status:'completed'}]};}return rpc(method,p);};
+ await sidebarAction(m,input('archive'));
+ assert.deepEqual(calls.find(([name])=>name==='thread/turns/list'),['thread/turns/list',{threadId:'t',limit:5}]);
+ assert.equal(calls.filter(([name])=>name==='thread/archive').length,1);
+ assert.ok(!calls.some(([name])=>/resume|interrupt|start$/.test(name)));
+});
+test('archive native history fails closed for active, unknown, malformed and failed native reads',async()=>{
+ for(const result of [{data:[{status:'inProgress'}]},{data:[{status:'unknown'}]},{},null,Error('native unavailable')]){
+  const {m,input,calls}=fixture(),passive=m.passive,rpc=m.rpc.request;
+  m.passive=async(action,p)=>{if(action==='history')assert.fail('must not open the passive history database');return passive(action,p);};
+  m.rpc.request=async(method,p)=>{if(method==='thread/turns/list'){if(result instanceof Error)throw result;return result;}return rpc(method,p);};
+  await assert.rejects(sidebarAction(m,input('archive')));
+  assert.ok(!calls.some(([name])=>name==='thread/archive'||name==='desktop-notify'));assert.equal(m.sidebarMutation,false);
+ }
+});
+test('archive refuses unavailable native history without attempting a write',async()=>{
+ const {m,input,calls}=fixture();m.service.protocolValidation.unsupportedMethods.push('thread/turns/list');
+ await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='FEATURE_UNAVAILABLE');
+ assert.ok(!calls.some(([name])=>['thread/turns/list','thread/archive','desktop-notify'].includes(name)));
+});
