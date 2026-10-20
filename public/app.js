@@ -1,3 +1,5 @@
+import {installAccountUsage} from './account-usage.js';
+let refreshAccountUsage;
 import {sendAfterGoal} from './goal-submit.js';
 import {notificationSupport,prepareNotificationWorker,submitWorkerNotification} from './notification-platform.js';
 import {deliverNotice,submitNotification} from './notification-delivery.js';
@@ -286,6 +288,7 @@ async function action(key, fn) {
 }
 
 function renderStatus() {
+  void refreshAccountUsage?.();
   const s = state.status || {}, c = s.connection || {}, h = s.host || {}, service = s.service || {};
   const conn = c.state || 'disconnected';
   if (state.detail && Array.isArray(s.controlledThreads)) state.detail.controlled = s.controlledThreads.includes(state.selectedId);
@@ -1424,6 +1427,10 @@ function wireEvents() {
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {
+  refreshAccountUsage=installAccountUsage({node:$('account-usage'),api,connected,context:()=>targetHost+':'+state.status?.instanceId+':'+state.status?.connection?.connectedAt});
+  $('account-usage').addEventListener('click',()=>toast($('account-usage').title));
+  void refreshAccountUsage();
+  setInterval(()=>{if(!document.hidden)void refreshAccountUsage();},15000);
   setInterval(()=>{renderControls();if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();},5000);
   setInterval(()=>{if(connected()&&!state.loadingThreads&&!sidebar.pending&&!sidebar.drag&&!sidebar.menu&&!sidebar.dialog&&!document.hidden)loadThreads();},15000);
   $('messages').addEventListener('click',e=>{
