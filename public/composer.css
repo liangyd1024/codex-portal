@@ -62,3 +62,17 @@
 .latest-message-button:focus-visible{outline:2px solid #377cf6;outline-offset:3px}
 @media(max-width:700px){.composer .stop-button{width:44px;height:44px}.latest-message-button{width:44px;height:44px}}
 @media(max-width:700px){.composer-options summary,.mobile-layout .composer-options summary{width:44px;min-height:44px}.composer-tools .composer-options-panel button,.composer-tools .composer-options-panel select{min-height:44px}.composer .composer-tools [role=status]{display:none}.composer .send-button{width:44px;height:44px}}
+
+/* Mode feedback remains visible beside +, including on phones. */
+.composer-mode-badges{display:flex;align-items:center;gap:4px;min-width:0;flex-wrap:wrap}
+.composer-mode-badges[hidden],.composer-mode-badge[hidden]{display:none}
+.composer-tools .composer-mode-badge{border:0;background:#edf2fb;color:#346ba8;border-radius:8px;min-height:32px;padding:4px 8px;white-space:nowrap;font-size:12px}
+.composer-mode-badge:disabled{opacity:.55}
+.composer-options-panel #execution-mode,.composer-options-panel #goal-settings{display:flex;align-items:center;justify-content:space-between}
+.composer-options-panel #execution-mode[aria-pressed=true]::after,.composer-options-panel #goal-settings[aria-pressed=true]::after{content:'✓';color:#346ba8}
+.composer .composer-tools{min-width:0;flex-shrink:1}
+@media(max-width:700px){.composer-tools .composer-mode-badge{min-height:44px;padding:4px 6px}.composer .composer-tools{gap:4px}}
+
+.plan-completion{margin:0 0 12px;padding:16px;border:1px solid var(--border,#e5e5e5);border-radius:16px;background:var(--surface,#fff)}
+.plan-completion[hidden]{display:none}.plan-completion-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.plan-completion button{min-height:40px;white-space:normal}.plan-completion p{margin:10px 0 0;font-size:13px;color:var(--muted,#666)}
+.plan-completion{width:100%;max-width:var(--conversation-width);margin-left:auto;margin-right:auto}.plan-completion button{padding:9px 14px;border-radius:20px;background:var(--soft,#f6f7f4)}.plan-completion button:first-child{background:var(--ink,#242825);color:white}.plan-completion button:focus-visible{outline:2px solid #60876a;outline-offset:3px}@media(max-width:700px){.plan-completion{padding:12px}.plan-completion button{min-height:44px}}

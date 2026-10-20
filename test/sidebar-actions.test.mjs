@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readSidebar,sidebarAction,sidebarCapabilities,PINNED_SECTION} from '../lib/sidebar.mjs';
-import {sidebarGroups} from '../public/sidebar.js';
+import {Sidebar,sidebarGroups} from '../public/sidebar.js';
 import {ArchiveSync} from '../lib/archive-sync.mjs';
 function fixture(){
  const calls=[];const t={id:'t',name:'Original',revision:'r',archived:false,readRevision:'rr',sectionId:null};
@@ -103,7 +103,7 @@ test('sidebar refresh finishes delayed archive after an unknown result without a
  m.rpc.request=async(name,p)=>{if(name==='thread/archive'){calls.push([name,p]);throw Object.assign(Error('timeout'),{code:'RPC_TIMEOUT'});}return rpc(name,p);};
  await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='OUTCOME_UNKNOWN');
  assert.equal(m.archiveSync.pending.size,1);assert.ok(!calls.some(([n])=>n==='desktop-notify'));
- t.archived=true;await readSidebar(m);
+ t.archived=true;await readSidebar(m);await m.archiveSync.flush('a');
  assert.equal(m.archiveSync.pending.size,0);assert.equal(calls.filter(([n])=>n==='thread/archive').length,1);
  assert.deepEqual(calls.find(([n])=>n==='desktop-notify'),['desktop-notify',{id:'t',archived:true}]);
 });
@@ -118,4 +118,22 @@ test('desktop writer conflict is actionable and never hides or notifies an unarc
  m.rpc.request=async(name,p)=>{if(name==='thread/archive')throw Error('thread t already has an active writer');return rpc(name,p);};
  await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='THREAD_WRITER_CONFLICT'&&e.status===409);
  assert.equal(m.archiveSync.pending.size,0);assert.ok(!calls.some(([n])=>n==='desktop-notify'));
+});
+
+test('sidebar reads do not wait for pending desktop notification delivery',async()=>{
+ const {m}=fixture();let finish;const delivery=new Promise(resolve=>finish=resolve);
+ m.archiveSync={flush:()=>delivery};
+ try{await readSidebar(m);assert.equal(m.sidebarAccountId,'account');}finally{finish();}
+});
+test('sidebar failure is visible and controls unlock before a stalled refresh completes',async()=>{
+ const events=[];let finish;
+ const ui={pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(value){events.push(['busy',value]);},focusAnchor(){},
+ o:{api:async()=>{throw Error('目标响应超时');},toast:message=>{events.push(message);return {remove(){}};},refresh:()=>new Promise(resolve=>{events.push('refresh');finish=resolve;})}};
+ await Sidebar.prototype.run.call(ui,'archive',{id:'t',revision:'r'});
+ assert.ok(events.indexOf('目标响应超时')<events.indexOf('refresh'));assert.equal(ui.pending,false);assert.deepEqual(events.at(-1),['busy',false]);finish();
+});
+test('successful mutation is acknowledged before slow list refresh, and not reported as failed if refresh rejects',async()=>{
+ const events=[];const ui={pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(){},focusAnchor(){},o:{api:async()=>{},toast:message=>{events.push(message);return {remove(){}};},changed:async()=>{assert.ok(events.includes('会话已归档'));throw Error('列表超时');},refresh:async()=>{}}};
+ await Sidebar.prototype.run.call(ui,'archive',{id:'t'});
+ assert.ok(events.includes('操作已完成，但刷新失败：列表超时'));assert.equal(ui.pending,false);
 });

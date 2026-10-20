@@ -1,3 +1,4 @@
+import {sendAfterGoal} from './goal-submit.js';
 import {notificationSupport,prepareNotificationWorker,submitWorkerNotification} from './notification-platform.js';
 import {deliverNotice,submitNotification} from './notification-delivery.js';
 import {asyncQuestions,QuestionDrafts} from './questions.js';
@@ -22,7 +23,7 @@ let mobileUI, draftWritesSuspended = false;
 import {createHandoffControls} from './thread-handoff.js';
 let handoffControls;
 import {installBrowserBackup} from './browser-backup.js';
-import {installComposer, WEB_ACCESS} from './composer.js';
+import {installComposer, WEB_ACCESS,implementationText,completedPlan} from './composer.js';
 import {installMobile} from './mobile.js';
 let composer;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from './detail-cache.js';
@@ -30,9 +31,22 @@ import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
 import {updateExtensionNotice, renderExtensionNotice, selectConnectionStatus, userContentKey, mergeLiveTurns, taskNotice, backgroundActivity} from './connection-state.js';
 function savedHost() { try { return localStorage.getItem('rcm.connection'); } catch { return null; } }
 const requestedHost = new URL(location.href).searchParams.get('host');
-const response=await fetch('/api/connections');
-if(!response.ok)throw new Error('无法读取连接配置。');
-const connectionConfig=await response.json();
+let pendingNotification=null, notificationNavigationReady=false;
+navigator.serviceWorker?.addEventListener('message',event=>{
+  const data=event.data;
+  if(data?.type!=='rcm-notification-click'||!data.threadId)return;
+  if(notificationNavigationReady)openNotificationThread(data);else pendingNotification=data;
+});
+const connectionConfig=await readConnections();
+async function readConnections(){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+  try {
+    const response=await fetch('/api/connections',{credentials:'same-origin',cache:'no-store',signal:controller.signal});
+    if(response.status===401){location.reload();throw new Error('登录已失效，请重新配对。');}
+    if(!response.ok)throw new Error('无法读取连接配置。');
+    return await response.json();
+  } finally {clearTimeout(timer);}
+}
 const connectionIds=connectionConfig.data.map(c=>c.id);
 const targetHost=connectionIds.includes(requestedHost)?requestedHost:connectionIds.includes(savedHost())?savedHost():connectionConfig.defaultConnection;
 document.getElementById('connection-select').replaceChildren(...connectionConfig.data.map(c=>new Option(c.host.alias,c.id)));
@@ -230,7 +244,7 @@ function toast(message, error = false, duration = 7500) {
   const n = el('div','toast' + (error ? ' error' : '')); n.setAttribute('role', error ? 'alert' : 'status');
   n.append(icon(error ? 'alert' : 'check'), el('p','', message));
   const close = el('button','icon-button'); close.type = 'button'; close.setAttribute('aria-label','关闭提示'); close.append(icon('close')); close.onclick = () => n.remove(); n.append(close);
-  $('toasts').append(n); setTimeout(() => n.remove(), duration);
+  $('toasts').append(n); if(duration>0)setTimeout(() => n.remove(), duration); return n;
 }
 async function api(path, options = {}) {
   path=targetUrl(path);
@@ -811,6 +825,7 @@ function applyDetail(data, resetModels = false) {
 }
 async function selectThread(id,options={}) {
   if(state.busy.has('create')){toast('正在创建会话，请稍候。');return;}
+  const url=new URL(location.href);url.searchParams.delete('thread');history.replaceState(null,'',url);
   closeNewChat();
   automations?.close();state.desktopMode=Boolean(options.desktop||id===automations?.threadId);
   document.querySelector('.main-panel').classList.toggle('desktop-chat',state.desktopMode);
@@ -937,6 +952,14 @@ function notificationDiagnostic(message) {
   list.prepend(el('p','',dateTime(new Date()) + ' · ' + message));
   while (list.children.length > 8) list.lastElementChild.remove();
 }
+function openNotificationThread({host,threadId}) {
+  if(host!==targetHost){
+    if(!connectionIds.includes(host))return;
+    flushDrafts();
+    const url=new URL(location.href);url.searchParams.set('host',host);url.searchParams.set('thread',threadId);location.assign(url);return;
+  }
+  selectThread(threadId);
+}
 async function sendTaskNotification(title, body, tag, threadId, host=targetHost) {
   if(notificationSupport().worker){
     try {
@@ -950,7 +973,7 @@ async function sendTaskNotification(title, body, tag, threadId, host=targetHost)
     notification = new Notification(title,{body,tag});
     liveNotifications.add(notification);
     notification.onclose = () => { liveNotifications.delete(notification); notificationDiagnostic(title + '：通知已关闭'); };
-    notification.onclick = () => { window.focus(); notification.close(); if (threadId && host===targetHost) selectThread(threadId); };
+    notification.onclick = () => { window.focus(); notification.close(); if(threadId)openNotificationThread({host,threadId}); };
     return notification;
   },{
     shown:()=>notificationDiagnostic(title + '：浏览器报告已显示；若系统未弹出，请检查系统的浏览器通知开关'),
@@ -1053,6 +1076,7 @@ async function createThreadFromDraft(){
   if(state.busy.has('create')||newDraft.phase!=='editing')return;
   const cwd=newDraft.cwd,model=state.model,effort=state.effort,text=$('message-input').value;
   if(!cwd||(!text.trim()&&!attachments.has())||attachments.pending())return;
+  try{composer.validateSend(text,false);}catch(error){toast(error.message,true);return;}
   state.drafts.set(newDraftId,text);$('new-chat-error').hidden=true;
   let created=false;
   await action('create',async()=>{
@@ -1084,11 +1108,13 @@ async function sendMessage(e) {
   const text = $('message-input').value.trim(), id = state.selectedId;
   if ((!text&&!attachments?.has()) || attachments?.pending() || !id || !usable() || !controlled() || state.busy.has('message')) return;
   const active = running(), selection = state.selectionVersion;
+  try{composer.validateSend(text,active);}catch(error){toast(error.message,true);return;}
   const sent = state.drafts.capture(id,$('message-input').value), pictures=attachments.capture();
   await action('message',async () => {
     const images=pictures.items.map(i=>({url:i.url}));
     const payload = active ? {text,images} : {text,images,model:state.model,effort:state.effort,...composer.options()};
-    const d = await api('/api/threads/' + encodeURIComponent(id) + (active ? '/steer' : '/message'),{method:'POST',body:payload});
+    const goalStarted=await composer.prepareSend(id,text,active);
+    const d=await sendAfterGoal({goalStarted,id,payload,active,api});
     attachments.acknowledge(pictures);
     const cleared = state.drafts.acknowledge(sent);
     if (id === state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }
@@ -1096,6 +1122,19 @@ async function sendMessage(e) {
     if (active) toast('补充要求已发送到当前轮次。');
     try { if (id === state.selectedId && selection === state.selectionVersion) await refreshSelected(); } catch (err) { recordError(err,'thread'); }
   });
+}
+async function implementPlan(id,plan){
+  if(id!==state.selectedId||newChatOpen||state.desktopMode||!usable()||!controlled()||running()||state.busy.size||completedPlan(turns())?.turnId!==plan.turnId)throw Object.assign(new Error('会话状态已变化，请重新核对计划。'),{status:409});
+  const selection=state.selectionVersion;
+  state.busy.add('message');renderControls();
+  try{
+    const d=await api('/api/threads/'+encodeURIComponent(id)+'/message',{method:'POST',body:{text:implementationText(plan),mode:'default',access:WEB_ACCESS,model:state.model,effort:state.effort}});
+    if(id===state.selectedId&&selection===state.selectionVersion){
+      if(d.turn)upsertTurn(d.turn);
+      renderThread();
+      try{await refreshSelected();}catch(error){recordError(error,'thread');}
+    }
+  }finally{state.busy.delete('message');renderControls();}
 }
 async function sendDesktopMessage(){
   const id=state.selectedId,selection=state.selectionVersion,text=$('message-input').value.trim();
@@ -1315,7 +1354,7 @@ function wireEvents() {
   scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
   attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady(),busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});
-  composer=installComposer({host:targetHost,api,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
+  composer=installComposer({host:targetHost,api,implementPlan,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,desktop:state.desktopMode,turns:turns(),goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
   const settings = $('composer-settings');
   document.addEventListener('click',event => { if (!settings.contains(event.target)) settings.open = false; });
   settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); settings.open = false; settings.querySelector('summary').focus(); } });
@@ -1325,7 +1364,7 @@ function wireEvents() {
   $('task-notifications').onchange = event => setTaskNotifications(event.target.checked);
   $('test-notification').onclick = () => { if (taskNotificationsEnabled && Notification.permission === 'granted') sendTaskNotification('Codex · 测试通知','浏览器通知已接入。请检查设备通知中心。','codex-test'); };
   window.addEventListener('focus',renderTaskNotifications);
-  navigator.serviceWorker?.addEventListener('message',event=>{const data=event.data;if(data?.type==='rcm-notification-click' && data.host===targetHost && data.threadId)selectThread(data.threadId);});
+
   let autoRefresh = false;
   try { autoRefresh = localStorage.getItem('rcm.autoRefresh.' + targetHost) === 'true'; } catch {}
   setAutoRefresh(autoRefresh);
@@ -1410,15 +1449,21 @@ async function init() {
   showInspectorView('session');
   installMobile(api).catch(e=>{$('mobile-access-body').textContent=messageOf(e);});
   wireEvents(); renderStatus(); renderThread(); renderThreads(); setupEvents();
-  if(state.selectedId)restoreDetail(state.selectedId,state.selectionVersion);
+  window.dispatchEvent(new Event('rcm-ready'));
+  notificationNavigationReady=true;
+  const linkedThread=new URL(location.href).searchParams.get('thread');
+  const notification=pendingNotification || (linkedThread && requestedHost===targetHost?{host:targetHost,threadId:linkedThread}:null);
+  pendingNotification=null;
+  if(notification)openNotificationThread(notification);
+  else if(state.selectedId)restoreDetail(state.selectedId,state.selectionVersion);
   try { const c = await api('/api/csrf'); state.csrf = c.token; await loadStatus(); if (connected()) await refreshWorkspace(); else if (!connectionPending()) await connectRemote(); }
   catch (e) { recordError(e,'init'); const n = $('connection-banner'); n.hidden = false; n.className = 'connection-banner error'; n.textContent = messageOf(e); }
 }
 if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
-init();
+await init();
 
 $('connection-select').value=targetHost;
-$('connection-select').onchange=()=>{if(state.busy.has('create'))return;rememberHost($('connection-select').value);if(inputId())state.drafts.set(inputId(),$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',$('connection-select').value);location.assign(url);};
+$('connection-select').onchange=()=>{if(state.busy.has('create'))return;rememberHost($('connection-select').value);if(inputId())state.drafts.set(inputId(),$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',$('connection-select').value);url.searchParams.delete('thread');location.assign(url);};
 
 const clearRecovery=el('button','text-button','清除日志缓存并重新加载');
 clearRecovery.type='button';

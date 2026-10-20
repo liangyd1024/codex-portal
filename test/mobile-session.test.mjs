@@ -15,7 +15,7 @@ async function entrance(file,run){
   await new Promise(resolve=>app.proxyServer.listen(0,'127.0.0.1',resolve));
   const request=(url,{method='GET',cookie='',csrf='',body={}}={})=>new Promise((resolve,reject)=>{
     const req=http.request({hostname:'127.0.0.1',port:app.proxyServer.address().port,path:url,method,headers:{host:'phone.test',origin:'https://phone.test',cookie,'x-csrf-token':csrf}},res=>{
-      let text='';res.on('data',chunk=>text+=chunk);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,data:JSON.parse(text)}));
+      let text='';res.on('data',chunk=>text+=chunk);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,text,data:res.headers['content-type']?.includes('application/json')?JSON.parse(text):null}));
     });req.on('error',reject);req.end(method==='POST'?JSON.stringify(body):undefined);
   });
   try{await run(access,request);}finally{app.proxyServer.closeAllConnections();await new Promise(resolve=>app.proxyServer.close(resolve));}
@@ -53,4 +53,23 @@ test('restart preserves pending codes and permanent sessions without extending f
   now+=86400000*500;access=new MobileAccess(file,()=>now);assert.ok(access.valid(permanentReq));
   access.revoke();assert.equal(new MobileAccess(file,()=>now).valid(permanentReq),false);
   console.log('保留手机有效期测试目录：'+dir);
+});
+
+
+test('login script remains executable across authentication changes and app entry stays protected',async()=>{
+  const dir=await mkdtemp(path.join(tmpdir(),'rcm-phone-assets-'));
+  await entrance(path.join(dir,'sessions.json'),async(access,request)=>{
+    const page=await request('/');assert.match(page.text,/正在检查已有登录/);
+    const before=await request('/login.js');assert.equal(before.status,200);
+    const cookie=access.cookie(access.login(access.createCode().code)).split(';')[0];
+    const after=await request('/login.js',{cookie});
+    assert.equal(after.status,200);assert.match(after.headers['content-type'],/javascript/);
+    assert.equal(after.text,before.text);
+    const entry=await request('/',{cookie});assert.match(entry.text,/bootstrap.js/);
+    const bootstrap=await request('/bootstrap.js',{cookie});assert.equal(bootstrap.status,200);
+    assert.match(bootstrap.headers['content-type'],/javascript/);
+    assert.equal((await request('/bootstrap.js')).status,401);
+    assert.equal((await request('/app.js')).status,401);
+  });
+  console.log('保留手机资源测试目录：'+dir);
 });
