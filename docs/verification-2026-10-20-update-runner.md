@@ -18,3 +18,9 @@
 - launchd Standard 且 PATH 仅 /usr/bin:/bin:/usr/sbin:/sbin，无 npm；绝对 Node 执行共享入口，291 Node、55 Python 通过、exit 0，/tmp/rcm-runner-launchd.log。
 - 修复后 mobile-session 单项连续 20 次通过；共享入口测试验证 Node/Python 错误码传播及前项失败后不执行后项，诊断分类验证不泄露原始日志。
 - ego-browser 空间 38、独立 4327 预览、API fixture，错误长文案桌面及390px可读、无横向溢出、Tab焦点solid、失败后更新按钮可用。未改变输入流程，未测中文输入法和实体手机。未将模拟状态称为真实更新成功。
+
+## 双机部署
+
+6f63540df0382d2b46578459e4da02467ccb7fc1 已推送。Marco 标准部署完成，备份 marco-20261020T130227931760Z.tar.gz.age；正式同版本更新返回 succeeded/unchanged=true，旧失败提示已由真实新结果替代。
+
+Ally 使用正式服务的独立 Node 路径，在 PATH=/usr/bin:/bin:/usr/sbin:/sbin 下运行共享完整测试入口：291 Node、55 Python 通过（/tmp/rcm-runner-ally-tests.log）。标准部署完成，备份 ally-20261020T130338225559Z.tar.gz.age。两台只重启 RCM 网页，未停止原生引擎或任务。下一步使用此验收文档提交验证 Ally 网页更新真实完整链路。
