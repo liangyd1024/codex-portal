@@ -5,6 +5,7 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {loadConfig,supportDir} from '../lib/config.mjs';
 import {launchdService} from '../lib/launchd.mjs';
+import {deploymentLock} from '../lib/deployment-lock.mjs';
 import {assertDeploymentIdle} from '../lib/deployment-check.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const label='local.remote-codex-manager.web',domain=`gui/${process.getuid()}`,job=path.join(homedir(),'Library/LaunchAgents',label+'.plist');
@@ -12,6 +13,8 @@ const lifecycle=launchdService(domain,label);
 const run=(file,args,options={})=>{const r=spawnSync(file,args,{encoding:'utf8',...options});if(r.status!==0)throw Error(`${path.basename(file)} 失败：${r.stderr||r.stdout}`);return r.stdout.trim();};
 const flag=name=>{const i=process.argv.indexOf(name);return i>=0?process.argv[i+1]:null;};
 const ref=flag('--ref')||'HEAD',config=loadConfig();
+const lock=await deploymentLock(path.join(supportDir,'deployment.lock'),process.env.RCM_DEPLOYMENT_TOKEN);
+try {
 const commit=run('git',['-C',root,'rev-parse','--verify',ref+'^{commit}']);
 if(!/^[a-f0-9]{40}$/.test(commit))throw Error('版本无效。');
 if(run('git',['-C',root,'status','--porcelain']))throw Error('开发目录有未提交修改，请提交后按版本安装。');
@@ -48,7 +51,7 @@ try{
  let healthy=false;
  for(let i=0;i<90;i++){try{const r=await fetch('http://127.0.0.1:4317/api/version',{signal:AbortSignal.timeout(1000)});if(r.ok&&(await r.json()).version===commit){healthy=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}
  if(!healthy)throw Error('新版本未通过健康检查。');
- await writeFile(path.join(supportDir,'installed.json'),JSON.stringify({commit,machineId:config.machineId,app,installedAt:new Date().toISOString(),backup:backup.archive,previousPlist:previous?previousFile:null}),{mode:0o600});
+ await writeFile(path.join(supportDir,'installed.json'),JSON.stringify({commit,sourceRoot:root,sourceRemote:run('git',['-C',root,'remote','get-url','origin']),machineId:config.machineId,app,installedAt:new Date().toISOString(),backup:backup.archive,previousPlist:previous?previousFile:null}),{mode:0o600});
  console.log(`已部署 ${commit}，本机网页：http://127.0.0.1:4317`);
 }catch(error){
  await lifecycle.stop();
@@ -56,3 +59,5 @@ try{
  if(previous&&existing){let restored=false;for(let i=0;i<60;i++){try{const r=await fetch('http://127.0.0.1:4317/api/connections',{signal:AbortSignal.timeout(1000)});if(r.ok){restored=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}if(!restored)throw Error('原网页已重新注册但健康检查未通过，请检查日志。原始错误：'+error.message);}
  throw Error('部署失败，已恢复原网页配置：'+error.message);
 }
+
+} finally {await lock.release();}

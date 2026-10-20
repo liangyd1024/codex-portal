@@ -1,3 +1,4 @@
+import {installSystemUpdate} from './system-update.js';
 import {installAccountUsage} from './account-usage.js';
 let refreshAccountUsage;
 import {sendAfterGoal} from './goal-submit.js';
@@ -1427,6 +1428,7 @@ function wireEvents() {
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {
+  installSystemUpdate({api,flush:flushDrafts,resetCsrf:()=>{state.csrf='';}});
   refreshAccountUsage=installAccountUsage({node:$('account-usage'),api,connected,context:()=>targetHost+':'+state.status?.instanceId+':'+state.status?.connection?.connectedAt});
   $('account-usage').addEventListener('click',()=>toast($('account-usage').title));
   void refreshAccountUsage();
@@ -1445,7 +1447,7 @@ async function init() {
   const navigation=el('nav','inspector-nav');navigation.setAttribute('aria-label','工作区详情分类');
   inspector.querySelector('.inspector-heading').after(navigation);
   const groups=[...inspector.querySelectorAll(':scope > details')];
-  const category=group=>group.id==='mobile-access'?'mobile':group.id==='browser-backup'||group.classList.contains('connection-section')||group.id==='diagnostics'||group.querySelector('#task-notifications')?'settings':'session';
+  const category=group=>group.id==='mobile-access'?'mobile':group.id==='system-update'||group.id==='browser-backup'||group.classList.contains('connection-section')||group.id==='diagnostics'||group.querySelector('#task-notifications')?'settings':'session';
   const views=[['session','会话'],['mobile','手机访问'],['settings','设置']];
   function showInspectorView(view){
     groups.forEach(group=>{group.hidden=category(group)!==view;if(!group.hidden&&group.id!=='diagnostics')group.open=true;});
