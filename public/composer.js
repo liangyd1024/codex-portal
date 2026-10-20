@@ -125,10 +125,11 @@ export function installComposer({host,api,context,refresh,notify}) {
     goalBadge.setAttribute('aria-label',goalBadge.textContent+'，查看设置');
     badges.hidden=planBadge.hidden&&goalBadge.hidden;
     summary.textContent='＋';summary.title='添加图片、技能和工具';summary.dataset.mode=choice().mode;summary.setAttribute('aria-label',choice().mode==='plan'?'更多输入工具，计划模式':'更多输入工具');
-    for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||c.active;
+    // Attachments can accompany a native turn/steer while the current turn runs.
+    for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||(control!==images&&c.active);
     if(c.goalError){bar.querySelector('#goal-settings').textContent='目标（状态待确认）';bar.querySelector('#goal-settings').title='目标状态暂未读取，请刷新后重试。';}else{bar.querySelector('#goal-settings').textContent='目标';bar.querySelector('#goal-settings').title='设置目标';}
     bar.querySelector('#goal-settings').disabled ||= c.draft;bar.querySelector('#goal-settings').hidden=Boolean(c.draft);
-    summary.setAttribute('aria-disabled',String(!c.ready||c.busy||c.active));if(!c.ready||c.busy||c.active)tools.open=false;
+    summary.setAttribute('aria-disabled',String(!c.ready||c.busy));if(!c.ready||c.busy)tools.open=false;
     status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.

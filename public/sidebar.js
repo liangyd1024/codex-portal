@@ -91,9 +91,13 @@ export class Sidebar {
     const counts=new Map();
     const visit=item=>{if(item.kind==='project'){item.children.forEach(visit);return;}const source=this.source(item.value);if(source)counts.set(source,(counts.get(source)||0)+1);};
     items.forEach(visit);
-    for(const source of ['web','desktop'])if(counts.has(source)){
-      const badge=activityIcon(source,this.o.icon);badge.title=counts.get(source)+' 个会话'+(source==='web'?'在网页端':'在桌面端')+'运行中';badge.setAttribute('aria-label',badge.title);parent.append(badge);
-    }
+    if(!counts.size)return;
+    const total=[...counts.values()].reduce((sum,count)=>sum+count,0);
+    const badge=activityIcon(counts.has('web')?'web':'desktop',this.o.icon);
+    badge.className='activity-icon activity-running activity-summary';
+    badge.replaceChildren(make('span','',String(total)));
+    badge.title=total+' 个会话运行中（'+[counts.has('web')?'网页端 '+counts.get('web'):'',counts.has('desktop')?'桌面端 '+counts.get('desktop'):''].filter(Boolean).join('，')+'）';
+    badge.setAttribute('aria-label',badge.title);parent.append(badge);
   }
   renderProject(parent,item){
     const p=item.value,group=make('div','project-group'),header=make('div','project-heading');
