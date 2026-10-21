@@ -444,10 +444,10 @@ const sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadNa
 });
 function renderProjects() { renderThreads(); if(newChatOpen&&!state.busy.has('create')){updateNewProjects();renderControls();} }
 function renderThreads() {
-  setText('projects-heading',state.loadingProjects||state.loadingThreads?'工作区 · 同步中':'工作区');
+  setText('projects-heading','工作区');
   if(state.sidebar)sidebar.render({...state.sidebar,data:state.threads},{search:state.search,loading:state.loadingThreads});
   setText('breadcrumb-project',state.projects.find(p=>p.id===state.projectId)?.name||'工作区');
-  $('more-threads').hidden=!state.loadingThreads&&!state.threadPageError&&!state.threadCursor;
+  $('more-threads').hidden=!state.threadPageError&&!state.threadCursor&&(!state.loadingThreads||state.threads.length>0);
   $('more-threads').textContent=state.threadPageError?'加载失败，点击重试':state.loadingThreads?'正在加载会话…':'加载更多会话';
   $('more-threads').disabled=state.loadingThreads;
   $('more-threads').onclick=()=>loadThreads(Boolean(state.threadCursor));
@@ -1200,9 +1200,13 @@ async function moreHistory() {
     state.historyCursor = d.nextCursor || null; state.loadedOlderHistory = true; if (d.historySource === 'snapshot') state.detail.historySource = 'snapshot'; renderThread();
   }); } finally { $('messages-scroller').setAttribute('aria-busy','false'); }
 }
+let inputSizeKey;
 function resizeInput() {
   const t = $('message-input');
   if (!t.clientWidth) return;
+  const key=JSON.stringify([t.value,t.clientWidth,getComputedStyle(t).font,getComputedStyle(t).lineHeight]);
+  if(inputSizeKey===key)return;
+  inputSizeKey=key;
   t.style.height = '0px';
   const height = Math.max(34,t.scrollHeight);
   t.style.height = Math.min(160,height) + 'px';

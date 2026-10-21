@@ -127,13 +127,13 @@ test('sidebar reads do not wait for pending desktop notification delivery',async
 });
 test('sidebar failure is visible and controls unlock before a stalled refresh completes',async()=>{
  const events=[];let finish;
- const ui={enqueue:Sidebar.prototype.enqueue,pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(value){events.push(['busy',value]);},focusAnchor(){},
+ const ui={render(){},enqueue:Sidebar.prototype.enqueue,pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(value){events.push(['busy',value]);},focusAnchor(){},
  o:{connected:()=>true,api:async()=>{throw Error('目标响应超时');},toast:message=>{events.push(message);return {remove(){}};},refresh:()=>new Promise(resolve=>{events.push('refresh');finish=resolve;})}};
  await Sidebar.prototype.run.call(ui,'archive',{id:'t',revision:'r'});
  assert.ok(events.indexOf('目标响应超时')<events.indexOf('refresh'));assert.equal(ui.pending,false);assert.deepEqual(events.at(-1),['busy',false]);finish();
 });
 test('successful mutation is acknowledged before slow list refresh, and not reported as failed if refresh rejects',async()=>{
- const events=[];const ui={enqueue:Sidebar.prototype.enqueue,pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(){},focusAnchor(){},o:{connected:()=>true,api:async()=>{},toast:message=>{events.push(message);return {remove(){}};},changed:async()=>{assert.ok(events.includes('会话已归档'));throw Error('列表超时');},refresh:async()=>{}}};
+ const events=[];const ui={render(){},enqueue:Sidebar.prototype.enqueue,pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(){},focusAnchor(){},o:{connected:()=>true,api:async()=>{},toast:message=>{events.push(message);return {remove(){}};},changed:async()=>{assert.ok(events.includes('会话已归档'));throw Error('列表超时');},refresh:async()=>{}}};
  await Sidebar.prototype.run.call(ui,'archive',{id:'t'});
  assert.ok(events.includes('操作已完成，但刷新失败：列表超时'));assert.equal(ui.pending,false);
 });
@@ -164,7 +164,7 @@ test('archive refuses unavailable native history without attempting a write',asy
 
 function queuedUI(api,changed=async()=>{}){
  const messages=[];
- const ui=Object.assign(Object.create(Sidebar.prototype),{snapshot:{accountScope:'a'},progress:{},setBusy(){},focusAnchor(){},undo(){},o:{connected:()=>true,api,changed,refresh:async()=>{},toast:message=>{messages.push(message);return {remove(){}};}}});
+ const ui=Object.assign(Object.create(Sidebar.prototype),{snapshot:{accountScope:'a'},render(){},progress:{},setBusy(){},focusAnchor(){},undo(){},o:{connected:()=>true,api,changed,refresh:async()=>{},toast:message=>{messages.push(message);return {remove(){}};}}});
  return {ui,messages};
 }
 test('sidebar queues different targets, rejects duplicate clicks, and proceeds before a stalled refresh',async()=>{
@@ -188,4 +188,22 @@ test('account change cancels queued writes and ignores late success',async()=>{
  const a=ui.run('archive',{id:'a'}),b=ui.run('archive',{id:'b'});await new Promise(setImmediate);
  ui.snapshot={accountScope:'new'};finish();await Promise.all([a,b]);
  assert.deepEqual(writes,['a']);assert.deepEqual(changes,[]);assert.ok(!messages.includes('会话已归档'));assert.equal(ui.pending,false);
+});
+
+test('archive hides immediately through stale refreshes and rolls back without waiting for failure refresh',async()=>{
+ let reject;const {ui,messages}=queuedUI(()=>new Promise((_,r)=>reject=r));
+ const t={id:'a'},other={id:'b'};ui.snapshot={accountScope:'a',data:[t,other]};
+ const shown=[];ui.render=function(s){shown.push(this.archiveDisplay(s).data.map(t=>t.id));};
+ const work=ui.run('archive',t);assert.deepEqual(shown.at(-1),['b']);
+ assert.deepEqual(ui.snapshot.data,[t,other]);
+ ui.render({...ui.snapshot});assert.deepEqual(shown.at(-1),['b']);
+ assert.deepEqual(ui.archiveDisplay({...ui.snapshot,accountScope:'other'}).data,[t,other]);
+ await new Promise(setImmediate);reject(Error('权限不足'));await work;
+ assert.deepEqual(shown.at(-1),['a','b']);assert.ok(messages.includes('权限不足'));
+});
+test('confirmed archive stays hidden when refresh fails, but remains visible in archived view',async()=>{
+ const {ui}=queuedUI(async()=>{},async()=>{throw Error('刷新失败');});
+ const t={id:'a'};ui.snapshot={accountScope:'a',data:[t]};await ui.run('archive',t);
+ assert.deepEqual(ui.archiveDisplay(ui.snapshot).data,[]);
+ assert.deepEqual(ui.archiveDisplay({...ui.snapshot,archived:true}).data,[t]);
 });

@@ -61,11 +61,18 @@ export class Sidebar {
     if(this.view?.search!==view.search){this.searchOverrides.clear();this.searchExpanded=true;}
     this.view=view;if(!snapshot)return;if(this.drag){this.snapshot=snapshot;return;}
     this.snapshot=snapshot;
+    if(!snapshot.archived&&!view.search&&!snapshot.nextCursor)for(const [key,t] of this.archiving||[]){
+      if(key===snapshot.accountScope+':'+t.id&&!this.operations?.has(key)&&!snapshot.data.some(row=>row.id===t.id))this.archiving.delete(key);
+    }
     if(this.scope!==snapshot.accountScope){this.scope=snapshot.accountScope;try{const saved=JSON.parse(localStorage.getItem(this.key())||'[]');this.expanded=new Set(Array.isArray(saved)?saved.filter(k=>typeof k==='string'):[]);}catch{this.expanded=new Set();}this.searchOverrides.clear();this.searchExpanded=true;this.closeMenu(false);this.undoNode?.remove();}
     this.archiveButton.textContent=snapshot.archived?'返回会话':'已归档';this.archiveButton.setAttribute('aria-pressed',String(snapshot.archived));
+    const display=this.archiveDisplay(snapshot);
+    const shape=JSON.stringify([display,view.search,display.data.length?false:view.loading,this.o.selectedId(),this.o.connected(),[...this.expanded],[...this.searchOverrides],this.searchExpanded,display.data.map(t=>[this.source(t),this.o.needsAnswer?.(t.id),this.o.relativeTime(t.recencyAt||t.updatedAt)])],(key,value)=>key==='observedAt'?undefined:value);
+    if(shape===this.renderShape){this.setBusy(this.pending);return;}
+    this.renderShape=shape;
     const focused=document.activeElement?.dataset?.focusKey,scroll=this.node.parentElement.scrollTop;
     this.node.replaceChildren();
-    for(const group of sidebarGroups(snapshot)){
+    for(const group of sidebarGroups(display)){
       const items=group.items.filter(i=>!view.search||i.kind==='thread'||i.children.length);
       if(view.search&&!items.length)continue;
       const wrap=make('section','sidebar-group'),header=make('div','sidebar-group-heading');
@@ -82,6 +89,10 @@ export class Sidebar {
     if(!this.node.childElementCount)this.node.append(make('p','sidebar-empty',view.loading?'正在读取…':view.search?'没有匹配的会话':snapshot.archived?'暂无已归档会话':'暂无会话'));
     if(focused)[...this.node.querySelectorAll('[data-focus-key]')].find(n=>n.dataset.focusKey===focused)?.focus({preventScroll:true});
     this.node.parentElement.scrollTop=scroll;this.setBusy(this.pending);
+  }
+  archiveDisplay(snapshot){
+    if(snapshot.archived||!this.archiving?.size)return snapshot;
+    return {...snapshot,data:snapshot.data.filter(t=>!this.archiving.has(snapshot.accountScope+':'+t.id))};
   }
   setBusy(pending){
     this.node.setAttribute('aria-busy',String(pending));this.progress.hidden=!pending;
@@ -197,6 +208,9 @@ export class Sidebar {
     const anchor=this.menuAnchor,dialog=propagate?this.dialog:null;
     if(dialog)dialog.dataset.busy='true';
     this.operations.set(key,action);this.pending=true;this.setBusy(true);
+    this.archiving??=new Map();
+    if(action==='archive'){this.archiving.set(key,target);this.render(this.snapshot,this.view);}
+    if(action==='restore')this.archiving.delete(key);
     const current=()=>this.snapshot.accountScope===scope;
 
     const label=action==='archive'?'正在归档会话…':action==='restore'?'正在恢复会话…':'正在更新…';
@@ -212,16 +226,17 @@ export class Sidebar {
       this.progress.textContent='正在刷新列表…';
       await this.o.changed(action,target);
       if(!current())return;
-      if(action==='archive')this.undo(target.id);if(action==='restore'&&this.undoId===target.id)this.undoNode?.remove();
+      if(action==='archive'){if(!this.snapshot.archived&&!this.snapshot.data?.some(t=>t.id===target.id))this.archiving.delete(key);this.undo(target.id);}if(action==='restore'&&this.undoId===target.id)this.undoNode?.remove();
     }catch(error){
       // Show the outcome before another potentially slow remote read.
       clearTimeout(slow);notice?.remove();
       if(!current())return;
+      if(action==='archive'&&!completed&&error.code!=='DESKTOP_SYNC_FAILED'){this.archiving.delete(key);this.render(this.snapshot,this.view);}
       this.o.toast(completed?'操作已完成，但刷新失败：'+error.message:error.message,true);
       void this.o.refresh().catch(()=>{});
       if(propagate)throw error;
     }
-    finally{clearTimeout(slow);notice?.remove();this.operations.delete(key);this.pending=this.operations.size>0;this.setBusy(this.pending);this.progress.textContent=this.pending?'正在处理会话…':'正在更新…';if(dialog)dialog.dataset.busy='false';if(!this.dialog&&globalThis.document?.activeElement===globalThis.document?.body&&this.menuAnchor===anchor)this.focusAnchor();}
+    finally{clearTimeout(slow);notice?.remove();if(!current())this.archiving.delete(key);this.operations.delete(key);this.pending=this.operations.size>0;this.setBusy(this.pending);this.progress.textContent=this.pending?'正在处理会话…':'正在更新…';if(dialog)dialog.dataset.busy='false';if(!this.dialog&&globalThis.document?.activeElement===globalThis.document?.body&&this.menuAnchor===anchor)this.focusAnchor();}
   }
 
   undo(id){
