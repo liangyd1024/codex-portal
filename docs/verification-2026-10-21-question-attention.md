@@ -36,3 +36,5 @@ ego-browser space 69，借用既有 4327 预览的静态资源；所有 API 请�
 ## 提交与部署
 
 工作期间发现其他会话正在修改 public/app.js、public/sidebar.js 和 test/sidebar-actions.test.mjs。保留其改动；对方已提交为 `2cb0a81`。本次基于该 master，仅提交提问功能及证据。部署结果随后补录。
+
+功能提交 `7b5d503` 已推送 origin/master。标准安装命令 `node scripts/install-local.mjs --ref 7b5d503` 因其他会话再次产生未提交修改，在干净工作区检查退出（码 1）。没有进入备份、重启和新版健康检查；正式版本仍为 `e08b6899944a2a520e4a92a145ca6bef8e09799c`。日志 `/tmp/rcm-attention-install.log`。本次截图是预览验收，不能标为已上线。
