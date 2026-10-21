@@ -523,8 +523,9 @@ function renderItem(item) {
     if(/^data:image\/(png|jpeg|webp|gif);base64,/.test(path))return imageCard(path,label||'回复图片');
     return null;
   }});
-  if (item.type === 'userMessage') {
-    const m=el('div','message user'),bubble=el('div','user-bubble'),content=userMessageContent(item.content);
+  if (item.type === 'userMessage' || item.type === 'goalMessage') {
+    const m=el('div','message user'),bubble=el('div','user-bubble'),content=item.type==='goalMessage'?{text:item.objective,images:[]}:userMessageContent(item.content);
+    if(item.type==='goalMessage'){m.setAttribute('aria-label','目标');bubble.append(el('div','goal-message-label','目标'));}
     if(content.text)bubble.append(el('div','user-message-text',content.text));
     for(const part of content.images){
       const src=part.type==='image'&&/^data:image\/(png|jpeg|webp|gif);base64,/.test(part.url||'')?part.url:imageUrl({part:part.index});

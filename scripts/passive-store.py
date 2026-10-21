@@ -601,6 +601,60 @@ def read_outputs(payload):
     finally: db.close()
 
 
+def goal_input_items(connection, identifier, turn_ids):
+    """Read explicit user goal records between native turns, without replaying them.
+
+    goal/set starts execution without a userMessage item. Like Desktop's goal
+    transcript entry, display the objective from the native acknowledgement.
+    Automatic goal continuations and status-only changes are not user inputs.
+    """
+    columns = {row['name'] for row in connection.execute('PRAGMA table_info(thread_turns)')}
+    if not {'rollout_byte_offset', 'rollout_end_byte_offset'} <= columns or not turn_ids:
+        return {}
+    try:
+        state = connect_store('state_5.sqlite')
+        try:
+            row = state.execute('SELECT rollout_path FROM threads WHERE id=?', (identifier,)).fetchone()
+        finally:
+            state.close()
+        if not row or not row[0]: return {}
+        path = pathlib.Path(row[0]).resolve()
+        if not path.is_relative_to(STORE.resolve()): return {}
+        result = {}
+        with path.open('rb') as stream:
+            for turn_id in turn_ids:
+                turn = connection.execute('SELECT rollout_ordinal,rollout_byte_offset FROM thread_turns WHERE thread_id=? AND turn_id=?', (identifier, turn_id)).fetchone()
+                if not turn or turn['rollout_byte_offset'] is None: continue
+                previous = connection.execute('SELECT rollout_end_byte_offset FROM thread_turns WHERE thread_id=? AND rollout_ordinal<? ORDER BY rollout_ordinal DESC LIMIT 1', (identifier, turn['rollout_ordinal'])).fetchone()
+                start = previous[0] if previous else 0
+                end = turn['rollout_byte_offset']
+                if start is None or start < 0 or start > end: continue
+                stream.seek(start)
+                explicit = None
+                items = []
+                while stream.tell() < end:
+                    line = stream.readline()
+                    if not line: break
+                    try: record = json.loads(line)
+                    except (ValueError, UnicodeDecodeError): continue
+                    value = record.get('payload') or {}
+                    if record.get('type') == 'response_item' and value.get('type') == 'message' and value.get('role') == 'user':
+                        parts = value.get('content') or []
+                        text = '\n'.join(part.get('text', '') for part in parts if part.get('type') == 'input_text')
+                        kinds = (value.get('internal_chat_message_metadata_passthrough') or {}).get('content_item_kinds') or []
+                        explicit = value.get('id') if 'user.goal' in kinds and text.startswith('<codex_internal_context source="user_goal">\nUser set the goal: ') else None
+                    elif record.get('type') == 'event_msg' and value.get('type') == 'thread_goal_updated' and explicit:
+                        goal = value.get('goal') or {}
+                        if value.get('threadId') == identifier and isinstance(goal.get('objective'), str) and isinstance(goal.get('updatedAt'), (int, float)):
+                            items.append({'id': explicit, 'type': 'goalMessage', 'objective': goal['objective'], 'createdAtMs': goal['updatedAt'] * 1000})
+                        explicit = None
+                if items: result[turn_id] = items
+        return result
+    except (OSError, sqlite3.Error, RuntimeError):
+        # Optional native rollout may be unavailable; preserve ordinary history.
+        return {}
+
+
 def read_history(payload):
     # On a new installation even the history database is absent until the first
     # turn. Only the manager's successful new-thread path may allow that absence.
@@ -624,6 +678,7 @@ def read_history(payload):
         sql = 'SELECT ' + ', '.join(TURN_COLUMNS) + ' FROM thread_turns WHERE ' + ' AND '.join(conditions)
         sql += ' ORDER BY rollout_ordinal DESC, turn_id DESC LIMIT ?'
         rows = connection.execute(sql, parameters + [6]).fetchall()
+        goal_inputs = goal_input_items(connection, identifier, [row['turn_id'] for row in rows[:5]])
         outputs = read_outputs({**payload, 'turnIds': [row['turn_id'] for row in rows[:5]]})['data'] if payload.get('withOutputs') else []
         journal_ids = [entry['item']['id'] for entry in outputs]
         item_sql = "CASE WHEN json_extract(item_json,'$.type')='commandExecution' THEN json_set(item_json,'$.aggregatedOutput',substr(coalesce(json_extract(item_json,'$.aggregatedOutput'),''),1,16384),'$.outputPartial',json('true')) ELSE item_json END" if payload.get('preview') else 'item_json'
@@ -645,7 +700,7 @@ def read_history(payload):
                 'startedAt': row['started_at'],
                 'completedAt': row['completed_at'],
                 'durationMs': row['duration_ms'],
-                'items': [history_item(item, identifier) for item in items],
+                'items': goal_inputs.get(row['turn_id'], []) + [history_item(item, identifier) for item in items],
             })
         if not payload.get('preview'):
             for turn in turns:

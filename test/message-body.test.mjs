@@ -78,3 +78,12 @@ test('file resolver preserves formatted link labels and ignores fenced code and 
  const calls=[];const body=markdown('[**视频**](</tmp/中文 (1).mp4>)\n\n`[例子](/tmp/no.mp4)`\n\n```md\n[代码](/tmp/no.mp4)\n```',0,{file:(path,label)=>{calls.push({path,label});return new Node('a');}});
  assert.equal(all(body,'A').length,1);assert.equal(all(body,'A')[0].textContent,'视频');assert.equal(all(body,'STRONG').length,1);assert.deepEqual(calls,[{path:'/tmp/中文 (1).mp4',label:'**视频**'}]);
 });
+
+test('native goal inputs remain visible before completed process and final answer',()=>{
+  const goal={id:'native-goal',type:'goalMessage',objective:'目标原文'};
+  const groups=groupTurnItems({status:'completed',items:[goal,{id:'tool',type:'commandExecution'},{id:'answer',type:'agentMessage',phase:'final_answer',text:'完成'}]});
+  assert.equal(groups[0].type,'message');
+  assert.equal(groups[0].item,goal);
+  assert.equal(groups[1].type,'process');
+  assert.equal(groups[2].item.id,'answer');
+});
