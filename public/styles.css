@@ -490,3 +490,22 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 @media(prefers-reduced-motion:reduce){.system-update-progress{animation:none}}
 
 .system-update-versions{white-space:pre-line;font-size:12px;line-height:1.8;overflow-wrap:anywhere}
+
+/* Keep question typography independent of the legacy approval-card palette. */
+.question-form{font-family:var(--font-ui);font-size:16px;line-height:1.625}
+.request-card .question-label{font-size:16px;line-height:1.625;color:var(--ink);font-weight:500;margin:0 0 12px}
+.request-card:has(.question-form) .request-origin{color:#737773;font-size:12px}
+.question-form .question-heading{color:#626762;font-size:14px;margin-bottom:12px}
+.question-form .question-option{font-size:16px;line-height:1.625;min-height:44px;align-items:flex-start;gap:10px;padding:10px 12px;margin:6px 0;border:1px solid var(--line);border-radius:10px}
+.question-form .question-option:has(input:checked){background:#f3f5f2;border-color:#b9c4b7}
+.question-form .question-option input{width:16px;height:16px;margin:5px 0 0;flex-shrink:0}
+.question-form .question-option span small{font-size:14px;line-height:1.625;color:#737773}
+.question-form .question-other{font:inherit;color:var(--ink);margin-top:8px;max-height:160px;resize:vertical}
+.question-form .question-other::placeholder{color:#858985}
+.question-form .request-actions button{font-size:14px;min-height:44px;padding:8px 16px;background:#f2f3f1;color:#555b55}
+.question-form .request-actions .accept{background:#242825;color:#fff}
+.question-form .question-close{min-width:44px;min-height:44px}
+/* Reserve the composer's actual height; only the question list may shrink. */
+.conversation>.composer-region{flex:0 0 auto;display:flex;flex-direction:column;min-height:0;max-height:70%}
+.conversation>.composer-region>*{flex-shrink:0}
+.conversation>.composer-region>.conversation-requests{flex:0 1 auto;min-height:0;overscroll-behavior:contain;padding:4px}
