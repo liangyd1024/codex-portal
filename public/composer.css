@@ -86,3 +86,17 @@
 .skill-suggestions .skill-description{min-width:0;color:#7b807b}
 .skill-suggestions .skill-source{max-width:140px;font-size:14px;color:#858985}
 @media(max-width:600px){.skill-suggestions button{grid-template-columns:18px minmax(0,1fr) auto;gap:2px 8px}.skill-suggestions strong{grid-column:2;white-space:normal;overflow-wrap:anywhere}.skill-suggestions .skill-source{grid-column:3;grid-row:1;max-width:84px}.skill-suggestions .skill-description{grid-column:2 / -1;font-size:14px}.skill-suggestions .icon{grid-column:1;grid-row:1}}
+
+/* Shared by new and existing conversations; keep composer chrome monochrome. */
+.composer{--ink:#000;--muted:#666;--line:#000;--soft:#f5f5f5;color:#000;border-color:#000;box-shadow:0 2px 10px #00000006}
+.composer:focus-within{border-color:#000;box-shadow:0 0 0 2px #00000014}
+.composer textarea,.composer .mention-input-wrap textarea{color:#000;caret-color:#000}
+.composer textarea::placeholder{color:#666}
+.composer .mention-mirror{color:#000}
+.composer .has-mentions textarea{color:transparent;-webkit-text-fill-color:transparent}
+.composer .composer-settings summary,.composer .composer-options summary,.composer .select-control select,.composer .composer-tools{color:#000}
+.composer .send-button,.composer .stop-button{background:#000;color:#fff}
+.composer .send-button:hover:not(:disabled),.composer .stop-button:hover:not(:disabled){background:#222}
+.composer .send-button:disabled{background:#eee;color:#888;opacity:1}
+.composer :is(button,input,select,textarea,summary):focus-visible{outline-color:#000}
+@media(forced-colors:active){.composer .has-mentions textarea{color:CanvasText;-webkit-text-fill-color:CanvasText}}
