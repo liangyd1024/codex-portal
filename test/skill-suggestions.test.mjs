@@ -24,3 +24,15 @@ test('multiple mentions and repeated references keep their exact positions',()=>
 test('sentence punctuation keeps a skill mention active',()=>{
  assert.deepEqual(mentionRanges('Use $create.',refs).map(r=>r.key),['/one']);
 });
+import {matchingSkills,skillPresentation} from '../public/skill-suggestions.js';
+test('skill names and native display names rank ahead of description-only matches',()=>{
+ const rows=[{name:'dingtalk',description:'MultiSkill',path:'/a',enabled:true},{name:'multica-cli',path:'/b',enabled:true,interface:{displayName:'Multica CLI',shortDescription:'Operate Multica'}},{name:'media',path:'/c',enabled:true,interface:{displayName:'Music to Video'}},{name:'disabled',path:'/d',enabled:false,description:'mu'}];
+ assert.deepEqual(matchingSkills(rows,'mu').map(e=>e.path),['/b','/c','/a']);
+ assert.deepEqual(matchingSkills(rows,'multica cli').map(e=>e.path),['/b']);
+ assert.deepEqual(skillPresentation(rows[1]),{name:'Multica CLI',description:'Operate Multica',source:''});
+});
+test('deduplicate only identical paths and preserve native selection identities',()=>{
+ const a={name:'same',path:'/one/SKILL.md',enabled:true,scope:'user'},b={...a,path:'/two/SKILL.md',scope:'repo'};
+ assert.deepEqual(matchingSkills([a,a,b],''),[a,b]);assert.equal(skillPresentation(a).source,'个人');assert.equal(skillPresentation(b).source,'项目');
+ assert.equal(skillPresentation({...a,shortDescription:'short',description:'long'}).description,'short');
+});
