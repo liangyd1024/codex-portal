@@ -89,3 +89,17 @@ test('sending revalidates cached capabilities and preserves read failure semanti
  await composerCatalog(m,'/project','skills');m.rpc.request=async()=>{throw Error('offline');};
  await assert.rejects(turnOptions(m,'a',{skills:['/skills/SKILL.md']},{}),/暂时无法读取/);
 });
+test('running-turn steering includes verified skills and plugins without changing turn settings',async()=>{
+ const {m,calls}=fixture();m.controlled.set('a',{cwd:'/project',status:{type:'active'}});m.activeTurns.set('a','running');
+ await m.steer('a',{text:'请用 $skill 补充验证',skills:['/skills/SKILL.md'],plugins:['plugin'],mode:'plan',access:'full'});
+ const request=calls.find(c=>c.method==='turn/steer').params;
+ assert.equal(request.expectedTurnId,'running');assert.equal(request.input[0].text,'请用 $skill 补充验证');assert.deepEqual(request.input[1],{type:'skill',name:'skill',path:'/skills/SKILL.md'});assert.match(request.input[2].text,/插件/);
+ assert.equal(request.collaborationMode,undefined);assert.equal(request.approvalPolicy,undefined);assert.equal(calls.some(c=>c.method==='turn/start'),false);
+});
+test('running skill selection rejects stale paths and connection changes before steering',async()=>{
+ for(const scenario of ['missing','connection']){
+  const {m,calls}=fixture();m.controlled.set('a',{cwd:'/project',status:{type:'active'}});m.activeTurns.set('a','running');
+  const request=m.rpc.request;m.rpc.request=async(method,params)=>{const result=await request(method,params);if(scenario==='connection'&&method==='skills/list')m.generation++;return result;};
+  await assert.rejects(m.steer('a',{text:'use skill',skills:[scenario==='missing'?'/untrusted':'/skills/SKILL.md']}));assert.equal(calls.some(c=>c.method==='turn/steer'),false);
+ }
+});

@@ -1142,7 +1142,8 @@ async function sendMessage(e) {
   const sent = state.drafts.capture(id,$('message-input').value), pictures=attachments.capture();
   await action('message',async () => {
     const images=pictures.items.map(i=>({url:i.url}));
-    const payload = active ? {text,images} : {text,images,model:state.model,effort:state.effort,...composer.options()};
+    const options=composer.options();
+    const payload = active ? {text,images,skills:options.skills,plugins:options.plugins} : {text,images,model:state.model,effort:state.effort,...options};
     const goalStarted=await composer.prepareSend(id,text,active);
     const d=await sendAfterGoal({goalStarted,id,payload,active,api});
     attachments.acknowledge(pictures);

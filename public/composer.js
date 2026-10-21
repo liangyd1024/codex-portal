@@ -114,7 +114,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
   function render(){
     planCompletion.render();
     const c=context();if(selected!==JSON.stringify([c.id,c.cwd])){selected=JSON.stringify([c.id,c.cwd]);suggestions.close();if(dialog.open)dialog.close();}
-    if(!c.ready||c.busy||c.active)suggestions.close();
+    if(!c.ready||c.busy)suggestions.close();
     syncReferences();mirror.render();
     mode.title=choice().mode==='plan'?'退出计划模式':'计划：先制定方案';
     mode.setAttribute('aria-pressed',String(choice().mode==='plan'));
@@ -126,7 +126,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
     badges.hidden=planBadge.hidden&&goalBadge.hidden;
     summary.textContent='＋';summary.title='添加图片、技能和工具';summary.dataset.mode=choice().mode;summary.setAttribute('aria-label',choice().mode==='plan'?'更多输入工具，计划模式':'更多输入工具');
     // Attachments can accompany a native turn/steer while the current turn runs.
-    for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||goalUpdating||(control!==images&&c.active);
+    for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||goalUpdating||(control!==images&&control.id!=='skill-picker'&&control.id!=='plugin-picker'&&c.active);
     goalButton.title='用下一条输入设置目标';goalButton.setAttribute('aria-pressed',String(Boolean(choice().goalPending)));
     for(const {button,value} of goalActions)button.hidden=c.draft||!c.goal||Boolean(c.goalError)||(value==='paused'?c.goal.status!=='active':value==='active'?c.goal.status!=='paused':c.goal.status==='complete');
     summary.setAttribute('aria-disabled',String(!c.ready||c.busy));if(!c.ready||c.busy)tools.open=false;

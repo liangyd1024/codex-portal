@@ -48,3 +48,7 @@ test('goal attachments use native steering when running and preserve errors for 
  }
  await assert.rejects(sendAfterGoal({goalStarted:true,id:'test',payload:{images:[{}]},api:async()=>{throw Error('offline');}}),/offline/);
 });
+test('steering preserves selected references but drops next-turn model and permission settings',async()=>{
+ let call;await sendAfterGoal({id:'running',active:true,payload:{text:'$skill',images:[],skills:['/skill'],plugins:['plugin'],mode:'plan',model:'other',access:'full'},api:async(...args)=>{call=args;}});
+ assert.equal(call[0],'/api/threads/running/steer');assert.deepEqual(call[1].body,{text:'$skill',images:[],skills:['/skill'],plugins:['plugin']});
+});

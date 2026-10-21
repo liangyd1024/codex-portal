@@ -25,9 +25,9 @@ export function installSkillSuggestions({input,api,context,select}) {
   const close=()=>{version++;box.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');};
   const position=()=>{if(box.hidden)return;const r=input.getBoundingClientRect(),v=window.visualViewport;box.style.left=Math.max(8,r.left)+'px';box.style.width=Math.max(0,Math.min(r.width,(v?.width||innerWidth)-16))+'px';box.style.bottom=Math.max(8,innerHeight-r.top+8)+'px';box.style.maxHeight=Math.max(60,Math.min(300,r.top-(v?.offsetTop||0)-16))+'px';};
   const highlight=()=>{[...box.querySelectorAll('[role=option]')].forEach((node,i)=>node.setAttribute('aria-selected',String(i===index)));const node=box.querySelectorAll('[role=option]')[index];if(node){input.setAttribute('aria-activedescendant',node.id);node.scrollIntoView({block:'nearest'});}};
-  const choose=entry=>{if(!query||input.disabled||!context().ready||context().busy||context().active)return;const range={...query};close();select(entry,range);};
+  const choose=entry=>{if(!query||input.disabled||!context().ready||context().busy)return;const range={...query};close();select(entry,range);};
   async function update(){
-    close();rows=[];if(composing||input.disabled||!context().ready||context().busy||context().active)return;
+    close();rows=[];if(composing||input.disabled||!context().ready||context().busy)return;
     query=skillQuery(input.value,input.selectionStart);if(!query)return;
     const stamp=version,id=context().id,cwd=context().cwd,value=input.value,caret=input.selectionStart;
     box.replaceChildren();box.hidden=false;input.setAttribute('aria-expanded','true');position();box.textContent='正在读取技能…';input.removeAttribute('aria-activedescendant');
