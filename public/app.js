@@ -1,3 +1,5 @@
+import {installCapacityRetry} from './capacity-retry.js';
+let capacityRetry;
 import {installSystemUpdate} from './system-update.js';
 import {installAccountUsage} from './account-usage.js';
 let refreshAccountUsage;
@@ -337,6 +339,7 @@ function renderConnectionBanner() {
   else banner.hidden = true;
 }
 function renderControls() {
+  capacityRetry?.tick();
   renderConnectionBanner();
   const ready = usable(), own = newChatOpen||controlled()&&!state.selectedArchived, active = !newChatOpen&&running();
   const background = backgroundActivity(state.detail,{controlled:own,connected:ready});
@@ -1368,6 +1371,9 @@ function wireEvents() {
   document.querySelector('.main-panel').classList.toggle('desktop-chat',state.desktopMode);
   setInterval(()=>{if(automations.opened&&!document.hidden)void automations.refresh();},15000);
 
+  capacityRetry=installCapacityRetry({container:document.querySelector('.composer-region'),storage:sessionStorage,
+    context:()=>({host:targetHost,id:state.selectedId,turns:!newChatOpen&&!state.desktopMode?turns():[],ready:!newChatOpen&&!state.desktopMode&&usable()&&controlled()&&!running()&&!uncertainHistory()&&!state.loadingDetail&&!state.historyError&&!state.busy.size}),
+    send:async(c,turnId,automatic)=>{const result=await api('/api/threads/'+encodeURIComponent(c.id)+'/retry-capacity',{method:'POST',body:{turnId,automatic,model:state.model,effort:state.effort,mode:composer.options().mode}});if(c.host===targetHost&&c.id===state.selectedId){upsertTurn(result.turn);renderThread();scheduleDetailRefresh();}}});
   scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
   attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady(),busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});

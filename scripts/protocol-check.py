@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 6
+PROTOCOL_POLICY = 7
 REQUEST_FIELDS = {
     'account/read': set(),
     'thread/archive': {'threadId'},
@@ -30,6 +30,7 @@ REQUEST_FIELDS = {
     'thread/backgroundTerminals/terminate': {'threadId','processId'},
     'thread/queue/list': {'threadId', 'limit'},
     'turn/start': {'threadId', 'input', 'model', 'effort', 'approvalPolicy', 'sandboxPolicy', 'collaborationMode'},
+    'thread/turns/list': {'threadId','limit','sortDirection','itemsView'},
     'collaborationMode/list': set(),
     'skills/list': {'cwds'},
     'plugin/installed': {'cwds'},
@@ -38,6 +39,7 @@ REQUEST_FIELDS = {
     'turn/interrupt': {'threadId', 'turnId'},
 }
 FEATURE_METHODS = {
+    'capacityRetry': ['turn/start','thread/read','thread/turns/list'],
     'plan': ['collaborationMode/list','turn/start'],
     'skills': ['skills/list','turn/start'],
     'plugins': ['plugin/installed','turn/start'],
@@ -89,6 +91,9 @@ def validate_request_schema(schema):
     for feature, required in FEATURE_METHODS.items():
         reasons = [failures[method] for method in required if method in failures]
         features[feature] = {'supported': not reasons, 'reason': '；'.join(reasons)}
+    retry_fields = {'clientUserMessageId', 'turnTrigger'}
+    if not retry_fields.issubset(methods.get('turn/start', {}).get('properties', {})):
+        features['capacityRetry'] = {'supported': False, 'reason': 'turn/start 缺少原生重试标识参数'}
     return {'status': 'limited' if failures else 'validated', 'methods': len(REQUEST_FIELDS)-len(failures), 'features': features, 'unsupportedMethods': list(failures), 'policy': PROTOCOL_POLICY}
 
 

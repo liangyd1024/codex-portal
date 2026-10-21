@@ -509,3 +509,6 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .conversation>.composer-region{flex:0 0 auto;display:flex;flex-direction:column;min-height:0;max-height:70%}
 .conversation>.composer-region>*{flex-shrink:0}
 .conversation>.composer-region>.conversation-requests{flex:0 1 auto;min-height:0;overscroll-behavior:contain;padding:4px}
+
+.capacity-retry{display:flex;align-items:center;flex-wrap:wrap;gap:8px;width:100%;max-width:var(--conversation-width);margin:0 auto 8px;font-size:14px;line-height:1.625;color:var(--ink)}
+.capacity-retry span{flex:1 1 220px}.capacity-retry button{min-height:44px}
