@@ -74,7 +74,7 @@ export function taskNotice(method, params, {host, known}) {
   }
   if (method === 'manager/request') {
     if (request.id == null) return null;
-    const labels = {question:'需要你回答',approval:'需要你审批',permissions:'需要你授权',elicitation:'需要你处理'};
+    const labels = {asyncQuestion:'需要你回答',question:'需要你回答',approval:'需要你审批',permissions:'需要你授权',elicitation:'需要你处理'};
     const itemId=request.params?.itemId;
     const identity=itemId?['request',request.params?.turnId,itemId,request.method]:['request',typeof request.id,request.id];
     return notice(identity,labels[request.kind] || '需要你处理',true);

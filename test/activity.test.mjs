@@ -66,3 +66,10 @@ test('ended process summaries use live item identity instead of stale historical
  const terminals=[{processId:'a'},{processId:'b'}];
  assert.match(conversationActivity({}, {controlled:true,connected:true,background:{state:'running',terminals}}).detail,/2 个后台命令/);
 });
+test('unanswered questions take visual precedence without changing execution status',()=>{
+ const c={connected:true,controlled:true,active:true,needsAnswer:true};
+ assert.equal(conversationActivity({},c).kind,'question');
+ assert.equal(conversationActivity({},c).label,'需要你回答');
+ assert.equal(conversationActivity({},{...c,needsAnswer:false}).kind,'turn');
+ assert.equal(conversationActivity({},{...c,connected:false}),null);
+});

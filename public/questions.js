@@ -30,3 +30,27 @@ export class QuestionDrafts {
   clear(r){delete this.values[this.keyFor(r)];this.save();}
   save(){try{this.storage.setItem(this.key,JSON.stringify(this.values));}catch{this.onError();}}
 }
+
+// Ephemeral display state derived only from native questions and accepted replies.
+export class PendingQuestions {
+  entries=new Map();answered=new Set();finished=new Set();
+  clear(){this.entries.clear();this.answered.clear();this.finished.clear();}
+  remember(set,key){set.add(key);if(set.size>10000)set.delete(set.values().next().value);}
+  update(method,p) {
+    const before=new Map(this.entries),id=p.threadId||p.thread?.id;
+    if(method==='turn/completed')this.remember(this.finished,JSON.stringify([id,p.turn?.id]));
+    if(method==='thread/closed'||method==='turn/completed')for(const [key,r] of this.entries)if(r.threadId===id&&(method==='thread/closed'||r.params.turnId===p.turn?.id))this.entries.delete(key);
+    if(['item/started','item/completed'].includes(method)&&id&&p.turnId&&p.item&&!this.finished.has(JSON.stringify([id,p.turnId]))){
+      for(const reply of questionReplies(p.item))this.remember(this.answered,JSON.stringify([id,reply.questionItemId]));
+      for(const reply of questionReplies(p.item))for(const [key,r] of this.entries)if(r.threadId===id){
+        const questions=r.params.questions.filter(q=>q.id!==reply.questionItemId);
+        if(questions.length)this.entries.set(key,{...r,params:{...r.params,questions}});else this.entries.delete(key);
+      }
+      for(const r of asyncQuestions([{id:p.turnId,status:'inProgress',items:[p.item]}],id)){
+        r.params.questions=r.params.questions.filter(q=>!this.answered.has(JSON.stringify([id,q.id])));
+        if(r.params.questions.length)this.entries.set(r.key,r);
+      }
+    }
+    return {added:[...this.entries.values()].filter(r=>JSON.stringify(before.get(r.key))!==JSON.stringify(r)),removed:[...before.values()].filter(r=>!this.entries.has(r.key)),changed:JSON.stringify([...before])!==JSON.stringify([...this.entries])};
+  }
+}

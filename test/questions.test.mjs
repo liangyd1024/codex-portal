@@ -40,3 +40,27 @@ test('HTTP async-answer route retains CSRF protection and awaits engine response
  const app=createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
  try{const {token}=await fetch(base+'/api/csrf').then(r=>r.json());const post=csrf=>fetch(base+'/api/threads/thread/question-answer',{method:'POST',headers:{'Content-Type':'application/json','x-csrf-token':csrf},body:JSON.stringify({itemId:'item'})});assert.equal((await post('')).status,403);assert.deepEqual(await (await post(token)).json(),{id:'thread',item:'item'});}finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));}
 });
+test('native async question events publish attention for other chats and accepted answers clear it',()=>{
+ const {m}=manager(),events=[];m.on('event',e=>events.push(e));
+ const p={threadId:'thread',turnId:'turn',item:turn().items[0]};
+ m.onNotification({method:'item/started',params:p});m.onNotification({method:'item/completed',params:p});
+ assert.equal(m.status().pendingRequests.length,1);
+ assert.equal(events.filter(e=>e.method==='manager/request').length,1);
+ const text=replyText(request().params.questions,answers());
+ m.onNotification({method:'item/completed',params:{...p,item:{type:'steeringUserMessage',status:'pending',input:[{type:'text',text}]}}});
+ assert.equal(m.status().pendingRequests.length,1);
+ m.onNotification({method:'item/completed',params:{...p,item:{type:'steeringUserMessage',status:'accepted',input:[{type:'text',text}]}}});
+ assert.equal(m.status().pendingRequests.length,0);
+ assert.equal(events.filter(e=>e.method==='manager/requestResolved').length,1);
+ m.onNotification({method:'item/completed',params:p});assert.equal(m.status().pendingRequests.length,0,'late item completion cannot revive answered question');
+ m.onNotification({method:'item/completed',params:{...p,item:{...p.item,id:'next-question'}}});
+ m.onNotification({method:'turn/completed',params:{threadId:'other',turn:{id:'turn',status:'completed'}}});
+ assert.equal(m.status().pendingRequests.length,1);
+ m.onNotification({method:'turn/completed',params:{threadId:'thread',turn:{id:'turn',status:'completed'}}});
+ assert.equal(m.status().pendingRequests.length,0);
+});
+test('reconnect reads full active history to recover unanswered questions, not old answered questions',async()=>{
+ const {m}=manager();m.subscriptions.set('thread',{});m.service={};const active=turn();
+ m.rpc.request=async(method,p)=>method==='thread/goal/get'?{goal:null}:p.itemsView==='full'?{data:[active]}:{data:[{id:'turn',status:'inProgress'}]};
+ await m.recoverNotices(m.rpc,'thread',0);assert.equal(m.status().pendingRequests.length,1);
+});

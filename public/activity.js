@@ -20,7 +20,13 @@ export function creationSource(thread) {
   if(thread?.originator==='Codex Desktop')return 'desktop';
   return 'unknown';
 }
-export function threadSourceIcon(thread, runningSource, icon) {
+export function questionActivityIcon(icon) {
+  const node=document.createElement('span');node.className='activity-icon activity-question';
+  node.title='需要你回答';node.setAttribute('role','img');node.setAttribute('aria-label',node.title);
+  node.append(icon('question'));return node;
+}
+export function threadSourceIcon(thread, runningSource, icon, needsAnswer=false) {
+  if(needsAnswer)return questionActivityIcon(icon);
   const created=creationSource(thread);
   const source=runningSource || created;
   const node=document.createElement('span');
@@ -31,7 +37,8 @@ export function threadSourceIcon(thread, runningSource, icon) {
   return node;
 }
 
-export function conversationActivity(thread, {connected=false, controlled=false, active=false, background={state:'idle'}}={}) {
+export function conversationActivity(thread, {connected=false, controlled=false, active=false, needsAnswer=false, background={state:'idle'}}={}) {
+  if(connected&&needsAnswer)return {kind:'question',label:'需要你回答',detail:'请在下方选择或输入答案'};
   const source=activitySource(thread,{connected,webActive:controlled&&active});
   if(source)return {kind:'turn',source,label:source==='desktop'?'桌面端正在运行':'正在运行',detail:'持续同步最新进展…'};
   if(controlled&&connected&&background.state==='running')return {kind:'background',label:'本轮已结束',detail:`${background.terminals?.length || 1} 个后台命令仍在运行`,terminals:background.terminals || []};
@@ -53,7 +60,8 @@ export function renderConversationActivity(node, activity, icon) {
     }
     node.append(details);return;
   }
-  if(activity.kind==='turn')node.append(activityIcon(activity.source,icon));
+  if(activity.kind==='question')node.append(questionActivityIcon(icon));
+  else if(activity.kind==='turn')node.append(activityIcon(activity.source,icon));
   else {
     const badge=document.createElement('span');badge.className='activity-icon activity-unknown';
     badge.setAttribute('aria-hidden','true');badge.append(icon(activity.kind==='background'?'terminal':'alert'));node.append(badge);

@@ -19,3 +19,12 @@ test('section and project aggregate live sources, exclude moved pinned children,
   sidebar.o.activitySource=t=>t.id==='x'?'web':null;assert.equal(badges(section.items)[0]['aria-label'],'1 个会话运行中（网页端 1）');
  }finally{globalThis.document=old;}
 });
+test('collapsed projects distinguish questions from running chats',()=>{
+ const old=globalThis.document;
+ globalThis.document={createElement:()=>({children:[],setAttribute(k,v){this[k]=v;},append(...n){this.children.push(...n);},replaceChildren(...n){this.children=n;}})};
+ try{
+ const s=Object.create(Sidebar.prototype);s.o={connected:()=>true,icon:()=>({}),needsAnswer:id=>id==='waiting'};
+ const n=document.createElement('span');s.renderActivity(n,[{kind:'thread',value:{id:'waiting',status:{type:'active'}}},{kind:'thread',value:{id:'running',status:{type:'active'}}}]);
+ assert.deepEqual(n.children.map(x=>x['aria-label']),['1 个会话需要你回答','1 个会话运行中（网页端 1）']);
+ }finally{globalThis.document=old;}
+});

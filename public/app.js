@@ -180,9 +180,12 @@ function running() {
 }
 function requestThread(r) { return r.threadId || r.params?.threadId; }
 function requests() {
-  const all = [...(state.status?.pendingRequests || []), ...(state.detail?.pendingRequests || []), ...state.localRequests, ...asyncQuestions(turns(),state.selectedId)];
+  const all = [...(state.status?.pendingRequests || []), ...(state.detail?.pendingRequests || []), ...state.localRequests, ...(state.detail?.recovering?[]:asyncQuestions(turns(),state.selectedId))];
   const map = new Map(); all.forEach(r => { if (r?.id != null) map.set(requestKey(r), r); });
   return [...map.values()];
+}
+function needsAnswer(id) {
+  return usable()&&requests().some(r=>requestThread(r)===id&&r.params?.questions?.length&&!questionDrafts.get(r).sent);
 }
 function threadName(t) {
   const name = String(t?.name || t?.title || t?.preview || '未命名会话').replace(/\s+/g, ' ').trim();
@@ -383,7 +386,7 @@ function renderControls() {
   $('interrupt').setAttribute('aria-busy',String(state.busy.has('interrupt')));
   const indicator=$('running-indicator'),nextIndicator=el('div');
   renderConversationActivity(nextIndicator,newChatOpen?null:conversationActivity(currentThread(),{
-    connected:ready,controlled:controlled(),active,background,
+    connected:ready,controlled:controlled(),active,background,needsAnswer:needsAnswer(state.selectedId),
   }),icon);
   indicator.hidden=nextIndicator.hidden;
   reconcileMessages(indicator,nextIndicator);
@@ -435,6 +438,7 @@ function controlReason(id, text) {
   note.textContent = text; note.hidden = !button.disabled || button.hidden;
 }
 const sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadName,relativeTime,api,toast,
+  needsAnswer,
   activitySource:t=>activitySource(t,{connected:usable(),webActive:((state.status?.controlledSessions||[]).find(s=>s.id===t.id)?.status||t.status)?.type==='active'}),
   connected:usable,selectedId:()=>state.selectedId,newThread:openNewDialog,
   select:t=>{state.projectId=t.projectId;state.selectedArchived=!!t.archived;saveView();selectThread(t.id);},
@@ -724,6 +728,8 @@ function renderRequests() {
   const list = requests().filter(r=>!questionDrafts.get(r).sent), signature = JSON.stringify([state.selectedId,list]);
   if (signature === state.requestSignature) { renderControls(); return; }
   state.requestSignature = signature;
+  for(const r of list)if(r.params?.questions?.length)notifyTaskEvent('manager/request',r);
+  if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();
   const saved = new Map([...document.querySelectorAll('.request-card')].map(card => [card.dataset.requestId, {fields:[...card.querySelectorAll('input,textarea')].map(f => ({name:f.name,value:f.value,checked:f.checked})),open:Boolean(card.querySelector('details[open]'))}]));
   const n = clear($('pending-requests')); const inline = clear($('conversation-requests'));
   $('request-count').hidden = !list.length; setText('request-count',list.length);

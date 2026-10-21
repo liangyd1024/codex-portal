@@ -1,4 +1,4 @@
-import {activitySource,activityIcon,threadSourceIcon} from './activity.js';
+import {activitySource,activityIcon,threadSourceIcon,questionActivityIcon} from './activity.js';
 const make=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
 function orderItems(items,keys=[],orderedThreadIds=null){
   const rank=new Map(keys.map((key,i)=>[key,i]));
@@ -113,9 +113,10 @@ export class Sidebar {
   disclosureKeys(button,key){button.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();if(this.isExpanded(key)!==(e.key==='ArrowRight'))this.toggle(key);}});}
   source(t){return this.o.activitySource?this.o.activitySource(t):activitySource(t,{connected:this.o.connected(),webActive:t.status?.type==='active'});}
   renderActivity(parent,items){
-    const counts=new Map();
-    const visit=item=>{if(item.kind==='project'){item.children.forEach(visit);return;}const source=this.source(item.value);if(source)counts.set(source,(counts.get(source)||0)+1);};
+    const counts=new Map();let waiting=0;
+    const visit=item=>{if(item.kind==='project'){item.children.forEach(visit);return;}if(this.o.needsAnswer?.(item.value.id)){waiting++;return;}const source=this.source(item.value);if(source)counts.set(source,(counts.get(source)||0)+1);};
     items.forEach(visit);
+    if(waiting){const badge=questionActivityIcon(this.o.icon);badge.title=waiting+' 个会话需要你回答';badge.setAttribute('aria-label',badge.title);badge.append(make('span','question-count',String(waiting)));parent.append(badge);}
     if(!counts.size)return;
     const total=[...counts.values()].reduce((sum,count)=>sum+count,0);
     const badge=activityIcon(counts.has('web')?'web':'desktop',this.o.icon);
@@ -143,7 +144,7 @@ export class Sidebar {
     if(this.o.selectedId()===t.id)button.setAttribute('aria-current','true');
     const title=make('div','thread-name');if(t.isUnread){const dot=make('span','thread-unread');dot.setAttribute('aria-label','未读');title.append(dot);}title.append(make('span','',this.o.threadName(t)));
     const source=this.source(t);
-    title.append(threadSourceIcon(t,source,this.o.icon));
+    title.append(threadSourceIcon(t,source,this.o.icon,this.o.needsAnswer?.(t.id)));
     const meta=make('div','thread-meta');meta.append(make('span','thread-time',this.o.relativeTime(t.recencyAt||t.updatedAt)));button.append(title,meta);button.onclick=()=>this.o.select(t);
     row.append(button);this.addMenu(row,button,()=>this.threadMenu(t));
     const manual=t.isPinned&&this.snapshot.preferences.pinned==='manual'&&this.snapshot.capabilities.reorderThread.supported;

@@ -71,3 +71,9 @@ test('worker rejection remains retryable; API acceptance allows deduplication',a
  fail=false;assert.equal(await deliverNotice(storage,'worker',send),true);
  assert.equal(await deliverNotice(storage,'worker',send),true);assert.equal(calls,2);
 });
+test('async question notifications retain native identity and deduplicate replay across tabs',()=>{
+ const r={id:'async:question',kind:'asyncQuestion',threadId:'chat',params:{threadId:'chat',turnId:'turn',itemId:'question'}};
+ const n=taskNotice('manager/request',r,context);assert.equal(n.label,'需要你回答');assert.equal(n.urgent,true);
+ assert.equal(taskNotice('manager/request',{request:r},context).key,n.key);
+ assert.notEqual(taskNotice('manager/request',{...r,params:{...r.params,itemId:'second'}},context).key,n.key);
+});
