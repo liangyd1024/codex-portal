@@ -13,3 +13,11 @@
 .sidebar .activity-running::after{width:5px;height:5px}
 
 .sidebar .activity-summary{width:auto;flex-basis:auto;min-width:16px;padding:0 2px;font-size:10px;font-weight:600;color:#347653;background:#edf5ef;border-color:#87ad95}
+
+/* Project creation is a direct action, not a single-item overflow menu. */
+.sidebar-project-create{display:grid;place-items:center;flex-shrink:0;width:28px;height:28px;padding:0;border-radius:5px;background:transparent;color:var(--muted);opacity:0}
+.sidebar-project-create .icon{width:16px;height:16px}
+.project-heading:hover>.sidebar-project-create,.project-heading:focus-within>.sidebar-project-create{opacity:1}
+.sidebar-project-create:hover:not(:disabled){background:var(--line);color:var(--ink)}
+.project-heading:hover>.sidebar-project-create:disabled,.project-heading:focus-within>.sidebar-project-create:disabled{opacity:.4}
+@media(max-width:700px),(hover:none){.sidebar-project-create{opacity:1;width:44px;height:44px;flex:0 0 44px}.sidebar-project-create:disabled{opacity:.4}}

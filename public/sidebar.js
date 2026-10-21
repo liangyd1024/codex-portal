@@ -119,9 +119,10 @@ export class Sidebar {
     const expanded=this.isExpanded('project:'+p.id);button.setAttribute('aria-expanded',String(expanded));button.append(this.o.icon('chevron','project-chevron'),this.o.icon('folder'),make('span','project-name',p.name));
     this.renderActivity(button,item.children);
     const children=make('div','project-threads');children.id='sidebar-project-'+p.id;children.hidden=!expanded;button.setAttribute('aria-controls',children.id);button.onclick=()=>this.toggle('project:'+p.id);this.disclosureKeys(button,'project:'+p.id);header.append(button);
-    this.addMenu(header,button,()=>[
-      {label:'在项目中新建会话',disabled:!this.o.connected(),run:()=>this.o.newThread(p.roots[0])},
-    ]);
+    const create=make('button','sidebar-project-create');create.type='button';
+    create.dataset.focusKey='create:project:'+p.id;create.title='在项目中新建会话：'+p.name;create.setAttribute('aria-label',create.title);
+    create.disabled=!this.o.connected()||!p.roots[0];create.append(this.o.icon('plus'));
+    create.onclick=()=>{if(!this.o.connected()||!p.roots[0])return;this.closeMenu(false);this.o.newThread(p.roots[0]);};header.append(create);
     for(const child of item.children)this.renderThread(children,child.value);
     if(!item.children.length)children.append(make('p','project-empty','暂无会话'));
     group.append(header,children);parent.append(group);
