@@ -5,8 +5,13 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 7
+PROTOCOL_POLICY = 8
 REQUEST_FIELDS = {
+    'fs/getMetadata': {'path'},
+    'fs/readDirectory': {'path'},
+    'fs/createDirectory': {'path','recursive'},
+    'project/list': {'cursor','limit'},
+    'project/create': {'idempotencyKey','name','roots'},
     'account/read': set(),
     'thread/archive': {'threadId'},
     'thread/unarchive': {'threadId'},
@@ -39,6 +44,7 @@ REQUEST_FIELDS = {
     'turn/interrupt': {'threadId', 'turnId'},
 }
 FEATURE_METHODS = {
+    'projectFolders': ['fs/getMetadata','fs/readDirectory','fs/createDirectory','project/list','project/create'],
     'capacityRetry': ['turn/start','thread/read','thread/turns/list'],
     'plan': ['collaborationMode/list','turn/start'],
     'skills': ['skills/list','turn/start'],
@@ -107,12 +113,13 @@ def check_protocol(binary, version, root):
             return {**previous['validation'], 'version': version, 'cached': True}
     except (OSError, ValueError, TypeError):
         pass
-    with tempfile.TemporaryDirectory(prefix='rcm-protocol-') as directory:
-        result = subprocess.run([str(binary), 'app-server', 'generate-json-schema', '--experimental', '--out', directory], capture_output=True, text=True, timeout=45)
-        if result.returncode:
-            raise RuntimeError('无法核验远端协议：' + result.stderr[-600:])
-        schema = json.loads((pathlib.Path(directory) / 'ClientRequest.json').read_text())
-        validation = validate_request_schema(schema)
+    # Keep generated schemas for inspection; never recursively remove directories.
+    directory = tempfile.mkdtemp(prefix='rcm-protocol-')
+    result = subprocess.run([str(binary), 'app-server', 'generate-json-schema', '--experimental', '--out', directory], capture_output=True, text=True, timeout=45)
+    if result.returncode:
+        raise RuntimeError('无法核验远端协议：' + result.stderr[-600:])
+    schema = json.loads((pathlib.Path(directory) / 'ClientRequest.json').read_text())
+    validation = validate_request_schema(schema)
     # Cache successful validation only. Interrupted writes never replace the previous result.
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     with tempfile.NamedTemporaryFile(mode='w', dir=root, prefix='.protocol-', delete=False) as file:

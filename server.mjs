@@ -1,3 +1,4 @@
+import {browseFolders,createFolder,openFolderProject} from './lib/project-folders.mjs';
 import {retryCapacity} from './lib/capacity-retry.mjs';
 import {deploymentStatus} from './lib/deployment-status.mjs';
 import {WebUpdate} from './lib/web-update.mjs';
@@ -92,6 +93,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       if(req.method==='GET'&&p==='/api/composer')return json(res,200,await composerCatalog(manager,url.searchParams.get('cwd'),url.searchParams.get('kind')));
       if(req.method==='GET'&&p==='/api/models'){manager.requireConnected();return json(res,200,{data:url.searchParams.get('refresh')==='1'||!manager.models.length?await manager.refreshCatalog('models'):manager.models,nextCursor:null});}
       if(req.method==='GET'&&p==='/api/sidebar')return json(res,200,await readSidebar(manager,Object.fromEntries(url.searchParams)));
+      if(req.method==='GET'&&p==='/api/project-folders')return json(res,200,await browseFolders(manager,url.searchParams.get('path')));
       if(req.method==='GET'&&p==='/api/projects')return json(res,200,{data:await manager.refreshCatalog('projects')});
       if(req.method==='GET'&&p==='/api/threads')return json(res,200,await manager.threads(Object.fromEntries(url.searchParams)));
       const fileMatch=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})\/items\/([A-Za-z0-9_-]{1,160})\/file$/);
@@ -110,6 +112,8 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
         if(typeof token!=='string'||Buffer.byteLength(token)!==Buffer.byteLength(csrf)||!timingSafeEqual(Buffer.from(token),Buffer.from(csrf)))throw new AppError('本机会话已变化。请刷新页面。',403,'CSRF');
         const data=await body(req,/^\/api\/threads\/[A-Za-z0-9_-]+\/(message|steer)$/.test(p)?6*1024*1024:1024*1024);
         if(p==='/api/system/update'){if(server.address()?.port!==4317&&!providedManagers)throw new AppError('开发预览不能更新正式服务。',409);if(Object.keys(data).length)throw new AppError('更新接口不接受仓库、版本或会话参数。');return json(res,202,await updater.start());}
+        if(p==='/api/project-folders')return json(res,200,await createFolder(manager,data));
+        if(p==='/api/projects/open')return json(res,200,await openFolderProject(manager,data));
         if(p==='/api/automations/binding')return json(res,200,await automations.get(targetKey).bind(data.threadId));
         if(p==='/api/automations/interrupt')return json(res,200,await automations.get(targetKey).interrupt(data));
         if(p==='/api/automations/message')return json(res,200,await automations.get(targetKey).send(data));

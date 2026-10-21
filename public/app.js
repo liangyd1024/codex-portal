@@ -1,3 +1,5 @@
+import {configureProjectBrowser} from './project-picker.js';
+let projectFolders;
 import {installCapacityRetry} from './capacity-retry.js';
 let capacityRetry;
 import {installSystemUpdate} from './system-update.js';
@@ -392,10 +394,11 @@ function renderControls() {
     input.disabled=!ready||posting;input.placeholder='描述你想完成的任务…';
     availability.textContent=reason;availability.hidden=!reason;
     $('new-retry-create').hidden=newDraft.phase!=='uncertain';
-    $('new-cwd').disabled=creating||newDraft.phase==='uncertain';$('close-new-chat').disabled=creating;
+    $('new-cwd').disabled=!ready||creating||newDraft.phase==='uncertain';$('close-new-chat').disabled=creating;
     $('interrupt').hidden=true;$('takeover').hidden=true;
     $('thread-title').hidden=false;setText('thread-title','新会话');
   }
+  projectFolders?.sync();
   document.querySelectorAll('.project-create').forEach(button => { button.disabled = $('new-thread').disabled; });
   setText('composer-model-label',(modelFor(state.model)?.displayName || state.model || '模型')+' · '+(effortNames[state.effort] || state.effort || '档位'));
   composer?.render(); attachments?.render();
@@ -1378,6 +1381,9 @@ function wireEvents() {
   scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
   attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady(),busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});
+  projectFolders=configureProjectBrowser({api,context:()=>({host:targetHost,instance:state.status?.instanceId,ready:newChatOpen&&usable()&&!$('new-cwd').disabled,open:newChatOpen}),onSelect:project=>{
+    state.projects=[...state.projects.filter(p=>p.id!==project.id),project];updateNewProjects(project.roots[0]);renderProjects();renderControls();void loadThreads().catch(error=>recordError(error,'刷新新项目'));
+  }});
   composer=installComposer({host:targetHost,api,implementPlan,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,desktop:state.desktopMode,turns:turns(),goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
   const settings = $('composer-settings');
   document.addEventListener('click',event => { if (!settings.contains(event.target)) settings.open = false; });
