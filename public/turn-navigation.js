@@ -11,15 +11,30 @@ export function turnPreview(turn,{uncertain=false}={}) {
   const running=['inProgress','in_progress','running'].includes(status);
   return {id:turn.id,question:clip(input.text|| (input.images?.length?'图片消息':question?'用户消息':'继续执行'),180),answer:clip(answer?.text,1000),status:uncertain&&running?'状态待确认':running?'正在执行':({failed:'执行失败',interrupted:'已中断',completed:'已完成'}[status]||'状态待确认'),running:running&&!uncertain,time:turn.startedAt||turn.createdAt};
 }
+// Read one page at a time. A changed context or cancellation stops further requests.
+export async function loadAllEarlier({context,loadEarlier,isCurrent,onProgress=()=>{},yieldPage=()=>new Promise(resolve=>setTimeout(resolve,0))}) {
+  const seen=new Set();
+  while(isCurrent()&&context().hasEarlier){
+    const {cursor,loading}=context();
+    if(loading||seen.has(cursor))return false;
+    seen.add(cursor);
+    if(!await loadEarlier())return false;
+    if(!isCurrent())return false;
+    onProgress();
+    await yieldPage();
+  }
+  return isCurrent();
+}
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
 export function installTurnNavigation({scroller,content,entryHost,context,follow,loadEarlier}) {
   const rail=el('nav','turn-navigation');rail.setAttribute('aria-label','对话轮次');
-  const ticks=el('div','turn-navigation-ticks'),older=el('button','turn-navigation-older','↑');older.type='button';older.setAttribute('aria-label','加载更早轮次');rail.append(older,ticks);document.body.append(rail);
+  const ticks=el('div','turn-navigation-ticks'),older=el('button','turn-navigation-older','↑');older.type='button';older.setAttribute('aria-label','加载全部轮次');rail.append(older,ticks);document.body.append(rail);
   const preview=el('div','turn-preview');preview.hidden=true;preview.id='turn-preview';document.body.append(preview);
   const entry=el('button','turn-navigation-entry','轮次');entry.type='button';entry.setAttribute('aria-haspopup','dialog');entryHost.append(entry);
   const dialog=el('dialog','turn-directory');dialog.setAttribute('aria-label','对话轮次');
   const header=el('div','turn-directory-header'),title=el('h2','','对话轮次'),close=el('button','','关闭'),list=el('div','turn-directory-list'),more=el('button','turn-directory-more','加载更早轮次'),feedback=el('p','turn-directory-feedback');feedback.setAttribute('role','status');close.type=more.type='button';header.append(title,close);dialog.append(header,list,feedback,more);document.body.append(dialog);
-  let key=null,rows=[],signature='',hovered=null,hideTimer,frame,currentId,loading=false,loadVersion=0;
+  const notice=el('div','turn-navigation-notice'),noticeText=el('span'),noticeAction=el('button');noticeText.setAttribute('role','status');noticeAction.type='button';notice.append(noticeText,noticeAction);rail.append(notice);notice.hidden=true;
+  let key=null,rows=[],signature='',hovered=null,hideTimer,frame,currentId,loading=false,loadVersion=0,loadMessage='';
   const buttons=new Map(),positions=new Map();let restore=null;
   const nodes=()=>[...content.querySelectorAll('.message-turn')];
   const locate=id=>nodes().find(n=>n.dataset.turnId===id);
@@ -44,20 +59,37 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
   }
   function renderList(){
     const top=list.scrollTop,focused=document.activeElement?.dataset.turnTarget;list.replaceChildren();
-    for(const row of rows){const button=el('button','turn-directory-row');button.type='button';button.dataset.turnTarget=row.id;button.setAttribute('aria-label','跳转到：'+row.question);button.append(card(row));button.onclick=()=>jump(row.id);if(row.id===currentId)button.setAttribute('aria-current','location');list.append(button);}
+    for(const row of rows){const button=el('button','turn-directory-row');button.type='button';button.dataset.turnTarget=row.id;button.setAttribute('aria-label','跳转到：'+row.question);button.append(card(row));button.onclick=()=>navigate(row.id);if(row.id===currentId)button.setAttribute('aria-current','location');list.append(button);}
     list.scrollTop=top;if(focused)list.querySelector('[data-turn-target="'+CSS.escape(focused)+'"]')?.focus({preventScroll:true});
   }
+  function report(message){loadMessage=message;feedback.textContent=message;noticeText.textContent=message;syncLoad();}
   async function earlier(){
-    if(loading)return;const version=++loadVersion,started=key;loading=true;feedback.textContent='正在加载更早轮次…';syncLoad();follow.pause({sticky:true});
-    try{const loaded=await loadEarlier();if(started!==key||version!==loadVersion)return;feedback.textContent=!loaded?'加载失败，请重试。':'';}
-    catch{if(started===key&&version===loadVersion)feedback.textContent='加载失败，请重试。';}
-    finally{if(started===key&&version===loadVersion){loading=false;syncLoad();update();}}
+    if(loading||!context().hasEarlier)return;
+    const version=++loadVersion,started=key,isCurrent=()=>started===key&&version===loadVersion;
+    loading=true;follow.pause({sticky:true});
+    const progress=()=>report('正在加载全部轮次 · 已加载 '+context().turns.length+' 轮');
+    progress();
+    try{
+      const loaded=await loadAllEarlier({context,loadEarlier,isCurrent,onProgress:progress});
+      if(isCurrent())report(loaded?'':'加载未完成，请重试。');
+    }catch{if(isCurrent())report('加载失败，请重试。');}
+    finally{if(isCurrent()){loading=false;syncLoad();update();}}
   }
-  function syncLoad(){const c=context();older.hidden=more.hidden=!c.hasEarlier;older.disabled=more.disabled=loading||c.loading;older.title=loading?'正在加载…':'加载更早轮次';more.textContent=loading?'正在加载…':c.historyError?'重试加载更早轮次':'加载更早轮次';}
-  older.onclick=more.onclick=earlier;
-  entry.onclick=()=>{hide();renderList();dialog.showModal();const active=list.querySelector('[aria-current]');if(active)list.scrollTop=active.offsetTop-list.offsetTop-Math.max(0,(list.clientHeight-active.offsetHeight)/2);close.focus();};close.onclick=()=>dialog.close();
+  function syncLoad(){
+    const c=context();if(!c.hasEarlier&&!loading){loadMessage='';feedback.textContent='';noticeText.textContent='';}older.hidden=more.hidden=!c.hasEarlier;older.disabled=loading||c.loading;more.disabled=!loading&&c.loading;
+    older.title=loading?'正在加载全部轮次…':'加载全部轮次';
+    more.textContent=loading?'取消加载':loadMessage?'继续加载全部轮次':'加载全部轮次';
+    rail.setAttribute('aria-busy',String(loading));notice.hidden=!loadMessage||dialog.open;
+    noticeAction.textContent=loading?'取消':'重试';noticeAction.disabled=!loading&&c.loading;
+    noticeAction.setAttribute('aria-label',loading?'取消加载全部轮次':'重试加载全部轮次');
+  }
+  function cancel(){loadVersion++;loading=false;report('已取消继续加载。');}
+  noticeAction.onclick=()=>loading?cancel():earlier();
+  older.onclick=earlier;more.onclick=()=>loading?cancel():earlier();
+  function navigate(id){jump(id);void earlier();}
+  entry.onclick=()=>{hide();renderList();dialog.showModal();const active=list.querySelector('[aria-current]');if(active)list.scrollTop=active.offsetTop-list.offsetTop-Math.max(0,(list.clientHeight-active.offsetHeight)/2);close.focus();void earlier();syncLoad();};close.onclick=()=>dialog.close();
   dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
-  dialog.addEventListener('close',()=>{(entry.checkVisibility()?entry:document.querySelector('#mobile-more>summary'))?.focus({preventScroll:true});});
+  dialog.addEventListener('close',()=>{syncLoad();(entry.checkVisibility()?entry:document.querySelector('#mobile-more>summary'))?.focus({preventScroll:true});});
   preview.addEventListener('pointerenter',()=>clearTimeout(hideTimer));preview.addEventListener('pointerleave',deferHide);
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!preview.hidden){hide();e.preventDefault();}});
   rail.addEventListener('keydown',e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;const entries=[...buttons.values()],index=entries.indexOf(document.activeElement);if(index<0)return;e.preventDefault();entries[e.key==='Home'?0:e.key==='End'?entries.length-1:Math.max(0,Math.min(entries.length-1,index+(e.key==='ArrowDown'?1:-1)))]?.focus();});
@@ -73,13 +105,13 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
   }
   function schedule(){if(!frame)frame=requestAnimationFrame(measure);}
   function switchContext(next){
-    if(next===key)return;key=next;restore=positions.get(next)||null;signature='';hide();if(dialog.open)dialog.close();loadVersion++;loading=false;feedback.textContent='';
+    if(next===key)return;key=next;restore=positions.get(next)||null;signature='';hide();if(dialog.open)dialog.close();loadVersion++;loading=false;loadMessage='';feedback.textContent='';noticeText.textContent='';notice.hidden=true;
   }
   function update(){
     const c=context();const next=c.turns.map(t=>turnPreview(t,{uncertain:c.uncertain})),sig=JSON.stringify(next);
     rows=next;
     if(sig!==signature){signature=sig;const keep=new Set(rows.map(r=>r.id));for(const [id,b] of buttons)if(!keep.has(id)){b.remove();buttons.delete(id);}
-      rows.forEach((row,index)=>{let b=buttons.get(row.id);if(!b){b=el('button','turn-tick');b.type='button';b.append(el('span'));buttons.set(row.id,b);}b.setAttribute('aria-label','预览并跳转到：'+row.question);b.setAttribute('aria-describedby','turn-preview');b.classList.toggle('turn-tick-running',row.running);b.onclick=()=>jump(row.id);b.onpointerenter=()=>show(row,b);b.onpointerleave=deferHide;b.onfocus=()=>show(row,b);b.onblur=deferHide;if(ticks.children[index]!==b)ticks.insertBefore(b,ticks.children[index]||null);});
+      rows.forEach((row,index)=>{let b=buttons.get(row.id);if(!b){b=el('button','turn-tick');b.type='button';b.append(el('span'));buttons.set(row.id,b);}b.setAttribute('aria-label','预览并跳转到：'+row.question);b.setAttribute('aria-describedby','turn-preview');b.classList.toggle('turn-tick-running',row.running);b.onclick=()=>navigate(row.id);b.onpointerenter=()=>show(row,b);b.onpointerleave=deferHide;b.onfocus=()=>show(row,b);b.onblur=deferHide;if(ticks.children[index]!==b)ticks.insertBefore(b,ticks.children[index]||null);});
       if(dialog.open)renderList();if(hovered){const row=rows.find(r=>r.id===hovered);if(row)show(row,buttons.get(row.id));else hide();}
     }
     if(restore&&rows.length){const target=locate(restore.id);if(restore.following){follow.reset();restore=null;}else if(target){follow.pause({sticky:true});scroller.scrollTop+=target.getBoundingClientRect().top-scroller.getBoundingClientRect().top-restore.offset;restore=null;}else if(!c.hasEarlier){restore=null;}}

@@ -61,7 +61,7 @@
       if(action==='handoff'){f.owned.delete(id);const h={threadId:id,state:'released'};f.handoffs.push(h);return json(h);}
       if(action==='message'||action==='steer'){t.status={type:'active'};const turn={id:'sent-'+f.calls.length,status:'inProgress',items:[{id:'user-'+f.calls.length,type:'userMessage',content:[...(body.text?[{type:'text',text:body.text}]:[]),...(body.images||[]).map(i=>({type:'image',url:i.url}))]}]};f.turns.set(id,[...(f.turns.get(id)||[]),turn]);return json({turn});}
       if(action==='interrupt'){t.status={type:'idle'};for(const turn of f.turns.get(id)||[])turn.status='interrupted';return json({ok:true});}
-      if(action==='history'){const data=f.history.get(id)||[];f.history.delete(id);return json({data,nextCursor:null});}
+      if(action==='history'){const all=f.history.get(id)||[],size=f.historyPageSize||all.length,data=all.slice(0,size),rest=all.slice(size);if(rest.length)f.history.set(id,rest);else f.history.delete(id);return json({data,nextCursor:rest.length?'earlier-'+rest.length:null});}
     }
     if(p==='/api/access/status')return json({local:f.local,sessionExpires:null,origins:f.origins,canSetup:f.local});
     if(p==='/api/access/setup'){f.origins.push(body.mode==='tailscale'?'https://qa.ts.net':'https://192.0.2.1:4319');return json({ok:true});}
