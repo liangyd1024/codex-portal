@@ -5,8 +5,11 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 8
+PROTOCOL_POLICY = 9
 REQUEST_FIELDS = {
+    'thread/items/list': {'threadId','limit','sortDirection','cursor'},
+    'mcpServerStatus/list': {'threadId','serverName','detail'},
+    'mcpServer/tool/call': {'threadId','server','tool','arguments'},
     'fs/getMetadata': {'path'},
     'fs/readDirectory': {'path'},
     'fs/createDirectory': {'path','recursive'},
@@ -44,6 +47,7 @@ REQUEST_FIELDS = {
     'turn/interrupt': {'threadId', 'turnId'},
 }
 FEATURE_METHODS = {
+    'threadReferences': ['thread/start','thread/resume','thread/read','thread/items/list','mcpServerStatus/list','mcpServer/tool/call'],
     'projectFolders': ['fs/getMetadata','fs/readDirectory','fs/createDirectory','project/list','project/create'],
     'capacityRetry': ['turn/start','thread/read','thread/turns/list'],
     'plan': ['collaborationMode/list','turn/start'],
@@ -97,6 +101,8 @@ def validate_request_schema(schema):
     for feature, required in FEATURE_METHODS.items():
         reasons = [failures[method] for method in required if method in failures]
         features[feature] = {'supported': not reasons, 'reason': '；'.join(reasons)}
+    if 'config' not in methods.get('thread/resume', {}).get('properties', {}) or 'additionalContext' not in methods.get('turn/start', {}).get('properties', {}):
+        features['threadReferences'] = {'supported': False, 'reason': 'thread/resume 缺少会话配置参数'}
     retry_fields = {'clientUserMessageId', 'turnTrigger'}
     if not retry_fields.issubset(methods.get('turn/start', {}).get('properties', {})):
         features['capacityRetry'] = {'supported': False, 'reason': 'turn/start 缺少原生重试标识参数'}

@@ -95,6 +95,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       if(req.method==='GET'&&p==='/api/account/usage')return json(res,200,await readAccountUsage(manager));
       if(req.method==='GET'&&p==='/api/system/deployment-status'){if(remote)throw new AppError('仅限本机部署检查。',403);return json(res,200,await deploymentStatus(manager));}
       if(req.method==='GET'&&p==='/api/status')return json(res,200,manager.status());
+      if(req.method==='GET'&&p==='/api/thread-references')return json(res,200,await manager.threads({search:url.searchParams.get('search')||'',cursor:url.searchParams.get('cursor')}));
       const desktopMatch=p.match(/^\/api\/desktop\/threads\/([0-9a-f-]{36})(?:\/(history|message|interrupt|acknowledge))?$/i);
       if(req.method==='GET'&&p==='/api/desktop/candidates')return json(res,200,await manager.passive('threads',{search:url.searchParams.get('search')||'',cursor:url.searchParams.get('cursor')}));
       if(req.method==='GET'&&desktopMatch){const session=desktopSession(targetKey,desktopMatch[1]);if(!desktopMatch[2])return json(res,200,await session.detail());if(desktopMatch[2]==='history')return json(res,200,await session.history(url.searchParams.get('cursor'),desktopMatch[1]));}

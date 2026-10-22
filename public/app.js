@@ -1221,8 +1221,8 @@ async function sendMessage(e) {
   await action('message',async () => {
     const images=pictures.items.map(i=>({url:i.url}));
     const options=composer.options();
-    if(options.threads.length)throw new Error('会话引用需要通过桌面继续，请切换入口或删除引用。');
-    const payload = active ? {text,images,skills:options.skills,plugins:options.plugins} : {text,images,model:state.model,effort:state.effort,...options};
+    if(options.threads.length&&(active||composer.isGoalPending()))throw new Error('请在当前任务结束后单独发送会话引用，暂不能与启动目标模式合并发送。草稿已保留。');
+    const payload = active ? {text,images,skills:options.skills,plugins:options.plugins,threads:options.threads} : {text,images,model:state.model,effort:state.effort,...options};
     const goalStarted=await composer.prepareSend(id,text,active);
     const d=await sendAfterGoal({goalStarted,id,payload,active,api});
     attachments.acknowledge(pictures);

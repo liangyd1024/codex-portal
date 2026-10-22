@@ -181,7 +181,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
     status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
-  return {render,validateSend:(text,active)=>validateGoalDraft(choice(),text,active),prepareSend:async(id,text,active)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,api,save}):false;render();return started;},moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();return {mode,skills:[...skills],plugins:[...plugins],threads:[...threads],access:WEB_ACCESS};},isLoading:()=>loading};
+  return {render,isGoalPending:()=>Boolean(choice().goalPending),validateSend:(text,active)=>validateGoalDraft(choice(),text,active),prepareSend:async(id,text,active)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,api,save}):false;render();return started;},moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();return {mode,skills:[...skills],plugins:[...plugins],threads:[...threads],access:WEB_ACCESS};},isLoading:()=>loading};
 }
 
 // Match the desktop's completed native plan item, never infer plans from prose.

@@ -40,38 +40,54 @@ export function installSkillSuggestions({input,api,context,select}) {
   const close=()=>{version++;box.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');};
   const position=()=>{if(box.hidden)return;const r=input.getBoundingClientRect(),v=window.visualViewport;box.style.left=Math.max(8,r.left)+'px';box.style.width=Math.max(0,Math.min(r.width,(v?.width||innerWidth)-16))+'px';box.style.bottom=Math.max(8,innerHeight-r.top+8)+'px';box.style.maxHeight=Math.max(60,Math.min(300,r.top-(v?.offsetTop||0)-16))+'px';};
   const highlight=()=>{[...box.querySelectorAll('[role=option]')].forEach((node,i)=>node.setAttribute('aria-selected',String(i===index)));const node=box.querySelectorAll('[role=option]')[index];if(node){input.setAttribute('aria-activedescendant',node.id);node.scrollIntoView({block:'nearest'});}};
-  const choose=entry=>{if(!query||input.disabled||!context().ready||context().busy)return;const range={...query};close();select(entry,range,query.kind||'skills');};
+  const choose=entry=>{if(!query||input.disabled||!context().ready||context().busy)return;const range={...query};close();select(entry,range,entry.mentionKind||query.kind||'skills');};
   async function update(){
     close();rows=[];if(composing||input.disabled||!context().ready||context().busy)return;
     query=pluginQuery(input.value,input.selectionStart)||skillQuery(input.value,input.selectionStart);if(!query)return;
     const desktop=context().desktop;
     if(desktop&&query.kind!=='plugins')return;
-    const kind=desktop?'threads':query.kind||'skills',label=kind==='threads'?'会话':kind==='plugins'?'插件':'技能';
+    const kind=desktop?'threads':query.kind==='plugins'?'mentions':'skills',label=kind==='threads'?'会话':kind==='mentions'?'会话与插件':'技能';
     query.kind=kind;box.setAttribute('aria-label',label);
     if(desktop&&!context().threadReferencesSupported){box.hidden=false;box.textContent='此桌面会话尚未确认支持会话引用，请在桌面新建支持引用的会话。';input.setAttribute('aria-expanded','true');position();return;}
     const stamp=version,id=context().id,cwd=context().cwd,value=input.value,caret=input.selectionStart;
     box.replaceChildren();box.hidden=false;input.setAttribute('aria-expanded','true');position();box.textContent='正在读取'+label+'…';input.removeAttribute('aria-activedescendant');
     try{
-      if(kind==='threads'){await new Promise(resolve=>setTimeout(resolve,180));if(stamp!==version)return;}
-      const catalog=kind==='threads'?{threads:await api('/api/desktop/candidates?search='+encodeURIComponent(query.query))}:await api('/api/composer?cwd='+encodeURIComponent(cwd)+'&kind='+kind);
-      if(stamp!==version||context().id!==id||context().cwd!==cwd||input.value!==value||input.selectionStart!==caret)return;
-      const source=catalog[kind];if(source.error)throw Error(source.error);
-      rows=kind==='threads'?matchingThreads(source.data||[],id):kind==='plugins'?matchingPlugins((source.marketplaces||[]).flatMap(e=>e.plugins||[]),query.query):matchingSkills((source.data||[]).flatMap(e=>e.skills||[]),query.query);
+      let source,loadErrors=[];
+      if(kind==='threads'||kind==='mentions'){
+        await new Promise(resolve=>setTimeout(resolve,180));if(stamp!==version)return;
+        const reads=await Promise.allSettled([api((desktop?'/api/desktop/candidates':'/api/thread-references')+'?search='+encodeURIComponent(query.query)),...(kind==='mentions'?[api('/api/composer?cwd='+encodeURIComponent(cwd)+'&kind=plugins')]:[])]);
+        if(stamp!==version||context().id!==id||context().cwd!==cwd||input.value!==value||input.selectionStart!==caret)return;
+        source=reads[0].status==='fulfilled'?reads[0].value:{data:[]};
+        if(reads[0].status==='rejected')loadErrors.push('会话读取失败：'+reads[0].reason.message);
+        rows=matchingThreads(source.data||[],id).map(e=>({...e,mentionKind:'threads'}));
+        if(kind==='mentions'){
+          const plugins=reads[1].status==='fulfilled'?reads[1].value.plugins:null;
+          if(reads[1].status==='rejected'||plugins?.error)loadErrors.push('插件目录暂不可用');
+          if(plugins)rows.push(...matchingPlugins((plugins.marketplaces||[]).flatMap(e=>e.plugins||[]),query.query).map(e=>({...e,mentionKind:'plugins'})));
+        }
+      }else{
+        const catalog=await api('/api/composer?cwd='+encodeURIComponent(cwd)+'&kind='+kind);
+        if(stamp!==version||context().id!==id||context().cwd!==cwd||input.value!==value||input.selectionStart!==caret)return;
+        source=catalog[kind];if(source.error)throw Error(source.error);
+        rows=matchingSkills((source.data||[]).flatMap(e=>e.skills||[]),query.query);
+      }
       box.replaceChildren();index=0;
       const heading=document.createElement('div');heading.className='skill-suggestions-heading';heading.textContent=label;box.append(heading);
       for(const [i,entry] of rows.entries()){
         const button=document.createElement('button');button.type='button';button.id='skill-option-'+i;button.setAttribute('role','option');
+        const rowKind=entry.mentionKind||kind;
         const view=skillPresentation(entry);
-        const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.classList.add('icon');icon.setAttribute('aria-hidden','true');const use=document.createElementNS(icon.namespaceURI,'use');use.setAttribute('href',kind==='threads'?'#i-chat':'#i-mark');icon.append(use);
+        const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.classList.add('icon');icon.setAttribute('aria-hidden','true');const use=document.createElementNS(icon.namespaceURI,'use');use.setAttribute('href',rowKind==='threads'?'#i-chat':'#i-mark');icon.append(use);
         const name=document.createElement('strong');name.textContent=view.name;name.title=entry.name;
         const description=document.createElement('span');description.className='skill-description';description.textContent=view.description;
-        const source=document.createElement('span');source.className='skill-source';source.textContent=view.source;
+        const source=document.createElement('span');source.className='skill-source';source.textContent=rowKind==='threads'?'会话':rowKind==='plugins'?'插件':view.source;
         button.title=[view.name,view.description,view.source,entry.path].filter(Boolean).join('\n');
         button.append(icon,name,description,source);button.onpointerdown=e=>{if(e.pointerType==='mouse')e.preventDefault();};button.onclick=()=>choose(entry);box.append(button);
       }
       if(!rows.length)box.append(document.createTextNode('没有匹配的可用'+label+'。'));
       if((source.data||[]).some(e=>e.errors?.length)||source.marketplaceLoadErrors?.length)box.append(document.createTextNode('部分目录未能读取，请重新输入以重试。'));
-      if(kind==='threads'&&source.nextCursor)box.append(document.createTextNode('输入会话名称可查找更早的会话。'));
+      for(const error of loadErrors)box.append(document.createTextNode(error+'。重新输入可重试。'));
+      if((kind==='threads'||kind==='mentions')&&source.nextCursor)box.append(document.createTextNode('输入会话名称可查找更早的会话。'));
       highlight();position();
     }catch(error){if(stamp===version){rows=[];box.textContent=label+'读取失败，重新输入可重试：'+error.message;}}
   }
