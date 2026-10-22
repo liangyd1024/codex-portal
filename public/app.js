@@ -1,3 +1,5 @@
+import {createSendReceipts,sendReceiptLabels} from './connection-state.js';
+const sendReceipts=createSendReceipts();
 import {installResponseAnnotations,annotatedText} from './response-annotations.js';
 import {installSideChat} from './side-chat.js';
 let annotations,sideChat;
@@ -625,8 +627,9 @@ function renderMessages() {
   const visibleTurns=progressiveTurns.view(state.loadingDetail?[]:turns());
   $('messages').setAttribute('aria-busy',String(state.loadingDetail||progressiveTurns.pending));
   progressiveTurns.enqueue();
+  const receipts=sendReceipts.view(context,turns());
   const nearBottom = scrollFollow?.following ?? true;
-  const shape=JSON.stringify([state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],visibleTurns],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
+  const shape=JSON.stringify([receipts.map(r=>[r.id,r.status]),state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],visibleTurns],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
   if(shape===lastMessageShape){
     for(const turn of visibleTurns)for(const item of turn.items||[]){
       if(item.type!=='commandExecution')continue;
@@ -690,6 +693,11 @@ function renderMessages() {
     });
     n.append(cachedTurn);
   });
+  for(const receipt of receipts){
+    const node=renderItem({id:receipt.id,type:'userMessage',content:receipt.content});
+    node.dataset.sendReceipt=receipt.id;
+    const status=el('div','user-message-time',sendReceiptLabels[receipt.status]);status.setAttribute('role','status');node.append(status);n.append(node);
+  }
   n.querySelectorAll('details[data-item-id]').forEach(d => { if (opened.has(d.dataset.itemId)) d.open = true; });
   commit();
   const rendered = $('messages');
@@ -1237,12 +1245,25 @@ async function sendMessage(e) {
     const options=composer.options();
     if(options.threads.length&&(active||composer.isGoalPending()))throw new Error('请在当前任务结束后单独发送会话引用，暂不能与启动目标模式合并发送。草稿已保留。');
     const payload = active ? {text,images,skills:options.skills,plugins:options.plugins,threads:options.threads} : {text,images,model:state.model,effort:state.effort,...options};
-    const goalStarted=await composer.prepareSend(id,text,active);
-    const d=await sendAfterGoal({goalStarted,id,payload,active,api});
+    const scope=targetHost+':'+id;
+    const content=[...(text?[{type:'text',text}]:[]),...images.map(i=>({type:'image',url:i.url}))];
+    const receipt=sendReceipts.begin(scope,content,turns());
+    renderMessages();scrollFollow?.schedule();
+    let d,submitted=false;
+    try{
+      const goalStarted=await composer.prepareSend(id,text,active);
+      submitted=true;
+      d=await sendAfterGoal({goalStarted,id,payload,active,api});
+      sendReceipts.accept(receipt,d);
+    }catch(error){
+      if(submitted)sendReceipts.fail(receipt,error);else receipt.status='failed';
+      if(scope===targetHost+':'+state.selectedId)renderMessages();
+      throw error;
+    }
     attachments.acknowledge(pictures);annotations.acknowledge(annotationDraft);
     const cleared = state.drafts.acknowledge(sent);
-    if (id === state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }
-    if (id === state.selectedId && selection === state.selectionVersion) { if (d.turn) { upsertTurn(d.turn); const t = ensureTurn(d.turn.id); const content=[...(text?[{type:'text',text}]:[]),...images.map(i=>({type:'image',url:i.url}))]; if (!t.items.some(item => item.type === 'userMessage' && userContentKey(item.content) === userContentKey(content))) t.items.unshift({id:'accepted-'+d.turn.id,type:'userMessage',content,localAccepted:true}); } renderThread(); }
+    if (scope===targetHost+':'+state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }
+    if (scope===targetHost+':'+state.selectedId && selection === state.selectionVersion) { if(d.turn)upsertTurn(d.turn);renderThread(); }
     if (active) toast('补充要求已发送到当前轮次。');
     try { if (id === state.selectedId && selection === state.selectionVersion) await refreshSelected(); } catch (err) { recordError(err,'thread'); }
   });
