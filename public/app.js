@@ -1404,6 +1404,7 @@ function handleEvent(event) {
   }
   if (threadId !== state.selectedId || !state.detail) return;
   if (method === 'thread/tokenUsage/updated' || method === 'turn/moderationMetadata') return;
+  if (method === 'thread/goal/cleared') { scheduleDetailRefresh(); return; }
   if (method === 'thread/queue/changed') { scheduleDetailRefresh(); return; }
   if (method === 'thread/status/changed') { state.detail.thread.status = p.status; scheduleStreamRender(); return; }
   if (method === 'thread/name/updated') { state.detail.thread.name = p.threadName || p.name; renderThread(); return; }

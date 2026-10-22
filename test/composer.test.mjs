@@ -39,7 +39,7 @@ test('goal uses explicit user origin and rejects busy threads and invalid budget
   await setGoal(m,'a',{objective:'目标',tokenBudget:2000});
   assert.deepEqual(calls[0].params,{threadId:'a',objective:'目标',tokenBudget:2000,origin:'user'});
   await assert.rejects(setGoal(m,'a',{objective:'x',tokenBudget:-1}));
-  m.activeTurns.set('a','turn');await assert.rejects(setGoal(m,'a',{status:'paused'}),e=>e.code==='THREAD_BUSY');
+  m.activeTurns.set('a','turn');await assert.rejects(setGoal(m,'a',{status:'active'}),e=>e.code==='THREAD_BUSY');
 });
 test('continuing a blocked goal delegates to the native engine without starting a duplicate turn',async()=>{
   const {m,calls}=fixture();m.controlled.set('a',{status:{type:'idle'}});
@@ -119,4 +119,25 @@ test('editing an existing running goal preserves its native status and budget',a
  assert.equal(calls.length,1);
  m.rpc.request=async()=>({goal:null});await assert.rejects(setGoal(m,'a',{objective:'新目标',expectedObjective:'原目标'}),e=>e.code==='GOAL_CHANGED');
  m.rpc.request=async()=>{throw Error('offline');};await assert.rejects(setGoal(m,'a',{objective:'新目标',expectedObjective:'原目标'}),/offline/);
+});
+
+test('goal toolbar clears the native goal during a turn and never deletes the conversation',async()=>{
+ const {m,calls}=fixture();m.controlled.set('a',{status:{type:'active'}});m.activeTurns.set('a','turn');
+ await setGoal(m,'a',{clear:true});
+ assert.deepEqual(calls,[{method:'thread/goal/clear',params:{threadId:'a',origin:'user'}}]);
+ for(const data of [{clear:false},{clear:true,status:'complete'},{clear:true,objective:'x'},{clear:true,tokenBudget:1}])await assert.rejects(setGoal(m,'a',data));
+ assert.equal(calls.length,1);
+});
+test('goal pause during a running turn uses native status without interrupting the turn',async()=>{
+ const {m,calls}=fixture();m.controlled.set('a',{status:{type:'active'}});m.activeTurns.set('a','turn');
+ await setGoal(m,'a',{status:'paused'});
+ assert.deepEqual(calls,[{method:'thread/goal/set',params:{threadId:'a',origin:'user',status:'paused'}}]);
+});
+test('goal clear respects unsupported engines, control ownership and RPC errors',async()=>{
+ const {m,calls}=fixture();m.controlled.set('a',{status:{type:'idle'}});
+ m.service.protocolValidation.features.goalClear={supported:false,reason:'missing'};
+ await assert.rejects(setGoal(m,'a',{clear:true}),e=>e.code==='FEATURE_UNAVAILABLE');assert.equal(calls.length,0);
+ m.service.protocolValidation.features.goalClear.supported=true;
+ m.rpc.request=async()=>{throw Error('disconnected');};await assert.rejects(setGoal(m,'a',{clear:true}),/disconnected/);
+ await assert.rejects(setGoal(m,'unknown',{clear:true}));
 });

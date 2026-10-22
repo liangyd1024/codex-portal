@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 11
+PROTOCOL_POLICY = 12
 REQUEST_FIELDS = {
     'thread/fork': {'threadId','ephemeral','excludeTurns','developerInstructions','approvalPolicy','sandbox','model','config'},
     'thread/items/list': {'threadId','limit','sortDirection','cursor'},
@@ -35,6 +35,7 @@ REQUEST_FIELDS = {
     'thread/name/set': {'threadId', 'name'},
     'thread/loaded/list': {'cursor'},
     'thread/goal/get': {'threadId'},
+    'thread/goal/clear': {'threadId','origin'},
     'thread/backgroundTerminals/list': {'threadId', 'limit'},
     'thread/backgroundTerminals/terminate': {'threadId','processId'},
     'thread/queue/list': {'threadId', 'limit', 'cursor'},
@@ -59,6 +60,7 @@ FEATURE_METHODS = {
     'skills': ['skills/list','turn/start'],
     'plugins': ['plugin/installed','turn/start'],
     'goal': ['thread/goal/set','thread/goal/get'],
+    'goalClear': ['thread/goal/clear'],
     'create': ['thread/start', 'thread/name/set', 'turn/start'],
     'takeover': ['thread/resume'],
     'message': ['turn/start'],
