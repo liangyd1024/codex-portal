@@ -173,7 +173,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
     planBadge.hidden=choice().mode!=='plan';
     const currentGoal=c.goal&&c.goal.status!=='complete';
     goalBadge.hidden=!choice().goalPending&&!currentGoal&&!c.goalError;
-    goalBadge.textContent=choice().goalPending?'目标 ×':c.goalError?'目标待确认':({active:'目标',paused:'目标已暂停',complete:'目标已完成'}[c.goal?.status]||'目标待确认');
+    goalBadge.textContent=choice().goalPending?'目标 ×':c.goalError?'目标待确认':({active:'目标',paused:'目标已暂停',blocked:'目标已阻塞',budgetLimited:'目标预算已用尽',usageLimited:'目标用量受限',complete:'目标已完成'}[c.goal?.status]||'目标待确认');
     goalBadge.title=choice().goalPending?'发送时将输入内容设为目标，点击取消':c.goalError?'目标状态暂未读取，点击重新检查':c.goal?.objective||'查看目标';
     goalBadge.setAttribute('aria-label',choice().goalPending?'取消本次目标设置':goalBadge.textContent+'，目标操作');
     badges.hidden=planBadge.hidden&&goalBadge.hidden;
@@ -182,7 +182,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
     for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||goalUpdating||(control!==images&&control!==goalBadge&&!(control===goalButton&&c.goal)&&control.dataset.tool!=='skill-picker'&&control.dataset.tool!=='plugin-picker'&&c.active);
     goalButton.disabled=goalButton.disabled||Boolean(c.ephemeral);
     goalButton.textContent=currentGoal&&!choice().goalPending?'编辑目标':'目标';goalButton.title=c.ephemeral?'临时聊天不支持目标模式，请在主聊天使用。':currentGoal?'编辑当前目标内容':'用下一条输入设置目标';goalButton.setAttribute('aria-pressed',String(Boolean(choice().goalPending)));
-    for(const {button,value} of goalActions)button.hidden=c.draft||!c.goal||Boolean(c.goalError)||(value==='paused'?c.goal.status!=='active':value==='active'?c.goal.status!=='paused':c.goal.status==='complete');
+    for(const {button,value} of goalActions)button.hidden=c.draft||!c.goal||Boolean(c.goalError)||(value==='paused'?c.goal.status!=='active':value==='active'?!['paused','blocked'].includes(c.goal.status):c.goal.status==='complete');
     summary.setAttribute('aria-disabled',String(!c.ready||c.busy));if(!c.ready||c.busy)tools.open=false;
     status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
   }

@@ -41,6 +41,11 @@ test('goal uses explicit user origin and rejects busy threads and invalid budget
   await assert.rejects(setGoal(m,'a',{objective:'x',tokenBudget:-1}));
   m.activeTurns.set('a','turn');await assert.rejects(setGoal(m,'a',{status:'paused'}),e=>e.code==='THREAD_BUSY');
 });
+test('continuing a blocked goal delegates to the native engine without starting a duplicate turn',async()=>{
+  const {m,calls}=fixture();m.controlled.set('a',{status:{type:'idle'}});
+  await setGoal(m,'a',{status:'active'});
+  assert.deepEqual(calls,[{method:'thread/goal/set',params:{threadId:'a',origin:'user',status:'active'}}]);
+});
 test('only known newly created threads fall back when a durable state row is not present',async()=>{
   const {m}=fixture();await m.newThread({cwd:'/project'});
   m.passive=async()=>{throw Error('未找到会话：new');};
