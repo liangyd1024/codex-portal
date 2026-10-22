@@ -4,9 +4,10 @@ import {mkdtempSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {summarizeTitle} from '../lib/thread-title.mjs';
+import {setGoal} from '../lib/composer.mjs';
 import {Manager} from '../lib/manager.mjs';
 
-function setup({titleStore=null,read,write,send}={}) {
+function setup({titleStore=null,read,write,send,goal}={}) {
   const calls=[];
   const m=new Manager({host:{alias:'test'},titleStore});
   m.connection.state='connected';
@@ -15,6 +16,7 @@ function setup({titleStore=null,read,write,send}={}) {
     if(method==='account/read')return {account:{type:'chatgpt'}};
     if(method==='thread/start')return {thread:{id:'t',cwd:'/project',status:{type:'idle'}}};
     if(method==='turn/start')return send?send():{turn:{id:'turn',status:'completed'}};
+    if(method==='thread/goal/set')return goal?goal():{goal:{objective:params.objective,status:'active'}};
     if(method==='thread/read')return read?read():{thread:{id:'t',name:null}};
     if(method==='thread/name/set')return write?write():{};
     throw Error('Unexpected RPC: '+method);
@@ -97,5 +99,34 @@ test('metadata retries stop after connection changes and do not hide permanent f
     assert.equal(calls.filter(c=>c.method==='thread/read').length,mode==='exhausted'?5:1);
     assert.equal(calls.filter(c=>c.method==='thread/name/set').length,0);
     assert.equal(m.errors.length,mode==='connection'?0:1);
+  }
+});
+
+test('goal-first conversation names from the accepted objective without starting an extra turn',async()=>{
+  const {m,calls}=setup();await m.newThread({cwd:'/project'});
+  await setGoal(m,'t',{objective:'请修复目标模式标题',status:'active'});await flush(m);
+  await m.message('t',{text:'后续回复'});await flush(m);
+  assert.deepEqual(calls.filter(c=>c.method==='thread/name/set').map(c=>c.params.name),['修复目标模式标题']);
+  assert.equal(calls.filter(c=>c.method==='thread/goal/set').length,1);
+  assert.equal(calls.filter(c=>c.method==='turn/start').length,1);
+  assert.equal(m.autoTitles.get('t').pendingFirstMessage,false);
+});
+test('goal failure preserves naming eligibility and naming failure does not resend the goal',async()=>{
+  let fail=true;
+  const {m,calls}=setup({goal:()=>{if(fail)throw Error('goal rejected');return {goal:{status:'active'}};},write:()=>{throw Error('name rejected');}});
+  await m.newThread({cwd:'/project'});
+  await assert.rejects(setGoal(m,'t',{objective:'目标'}),/goal rejected/);
+  assert.equal(m.autoTitles.get('t').pendingFirstMessage,true);
+  fail=false;await setGoal(m,'t',{objective:'目标'});await flush(m);
+  assert.equal(calls.filter(c=>c.method==='thread/goal/set').length,2);
+  assert.equal(calls.filter(c=>c.method==='thread/name/set').length,1);
+  assert.equal(m.errors.at(-1).stage,'自动命名');
+});
+test('goal naming preserves native names and ignores late responses after connection replacement',async()=>{
+  for(const mode of ['named','connection']){
+    const {m,calls}=setup({read:()=>({thread:{name:'已有名称'}}),goal:()=>{if(mode==='connection')m.generation++;return {goal:{status:'active'}};}});
+    await m.newThread({cwd:'/project'});await setGoal(m,'t',{objective:'新目标'});await flush(m);
+    assert.equal(calls.filter(c=>c.method==='thread/name/set').length,0);
+    if(mode==='connection')assert.equal(m.autoTitles.get('t').pendingFirstMessage,true);
   }
 });
