@@ -1,3 +1,5 @@
+import {installQueuedInputs} from './queued-inputs.js';
+let queuedInputs;
 import {createSendReceipts,sendReceiptLabels} from './connection-state.js';
 const sendReceipts=createSendReceipts();
 import {installResponseAnnotations,annotatedText} from './response-annotations.js';
@@ -31,7 +33,7 @@ import {NewChatDraft} from './new-chat.js';
 import {installAttachments} from './attachments.js';
 let attachments;
 import {Sidebar,projectFolderOptions} from './sidebar.js';
-import {DraftStore, shouldSendOnEnter, coalesceRefresh} from './input-state.js';
+import {DraftStore, shouldSendOnEnter, coalesceRefresh, followUpAction} from './input-state.js';
 import {installAutomations} from './automations.js';
 let automations;
 import {installThreadSync} from './thread-sync.js';
@@ -353,7 +355,7 @@ function renderConnectionBanner() {
   else banner.hidden = true;
 }
 function renderControls() {
-  annotations?.render();sideChat?.sync();
+  annotations?.render();sideChat?.sync();queuedInputs?.render();
   queueMicrotask(()=>turnNavigation?.update());
   capacityRetry?.tick();
   renderConnectionBanner();
@@ -376,18 +378,20 @@ function renderControls() {
   $('model-select').disabled = !ready || !state.models.length || state.loadingModels;
   $('effort-select').disabled = !ready || !state.model || !effortsFor(state.model).length || state.loadingModels;
   const input = $('message-input'); input.disabled = !ready || !own || posting || handing;
-  input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? '补充要求…' : '发送消息…';
+  const followUp=followUpAction({active,touch:touchInput()});
+  input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? (followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…') : '发送消息…';
   const hasModel = Boolean(state.model && state.models.some(m => modelId(m) === state.model));
   const hasEffort = effortsFor(state.model).some(e => e.value === state.effort);
-  $('send-message').disabled = !!state.status?.loginRecovery || !ready || !own || !featureReady(active?'steer':'message') || posting || attachments?.pending() || (!input.value.trim()&&!attachments?.has()&&!annotations?.has()) || (!active && (!hasModel || !hasEffort));
-  $('send-message').setAttribute('aria-label',active ? '补充当前轮次' : '发送消息');
+  $('send-message').disabled = !!state.status?.loginRecovery || !ready || !own || !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') || posting || attachments?.pending() || (!input.value.trim()&&!attachments?.has()&&!annotations?.has()) || (!active && (!hasModel || !hasEffort));
+  $('send-message').setAttribute('aria-label',active ? (followUp==='queue'?'排队发送':'引导当前任务') : '发送消息');
+  const guide=$('guide-message');if(guide){guide.hidden=!active||touchInput()||state.desktopMode;guide.disabled=!ready||!own||posting||attachments?.pending()||!featureReady('steer')||(!input.value.trim()&&!attachments?.has()&&!annotations?.has());}
   $('message-form').setAttribute('aria-busy',String(posting));
-  $('send-message').title = posting ? '正在发送…' : active ? '补充当前轮次' : '发送消息';
+  $('send-message').title = posting ? '正在发送…' : active ? (followUp==='queue'?'排队发送':'引导当前任务') : '发送消息';
   $('interrupt').hidden = !active&&background.state!=='running'; $('interrupt').disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt');
   $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || handing || !state.selectedId;
   $('takeover').querySelector('span').textContent = switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话';
   const availability = $('composer-availability');
-  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '正在发送…' : state.busy.has('interrupt') ? '正在请求停止，请稍候…' : !featureReady(active?'steer':'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !hasModel ? '请选择一个可用模型。' : own && !hasEffort ? '请选择思考档位。' : '';
+  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '正在发送…' : state.busy.has('interrupt') ? '正在请求停止，请稍候…' : !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !hasModel ? '请选择一个可用模型。' : own && !hasEffort ? '请选择思考档位。' : '';
   availability.textContent = unavailable; availability.hidden = !unavailable;
   $('new-thread').setAttribute('aria-description',!ready ? '连接恢复后可新建会话。' : !state.models.length ? '正在等待目标机器模型目录。' : creating ? '正在创建，请稍候。' : '');
   controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
@@ -712,10 +716,7 @@ function renderMessages() {
   else if (preserveAnchor) {
     const restored = [...rendered.querySelectorAll('.message-turn')].find(node => node.dataset.turnId === anchorId);
     const targetTop = restored ? oldTop + restored.getBoundingClientRect().top - viewportTop - anchorOffset : oldTop + (scroller.scrollHeight - oldHeight);
-    // A short initial page can leave blank space below the last message.
-    // Retain that space so the browser does not clamp the restored position.
-    const missingSpace = targetTop - (scroller.scrollHeight - scroller.clientHeight);
-    if (missingSpace > 0) rendered.style.paddingBottom = (parseFloat(rendered.style.paddingBottom) || 0) + Math.ceil(missingSpace) + 'px';
+    // Clamp to real content when a collapsed group shortens the page.
     scroller.scrollTop = targetTop;
   }
   else scroller.scrollTop = oldTop;
@@ -1229,15 +1230,16 @@ async function createThreadFromDraft(){
   });
   if(created){await sendMessage();void Promise.allSettled([loadThreads(),loadStatus()]);}
 }
-async function sendMessage(e) {
+async function sendMessage(e,alternate=false) {
   e?.preventDefault();
-  if ($('send-message').disabled) return;
+  if ($('send-message').disabled&&!alternate) return;
   if(newChatOpen){await createThreadFromDraft();return;}
   if(state.desktopMode){await sendDesktopMessage();return;}
   const annotationDraft=annotations.capture();
   const text = annotatedText($('message-input').value.trim(),annotationDraft.items), id = state.selectedId;
   if ((!text&&!attachments?.has()) || attachments?.pending() || !id || !usable() || !controlled() || state.busy.has('message')) return;
   const active = running(), selection = state.selectionVersion;
+  const followUp=followUpAction({active,touch:touchInput(),alternate});
   try{composer.validateSend(text,active);}catch(error){toast(error.message,true);return;}
   const sent = state.drafts.capture(id,$('message-input').value), pictures=attachments.capture();
   await action('message',async () => {
@@ -1253,8 +1255,9 @@ async function sendMessage(e) {
     try{
       const goalStarted=await composer.prepareSend(id,text,active);
       submitted=true;
-      d=await sendAfterGoal({goalStarted,id,payload,active,api});
-      sendReceipts.accept(receipt,d);
+      d=followUp==='queue'?await api('/api/threads/'+encodeURIComponent(id)+'/queue-add',{method:'POST',body:payload}):await sendAfterGoal({goalStarted,id,payload,active,api});
+      if(d.queuedSubmission){sendReceipts.remove(scope,receipt);if(scope===targetHost+':'+state.selectedId&&selection===state.selectionVersion&&state.detail){const queue=state.detail.queue||{data:[]};state.detail.queue={...queue,data:[...(queue.data||[]).filter(q=>q.id!==d.queuedSubmission.id),d.queuedSubmission]};}}
+      else sendReceipts.accept(receipt,d);
     }catch(error){
       if(submitted)sendReceipts.fail(receipt,error);else receipt.status='failed';
       if(scope===targetHost+':'+state.selectedId)renderMessages();
@@ -1264,7 +1267,7 @@ async function sendMessage(e) {
     const cleared = state.drafts.acknowledge(sent);
     if (scope===targetHost+':'+state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }
     if (scope===targetHost+':'+state.selectedId && selection === state.selectionVersion) { if(d.turn)upsertTurn(d.turn);renderThread(); }
-    if (active) toast('补充要求已发送到当前轮次。');
+    if (active) toast(followUp==='queue'?'已加入排队，当前任务结束后执行。':'引导已发送到当前轮次。');
     try { if (id === state.selectedId && selection === state.selectionVersion) await refreshSelected(); } catch (err) { recordError(err,'thread'); }
   });
 }
@@ -1530,6 +1533,7 @@ function wireEvents() {
   capacityRetry=installCapacityRetry({container:document.querySelector('.composer-region'),storage:sessionStorage,refresh:refreshSelected,
     context:()=>({host:targetHost,id:state.selectedId,turns:!newChatOpen&&!state.desktopMode?turns():[],unavailableReason:!usable()?'连接尚未恢复，暂不能重试。':running()?'会话正在运行，暂不能重试。':!controlled()?'接管会话后可重试。':'正在确认会话状态，暂不能重试。',ready:!newChatOpen&&!state.desktopMode&&usable()&&controlled()&&!running()&&!uncertainHistory()&&!state.loadingDetail&&!state.historyError&&!state.busy.size}),
     send:async(c,turnId,automatic)=>{try{const result=await api('/api/threads/'+encodeURIComponent(c.id)+'/retry-capacity',{method:'POST',body:{turnId,automatic,model:state.model,effort:state.effort,mode:composer.options().mode}});if(c.host===targetHost&&c.id===state.selectedId){upsertTurn(result.turn);renderThread();scheduleDetailRefresh();}}catch(error){if(c.host===targetHost&&c.id===state.selectedId)await refreshSelected().catch(()=>{});throw error;}}});
+  queuedInputs=installQueuedInputs({host:document.querySelector('#conversation>.composer-region'),context:()=>({host:targetHost,id:state.selectedId,queue:state.detail?.queue,visible:!newChatOpen&&!state.desktopMode,ready:usable()&&controlled(),running:running(),supported:featureReady('queueWrite')}),api,refresh:refreshSelected,onError:error=>toast(messageOf(error),true)});
   scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
   attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady()&&!state.desktopMode,busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});
@@ -1585,12 +1589,13 @@ function wireEvents() {
   historyScroller.addEventListener('wheel',event => { if (event.deltaY < 0) loadEarlierNearTop(); },{passive:true});
   historyScroller.addEventListener('keydown',event => { if (['ArrowUp','PageUp','Home'].includes(event.key)) loadEarlierNearTop(); });
   let searchTimer; $('thread-search').oninput = e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.search = e.target.value.trim(); loadThreads(); },300); };
+  const guide=el('button','text-button','引导');guide.id='guide-message';guide.type='button';guide.title='引导当前任务（⌘/Ctrl+Enter）';guide.hidden=true;guide.onclick=()=>sendMessage(undefined,true);$('interrupt').before(guide);
   $('message-form').onsubmit = sendMessage; $('interrupt').onclick = interruptThread;
   $('message-input').oninput = () => { if (inputId() && !draftWritesSuspended) state.drafts.set(inputId(),$('message-input').value); resizeInput(); renderControls(); };
   let composing = false, compositionEnded = -Infinity;
   $('message-input').addEventListener('compositionstart',() => { composing = true; });
   $('message-input').addEventListener('compositionend',() => { composing = false; compositionEnded = performance.now(); });
-  $('message-input').onkeydown = e => { if (shouldSendOnEnter(e,{touch:touchInput(),composing,compositionEnded})) { e.preventDefault(); if (!$('send-message').disabled) sendMessage(); } };
+  $('message-input').onkeydown = e => { if (shouldSendOnEnter(e,{touch:touchInput(),composing,compositionEnded})) { e.preventDefault(); if (!$('send-message').disabled&&!e.repeat&&!e.altKey) sendMessage(undefined,e.metaKey||e.ctrlKey); } };
   $('model-select').onchange = e => { state.model = e.target.value; state.effort = defaultEffort(state.model); fillEfforts($('effort-select'),state.model,state.effort); settings.open=false;settings.querySelector('summary').focus();renderControls(); };
   $('effort-select').onchange = e => { state.effort = e.target.value;settings.open=false;settings.querySelector('summary').focus();renderControls(); };
   $('new-retry-create').onclick=()=>{newDraft.complete();$('new-chat-error').hidden=true;renderControls();$('message-input').focus();};

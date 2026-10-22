@@ -11,6 +11,7 @@ export function createSendReceipts() {
       const receipt = {id:crypto.randomUUID(),content,status:'sending',seen:new Set(messages(turns).map(i=>i.id))};
       const list=(scopes.get(scope)||[]).filter(r=>r.status!=='failed');list.push(receipt);scopes.set(scope,list);return receipt;
     },
+    remove(scope,receipt) {const list=(scopes.get(scope)||[]).filter(r=>r!==receipt);if(list.length)scopes.set(scope,list);else scopes.delete(scope);},
     accept(receipt, result) {receipt.status='accepted';receipt.turnId=result.turn?.id||result.turnId;},
     fail(receipt, error) {receipt.status=error.status>=400&&error.status<500&&!['OUTCOME_UNKNOWN','SEND_PENDING'].includes(error.code)?'failed':'unknown';},
     view(scope, turns) {

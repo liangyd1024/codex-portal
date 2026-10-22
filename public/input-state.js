@@ -45,3 +45,9 @@ export function coalesceRefresh(refresh) {
     return pending;
   };
 }
+
+// Desktop Codex uses the modified Enter chord for the alternate follow-up action.
+export function followUpAction({active,touch=false,alternate=false}) {
+  if(!active)return 'message';
+  return touch&&!alternate||!touch&&alternate?'steer':'queue';
+}

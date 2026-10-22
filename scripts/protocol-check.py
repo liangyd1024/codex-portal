@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 10
+PROTOCOL_POLICY = 11
 REQUEST_FIELDS = {
     'thread/fork': {'threadId','ephemeral','excludeTurns','developerInstructions','approvalPolicy','sandbox','model','config'},
     'thread/items/list': {'threadId','limit','sortDirection','cursor'},
@@ -37,14 +37,17 @@ REQUEST_FIELDS = {
     'thread/goal/get': {'threadId'},
     'thread/backgroundTerminals/list': {'threadId', 'limit'},
     'thread/backgroundTerminals/terminate': {'threadId','processId'},
-    'thread/queue/list': {'threadId', 'limit'},
+    'thread/queue/list': {'threadId', 'limit', 'cursor'},
+    'thread/queue/add': {'threadId', 'input', 'clientUserMessageId'},
+    'thread/queue/delete': {'threadId', 'queuedSubmissionId'},
+    'thread/queue/start': {'threadId', 'queuedSubmissionId'},
     'turn/start': {'threadId', 'input', 'model', 'effort', 'approvalPolicy', 'sandboxPolicy', 'collaborationMode'},
     'thread/turns/list': {'threadId','limit','sortDirection','itemsView'},
     'collaborationMode/list': set(),
     'skills/list': {'cwds'},
     'plugin/installed': {'cwds'},
     'thread/goal/set': {'threadId','objective','status','tokenBudget','origin'},
-    'turn/steer': {'threadId', 'expectedTurnId', 'input'},
+    'turn/steer': {'threadId', 'expectedTurnId', 'input', 'clientUserMessageId'},
     'turn/interrupt': {'threadId', 'turnId'},
 }
 FEATURE_METHODS = {
@@ -62,6 +65,7 @@ FEATURE_METHODS = {
     'steer': ['turn/steer'],
     'stop': ['turn/interrupt','thread/backgroundTerminals/list','thread/backgroundTerminals/terminate'],
     'queue': ['thread/queue/list'],
+    'queueWrite': ['thread/queue/list','thread/queue/add','thread/queue/delete','thread/queue/start','turn/steer'],
     'release': ['thread/loaded/list', 'thread/read', 'thread/goal/get', 'thread/backgroundTerminals/list', 'thread/queue/list'],
     'handoff': ['thread/unsubscribe', 'thread/loaded/list', 'thread/read', 'thread/goal/get', 'thread/backgroundTerminals/list', 'thread/queue/list'],
 }
