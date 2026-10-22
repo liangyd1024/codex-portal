@@ -30,7 +30,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
   const choice=()=>{const id=context().id;if(!selections.has(id))selections.set(id,{mode:'default',skills:[],plugins:[]});return selections.get(id);};
   mode.onclick=()=>{choice().mode=choice().mode==='plan'?'default':'plan';choice().goalPending=false;save();render();tools.open=false;summary.focus();};
   planBadge.onclick=()=>{choice().mode='default';save();render();summary.focus();};
-  goalBadge.onclick=()=>{if(choice().goalPending){choice().goalPending=false;save();render();summary.focus();}else{tools.open=true;position();bar.querySelector('#goal-settings').focus();}};
+  goalBadge.onclick=()=>{if(choice().goalPending){choice().goalPending=false;save();render();summary.focus();}else{editGoal(goalBadge);}};
   const input=document.getElementById('message-input');
   const references=()=>Array.isArray(choice().references)?choice().references.filter(r=>r&&['skills','plugins'].includes(r.kind)&&typeof r.key==='string'&&typeof r.token==='string'&&r.token.length>1):[];
   const present=()=>mentionRanges(input.value,references());
@@ -92,12 +92,60 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
   bar.querySelector('#plugin-picker').onclick=e=>void picker('plugins',e.currentTarget);
   const goalButton=bar.querySelector('#goal-settings');
   goalButton.onclick=()=>{
+    if(context().goal&&!choice().goalPending){editGoal(goalButton);return;}
     const next=!choice().goalPending;
     choice().goalPending=next;
     if(next){choice().mode='default';delete choice().goalUncertain;}
     save();render();tools.open=false;input.focus();
   };
   let goalUpdating=false;
+  function editGoal(button){
+    const current=context();
+    if(!current.goal||current.goalError){notify('目标暂未读取，请刷新后重试。',true);return;}
+    dialog.classList.remove('catalog-dialog');
+    const c=open('编辑目标',button),id=c.id,version=dialogVersion,selection=choice();
+    const draft=selection.goalEdit||(selection.goalEdit={base:c.goal.objective,text:c.goal.objective});
+    const form=document.createElement('form');form.className='composer-goal';
+    const label=text('label','目标内容'),area=document.createElement('textarea');area.value=draft.text;area.required=true;area.maxLength=10000;area.rows=7;label.append(area);
+    const feedback=text('p','');feedback.setAttribute('role','status');
+    const actions=document.createElement('div');actions.className='goal-edit-actions';
+    const cancel=text('button','取消'),submit=text('button','保存');cancel.type='button';submit.type='submit';cancel.onclick=()=>dialog.close();
+    let reloading=false;
+    const reload=text('button','重新读取目标');reload.type='button';reload.hidden=!draft.uncertain&&draft.base===c.goal.objective;
+    actions.append(reload,cancel,submit);form.append(label,feedback,actions);dialog.append(form);
+    reload.onclick=async()=>{
+      if(goalUpdating||reloading)return;reloading=true;reload.disabled=true;submit.disabled=true;area.readOnly=true;
+      try{const detail=await api('/api/threads/'+encodeURIComponent(id));if(!same())return;if(detail.goalError||!detail.goal)throw Error('目标暂未读取。');draft.base=detail.goal.objective;draft.text=draft.base;delete draft.uncertain;area.value=draft.text;save();feedback.textContent='已读取当前目标。';}
+      catch(error){if(same())feedback.textContent=error.message;}finally{reloading=false;if(same()){reload.disabled=false;submit.disabled=false;area.readOnly=false;}}
+    };
+    const same=()=>context().id===id&&dialog.open&&dialogVersion===version;
+    area.oninput=()=>{draft.text=area.value;save();};
+    form.addEventListener('keydown',e=>{if(e.isComposing||e.keyCode===229){if(e.key==='Enter')e.stopPropagation();}});
+    form.onsubmit=async e=>{
+      e.preventDefault();if(goalUpdating||reloading||!same())return;
+      const now=context(),objective=area.value.trim();
+      if(!now.ready||now.busy||now.goalError){feedback.textContent='连接或目标状态尚未确认，草稿已保留。';return;}
+      if(!objective){feedback.textContent='请填写目标内容。';area.focus();return;}
+      goalUpdating=true;submit.disabled=true;reload.disabled=true;area.readOnly=true;form.setAttribute('aria-busy','true');feedback.textContent='正在保存…';render();
+      let saved=false;
+      try{
+        const route='/api/threads/'+encodeURIComponent(id);
+        if(draft.uncertain){
+          const detail=await api(route);
+          if(detail.goalError||!detail.goal)throw Error('上次保存结果仍未确认，请稍后重试。');
+          if(detail.goal.objective===draft.uncertain)saved=true;
+          else throw Error('上次保存结果未确认，请关闭编辑框并刷新目标后核对。');
+        }else{
+          draft.uncertain=objective;save();
+          try{await api(route+'/goal',{method:'POST',body:{objective,expectedObjective:draft.base}});saved=true;}
+          catch(error){if(error.status>=400&&error.status<500&&error.code!=='OUTCOME_UNKNOWN'){delete draft.uncertain;save();}throw error;}
+        }
+        if(saved){delete selection.goalEdit;save();if(same()){dialog.close();notify('目标已更新。');}if(context().id===id)await refresh();}
+      }catch(error){if(same()){reload.hidden=false;feedback.textContent=(saved?'目标已保存，刷新失败：':'保存未确认：')+error.message;}}
+      finally{goalUpdating=false;if(same()){submit.disabled=false;reload.disabled=false;area.readOnly=false;form.setAttribute('aria-busy','false');}render();}
+    };
+    area.focus();
+  }
   const goalActions=[];
   for(const [value,name] of [['paused','暂停目标'],['active','继续目标'],['complete','完成目标']]){
     const button=text('button',name);button.type='button';panel.append(button);goalActions.push({button,value});
@@ -126,8 +174,8 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
     badges.hidden=planBadge.hidden&&goalBadge.hidden;
     summary.textContent='＋';summary.title='添加图片、技能和工具';summary.dataset.mode=choice().mode;summary.setAttribute('aria-label',choice().mode==='plan'?'更多输入工具，计划模式':'更多输入工具');
     // Attachments can accompany a native turn/steer while the current turn runs.
-    for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||goalUpdating||(control!==images&&control.id!=='skill-picker'&&control.id!=='plugin-picker'&&c.active);
-    goalButton.title='用下一条输入设置目标';goalButton.setAttribute('aria-pressed',String(Boolean(choice().goalPending)));
+    for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||goalUpdating||(control!==images&&control!==goalBadge&&!(control===goalButton&&c.goal)&&control.id!=='skill-picker'&&control.id!=='plugin-picker'&&c.active);
+    goalButton.textContent=c.goal&&!choice().goalPending?'编辑目标':'目标';goalButton.title=c.goal?'编辑当前目标内容':'用下一条输入设置目标';goalButton.setAttribute('aria-pressed',String(Boolean(choice().goalPending)));
     for(const {button,value} of goalActions)button.hidden=c.draft||!c.goal||Boolean(c.goalError)||(value==='paused'?c.goal.status!=='active':value==='active'?c.goal.status!=='paused':c.goal.status==='complete');
     summary.setAttribute('aria-disabled',String(!c.ready||c.busy));if(!c.ready||c.busy)tools.open=false;
     status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ');status.hidden=!status.textContent;

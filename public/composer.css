@@ -100,3 +100,5 @@
 .composer .send-button:disabled{background:#eee;color:#888;opacity:1}
 .composer :is(button,input,select,textarea,summary):focus-visible{outline-color:var(--focus-ring,#000)}
 @media(forced-colors:active){.composer .has-mentions textarea{color:CanvasText;-webkit-text-fill-color:CanvasText}}
+
+.composer-goal textarea{font-family:var(--font-ui);font-size:16px;line-height:1.625;border:1px solid var(--line,#ddd);border-radius:8px;color:inherit;background:transparent}.goal-edit-actions{display:flex;justify-content:flex-end;gap:8px}.goal-edit-actions button{min-height:44px}.goal-edit-actions button[type=submit]{background:#000;color:#fff}.composer-goal [role=status]:empty{display:none}

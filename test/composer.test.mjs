@@ -103,3 +103,15 @@ test('running skill selection rejects stale paths and connection changes before 
   await assert.rejects(m.steer('a',{text:'use skill',skills:[scenario==='missing'?'/untrusted':'/skills/SKILL.md']}));assert.equal(calls.some(c=>c.method==='turn/steer'),false);
  }
 });
+
+test('editing an existing running goal preserves its native status and budget',async()=>{
+ const {m,calls}=fixture();m.controlled.set('a',{status:{type:'active'}});m.activeTurns.set('a','turn');
+ const request=m.rpc.request;m.rpc.request=async(method,params)=>method==='thread/goal/get'?{goal:{objective:'原目标',status:'active',tokenBudget:500}}:request(method,params);
+ await setGoal(m,'a',{objective:' 新目标 ',expectedObjective:'原目标'});
+ assert.deepEqual(calls,[{method:'thread/goal/set',params:{threadId:'a',origin:'user',objective:'新目标'}}]);
+ await assert.rejects(setGoal(m,'a',{objective:'旧修改',expectedObjective:'过期目标'}),e=>e.code==='GOAL_CHANGED');
+ await assert.rejects(setGoal(m,'a',{objective:'新目标',expectedObjective:'原目标',status:'active'}),/参数无效/);
+ assert.equal(calls.length,1);
+ m.rpc.request=async()=>({goal:null});await assert.rejects(setGoal(m,'a',{objective:'新目标',expectedObjective:'原目标'}),e=>e.code==='GOAL_CHANGED');
+ m.rpc.request=async()=>{throw Error('offline');};await assert.rejects(setGoal(m,'a',{objective:'新目标',expectedObjective:'原目标'}),/offline/);
+});
