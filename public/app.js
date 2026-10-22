@@ -904,7 +904,7 @@ function saveDetailSoon(){
 async function restoreDetail(id,seq){
   const version=state.detailVersion;
   const cached=await readDetailCache(targetHost,id);
-  if(!cached||id!==state.selectedId||seq!==state.selectionVersion||version!==state.detailVersion||state.detail)return;
+  if(!cached||id!==state.selectedId||seq!==state.selectionVersion||version!==state.detailVersion||state.detail||state.historyError)return;
   state.loadingDetail=false;applyDetail(cached,true);
 }
 function applyDetail(data, resetModels = false) {
@@ -924,8 +924,6 @@ async function selectThread(id,options={}) {
   if (inputId()) state.drafts.set(inputId(),$('message-input').value);
   const seq = ++state.selectionVersion; state.selectedId = id; state.detail = null; state.historyCursor = null; state.loadedOlderHistory = false; state.loadingDetail = true; state.historyError = ''; saveView();
   $('message-input').value = state.drafts.get(id) || ''; resizeInput(); renderThread(); renderThreads(); if (compactLayout()) toggleSidebar(false, false);
-  await restoreDetail(id,seq);
-  if(seq!==state.selectionVersion)return;
   try { await refreshSelected(); if (seq !== state.selectionVersion) return; scrollFollow?.schedule(); }
   catch (e) { if (seq !== state.selectionVersion) return; state.loadingDetail = false; state.historyError = messageOf(e); recordError(e,'thread'); renderThread(); }
 }
@@ -962,7 +960,9 @@ async function refreshSelected() {
   const isCurrent=()=>!newChatOpen&&id===state.selectedId&&seq===state.selectionVersion&&version===state.detailVersion;
   if(detailReads.has(key)) return detailReads.get(key);
   const read=(async()=>{
-  if(!state.detail)await restoreDetail(id,seq);
+  // Recovery is optional: a slow or blocked IndexedDB read must not delay HTTP.
+  // restoreDetail only applies while this selection still has no network detail.
+  if(!state.detail)void restoreDetail(id,seq);
   if(!isCurrent())return;
   const resetModels=!state.detail||state.loadingDetail;
   const data = await readSelectedDetail(id,isCurrent); if (!isCurrent()) return;

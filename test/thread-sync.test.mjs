@@ -56,16 +56,17 @@ function detailFixture() {
   const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
   const state={selectedId:'a',selectionVersion:1,detailVersion:1,detail:{thread:{id:'a'},turns:[]},loadedOlderHistory:false,
     status:{instanceId:'one',connection:{state:'connected'},controlledThreads:[],handoffs:[]}};
-  const requests=[],applied=[];
+  const requests=[],applied=[],cacheReads=[];
   const context=vm.createContext({state,newChatOpen:false,automations:null,desktopSends:{},performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
     turns:()=>state.detail?.turns||[],outputBases:()=>new Map(),decodeOutputs:async x=>x,hydrateOutputs:x=>x,
-    restoreDetail:async()=>{},scheduleDetailRefresh:()=>{},
+    readDetailCache:()=>new Promise(resolve=>cacheReads.push(resolve)),scheduleDetailRefresh:()=>{},
     api:path=>new Promise((resolve,reject)=>requests.push({path,resolve,reject})),
     applyDetail:data=>{state.detail=data;applied.push(data);},
   });
+  vm.runInContext(source.slice(source.indexOf('async function restoreDetail('),source.indexOf('function applyDetail(')),context);
   vm.runInContext(source.slice(source.indexOf('async function readSelectedDetail('),source.indexOf('async function refreshWorkspace('))+'\nglobalThis.read=refreshSelected;',context);
   vm.runInContext(source.slice(source.indexOf('function applyStatus('),source.indexOf('\nconst $'))+'\nglobalThis.status=applyStatus;',context);
-  return {state,requests,applied,context,read:context.read,status:context.status};
+  return {state,requests,applied,cacheReads,context,read:context.read,status:context.status};
 }
 test('late thread and connection replies cannot overwrite a new selection; duplicate reads coalesce',async()=>{
   const f=detailFixture(),old=f.read(),duplicate=f.read();assert.equal(f.requests.length,1);
@@ -140,4 +141,35 @@ test('native management replies cannot replace a newly selected ordinary chat',a
   f.requests[0].resolve({thread:{id:'a'},turns:[],desktop:{receipts:{}}});await old;
   assert.equal(f.applied.length,0);
   f.context.automations={opened:true};await f.read();assert.equal(f.requests.length,1);
+});
+
+
+test('cold history starts HTTP without waiting for recovery and reads cache only once',async()=>{
+  const f=detailFixture();f.state.detail=null;
+  const read=f.read(),duplicate=f.read();
+  assert.equal(f.cacheReads.length,1);assert.equal(f.requests.length,1);
+  assert.match(f.requests[0].path,/preview=1/);
+  f.requests[0].resolve({thread:{id:'a'},turns:[{id:'fresh',items:[]}]});await settle();
+  assert.equal(f.applied.length,1);assert.equal(f.requests.length,2);
+  f.cacheReads[0]({thread:{id:'a'},turns:[{id:'stale',items:[]}],recovering:true});await settle();
+  assert.equal(f.applied.length,1);
+  f.requests[1].resolve({thread:{id:'a'},turns:[{id:'fresh',items:[]}]});await Promise.all([read,duplicate]);
+  assert.equal(f.state.detail.turns[0].id,'fresh');
+});
+test('fast recovery can display while HTTP is pending, without granting control',async()=>{
+  const f=detailFixture();f.state.detail=null;
+  const read=f.read();
+  f.cacheReads[0]({thread:{id:'a'},turns:[],controlled:false,recovering:true});await settle();
+  assert.equal(f.state.detail.recovering,true);assert.equal(f.state.detail.controlled,false);
+  f.requests[0].resolve({thread:{id:'a'},turns:[],controlled:true});await settle();
+  f.requests[1].resolve({thread:{id:'a'},turns:[],controlled:true});await read;
+  assert.equal(f.state.detail.controlled,true);assert.equal(f.state.detail.recovering,undefined);
+});
+test('late recovery ignores changed selections, connection versions and failed reads',async()=>{
+  for(const change of [f=>f.state.selectionVersion++,f=>f.state.detailVersion++,f=>f.state.historyError='读取失败']){
+    const f=detailFixture();f.state.detail=null;const read=f.read();change(f);
+    f.cacheReads[0]({thread:{id:'a'},turns:[],recovering:true});await settle();
+    assert.equal(f.applied.length,0);
+    f.requests[0].reject(Error('read failed'));await read.catch(()=>{});
+  }
 });
