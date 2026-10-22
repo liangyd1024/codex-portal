@@ -32,12 +32,12 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
   planBadge.onclick=()=>{choice().mode='default';save();render();summary.focus();};
   goalBadge.onclick=()=>{if(choice().goalPending){choice().goalPending=false;save();render();summary.focus();}else{editGoal(goalBadge);}};
   const input=document.getElementById('message-input');
-  const references=()=>Array.isArray(choice().references)?choice().references.filter(r=>r&&['skills','plugins'].includes(r.kind)&&typeof r.key==='string'&&typeof r.token==='string'&&r.token.length>1):[];
+  const references=()=>Array.isArray(choice().references)?choice().references.filter(r=>r&&['skills','plugins','threads'].includes(r.kind)&&typeof r.key==='string'&&typeof r.token==='string'&&r.token.length>1):[];
   const present=()=>mentionRanges(input.value,references());
-  const syncReferences=()=>{const active=present();for(const kind of ['skills','plugins'])choice()[kind]=[...new Set(active.filter(r=>r.kind===kind).map(r=>r.key))];};
+  const syncReferences=()=>{const active=present();for(const kind of ['skills','plugins','threads'])choice()[kind]=[...new Set(active.filter(r=>r.kind===kind).map(r=>r.key))];};
   function insertReference(entry,kind='skills',range){
     const key=kind==='skills'?entry.path:entry.id;
-    const token=(kind==='skills'?'$':'@')+(entry.name||key).replace(/\s+/gu,'-');
+    const token=(kind==='skills'?'$':'@')+(entry.name||key).replace(/\s+/gu,'-')+(kind==='threads'?'·'+key.slice(-8):'');
     const collision=present().find(r=>r.token===token&&r.key!==key);if(collision){notify('同名能力已在草稿中，请先删除原引用再选择。',true);return false;}
     choice().references=[...references().filter(r=>r.token!==token&&!(r.kind===kind&&r.key===key)),{kind,key,token}];
     const start=range?.start??input.selectionStart,end=range?.end??input.selectionEnd;
@@ -181,7 +181,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
     status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
-  return {render,validateSend:(text,active)=>validateGoalDraft(choice(),text,active),prepareSend:async(id,text,active)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,api,save}):false;render();return started;},moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins}=choice();return {mode,skills:[...skills],plugins:[...plugins],access:WEB_ACCESS};},isLoading:()=>loading};
+  return {render,validateSend:(text,active)=>validateGoalDraft(choice(),text,active),prepareSend:async(id,text,active)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,api,save}):false;render();return started;},moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();return {mode,skills:[...skills],plugins:[...plugins],threads:[...threads],access:WEB_ACCESS};},isLoading:()=>loading};
 }
 
 // Match the desktop's completed native plan item, never infer plans from prose.

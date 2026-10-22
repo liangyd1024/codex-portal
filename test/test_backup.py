@@ -6,6 +6,7 @@ class BackupTests(unittest.TestCase):
   cls.root=pathlib.Path(tempfile.mkdtemp(prefix='rcm-tests-'));cls.home=cls.root/'home';cls.support=cls.home/'Library/Application Support/RemoteCodexManager';cls.data=cls.home/'.codex/remote-codex-manager';cls.support.mkdir(parents=True);cls.data.mkdir(parents=True)
   (cls.support/'connections.json').write_text(json.dumps({'formatVersion':1,'machineId':'test','connections':[]}))
   (cls.data/'web-titles-local.json').write_text('[]');(cls.data/'web-titles-local.json.connection.json').write_text('{"enabled":true}')
+  (cls.data/'web-titles-local.json.desktop-00000000-0000-0000-0000-000000000001.json').write_text('{"submissions":{}}')
   (cls.data/'web-titles-local.json.native-automations.json').write_text('{"threadId":null,"submissions":{}}')
   (cls.data/'web-titles-local.json.handoffs.json').write_text('[["test-thread",{"state":"waiting","requestedAt":1}]]')
   for name in ['auth.json','state_5.sqlite','secret.key']:(cls.home/'.codex'/name).write_text('DO-NOT-BACKUP')
@@ -33,7 +34,7 @@ class BackupTests(unittest.TestCase):
   finally:stop.set();t.join()
  def test_complete_restore_and_scope(self):
   dest=self.root/'restored';r=b.prepare(self.result['index'],self.identity,'test',dest);self.assertFalse(r['liveDataChanged'])
-  m=b.verify_tree(dest,'test');self.assertIn('data/output-journal.sqlite',m['files']);self.assertIn('data/web-titles-local.json.connection.json',m['files']);self.assertEqual(m['browserSnapshots'],[]);self.assertIn('data/web-titles-local.json.native-automations.json',m['files'])
+  m=b.verify_tree(dest,'test');self.assertIn('data/output-journal.sqlite',m['files']);self.assertIn('data/web-titles-local.json.connection.json',m['files']);self.assertEqual(m['browserSnapshots'],[]);self.assertIn('data/web-titles-local.json.native-automations.json',m['files']);self.assertIn('data/web-titles-local.json.desktop-00000000-0000-0000-0000-000000000001.json',m['files'])
   self.assertEqual(json.loads((dest/'data/web-titles-local.json.handoffs.json').read_text()),[['test-thread',{'state':'waiting','requestedAt':1}]])
   self.assertFalse(any(any(secret in n for secret in ['auth.json','state_5.sqlite','secret','-wal','-shm']) for n in m['files']))
  def test_wrong_key_rejected_before_extraction(self):

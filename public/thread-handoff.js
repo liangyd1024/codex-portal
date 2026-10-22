@@ -1,7 +1,7 @@
 export function handoffMessage(handoff,connected) {
   if(!handoff)return '';
   if(handoff.state==='checking')return '正在检查此会话能否交还…';
-  if(handoff.state==='released')return '已结束网页使用。可在桌面端点击“重试”继续；草稿保留在此网页。';
+  if(handoff.state==='released')return '已结束网页使用。请在桌面打开此会话（如有提示可点“重试”），再选择“通过桌面继续”。草稿保留在此网页。';
   if(!connected)return '交还状态待确认。恢复连接后会继续检查，网页不会自动接管此会话。';
   if(handoff.state==='waiting'){
     const delay=handoff.unloadDelaySecs;

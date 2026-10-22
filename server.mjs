@@ -32,6 +32,14 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
  const managers=providedManagers||new Map(config.connections.map(host=>[host.id,new Manager({titleStore:path.join(stateDir,`web-titles-${host.id}.json`),host:publicHost(host),...(host.kind==='local'?createLocalTransport(host):createSshTransport(host))})]));
  const manager=managers.get(config.defaultConnection);
  const automations=new Map([...managers].map(([id,m])=>[id,new NativeAutomations(m)]));
+ const desktopSessions=new Map();
+ const desktopSession=(host,id)=>{
+   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))throw new AppError('会话 ID 无效。');
+   if(automations.get(host).state.threadId===id)return automations.get(host);
+   const key=host+':'+id;
+   if(!desktopSessions.has(key))desktopSessions.set(key,new NativeAutomations(managers.get(host),{threadId:id}));
+   return desktopSessions.get(key);
+ };
   const broadcasts=new Map();
   const staticResponse=createStaticResponse();
   const csrf=randomBytes(32).toString('hex'); const clients=new Set();
@@ -87,6 +95,9 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       if(req.method==='GET'&&p==='/api/account/usage')return json(res,200,await readAccountUsage(manager));
       if(req.method==='GET'&&p==='/api/system/deployment-status'){if(remote)throw new AppError('仅限本机部署检查。',403);return json(res,200,await deploymentStatus(manager));}
       if(req.method==='GET'&&p==='/api/status')return json(res,200,manager.status());
+      const desktopMatch=p.match(/^\/api\/desktop\/threads\/([0-9a-f-]{36})(?:\/(history|message|interrupt|acknowledge))?$/i);
+      if(req.method==='GET'&&p==='/api/desktop/candidates')return json(res,200,await manager.passive('threads',{search:url.searchParams.get('search')||'',cursor:url.searchParams.get('cursor')}));
+      if(req.method==='GET'&&desktopMatch){const session=desktopSession(targetKey,desktopMatch[1]);if(!desktopMatch[2])return json(res,200,await session.detail());if(desktopMatch[2]==='history')return json(res,200,await session.history(url.searchParams.get('cursor'),desktopMatch[1]));}
       if(req.method==='GET'&&p==='/api/automations')return json(res,200,await automations.get(targetKey).list());
       if(req.method==='GET'&&p==='/api/automations/candidates')return json(res,200,await automations.get(targetKey).candidates(url.searchParams.get('search')||''));
       if(req.method==='GET'&&p==='/api/automations/history')return json(res,200,await automations.get(targetKey).history(url.searchParams.get('cursor'),url.searchParams.get('threadId')));
@@ -116,6 +127,8 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
         if(p==='/api/system/update'){if(server.address()?.port!==4317&&!providedManagers)throw new AppError('开发预览不能更新正式服务。',409);if(Object.keys(data).length)throw new AppError('更新接口不接受仓库、版本或会话参数。');return json(res,202,await updater.start());}
         if(p==='/api/project-folders')return json(res,200,await createFolder(manager,data));
         if(p==='/api/projects/open')return json(res,200,await openFolderProject(manager,data));
+        if(desktopMatch){const session=desktopSession(targetKey,desktopMatch[1]),payload={...data,threadId:desktopMatch[1]};const fn={message:()=>session.send(payload),interrupt:()=>session.interrupt(payload),acknowledge:()=>session.acknowledge(payload)}[desktopMatch[2]];if(fn)return json(res,200,await fn());}
+        if(match&&desktopSessions.get(targetKey+':'+match[1])?.pending)throw new AppError('桌面发送仍在确认中，请稍后重试。',409,'SEND_PENDING');
         if(p==='/api/automations/binding')return json(res,200,await automations.get(targetKey).bind(data.threadId));
         if(p==='/api/automations/interrupt')return json(res,200,await automations.get(targetKey).interrupt(data));
         if(p==='/api/automations/message')return json(res,200,await automations.get(targetKey).send(data));

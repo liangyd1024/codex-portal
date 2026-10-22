@@ -5,7 +5,7 @@ import argparse, datetime, hashlib, io, json, os, pathlib, re, shutil, sqlite3, 
 FORMAT = 1
 TABLES = {'commands', 'output_chunks', 'startup_prefixes', 'notification_events', 'turn_owners'}
 MOBILE = {'config.json','sessions.json','sessions.json.code','Codex-Local-CA.crt','ca.key','server.key','server.crt','Codex-Local-CA.srl','server.csr','server.ext','lan.png','tailscale.png'}
-STATE = re.compile(r'web-titles-[A-Za-z0-9_-]+\.json(?:\.(?:subscriptions|handoffs|notices|connection|native-automations)\.json)?$')
+STATE = re.compile(r'web-titles-[A-Za-z0-9_-]+\.json(?:\.(?:subscriptions|handoffs|notices|connection|native-automations|desktop-[0-9a-f-]{36})\.json)?$')
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 def stamp(): return datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')

@@ -12,6 +12,12 @@ export function matchingPlugins(entries,query='') {
   return matchingSkills(entries.filter(e=>e.installed).map(e=>({...e,path:e.id})),query);
 }
 
+export function matchingThreads(entries, currentId) {
+  const seen=new Set();
+  return entries.filter(e=>e.id!==currentId&&!e.archived&&!e.ephemeral&&e.threadSource!=='ambient_suggestions'&&!seen.has(e.id)&&seen.add(e.id))
+    .map(e=>({id:e.id,path:e.id,name:e.name||e.title||'未命名会话',description:(e.cwd||'').split('/').filter(Boolean).at(-1)||'',scope:'thread'}));
+}
+
 export function skillPresentation(entry) {
   return {name:entry.interface?.displayName||entry.name,
     description:entry.interface?.shortDescription||entry.shortDescription||entry.description||'',
@@ -38,20 +44,25 @@ export function installSkillSuggestions({input,api,context,select}) {
   async function update(){
     close();rows=[];if(composing||input.disabled||!context().ready||context().busy)return;
     query=pluginQuery(input.value,input.selectionStart)||skillQuery(input.value,input.selectionStart);if(!query)return;
-    const kind=query.kind||'skills',label=kind==='plugins'?'插件':'技能';box.setAttribute('aria-label',label);
+    const desktop=context().desktop;
+    if(desktop&&query.kind!=='plugins')return;
+    const kind=desktop?'threads':query.kind||'skills',label=kind==='threads'?'会话':kind==='plugins'?'插件':'技能';
+    query.kind=kind;box.setAttribute('aria-label',label);
+    if(desktop&&!context().threadReferencesSupported){box.hidden=false;box.textContent='此桌面会话尚未确认支持会话引用，请在桌面新建支持引用的会话。';input.setAttribute('aria-expanded','true');position();return;}
     const stamp=version,id=context().id,cwd=context().cwd,value=input.value,caret=input.selectionStart;
     box.replaceChildren();box.hidden=false;input.setAttribute('aria-expanded','true');position();box.textContent='正在读取'+label+'…';input.removeAttribute('aria-activedescendant');
     try{
-      const catalog=await api('/api/composer?cwd='+encodeURIComponent(cwd)+'&kind='+kind);
+      if(kind==='threads'){await new Promise(resolve=>setTimeout(resolve,180));if(stamp!==version)return;}
+      const catalog=kind==='threads'?{threads:await api('/api/desktop/candidates?search='+encodeURIComponent(query.query))}:await api('/api/composer?cwd='+encodeURIComponent(cwd)+'&kind='+kind);
       if(stamp!==version||context().id!==id||context().cwd!==cwd||input.value!==value||input.selectionStart!==caret)return;
       const source=catalog[kind];if(source.error)throw Error(source.error);
-      rows=kind==='plugins'?matchingPlugins((source.marketplaces||[]).flatMap(e=>e.plugins||[]),query.query):matchingSkills((source.data||[]).flatMap(e=>e.skills||[]),query.query);
+      rows=kind==='threads'?matchingThreads(source.data||[],id):kind==='plugins'?matchingPlugins((source.marketplaces||[]).flatMap(e=>e.plugins||[]),query.query):matchingSkills((source.data||[]).flatMap(e=>e.skills||[]),query.query);
       box.replaceChildren();index=0;
       const heading=document.createElement('div');heading.className='skill-suggestions-heading';heading.textContent=label;box.append(heading);
       for(const [i,entry] of rows.entries()){
         const button=document.createElement('button');button.type='button';button.id='skill-option-'+i;button.setAttribute('role','option');
         const view=skillPresentation(entry);
-        const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.classList.add('icon');icon.setAttribute('aria-hidden','true');const use=document.createElementNS(icon.namespaceURI,'use');use.setAttribute('href','#i-mark');icon.append(use);
+        const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.classList.add('icon');icon.setAttribute('aria-hidden','true');const use=document.createElementNS(icon.namespaceURI,'use');use.setAttribute('href',kind==='threads'?'#i-chat':'#i-mark');icon.append(use);
         const name=document.createElement('strong');name.textContent=view.name;name.title=entry.name;
         const description=document.createElement('span');description.className='skill-description';description.textContent=view.description;
         const source=document.createElement('span');source.className='skill-source';source.textContent=view.source;
@@ -60,6 +71,7 @@ export function installSkillSuggestions({input,api,context,select}) {
       }
       if(!rows.length)box.append(document.createTextNode('没有匹配的可用'+label+'。'));
       if((source.data||[]).some(e=>e.errors?.length)||source.marketplaceLoadErrors?.length)box.append(document.createTextNode('部分目录未能读取，请重新输入以重试。'));
+      if(kind==='threads'&&source.nextCursor)box.append(document.createTextNode('输入会话名称可查找更早的会话。'));
       highlight();position();
     }catch(error){if(stamp===version){rows=[];box.textContent=label+'读取失败，重新输入可重试：'+error.message;}}
   }

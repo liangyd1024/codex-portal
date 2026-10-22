@@ -135,7 +135,7 @@ test('structured skill confirmation removes optimistic echo without dropping oth
 
 test('native management replies cannot replace a newly selected ordinary chat',async()=>{
   const f=detailFixture();f.state.desktopMode=true;
-  const old=f.read();assert.equal(f.requests[0].path,'/api/automations/session');
+  const old=f.read();assert.equal(f.requests[0].path,'/api/desktop/threads/a');
   f.state.desktopMode=false;f.state.selectedId='b';f.state.selectionVersion++;
   f.requests[0].resolve({thread:{id:'a'},turns:[],desktop:{receipts:{}}});await old;
   assert.equal(f.applied.length,0);

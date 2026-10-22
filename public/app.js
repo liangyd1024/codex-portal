@@ -96,7 +96,7 @@ const newDraftId='local:new-chat-draft';
 const newDraft=new NewChatDraft(sessionStorage,'rcm.new-chat.'+targetHost);
 let newChatOpen=false;
 const inputId=()=>newChatOpen?newDraftId:state.selectedId;
-const inputReady=()=>state.desktopMode&&!newChatOpen?false:newChatOpen?usable()&&Boolean(newDraft.cwd):usable()&&controlled()&&!state.selectedArchived;
+const inputReady=()=>state.desktopMode&&!newChatOpen?Boolean(state.transport&&state.detail?.desktop?.available):newChatOpen?usable()&&Boolean(newDraft.cwd):usable()&&controlled()&&!state.selectedArchived;
 function rememberNewDraft(){try{newDraft.save();}catch{toast('新会话草稿设置暂未保存，请保留当前页面。',true);}}
 function closeNewChat(restore=true){
   if(!newChatOpen)return;
@@ -353,7 +353,7 @@ function renderControls() {
   const background = backgroundActivity(state.detail,{controlled:own,connected:ready});
   const handoff=currentHandoff(),handing=state.busy.has('handoff:'+state.selectedId)||handoff?.state==='checking';
   handoffControls??=createHandoffControls({endUse:endThreadUse});
-  handoffControls.render({id:newChatOpen?null:state.selectedId,context:targetHost+':'+state.selectedId+':'+state.selectionVersion,running:active,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId)),handoff,connected:ready,
+  handoffControls.render({id:newChatOpen||state.desktopMode?null:state.selectedId,context:targetHost+':'+state.selectedId+':'+state.selectionVersion,running:active,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId)),handoff,connected:ready,
     supported:state.status?.service?.protocolValidation?.features?.handoff?.supported===true,busy:handing,archived:state.selectedArchived,conflict:state.detail?.controlState==='conflict'});
   const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
   $('connection-select').disabled=creating;
@@ -421,15 +421,19 @@ function renderControls() {
     feedback.textContent = pending ? '正在提交，请稍候…' : card.dataset.asyncQuestion==='true'&&!state.status?.controlledThreads?.includes(card.dataset.threadId) ? '查看模式，请在原操作入口回答。' : !ready ? '连接恢复后可处理此请求，已填内容会保留。' : '';
     feedback.hidden = !feedback.textContent;
   });
+  if($('desktop-entry')){
+    $('desktop-entry').hidden=newChatOpen||!state.selectedId||state.selectedArchived||own||state.desktopMode;
+    $('desktop-entry').disabled=!state.transport||state.busy.size>0||Boolean(handoff&&handoff.state!=='released');
+  }
   if($('desktop-review'))$('desktop-review').hidden=true;
   if(state.desktopMode&&!newChatOpen){
     const desktop=state.detail?.desktop,online=state.transport&&desktop?.available,unconfirmed=desktop?.unconfirmed||desktopSends[state.selectedId]?.messageId;
-    input.disabled=posting;input.placeholder=active?'任务执行中，可先输入下一条要求…':'描述要创建、修改或删除的定时任务…';
+    input.disabled=posting;input.placeholder=active?'任务执行中，可先输入下一条要求…':'发送消息，输入 @ 引用会话…';
     $('takeover').hidden=true;
     $('send-message').disabled=!online||!desktop?.canSend||!!unconfirmed||posting||!input.value.trim();
     $('send-message').title='发送到桌面会话';$('send-message').setAttribute('aria-label','发送到桌面会话');
     $('interrupt').hidden=!active;$('interrupt').disabled=!online||state.busy.has('interrupt');
-    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'正在发送到桌面…':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复创建任务。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
+    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'正在发送到桌面…':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     availability.textContent=reason;availability.hidden=!reason;
     $('desktop-review').hidden=!unconfirmed;$('desktop-review').disabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
     setText('composer-hint','使用桌面会话的模型与设置。发送成功仅代表会话已接收，任务结果以原始回复为准。');
@@ -638,7 +642,7 @@ function renderMessages() {
   if (state.historyError) { n.append(el('div','turn-error',state.historyError)); if(!turns().length){commit();return;} }
   if(state.detail?.recovering)n.append(el('div','history-notice','已恢复本机保存的输出，正在同步最新内容…')); 
   for (const notice of state.runtimeNotices.get(state.selectedId)?.values() || []) n.append(renderExtensionNotice(notice));
-  if (!turns().length) { const empty = el('div','empty-history'); empty.append(icon('chat'),el('p','','此会话暂无消息。'),el('p','',controlled() ? '输入要求，开始目标机器工作。' : '接管后，可以在此会话开始工作。')); n.append(empty); }
+  if (!turns().length) { const empty = el('div','empty-history'); empty.append(icon('chat'),el('p','','此会话暂无消息。'),el('p','',state.desktopMode ? '通过桌面继续此会话。' : controlled() ? '输入要求，开始目标机器工作。' : '接管后，可以在此会话开始工作。')); n.append(empty); }
   turns().forEach(t => {
     const cachedTurn=messageCache.render('turn:'+t.id,renderSignature([renderContext,t]),()=>{
     const turn = el('section','message-turn'); turn.dataset.turnId = t.id;
@@ -708,7 +712,7 @@ function renderThread() {
   note.className = 'control-note';
   note.textContent = own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话由其他入口管理，当前为查看模式。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
   if (snapshotHistory()) note.textContent = (own ? '历史来自快照。实时状态由目标机器控制连接确认。' : '历史快照，运行状态需接管后确认。') + (busy ? ' ' + note.textContent : '');
-  if(state.desktopMode){badge.textContent='桌面托管';note.textContent='消息由 Codex 桌面执行，定时任务与桌面共用。';}
+  if(state.desktopMode){badge.textContent='桌面托管';note.textContent='消息由 Codex 桌面执行，沿用该会话的原生工具。';}
   renderMessages(); renderSession(); renderFiles(); renderControls(); resizeInput();
 }
 function renderSession() {
@@ -924,7 +928,7 @@ async function selectThread(id,options={}) {
 }
 async function readSelectedDetail(id,isCurrent){
   if(state.desktopMode){
-    const data=await api('/api/automations/session');if(data.thread.id!==id)throw new Error('管理会话已更换，请从定时任务入口重新打开。');
+    const data=await api('/api/desktop/threads/'+encodeURIComponent(id));if(data.thread.id!==id)throw new Error('桌面会话已变化，请重新打开。');
     const pending=desktopSends[id];
     if(pending&&data.desktop?.receipts?.[pending.messageId]?.status==='accepted'){
       if(state.drafts.get(id)===pending.text){state.drafts.set(id,'');if(isCurrent()&&$('message-input').value===pending.text){$('message-input').value='';resizeInput();}}
@@ -1217,6 +1221,7 @@ async function sendMessage(e) {
   await action('message',async () => {
     const images=pictures.items.map(i=>({url:i.url}));
     const options=composer.options();
+    if(options.threads.length)throw new Error('会话引用需要通过桌面继续，请切换入口或删除引用。');
     const payload = active ? {text,images,skills:options.skills,plugins:options.plugins} : {text,images,model:state.model,effort:state.effort,...options};
     const goalStarted=await composer.prepareSend(id,text,active);
     const d=await sendAfterGoal({goalStarted,id,payload,active,api});
@@ -1245,14 +1250,20 @@ async function sendDesktopMessage(){
   const id=state.selectedId,selection=state.selectionVersion,text=$('message-input').value.trim();
   if(!text||state.busy.has('message')||!state.detail?.desktop?.canSend)return;
   if(desktopSends[id])return;
+  if(attachments?.has()){toast('桌面入口暂不支持草稿中的图片，请返回网页入口处理图片后再发送。',true);return;}
+  const options=composer.options();
+  if(options.skills.length||options.plugins.length){toast('桌面入口暂不支持草稿中的技能或插件引用，请删除后再发送。',true);return;}
   const sent=state.drafts.capture(id,$('message-input').value),messageId=crypto.randomUUID();
   desktopSends[id]={messageId,text:sent.text};saveDesktopSends();
   await action('message',async()=>{
     try{
-      await api('/api/automations/message',{method:'POST',body:{threadId:id,messageId,text}});
+      await api('/api/desktop/threads/'+encodeURIComponent(id)+'/message',{method:'POST',body:{messageId,text,threads:options.threads}});
       delete desktopSends[id];saveDesktopSends();
       const cleared=state.drafts.acknowledge(sent);
       if(id===state.selectedId&&selection===state.selectionVersion&&cleared&&$('message-input').value===sent.text){$('message-input').value='';resizeInput();}
+    }catch(error){
+      if(error.status>=400&&error.status<500&&error.code!=='OUTCOME_UNKNOWN'&&error.code!=='SEND_PENDING'){delete desktopSends[id];saveDesktopSends();}
+      throw error;
     }finally{
       if(id===state.selectedId&&selection===state.selectionVersion)await refreshSelected();
     }
@@ -1262,7 +1273,7 @@ async function interruptThread() {
   if(state.desktopMode){
     const threadId=state.selectedId,turnId=[...turns()].reverse().find(t=>['inProgress','in_progress','running'].includes(typeOf(t.status)))?.id;
     if(!turnId)return;
-    await action('interrupt',async()=>{await api('/api/automations/interrupt',{method:'POST',body:{threadId,turnId}});toast('停止请求已交给桌面，等待状态确认。');if(threadId===state.selectedId)await refreshSelected();});return;
+    await action('interrupt',async()=>{await api('/api/desktop/threads/'+encodeURIComponent(threadId)+'/interrupt',{method:'POST',body:{turnId}});toast('停止请求已交给桌面，等待状态确认。');if(threadId===state.selectedId)await refreshSelected();});return;
   }
   if (!state.selectedId || !controlled()) return;
   const id = state.selectedId;
@@ -1274,7 +1285,7 @@ async function moreHistory() {
   $('messages-scroller').setAttribute('aria-busy','true');
   try { await action('history',async () => {
     let d;
-    try{d=await api((state.desktopMode?'/api/automations/history':'/api/threads/'+encodeURIComponent(id)+'/history')+'?cursor='+encodeURIComponent(state.historyCursor)+(state.desktopMode?'&threadId='+encodeURIComponent(id):''));}
+    try{d=await api((state.desktopMode?'/api/desktop/threads/'+encodeURIComponent(id)+'/history':'/api/threads/'+encodeURIComponent(id)+'/history')+'?cursor='+encodeURIComponent(state.historyCursor)+(state.desktopMode?'&threadId='+encodeURIComponent(id):''));}
     catch(error){if(error.code==='HISTORY_CURSOR_CHANGED')throw new Error('历史记录已更新。请刷新会话后再向上滚动。');throw error;}
     if (id !== state.selectedId || version !== state.selectionVersion) return;
     const old = new Map(turns().map(t => [t.id,t])); const all = [...[...(d.data || [])].reverse(),...turns()]; const seen = new Set(); state.detail.turns = all.filter(t => !seen.has(t.id) && seen.add(t.id)).map(t => old.get(t.id) || t);
@@ -1470,8 +1481,9 @@ function wireEvents() {
     openSession:async(id,prompt)=>{await selectThread(id,{desktop:true});if(prompt&&state.selectedId===id){const previous=$('message-input').value;if(previous&&previous!==prompt){toast('管理会话已有未发送草稿，请先处理草稿，再返回定时任务继续。');$('message-input').focus();return;}$('message-input').value=prompt;state.drafts.set(id,$('message-input').value);resizeInput();renderControls();}$('message-input').focus();},
     openThread:id=>selectThread(id),notify:toast});
   const scheduleNav=el('button','automations-nav');scheduleNav.id='open-automations';scheduleNav.type='button';scheduleNav.textContent='定时任务';scheduleNav.onclick=()=>automations.open();document.querySelector('.inspector-nav').append(scheduleNav);
+  const desktopEntry=el('button','text-button','通过桌面继续');desktopEntry.id='desktop-entry';desktopEntry.type='button';desktopEntry.hidden=true;desktopEntry.onclick=()=>selectThread(state.selectedId,{desktop:true});$('takeover').after(desktopEntry);
   const review=el('button','text-button','已核对会话记录，解锁发送');review.id='desktop-review';review.type='button';review.hidden=true;
-  review.onclick=()=>action('desktop-review',async()=>{const threadId=state.selectedId;await api('/api/automations/acknowledge',{method:'POST',body:{threadId,messageId:state.detail?.desktop?.unconfirmed||desktopSends[threadId]?.messageId}});delete desktopSends[threadId];saveDesktopSends();await refreshSelected();});
+  review.onclick=()=>action('desktop-review',async()=>{const threadId=state.selectedId;await api('/api/desktop/threads/'+encodeURIComponent(threadId)+'/acknowledge',{method:'POST',body:{messageId:state.detail?.desktop?.unconfirmed||desktopSends[threadId]?.messageId}});delete desktopSends[threadId];saveDesktopSends();await refreshSelected();});
   $('composer-availability').after(review);
   document.querySelector('.main-panel').classList.toggle('desktop-chat',state.desktopMode);
   setInterval(()=>{if(automations.opened&&!document.hidden)void automations.refresh();},15000);
@@ -1480,12 +1492,12 @@ function wireEvents() {
     context:()=>({host:targetHost,id:state.selectedId,turns:!newChatOpen&&!state.desktopMode?turns():[],ready:!newChatOpen&&!state.desktopMode&&usable()&&controlled()&&!running()&&!uncertainHistory()&&!state.loadingDetail&&!state.historyError&&!state.busy.size}),
     send:async(c,turnId,automatic)=>{const result=await api('/api/threads/'+encodeURIComponent(c.id)+'/retry-capacity',{method:'POST',body:{turnId,automatic,model:state.model,effort:state.effort,mode:composer.options().mode}});if(c.host===targetHost&&c.id===state.selectedId){upsertTurn(result.turn);renderThread();scheduleDetailRefresh();}}});
   scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
-  attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady(),busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
+  attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady()&&!state.desktopMode,busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});
   projectFolders=configureProjectBrowser({api,context:()=>({host:targetHost,instance:state.status?.instanceId,ready:newChatOpen&&usable()&&!$('new-cwd').disabled,open:newChatOpen}),onSelect:project=>{
     state.projects=[...state.projects.filter(p=>p.id!==project.id),project];updateNewProjects(project.roots[0]);renderProjects();renderControls();void loadThreads().catch(error=>recordError(error,'刷新新项目'));
   }});
-  composer=installComposer({host:targetHost,api,implementPlan,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,desktop:state.desktopMode,turns:turns(),goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
+  composer=installComposer({host:targetHost,api,implementPlan,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,desktop:state.desktopMode,threadReferencesSupported:state.detail?.desktop?.threadReferencesSupported===true,turns:turns(),goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
   const settings = $('composer-settings');
   document.addEventListener('click',event => { if (!settings.contains(event.target)) settings.open = false; });
   settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); settings.open = false; settings.querySelector('summary').focus(); } });
