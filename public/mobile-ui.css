@@ -109,8 +109,9 @@
 .mobile-layout .dialog-selects{display:flex;flex-direction:column;gap:12px}
 .mobile-layout .dialog-actions,.mobile-layout .sidebar-dialog-actions{position:static;background:#fff;padding:12px 0;margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
 .mobile-layout .dialog-actions button,.mobile-layout .sidebar-dialog-actions button{flex:1}
-.mobile-layout .toast-region{position:fixed;left:50%;bottom:auto;top:calc(var(--visual-top,0px) + env(safe-area-inset-top) + 64px);width:calc(100vw - 24px);max-width:440px;z-index:100;max-height:35dvh;overflow:auto}
+.mobile-layout .toast-region{--toast-height:calc(var(--visual-height,100dvh) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 80px);position:fixed;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:auto;top:calc(var(--visual-top,0px) + env(safe-area-inset-top) + 64px);width:auto;max-width:440px;margin:0 auto;transform:none;z-index:100;max-height:var(--toast-height);overflow:auto}
 .mobile-layout .toast{gap:8px;align-items:center;pointer-events:none}
+.mobile-layout .toast p{max-height:calc(var(--toast-height) - 18px);overflow:auto;overscroll-behavior:contain;pointer-events:auto}
 .mobile-layout .toast:not(:last-child){display:none}
 .mobile-layout .toast .icon-button{pointer-events:auto}
 .mobile-layout body:has(.app-shell.sidebar-open,.app-shell:not(.inspector-hidden),#mobile-more[open]) .toast-region{top:auto;bottom:max(8px,env(safe-area-inset-bottom))}
