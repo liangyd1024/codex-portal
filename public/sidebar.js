@@ -255,7 +255,6 @@ export class Sidebar {
     try{await this.enqueue(()=>{if(!current()||!this.o.connected())throw Error('连接或账号已变化，未执行排队操作。');started=true;if(notice?.querySelector)notice.querySelector('p').textContent=(target?.name?target.name+'：':'')+label;return this.o.api('/api/sidebar/actions',{method:'POST',body:{action,id:target?.id,expectedRevision:target?.revision,accountScope:scope,...extra}});});
       if(!current())return;
       completed=true;clearTimeout(slow);notice?.remove();
-      this.o.toast(action==='archive'?'会话已归档':action==='restore'?'会话已恢复':'已更新');
       this.progress.textContent='正在刷新列表…';
       await this.o.changed(action,target);
       if(!current())return;

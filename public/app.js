@@ -230,9 +230,7 @@ function renderRefresh() {
   n.setAttribute('aria-busy', String(state.refreshing));
   setText('refresh-message', state.refreshMessage);
   setText('refresh-time', state.lastSync ? state.refreshScope + '最后更新：' + dateTime(state.lastSync) + '（北京时间）' : '尚未成功刷新');
-  const syncTime = timestamp(state.lastSync);
-  const compactTime = syncTime ? new Intl.DateTimeFormat('zh-CN', {timeZone:'Asia/Shanghai',hour:'2-digit',minute:'2-digit',hour12:false}).format(syncTime) : '';
-  setText('refresh-compact', state.refreshing ? '刷新中…' : state.refreshMessage.endsWith('刷新成功') ? '已刷新' + (compactTime ? ' · ' + compactTime : '') : state.refreshMessage.includes('失败') ? '刷新失败' : state.refreshMessage);
+  setText('refresh-compact', state.refreshing ? '刷新中…' : state.refreshMessage.includes('失败') ? '刷新失败' : state.refreshMessage);
   for (const id of ['refresh-all','refresh-projects']) {
     $(id).classList.toggle('refreshing', state.refreshing);
     $(id).setAttribute('aria-busy', String(state.refreshing));
@@ -247,12 +245,7 @@ async function showRefresh(scope, work) {
   try {
     await work();
     state.lastSync = new Date(); state.refreshScope = scope;
-    state.refreshMessage = scope + '刷新成功';
-    refreshNoticeTimer = setTimeout(() => {
-      refreshNoticeTimer = null;
-      state.refreshMessage = '';
-      renderRefresh();
-    }, 2500);
+    state.refreshMessage = '';
   } catch (error) {
     state.refreshMessage = scope + '刷新失败：' + (error.message || String(error));
     recordError(error,'refresh');
@@ -1117,19 +1110,19 @@ async function connectRemote() {
   const success = await action('connect',async () => {
     const data = await api('/api/connect',{method:'POST',body:{},timeout:150000});
     if (data.connection) { applyStatus(data); renderStatus(); } else await loadStatus();
-    if(connected())toast('已连接目标机器。正在同步项目与会话。');return true;
+    return true;
   });
   if (success) { renderStatus(); if(connected())refreshWorkspace().catch(e => recordError(e,'sync')); }
 }
 async function disconnectRemote() {
-  return action('disconnect',async () => { await api('/api/disconnect',{method:'POST'}); await loadStatus(); if (state.detail) state.detail.controlled = false; renderThread(); toast('已断开本机连接。目标机器任务的状态请在重连后核对。'); });
+  return action('disconnect',async () => { await api('/api/disconnect',{method:'POST'}); await loadStatus(); if (state.detail) state.detail.controlled = false; renderThread(); });
 }
 async function takeoverThread() {
   if (!state.selectedId || !usable()) return;
   const id = state.selectedId,selection=state.selectionVersion;
   const current=()=>id===state.selectedId&&selection===state.selectionVersion&&!newChatOpen;
   await action('takeover',async () => {
-    try { const d = await api('/api/threads/' + encodeURIComponent(id) + '/takeover',{method:'POST'}); if(current())applyDetail(d,true); await loadStatus(); if(current())toast('已取得原会话的控制权。',false,7500,'takeover'); }
+    try { const d = await api('/api/threads/' + encodeURIComponent(id) + '/takeover',{method:'POST'}); if(current())applyDetail(d,true); await loadStatus(); }
     catch (e) {
       recordError(e,'takeover');
       if(!current())return;
@@ -1180,7 +1173,7 @@ async function respondRequest(r, answer) {
     if(instance!==state.status?.instanceId)return;
     const remove = list => (list || []).filter(x => requestKey(x) !== requestKey(r));
     state.localRequests = remove(state.localRequests); if (state.status) state.status.pendingRequests = remove(state.status.pendingRequests); if (state.detail) state.detail.pendingRequests = remove(state.detail.pendingRequests);
-    renderRequests();if(returnFocus){if(state.selectedId===requestThread(r))$('message-input').focus();else if(sideChat?.id===requestThread(r))document.querySelector('.side-chat-panel .composer textarea')?.focus();}await loadStatus(); toast('已提交处理结果。');
+    renderRequests();if(returnFocus){if(state.selectedId===requestThread(r))$('message-input').focus();else if(sideChat?.id===requestThread(r))document.querySelector('.side-chat-panel .composer textarea')?.focus();}await loadStatus();
   });
 }
 function updateNewProjects(projectRoot) {
@@ -1267,7 +1260,6 @@ async function sendMessage(e,alternate=false) {
     const cleared = state.drafts.acknowledge(sent);
     if (scope===targetHost+':'+state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }
     if (scope===targetHost+':'+state.selectedId && selection === state.selectionVersion) { if(d.turn)upsertTurn(d.turn);renderThread(); }
-    if (active) toast(followUp==='queue'?'已加入排队，当前任务结束后执行。':'引导已发送到当前轮次。');
     try { if (id === state.selectedId && selection === state.selectionVersion) await refreshSelected(); } catch (err) { recordError(err,'thread'); }
   });
 }

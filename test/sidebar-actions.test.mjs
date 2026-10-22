@@ -132,8 +132,8 @@ test('sidebar failure is visible and controls unlock before a stalled refresh co
  await Sidebar.prototype.run.call(ui,'archive',{id:'t',revision:'r'});
  assert.ok(events.indexOf('目标响应超时')<events.indexOf('refresh'));assert.equal(ui.pending,false);assert.deepEqual(events.at(-1),['busy',false]);finish();
 });
-test('successful mutation is acknowledged before slow list refresh, and not reported as failed if refresh rejects',async()=>{
- const events=[];const ui={render(){},enqueue:Sidebar.prototype.enqueue,pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(){},focusAnchor(){},o:{connected:()=>true,api:async()=>{},toast:message=>{events.push(message);return {remove(){}};},changed:async()=>{assert.ok(events.includes('会话已归档'));throw Error('列表超时');},refresh:async()=>{}}};
+test('successful mutation stays silent before list refresh and distinguishes a refresh failure',async()=>{
+ const events=[];const ui={render(){},enqueue:Sidebar.prototype.enqueue,pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(){},focusAnchor(){},o:{connected:()=>true,api:async()=>{},toast:message=>{events.push(message);return {remove(){}};},changed:async()=>{assert.ok(!events.includes('会话已归档'));throw Error('列表超时');},refresh:async()=>{}}};
  await Sidebar.prototype.run.call(ui,'archive',{id:'t'});
  assert.ok(events.includes('操作已完成，但刷新失败：列表超时'));assert.equal(ui.pending,false);
 });
@@ -206,4 +206,17 @@ test('confirmed archive stays hidden when refresh fails, but remains visible in 
  const t={id:'a'};ui.snapshot={accountScope:'a',data:[t]};await ui.run('archive',t);
  assert.deepEqual(ui.archiveDisplay(ui.snapshot).data,[]);
  assert.deepEqual(ui.archiveDisplay({...ui.snapshot,archived:true}).data,[t]);
+});
+
+test('sidebar success refreshes the result without a success toast and preserves refresh errors',async()=>{
+ for(const action of ['archive','restore','rename','pin','moveProject','moveSection','read','reorderThread','createSection','renameSection','deleteSection']){
+  const changes=[];const {ui,messages}=queuedUI(async()=>{},async a=>changes.push(a));
+  await ui.run(action,{id:'a'});
+  assert.deepEqual(changes,[action]);
+  assert.equal(messages.length,1,'only the existing progress notice remains for '+action);
+  assert.match(messages[0],/^正在/);
+ }
+ const {ui,messages}=queuedUI(async()=>{},async()=>{throw Error('列表不可用');});
+ await ui.run('archive',{id:'a'});
+ assert.ok(messages.includes('操作已完成，但刷新失败：列表不可用'));
 });

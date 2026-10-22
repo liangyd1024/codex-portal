@@ -144,7 +144,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
           try{await api(route+'/goal',{method:'POST',body:{objective,expectedObjective:draft.base}});saved=true;}
           catch(error){if(error.status>=400&&error.status<500&&error.code!=='OUTCOME_UNKNOWN'){delete draft.uncertain;save();}throw error;}
         }
-        if(saved){delete selection.goalEdit;save();if(same()){dialog.close();notify('目标已更新。');}if(context().id===id)await refresh();}
+        if(saved){delete selection.goalEdit;save();if(same())dialog.close();if(context().id===id)await refresh();}
       }catch(error){if(same()){reload.hidden=false;feedback.textContent=(saved?'目标已保存，刷新失败：':'保存未确认：')+error.message;}}
       finally{goalUpdating=false;if(same()){submit.disabled=false;reload.disabled=false;area.readOnly=false;form.setAttribute('aria-busy','false');}render();}
     };

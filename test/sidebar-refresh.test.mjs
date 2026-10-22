@@ -21,3 +21,16 @@ test('late activity is ignored after a new snapshot, account, disconnect or conn
   assert.equal(renders,change==='none'?1:0);assert.equal(state.threads[0].activity?.observedAt,change==='none'?123:undefined);
  }
 });
+
+test('manual refresh clears progress on success without a success timer; errors remain visible',async()=>{
+ const state={},frames=[],timers=[],errors=[];
+ const c=vm.createContext({state,Date,refreshNoticeTimer:null,clearTimeout(){},setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},renderRefresh:()=>frames.push({...state}),recordError:e=>errors.push(e)});
+ vm.runInContext(source.slice(source.indexOf('async function showRefresh('),source.indexOf('function recordError(')),c);
+ const d=gate(),pending=c.showRefresh('项目',()=>d.promise);
+ assert.equal(state.refreshing,true);assert.match(state.refreshMessage,/正在刷新/);
+ d.resolve();await pending;
+ assert.equal(state.refreshing,false);assert.equal(state.refreshMessage,'');assert.ok(state.lastSync);assert.equal(timers.length,0);
+ await c.showRefresh('项目',async()=>{throw Error('连接失败');});
+ assert.match(state.refreshMessage,/刷新失败：连接失败/);assert.equal(errors.length,1);assert.equal(timers.at(-1).ms,8000);
+ timers.at(-1).fn();assert.equal(state.refreshMessage,'');
+});
