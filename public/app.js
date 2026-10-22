@@ -391,7 +391,7 @@ function renderControls() {
   $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || handing || !state.selectedId;
   $('takeover').querySelector('span').textContent = switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话';
   const availability = $('composer-availability');
-  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '正在发送…' : state.busy.has('interrupt') ? '正在请求停止，请稍候…' : !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !hasModel ? '请选择一个可用模型。' : own && !hasEffort ? '请选择思考档位。' : '';
+  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '' : state.busy.has('interrupt') ? '正在请求停止，请稍候…' : !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !hasModel ? '请选择一个可用模型。' : own && !hasEffort ? '请选择思考档位。' : '';
   availability.textContent = unavailable; availability.hidden = !unavailable;
   $('new-thread').setAttribute('aria-description',!ready ? '连接恢复后可新建会话。' : !state.models.length ? '正在等待目标机器模型目录。' : creating ? '正在创建，请稍候。' : '');
   controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
@@ -445,7 +445,7 @@ function renderControls() {
     $('send-message').disabled=!online||!desktop?.canSend||!!unconfirmed||posting||(!input.value.trim()&&!annotations?.has());
     $('send-message').title='发送到桌面会话';$('send-message').setAttribute('aria-label','发送到桌面会话');
     $('interrupt').hidden=!active;$('interrupt').disabled=!online||state.busy.has('interrupt');
-    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'正在发送到桌面…':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
+    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     availability.textContent=reason;availability.hidden=!reason;
     $('desktop-review').hidden=!unconfirmed;$('desktop-review').disabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
     setText('composer-hint','使用桌面会话的模型与设置。发送成功仅代表会话已接收，任务结果以原始回复为准。');
