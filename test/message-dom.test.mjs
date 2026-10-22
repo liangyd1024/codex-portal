@@ -41,3 +41,17 @@ test('image load state and retries persist only for the same source',()=>{
  reconcileMessages(parent,tree(image('first.png')));assert.equal(parent.firstChild,old);assert.equal(old.getAttribute('data-loaded'),'true');
  reconcileMessages(parent,tree(image('second.png')));assert.equal(parent.firstChild.dataset.source,'second.png');
 });
+
+test('retained cached nodes move into new groups without rebuilding, and changed nodes bind to reconciled DOM',async t=>{
+ const {RenderCache}=await import('../public/render-cache.js');
+ const previous=globalThis.document;globalThis.document={createTextNode:()=>text('')};t.after(()=>{if(previous)globalThis.document=previous;else delete globalThis.document;});
+ Node.prototype.querySelectorAll=function(){return this.childNodes.flatMap(n=>[...(n.dataset.renderKey?[n]:[]),...n.querySelectorAll()]);};
+ const cache=new RenderCache(),parent=tree();let builds=0;
+ const item=(value='a')=>cache.render('item:a',value,()=>{builds++;return message('a',value);});
+ reconcileMessages(parent,tree(item()));cache.bind(parent);const original=parent.firstChild;
+ for(let i=0;i<10;i++){reconcileMessages(parent,tree(item()));cache.bind(parent);}assert.equal(builds,1);assert.equal(parent.firstChild,original);
+ const group=new Node('DETAILS','group');group.append(item());reconcileMessages(parent,tree(group));cache.bind(parent);assert.equal(parent.firstChild.firstChild,original);
+ const changed=new Node('DETAILS','group');changed.append(item('changed'));reconcileMessages(parent,tree(changed));cache.bind(parent);assert.equal(parent.firstChild.firstChild,original);assert.equal(original.firstChild.data,'changed');
+ const next=new Node('DETAILS','group');next.append(item('changed'));reconcileMessages(parent,tree(next));assert.equal(parent.firstChild.firstChild,original);assert.equal(builds,2);
+ reconcileMessages(parent,tree());cache.bind(parent);assert.equal(cache.entries.size,0);
+});

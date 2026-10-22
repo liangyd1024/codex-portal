@@ -1,0 +1,25 @@
+{
+  "switched": {
+    "draft": "保留中文草稿",
+    "otherAbsent": true,
+    "errors": []
+  },
+  "history": {
+    "turns": [
+      "earlier-turn",
+      "qa-turn"
+    ],
+    "full": true,
+    "scroll": 0
+  },
+  "offline": {
+    "draft": "保留中文草稿",
+    "disabled": true
+  },
+  "mobile": {
+    "overflow": false,
+    "inputFont": "16px",
+    "draft": "保留中文草稿",
+    "errors": []
+  }
+}

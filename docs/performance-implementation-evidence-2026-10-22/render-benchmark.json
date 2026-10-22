@@ -1,0 +1,219 @@
+[
+  {
+    "n": 5,
+    "width": 1440,
+    "height": 900,
+    "allDeltasVisible": true,
+    "samples": [
+      {
+        "ms": 1.899999976158142,
+        "createdElements": 122
+      },
+      {
+        "ms": 1.399999976158142,
+        "createdElements": 122
+      },
+      {
+        "ms": 1.399999976158142,
+        "createdElements": 122
+      },
+      {
+        "ms": 1.2999999523162842,
+        "createdElements": 122
+      },
+      {
+        "ms": 1.399999976158142,
+        "createdElements": 122
+      },
+      {
+        "ms": 1.600000023841858,
+        "createdElements": 122
+      },
+      {
+        "ms": 4.5,
+        "createdElements": 122
+      },
+      {
+        "ms": 6.299999952316284,
+        "createdElements": 122
+      },
+      {
+        "ms": 4.399999976158142,
+        "createdElements": 122
+      },
+      {
+        "ms": 3.799999952316284,
+        "createdElements": 122
+      }
+    ],
+    "longTasks": [],
+    "dom": 581,
+    "overflow": false,
+    "errors": [],
+    "realApiRequests": 0
+  },
+  {
+    "n": 50,
+    "width": 1440,
+    "height": 900,
+    "allDeltasVisible": true,
+    "samples": [
+      {
+        "ms": 2.5,
+        "createdElements": 122
+      },
+      {
+        "ms": 2,
+        "createdElements": 122
+      },
+      {
+        "ms": 2,
+        "createdElements": 122
+      },
+      {
+        "ms": 2,
+        "createdElements": 122
+      },
+      {
+        "ms": 2,
+        "createdElements": 122
+      },
+      {
+        "ms": 2.299999952316284,
+        "createdElements": 122
+      },
+      {
+        "ms": 3.600000023841858,
+        "createdElements": 122
+      },
+      {
+        "ms": 2.3000000715255737,
+        "createdElements": 122
+      },
+      {
+        "ms": 5.899999976158142,
+        "createdElements": 122
+      },
+      {
+        "ms": 4.299999952316284,
+        "createdElements": 122
+      }
+    ],
+    "longTasks": [],
+    "dom": 5801,
+    "overflow": false,
+    "errors": [],
+    "realApiRequests": 0
+  },
+  {
+    "n": 200,
+    "width": 1440,
+    "height": 900,
+    "allDeltasVisible": true,
+    "samples": [
+      {
+        "ms": 6.299999952316284,
+        "createdElements": 122
+      },
+      {
+        "ms": 5.900000095367432,
+        "createdElements": 122
+      },
+      {
+        "ms": 5.399999976158142,
+        "createdElements": 122
+      },
+      {
+        "ms": 5.299999952316284,
+        "createdElements": 122
+      },
+      {
+        "ms": 6.100000023841858,
+        "createdElements": 122
+      },
+      {
+        "ms": 6.100000023841858,
+        "createdElements": 122
+      },
+      {
+        "ms": 6.600000023841858,
+        "createdElements": 122
+      },
+      {
+        "ms": 9.5,
+        "createdElements": 122
+      },
+      {
+        "ms": 2.1999999284744263,
+        "createdElements": 0
+      },
+      {
+        "ms": 9.799999952316284,
+        "createdElements": 122
+      }
+    ],
+    "longTasks": [],
+    "dom": 23201,
+    "overflow": false,
+    "errors": [],
+    "realApiRequests": 0
+  },
+  {
+    "n": 50,
+    "width": 390,
+    "height": 844,
+    "allDeltasVisible": true,
+    "samples": [
+      {
+        "ms": 14.700000047683716,
+        "createdElements": 122
+      },
+      {
+        "ms": 13.800000071525574,
+        "createdElements": 122
+      },
+      {
+        "ms": 14.199999928474426,
+        "createdElements": 122
+      },
+      {
+        "ms": 14.400000095367432,
+        "createdElements": 122
+      },
+      {
+        "ms": 14.699999928474426,
+        "createdElements": 122
+      },
+      {
+        "ms": 13.600000023841858,
+        "createdElements": 122
+      },
+      {
+        "ms": 13.799999952316284,
+        "createdElements": 122
+      },
+      {
+        "ms": 15.100000023841858,
+        "createdElements": 122
+      },
+      {
+        "ms": 14.700000047683716,
+        "createdElements": 122
+      },
+      {
+        "ms": 14.200000047683716,
+        "createdElements": 122
+      }
+    ],
+    "longTasks": [
+      {
+        "duration": 65,
+        "start": 2329.399999976158
+      }
+    ],
+    "dom": 5801,
+    "overflow": false,
+    "errors": [],
+    "realApiRequests": 0
+  }
+]

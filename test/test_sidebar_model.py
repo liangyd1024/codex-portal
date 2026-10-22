@@ -4,6 +4,7 @@ import pathlib
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('sidebar_store', pathlib.Path(__file__).parents[1] / 'scripts/passive-store.py')
 store = importlib.util.module_from_spec(spec)
@@ -39,6 +40,22 @@ class SidebarModelTest(unittest.TestCase):
         self.db.execute('INSERT INTO threads ('+','.join(row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()));self.db.commit()
 
     def read(self,**kw):return store.read_sidebar({'accountId':'account1',**kw})
+
+    def test_deferred_content_does_not_probe_desktop_and_activity_keeps_account_scope(self):
+        self.add('chat')
+        def activity(rows):
+            for row in rows:
+                row['activity'] = {'source': 'desktop', 'observedAt': 123}
+        with patch.object(store, 'sidebar_activity', side_effect=activity) as probe:
+            content = self.read(includeActivity=False)
+            probe.assert_not_called()
+            self.assertNotIn('activity', content['data'][0])
+            result = store.read_sidebar_activity({'threadIds': ['chat'], 'accountId': 'account1'})
+            self.assertEqual(result['accountScope'], content['accountScope'])
+            self.assertEqual(result['data'][0]['activity']['observedAt'], 123)
+            self.assertEqual(self.read()['data'][0]['activity']['source'], 'desktop')
+        with self.assertRaises(ValueError):
+            store.read_sidebar_activity({'threadIds': ['../invalid']})
 
     def test_sidebar_keeps_creation_origin(self):
         self.db.execute('ALTER TABLE threads ADD COLUMN originator TEXT')

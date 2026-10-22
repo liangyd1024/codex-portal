@@ -825,7 +825,8 @@ def read_sidebar(payload):
             if not t['archived'] and t['projectId'] in project_by_id:
                 p = project_by_id[t['projectId']]
                 p['recencyAt'] = max(p['recencyAt'], t['recencyAt'])
-        sidebar_activity(threads)
+        if payload.get('includeActivity') is not False:
+            sidebar_activity(threads)
         by_id = {t['id']: t for t in threads}
         for s in sections:
             s['revision'] = sidebar_revision([s['name'],sorted(t['id'] for t in threads if t['sectionId'] == s['id'])])
@@ -878,12 +879,22 @@ def read_sidebar(payload):
         db.close()
 
 
+def read_sidebar_activity(payload):
+    identifiers = payload.get('threadIds', [])
+    if not isinstance(identifiers, list) or len(identifiers) > 200 or any(not isinstance(i, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,160}', i) for i in identifiers):
+        raise ValueError('会话标识无效。')
+    rows = [{'id': identifier} for identifier in identifiers]
+    sidebar_activity(rows)
+    account = payload.get('accountId')
+    return {'data': rows, 'accountScope': sidebar_revision(account) if account else None}
+
+
 def main():
     payload = globals().get('PAYLOAD')
     if not isinstance(payload, dict):
         raise ValueError('PAYLOAD 必须是 JSON 对象。')
     action = payload.get('action')
-    handlers = {'sidebar': read_sidebar, 'sidebarMetadata': read_sidebar_metadata, 'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
+    handlers = {'sidebar': read_sidebar, 'sidebarActivity': read_sidebar_activity, 'sidebarMetadata': read_sidebar_metadata, 'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
     if action not in handlers:
         raise ValueError('不支持的只读操作。')
     return handlers[action](payload)

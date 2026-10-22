@@ -1,3 +1,4 @@
+import {RenderCache,renderSignature} from './render-cache.js';
 import {createToasts,confirmAction} from './feedback.js';
 import {configureProjectBrowser} from './project-picker.js';
 let projectFolders;
@@ -109,7 +110,9 @@ function flushDrafts() {
   else state.drafts.persist();
   saveView(); saveOutputPositions();
 }
+let workspaceStarting=true;
 const resumeWorkspace = coalesceRefresh(async () => {
+  if(workspaceStarting)return;
   if (document.hidden || navigator.onLine === false) return;
   await loadStatus();
   if (connected()&&!state.status?.service?.releasing) {
@@ -442,7 +445,7 @@ const sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadNa
   select:t=>{state.projectId=t.projectId;state.selectedArchived=!!t.archived;saveView();selectThread(t.id);},
   onArchiveView:archived=>{state.sidebarArchived=archived;state.threadCursor=null;state.threads=[];loadThreads();},
   refresh:()=>loadThreads(false,true),
-  changed:async(action,t)=>{if(t?.id===state.selectedId&&['archive','restore'].includes(action))state.selectedArchived=action==='archive';await Promise.all([loadThreads(false,true),loadStatus()]);if(t?.id===state.selectedId)await refreshSelected();renderControls();},
+  changed:async(action,t)=>{if(t?.id===state.selectedId&&['archive','restore'].includes(action))state.selectedArchived=action==='archive';await Promise.all([loadThreads(false,true,true),loadStatus()]);if(t?.id===state.selectedId)await refreshSelected();renderControls();},
 });
 function renderProjects() { renderThreads(); if(newChatOpen&&!state.busy.has('create')){updateNewProjects();renderControls();} }
 function renderThreads() {
@@ -596,12 +599,13 @@ function renderItem(item) {
 }
 function kindName(kind) { const k = typeOf(kind); return {add:'新增',delete:'删除',update:'修改',create:'新增',modify:'修改'}[k] || k || '修改'; }
 let lastMessageShape;
+const messageCache=new RenderCache();
 function renderMessages() {
   // Keep the jump input stable while the user types; render after blur.
   if(document.activeElement?.matches('.output-controls input')) return;
   const scroller = $('messages-scroller');
   const context=targetHost+':'+state.selectedId;
-  if(scrollContext!==context){closeFileViewer();scrollContext=context;scrollFollow?.reset();clear($('messages'));lastMessageShape=undefined;}
+  if(scrollContext!==context){closeFileViewer();scrollContext=context;scrollFollow?.reset();clear($('messages'));lastMessageShape=undefined;messageCache.clear();}
   const nearBottom = scrollFollow?.following ?? true;
   const shape=JSON.stringify([state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],turns()],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
   if(shape===lastMessageShape){
@@ -624,13 +628,16 @@ function renderMessages() {
   const anchorId = anchor?.dataset.turnId, anchorOffset = anchor ? anchor.getBoundingClientRect().top - viewportTop : 0;
   const opened = new Set($('messages').querySelector('details[data-item-id]') ? [...$('messages').querySelectorAll('details[open][data-item-id]')].map(n => n.dataset.itemId) : savedOpenDetails());
   const n = el('div');
-  const commit = () => reconcileMessages($('messages'), n);
+  const commit = () => {reconcileMessages($('messages'), n);messageCache.bind($('messages'));};
+  const renderContext=renderSignature([controlled(),uncertainHistory(),backgroundActivity(state.detail,{controlled:controlled(),connected:usable()})]);
+  const cachedItem=(item,turnId)=>messageCache.render('item:'+turnId+':'+item.id,renderSignature([renderContext,item]),()=>{const node=renderItem(item);node.dataset.messageId=item.id;return node;});
   if (state.loadingDetail) { n.append(el('div','empty-history loading','正在读取会话历史…')); commit(); return; }
   if (state.historyError) { n.append(el('div','turn-error',state.historyError)); if(!turns().length){commit();return;} }
   if(state.detail?.recovering)n.append(el('div','history-notice','已恢复本机保存的输出，正在同步最新内容…')); 
   for (const notice of state.runtimeNotices.get(state.selectedId)?.values() || []) n.append(renderExtensionNotice(notice));
   if (!turns().length) { const empty = el('div','empty-history'); empty.append(icon('chat'),el('p','','此会话暂无消息。'),el('p','',controlled() ? '输入要求，开始目标机器工作。' : '接管后，可以在此会话开始工作。')); n.append(empty); }
   turns().forEach(t => {
+    const cachedTurn=messageCache.render('turn:'+t.id,renderSignature([renderContext,t]),()=>{
     const turn = el('section','message-turn'); turn.dataset.turnId = t.id;
     const meta = el('div','turn-meta'); meta.classList.toggle('needs-attention',['failed','declined','systemError','interrupted'].includes(typeOf(t.status))); meta.append(el('span','',dateTime(t.startedAt || t.createdAt,true)));
     const actualModel = t.model || t.modelInfo?.model, actualEffort = t.effort || t.reasoningEffort || t.modelInfo?.reasoningEffort;
@@ -639,7 +646,7 @@ function renderMessages() {
     meta.append(el('span','turn-status',turnStatus)); turn.append(meta);
     for (const group of timedTurnGroups(t)) {
       if (group.type === 'duration') { turn.append(el('div','turn-duration',group.label)); continue; }
-      if (group.type === 'message') { const message=renderItem(group.item); message.dataset.messageId=group.item.id; turn.append(message); continue; }
+      if (group.type === 'message') { turn.append(cachedItem(group.item,t.id)); continue; }
       const processGroup = el('details','activity-group process-group');
       processGroup.dataset.itemId = 'process-' + t.id + '-' + group.key;
       const summary = el('summary');
@@ -651,15 +658,23 @@ function renderMessages() {
       const processStatus = processGroupStatus(t,group.items,{uncertain:uncertainHistory(),background:backgroundActivity(state.detail,{controlled:controlled(),connected:usable()})});
       if (processStatus) summary.append(el('span','process-status',processStatus));
       const body = el('div','activity-items');
-      for (const item of group.items) { const message=renderItem(item); message.dataset.messageId=item.id; body.append(message); }
+      for (const item of group.items) { body.append(cachedItem(item,t.id)); }
       processGroup.append(summary,body); turn.append(processGroup);
     }
     if (t.error) turn.append(el('div','turn-error',messageOf(t.error)));
-    n.append(turn);
+    return turn;
+    });
+    n.append(cachedTurn);
   });
   n.querySelectorAll('details[data-item-id]').forEach(d => { if (opened.has(d.dataset.itemId)) d.open = true; });
   commit();
   const rendered = $('messages');
+  for(const turn of turns())for(const item of turn.items||[]){
+    if(item.type!=='commandExecution')continue;
+    const previous=rendered.querySelector('details[data-item-id="'+CSS.escape(item.id)+'"] .command-output-view');
+    const stamp=String(item.outputToken||(item.aggregatedOutput||'').length)+':'+String(outputPositions.get(state.selectedId+':'+item.id)??'tail');
+    if(previous&&previous.dataset.outputStamp!==stamp)previous.replaceWith(renderCommandOutput(item));
+  }
   rendered.querySelectorAll('.tool-output[data-follow-tail="true"]').forEach(pre=>{pre.scrollTop=pre.scrollHeight;});
   if (nearBottom && !state.busy.has('history')) scroller.scrollTop = scroller.scrollHeight;
   else if (state.busy.has('history')) {
@@ -792,7 +807,18 @@ async function loadProjects() {
 }
 const createdThreads = new Map();
 let threadSearch = '';
-async function loadThreads(append = false, reportFailure = false) {
+let listRead;
+function loadThreads(append = false, reportFailure = false, fresh = false) {
+  const key=JSON.stringify([state.status?.instanceId,state.status?.connection?.connectedAt,state.search,state.sidebarArchived,state.selectedId,append?state.threadCursor:null,append]);
+  if(listRead?.key===key){
+    if(fresh)return listRead.promise.catch(()=>{}).then(()=>loadThreads(append,reportFailure));
+    return reportFailure?listRead.promise:listRead.promise.catch(()=>{});
+  }
+  const record={key};
+  record.promise=readThreads(append,true).finally(()=>{if(listRead===record)listRead=null;});
+  listRead=record;return reportFailure?record.promise:record.promise.catch(()=>{});
+}
+async function readThreads(append = false, reportFailure = false) {
   if (!connected() || (append && (state.loadingThreads || !state.threadCursor))) return;
   // Restore project metadata before grouping the cross-project thread list.
   if (state.projectId && !state.projects.length) await loadProjects();
@@ -805,19 +831,35 @@ async function loadThreads(append = false, reportFailure = false) {
     threadSearch = state.search; state.threadCursor = null;
   }
   renderThreads();
-  const q = new URLSearchParams(); if (state.search) q.set('search',state.search); if(state.selectedId)q.set('selectedId',state.selectedId);
+  const q = new URLSearchParams({activity:'deferred'}); if (state.search) q.set('search',state.search); if(state.selectedId)q.set('selectedId',state.selectedId);
   if (append && state.threadCursor) q.set('cursor',state.threadCursor);
   try {
     if(state.sidebarArchived)q.set('archived','true');
     const d = await api('/api/sidebar?' + q); if (seq !== state.listVersion) return;
+    if(state.sidebar?.accountScope===d.accountScope){const previous=new Map(state.threads.map(t=>[t.id,t.activity]));for(const t of d.data||[])if(!t.activity&&previous.has(t.id))t.activity=previous.get(t.id);}
     state.sidebar=d;state.projects=d.projects||[];if(d.selectedThread?.id===state.selectedId)state.selectedArchived=!!d.selectedThread.archived;
     state.threadListSource = d.historySource || null;
     for (const thread of d.data || []) createdThreads.delete(thread.id);
     const pending = state.sidebarArchived?[]:[...createdThreads.values()].filter(t => !state.search || threadName(t).includes(state.search));
     const all = append ? [...state.threads,...(d.data || [])] : [...pending,...(d.data || [])];
     const seen = new Set(); state.threads = all.filter(t => !seen.has(t.id) && seen.add(t.id)); state.threadCursor = d.nextCursor || null;
+    void loadSidebarActivity(d,seq);
   } catch (e) { if (seq === state.listVersion) { state.threadPageError = true; recordError(e,'threads'); toast(messageOf(e),true); } if (reportFailure) throw e; }
   finally { if (seq === state.listVersion) { state.loadingThreads = false; renderThreads(); renderControls(); if (!state.threadPageError) requestAnimationFrame(loadVisibleThreads); } }
+}
+async function loadSidebarActivity(snapshot,seq){
+  const instance=state.status?.instanceId,connection=state.status?.connection?.connectedAt;
+  const current=()=>seq===state.listVersion&&state.sidebar===snapshot&&connected()&&state.status?.instanceId===instance&&state.status?.connection?.connectedAt===connection;
+  const ids=(snapshot.data||[]).map(t=>t.id);
+  for(let offset=0;offset<ids.length&&current();offset+=200){
+    try{
+      const data=await api('/api/sidebar/activity?'+new URLSearchParams({ids:JSON.stringify(ids.slice(offset,offset+200))}));
+      if(!current()||data.accountScope!==snapshot.accountScope)return;
+      const activity=new Map((data.data||[]).map(t=>[t.id,t.activity]));
+      for(const t of state.threads)if(activity.has(t.id)){if(activity.get(t.id))t.activity=activity.get(t.id);else delete t.activity;}
+      renderThreads();
+    }catch(error){if(current())recordError(error,'sidebar-activity');return;}
+  }
 }
 function loadVisibleThreads() {
   const list = $('project-list');
@@ -913,10 +955,10 @@ async function refreshSelected() {
   try { await read; }
   finally { if(detailReads.get(key)===read)detailReads.delete(key); }
 }
-async function refreshWorkspace(forceModels = false) {
+async function refreshWorkspace(forceModels = false, statusReady = false) {
   if (workspaceRefreshPromise) return workspaceRefreshPromise;
   workspaceRefreshPromise = showRefresh('工作区', async () => {
-    await loadStatus(); if (!connected()) throw new Error('目标机器未连接。请先连接，再刷新。');
+    if(!statusReady)await loadStatus(); if (!connected()) throw new Error('目标机器未连接。请先连接，再刷新。');
     const results = await Promise.allSettled([loadModels(forceModels),loadProjects(),loadThreads(false,true),refreshSelected()]);
     const labels = ['模型列表','项目列表','会话列表','当前会话'];
     const failures = results.flatMap((r,i) => r.status === 'rejected' ? [labels[i] + '：' + (r.reason?.message || String(r.reason))] : []);
@@ -927,7 +969,7 @@ async function refreshWorkspace(forceModels = false) {
 }
 let autoRefreshTimer = null;
 async function refreshCatalogs() {
-  if (!usable() || state.refreshing || modelLoadPromise || projectLoadPromise) return;
+  if (document.hidden || !usable() || state.refreshing || modelLoadPromise || projectLoadPromise) return;
   await showRefresh('项目和模型列表', async () => {
     const results = await Promise.allSettled([loadProjects(),loadModels(true)]);
     const labels = ['项目列表','模型列表'];
@@ -1231,13 +1273,15 @@ function ensureTurn(id) {
   return t;
 }
 function upsertItem(turnId,item) { const t = ensureTurn(turnId); if (!t) return; if (item.type === 'userMessage') t.items = t.items.filter(old => !old.localAccepted || userContentKey(old.content) !== userContentKey(item.content)); const i = t.items.findIndex(x => x.id === item.id); if (i >= 0) t.items[i] = mergeLiveTurns([{id:turnId,items:[t.items[i]]}],[{id:turnId,items:[item]}])[0].items[0]; else t.items.push(item); }
-function scheduleStreamRender() {
+let streamFullRender=false;
+function scheduleStreamRender(kind='all') {
+  if(kind!=='text')streamFullRender=true;
   if (state.streamRender) return; state.streamRender = true;
-  setTimeout(() => { state.streamRender = false; renderRequests(); renderMessages(); renderSession(); renderFiles(); renderControls(); },80);
+  setTimeout(() => { state.streamRender = false; const full=streamFullRender;streamFullRender=false;renderMessages();if(full){renderRequests();renderSession();renderFiles();renderControls();} },80);
 }
 let detailRefreshTimer, listRefreshTimer;
 function scheduleDetailRefresh() { if(detailRefreshTimer)return; detailRefreshTimer = setTimeout(() => { detailRefreshTimer=null; if (usable() && state.selectedId) refreshSelected().catch(e => recordError(e,'thread')); },650); }
-function scheduleListRefresh() { clearTimeout(listRefreshTimer); listRefreshTimer = setTimeout(() => { if (usable()) loadThreads(); },1000); }
+function scheduleListRefresh() { clearTimeout(listRefreshTimer); listRefreshTimer = setTimeout(() => { if (usable()) loadThreads(false,false,true); },1000); }
 function handleEvent(event) {
   let data; try { data = JSON.parse(event.data); } catch { return; }
   const method = data.method || event.type, p = data.params || {};
@@ -1249,7 +1293,7 @@ function handleEvent(event) {
   if (method === 'manager/status') {
     const was = connected(); applyStatus(p.status || p); renderStatus(); renderRequests(); renderThread();
     for(const request of state.status.pendingRequests||[])notifyTaskEvent('manager/request',request);
-    if (!was && connected()) refreshWorkspace().catch(e => recordError(e,'sync'));
+    if (!workspaceStarting && !was && connected()) refreshWorkspace().catch(e => recordError(e,'sync'));
     return;
   }
   if (method === 'manager/error') { recordError(p.message || p.error || p,p.stage || 'remote'); if(notifyManagerError(p))toast(messageOf(p.message || p.error || p),true,11000); return; }
@@ -1281,7 +1325,7 @@ function handleEvent(event) {
   if (method === 'item/started' || method === 'item/completed') { if (p.item) upsertItem(p.turnId,p.item); scheduleStreamRender(); return; }
   if (method === 'item/agentMessage/delta' || method === 'item/plan/delta') {
     const t = ensureTurn(p.turnId); if (!t) return; let item = t.items.find(x => x.id === p.itemId);
-    if (!item) { item = {id:p.itemId,type:method.includes('/plan/') ? 'plan' : 'agentMessage',text:''}; t.items.push(item); } item.text = (item.text || '') + (p.delta || ''); scheduleStreamRender(); return;
+    if (!item) { item = {id:p.itemId,type:method.includes('/plan/') ? 'plan' : 'agentMessage',text:''}; t.items.push(item); } item.text = (item.text || '') + (p.delta || ''); scheduleStreamRender('text'); return;
   }
   if (method === 'item/commandExecution/outputDelta') {
     if(state.status?.service?.outputJournal){scheduleDetailRefresh();return;}
@@ -1292,7 +1336,7 @@ function handleEvent(event) {
   if (method === 'item/reasoning/summaryTextDelta') {
     const t = ensureTurn(p.turnId); if (!t) return; let item = t.items.find(x => x.id === p.itemId);
     if (!item) { item = {id:p.itemId,type:'reasoning',summary:[]}; t.items.push(item); }
-    const i = p.summaryIndex || 0; item.summary[i] = (item.summary[i] || '') + (p.delta || ''); scheduleStreamRender(); return;
+    const i = p.summaryIndex || 0; item.summary[i] = (item.summary[i] || '') + (p.delta || ''); scheduleStreamRender('text'); return;
   }
   if (method === 'error') {
     const t = ensureTurn(p.turnId || turns().at(-1)?.id); if (t) t.error = p.error || p; recordError(p.error || p,'remote'); scheduleStreamRender(); return;
@@ -1466,12 +1510,14 @@ function wireEvents() {
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {
-  installSystemUpdate({api,flush:flushDrafts,resetCsrf:()=>{state.csrf='';}});
+  let settingsInstalled=false,mobileInstalled=false;
+  const loadSettings=()=>{if(settingsInstalled)return;settingsInstalled=true;installSystemUpdate({api,flush:flushDrafts,resetCsrf:()=>{state.csrf='';}});};
+  const loadMobile=()=>{if(mobileInstalled)return;mobileInstalled=true;installMobile(api).catch(e=>{$('mobile-access-body').textContent=messageOf(e);});};
   refreshAccountUsage=installAccountUsage({node:$('account-usage'),identityNode:$('account-identity'),api,connected,context:()=>targetHost+':'+state.status?.instanceId+':'+state.status?.connection?.connectedAt});
   $('account-usage').addEventListener('click',()=>toast($('account-usage').title));
   void refreshAccountUsage();
   setInterval(()=>{if(!document.hidden)void refreshAccountUsage();},15000);
-  setInterval(()=>{renderControls();if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();},5000);
+  setInterval(()=>{if(document.hidden)return;renderControls();if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();},5000);
   setInterval(()=>{if(connected()&&!state.loadingThreads&&!sidebar.pending&&!sidebar.drag&&!sidebar.menu&&!sidebar.dialog&&!document.hidden)loadThreads();},15000);
   $('messages').addEventListener('click',e=>{
     const summary=e.target.closest('summary');if(!summary)return;
@@ -1489,13 +1535,14 @@ async function init() {
   groups.forEach(group=>{group.open=group.id!=='diagnostics'&&group.id!=='browser-backup'&&!group.classList.contains('connection-section');});
   const views=[['session','会话'],['mobile','手机访问'],['settings','设置']];
   function showInspectorView(view){
+    if(view==='settings')loadSettings();
+    if(view==='mobile')loadMobile();
     groups.forEach(group=>{group.hidden=category(group)!==view;});
     navigation.querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.view===view)));
     inspector.scrollTop = 0;
   }
   for(const [view,title] of views){const button=el('button','',title);button.type='button';button.dataset.view=view;button.onclick=()=>showInspectorView(view);navigation.append(button);}
   showInspectorView('session');
-  installMobile(api).catch(e=>{$('mobile-access-body').textContent=messageOf(e);});
   wireEvents(); renderStatus(); renderThread(); renderThreads(); setupEvents();
   window.dispatchEvent(new Event('rcm-ready'));
   notificationNavigationReady=true;
@@ -1504,8 +1551,9 @@ async function init() {
   pendingNotification=null;
   if(notification)openNotificationThread(notification);
   else if(state.selectedId)restoreDetail(state.selectedId,state.selectionVersion);
-  try { const c = await api('/api/csrf'); state.csrf = c.token; await loadStatus(); if (connected()) await refreshWorkspace(); else if (!connectionPending()) await connectRemote(); }
+  try { const c = await api('/api/csrf'); state.csrf = c.token; await loadStatus(); if (connected()) await refreshWorkspace(false,true); else if (!connectionPending()) await connectRemote(); }
   catch (e) { recordError(e,'init'); const n = $('connection-banner'); n.hidden = false; n.className = 'connection-banner error'; n.textContent = messageOf(e); }
+  finally{workspaceStarting=false;}
 }
 if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
 await init();

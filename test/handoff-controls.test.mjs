@@ -6,7 +6,7 @@ function controlsFixture(t){
  const previous=Object.getOwnPropertyDescriptor(globalThis,'document');
  const nodes=new Map();
  const make=()=>({children:[],attrs:{},hidden:false,classList:{toggle(){}},set id(v){this._id=v;nodes.set(v,this);},get id(){return this._id;},append(...xs){this.children.push(...xs);},after(n){this.afterNode=n;},setAttribute(k,v){this.attrs[k]=v;},focus(){},checkVisibility(){return !this.hidden;}});
- const document={head:make(),createElement:make,getElementById:id=>nodes.get(id)};
+ const document={querySelector:()=>null,head:make(),createElement:make,getElementById:id=>nodes.get(id)};
  for(const id of ['takeover','connection-banner','message-input']){const n=make();n.id=id;}
  Object.defineProperty(globalThis,'document',{value:document,configurable:true});t.after(()=>{if(previous)Object.defineProperty(globalThis,'document',previous);else delete globalThis.document;});
  let calls=0;const controls=createHandoffControls({endUse:()=>calls++}),state={id:'a',context:'host:a:1',owned:true,connected:true,supported:true,running:true};

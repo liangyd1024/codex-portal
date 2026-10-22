@@ -1,3 +1,4 @@
+import {createStaticResponse} from './lib/http/static-response.mjs';
 import {browseFolders,createFolder,openFolderProject} from './lib/project-folders.mjs';
 import {retryCapacity} from './lib/capacity-retry.mjs';
 import {deploymentStatus} from './lib/deployment-status.mjs';
@@ -5,7 +6,7 @@ import {WebUpdate} from './lib/web-update.mjs';
 import {supportDir} from './lib/config.mjs';
 import {readAccountUsage} from './lib/account-usage.mjs';
 import {fileResponse} from './lib/file-response.mjs';
-import {readSidebar,sidebarAction} from './lib/sidebar.mjs';
+import {readSidebar,readSidebarActivity,sidebarAction} from './lib/sidebar.mjs';
 import {composerCatalog,setGoal} from './lib/composer.mjs';
 import {homedir,networkInterfaces} from 'node:os';
 import {execFile} from 'node:child_process';
@@ -32,6 +33,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
  const manager=managers.get(config.defaultConnection);
  const automations=new Map([...managers].map(([id,m])=>[id,new NativeAutomations(m)]));
   const broadcasts=new Map();
+  const staticResponse=createStaticResponse();
   const csrf=randomBytes(32).toString('hex'); const clients=new Set();
 
   for(const [key,target] of managers){const listener=event=>{for(const client of clients){if(client.targetKey!==key)continue;if(client.writableLength>8*1024*1024){client.destroy();clients.delete(client);}else client.write(`data: ${JSON.stringify(event)}\n\n`);}};broadcasts.set(key,listener);target.on('event',listener);}
@@ -92,6 +94,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       if(req.method==='GET'&&p==='/api/automations/session')return json(res,200,await automations.get(targetKey).detail());
       if(req.method==='GET'&&p==='/api/composer')return json(res,200,await composerCatalog(manager,url.searchParams.get('cwd'),url.searchParams.get('kind')));
       if(req.method==='GET'&&p==='/api/models'){manager.requireConnected();return json(res,200,{data:url.searchParams.get('refresh')==='1'||!manager.models.length?await manager.refreshCatalog('models'):manager.models,nextCursor:null});}
+      if(req.method==='GET'&&p==='/api/sidebar/activity')return json(res,200,await readSidebarActivity(manager,Object.fromEntries(url.searchParams)));
       if(req.method==='GET'&&p==='/api/sidebar')return json(res,200,await readSidebar(manager,Object.fromEntries(url.searchParams)));
       if(req.method==='GET'&&p==='/api/project-folders')return json(res,200,await browseFolders(manager,url.searchParams.get('path')));
       if(req.method==='GET'&&p==='/api/projects')return json(res,200,{data:await manager.refreshCatalog('projects')});
@@ -139,10 +142,9 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       }
       if(p.startsWith('/api/'))return json(res,404,{error:{message:'找不到此接口。',code:'NOT_FOUND'}});
       if(req.method!=='GET'&&req.method!=='HEAD')throw new AppError('不支持此请求方法。',405);
-      const file={'/feedback.js':'feedback.js','/feedback.css':'feedback.css','/capacity-retry.js':'capacity-retry.js','/system-update.js':'system-update.js','/account-usage.js':'account-usage.js','/login.js':'login.js','/bootstrap.js':'bootstrap.js','/manifest.webmanifest':'manifest.webmanifest','/notification-platform.js':'notification-platform.js','/notification-worker.js':'notification-worker.js','/notification-delivery.js':'notification-delivery.js','/automations.js':'automations.js','/automations.css':'automations.css','/questions.js':'questions.js','/question-form.js':'question-form.js','/message-files.js':'message-files.js','/recovery-state.js':'recovery-state.js','/activity.js':'activity.js','/project-picker.js':'project-picker.js','/project-picker.css':'project-picker.css','/message-media.js':'message-media.js','/message-time.js':'message-time.js','/message-body.js':'message-body.js','/message-dom.js':'message-dom.js','/new-chat.js':'new-chat.js','/new-chat.css':'new-chat.css','/inline-mentions.js':'inline-mentions.js','/skill-suggestions.js':'skill-suggestions.js','/attachments.js':'attachments.js','/goal-submit.js':'goal-submit.js','/composer.js':'composer.js','/composer.css':'composer.css','/':'index.html','/index.html':'index.html','/app.js':'app.js','/mobile-ui.js':'mobile-ui.js','/mobile-ui.css':'mobile-ui.css','/input-state.js':'input-state.js','/thread-sync.js':'thread-sync.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
+      const file={'/shared/questions.js':'../shared/questions.js','/shared/connection-state.js':'../shared/connection-state.js','/render-cache.js':'render-cache.js','/feedback.js':'feedback.js','/feedback.css':'feedback.css','/capacity-retry.js':'capacity-retry.js','/system-update.js':'system-update.js','/account-usage.js':'account-usage.js','/login.js':'login.js','/bootstrap.js':'bootstrap.js','/manifest.webmanifest':'manifest.webmanifest','/notification-platform.js':'notification-platform.js','/notification-worker.js':'notification-worker.js','/notification-delivery.js':'notification-delivery.js','/automations.js':'automations.js','/automations.css':'automations.css','/questions.js':'questions.js','/question-form.js':'question-form.js','/message-files.js':'message-files.js','/recovery-state.js':'recovery-state.js','/activity.js':'activity.js','/project-picker.js':'project-picker.js','/project-picker.css':'project-picker.css','/message-media.js':'message-media.js','/message-time.js':'message-time.js','/message-body.js':'message-body.js','/message-dom.js':'message-dom.js','/new-chat.js':'new-chat.js','/new-chat.css':'new-chat.css','/inline-mentions.js':'inline-mentions.js','/skill-suggestions.js':'skill-suggestions.js','/attachments.js':'attachments.js','/goal-submit.js':'goal-submit.js','/composer.js':'composer.js','/composer.css':'composer.css','/':'index.html','/index.html':'index.html','/app.js':'app.js','/mobile-ui.js':'mobile-ui.js','/mobile-ui.css':'mobile-ui.css','/input-state.js':'input-state.js','/thread-sync.js':'thread-sync.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
       if(!file){res.writeHead(404);res.end('Not found');return;}
-      const content=await readFile(path.join(ROOT,'public',file));
-      res.writeHead(200,{'Content-Type':file.endsWith('.webmanifest')?'application/manifest+json':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);
+      await staticResponse(req,res,path.join(ROOT,'public',file));
     }catch(error){if(res.headersSent){res.destroy();return;}json(res,error.status||502,{error:{message:error.message,code:error.code||'REMOTE_ERROR',...(error.details?{details:error.details}:{})}});}
   };
   const server=http.createServer((req,res)=>handler(req,res));

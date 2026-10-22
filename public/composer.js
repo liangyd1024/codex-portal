@@ -4,7 +4,7 @@ import {installInlineMentions,mentionRanges} from './inline-mentions.js';
 export const WEB_ACCESS='full';
 
 export function installComposer({host,api,context,refresh,notify,implementPlan}) {
-  const link=document.createElement('link');link.rel='stylesheet';link.href='/composer.css';document.head.append(link);
+  if(!document.querySelector('link[href="/composer.css"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/composer.css';document.head.append(link);}
   const bar=document.createElement('div');bar.className='composer-tools';
   bar.innerHTML='<button type="button" id="execution-mode" aria-pressed="false">计划</button><button type="button" id="goal-settings">目标</button><button type="button" id="skill-picker">技能</button><button type="button" id="plugin-picker">插件</button><span id="composer-tools-status" role="status"></span>';
   const tools=document.createElement('details');tools.className='composer-options';

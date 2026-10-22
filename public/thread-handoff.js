@@ -12,7 +12,7 @@ export function handoffMessage(handoff,connected) {
 }
 
 export function createHandoffControls({endUse}) {
-  const link=document.createElement('link');link.rel='stylesheet';link.href='/handoff.css';document.head.append(link);
+  if(!document.querySelector('link[href="/handoff.css"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/handoff.css';document.head.append(link);}
   const button=document.createElement('button');button.type='button';button.id='handoff-thread';button.className='text-button handoff-button';button.textContent='交还桌面端';
   document.getElementById('takeover').after(button);
   const banner=document.createElement('div');banner.className='handoff-status';banner.hidden=true;banner.tabIndex=-1;banner.id='handoff-status';

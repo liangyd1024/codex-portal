@@ -1,10 +1,23 @@
 // Reconcile the conversation in place so streamed text never remounts history.
 const key = node => node.nodeType === 1
   ? node.dataset.turnId || node.dataset.messageId || node.dataset.itemId || '' : '';
+const retained = new WeakMap();
+export function retainMessage(node) {
+  const marker = document.createTextNode(''); retained.set(marker, node); return marker;
+}
+function materialize(node) {
+  for (const child of [...node.childNodes]) {
+    const original = retained.get(child);
+    if (original) child.replaceWith(original);
+    else if (child.nodeType === 1) materialize(child);
+  }
+  return node;
+}
 export function reconcileMessages(parent, next) {
   const keyed = new Map([...parent.childNodes].filter(key).map(node => [key(node), node]));
   let cursor = parent.firstChild;
-  for (const fresh of [...next.childNodes]) {
+  for (const marker of [...next.childNodes]) {
+    const fresh = retained.get(marker) || marker;
     const candidate = key(fresh) ? keyed.get(key(fresh)) : cursor && !key(cursor) ? cursor : null;
     const node = candidate ? reconcileNode(candidate, fresh) : fresh;
     if (candidate && node !== candidate) {
@@ -13,11 +26,13 @@ export function reconcileMessages(parent, next) {
       if (atCursor) cursor = node;
     }
     if (node !== cursor) parent.insertBefore(node, cursor);
+    if (!candidate || node !== candidate) materialize(node);
     cursor = node.nextSibling;
   }
   while (cursor) { const nextNode = cursor.nextSibling; cursor.remove(); cursor = nextNode; }
 }
 function reconcileNode(old, fresh) {
+  if (old === fresh) return old;
   if (old.nodeType !== fresh.nodeType || old.nodeName !== fresh.nodeName || key(old) !== key(fresh)) return fresh;
   if (old.nodeType === 3) {
     if (old.data !== fresh.data) old.data = fresh.data;

@@ -15,14 +15,22 @@ export function mentionRanges(value, references) {
 export function installInlineMentions(input,references){
   const wrap=document.createElement('div');wrap.className='mention-input-wrap';input.before(wrap);wrap.append(input);
   const mirror=document.createElement('div');mirror.className='mention-mirror';mirror.setAttribute('aria-hidden','true');wrap.prepend(mirror);
-  let composing=false;
+  let composing=false,lastText,lastStyle;
   function render(){
     const style=getComputedStyle(input);
-    for(const key of ['fontFamily','fontSize','fontWeight','fontStyle','lineHeight','letterSpacing','wordSpacing','textIndent','textAlign','paddingTop','paddingRight','paddingBottom','paddingLeft','borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','tabSize','wordBreak','overflowWrap'])mirror.style[key]=style[key];
-    mirror.style.width=input.clientWidth+'px';mirror.style.height=input.clientHeight+'px';
-    const ranges=mentionRanges(input.value,references());mirror.replaceChildren();let offset=0;
-    for(const range of ranges){mirror.append(document.createTextNode(input.value.slice(offset,range.start)));const mark=document.createElement('span');mark.className='inline-mention';mark.textContent=input.value.slice(range.start,range.end);mirror.append(mark);offset=range.end;}
-    mirror.append(document.createTextNode(input.value.slice(offset)+'\n'));wrap.classList.toggle('has-mentions',ranges.length>0&&!composing);
+    const keys=['fontFamily','fontSize','fontWeight','fontStyle','lineHeight','letterSpacing','wordSpacing','textIndent','textAlign','paddingTop','paddingRight','paddingBottom','paddingLeft','borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','tabSize','wordBreak','overflowWrap'];
+    const styleStamp=JSON.stringify([keys.map(key=>style[key]),input.clientWidth,input.clientHeight]);
+    if(styleStamp!==lastStyle){
+      lastStyle=styleStamp;for(const key of keys)mirror.style[key]=style[key];
+      mirror.style.width=input.clientWidth+'px';mirror.style.height=input.clientHeight+'px';
+    }
+    const refs=references(),textStamp=JSON.stringify([input.value,refs,composing]);
+    if(textStamp!==lastText){
+      lastText=textStamp;
+      const ranges=mentionRanges(input.value,refs);mirror.replaceChildren();let offset=0;
+      for(const range of ranges){mirror.append(document.createTextNode(input.value.slice(offset,range.start)));const mark=document.createElement('span');mark.className='inline-mention';mark.textContent=input.value.slice(range.start,range.end);mirror.append(mark);offset=range.end;}
+      mirror.append(document.createTextNode(input.value.slice(offset)+'\n'));wrap.classList.toggle('has-mentions',ranges.length>0&&!composing);
+    }
     mirror.scrollTop=input.scrollTop;mirror.scrollLeft=input.scrollLeft;
   }
   input.addEventListener('input',render);input.addEventListener('scroll',render);
