@@ -89,3 +89,26 @@ test('preview and passive browsing do not read live state; writes cannot enter t
   await m.detail('a',{},true);await m.detail('a',{},false,null,true);await m.detail('uncontrolled');
   await assert.rejects(readLiveStatus(m,'turn/start'),/Unsupported status read/);assert.equal(calls,0);
 });
+test('native account update discards old account and sidebar reads without disconnecting tasks',async()=>{
+ const wait=deferred();let old=true;
+ const m=fixture({connected:true,request:async()=>{if(old)await wait.promise;return {account:{type:old?'chatgpt':'apiKey'}};}});
+ const account=assert.rejects(readLiveStatus(m,'account/read'),e=>e.code==='ACCOUNT_CHANGED');
+ const sidebar=assert.rejects(readSidebar(m),e=>e.code==='ACCOUNT_CHANGED');
+ await settle();const generation=m.generation;
+ m.onNotification({method:'account/updated',params:{authMode:'apiKey'}});old=false;
+ assert.equal((await readLiveStatus(m,'account/read')).account.type,'apiKey');
+ wait.resolve();await Promise.all([account,sidebar]);
+ assert.equal(m.generation,generation);assert.equal(m.controlled.has('a'),true);
+});
+test('account update during passive layout read cannot publish previous account sections',async()=>{
+ const wait=deferred();const m=fixture({connected:true,request:async()=>statusResult('account/read')});
+ m.passive=async()=>{await wait.promise;return {data:[],sections:[{id:'old'}]};};
+ const rejected=assert.rejects(readSidebar(m),e=>e.code==='ACCOUNT_CHANGED');await settle();
+ m.onNotification({method:'account/updated',params:{authMode:null}});wait.resolve();await rejected;
+});
+test('late rejected auth read cannot mark a newly updated account invalid',async()=>{
+ let reject;const m=fixture({connected:true,request:()=>new Promise((_,r)=>reject=r)});
+ const rejected=assert.rejects(readLiveStatus(m,'account/read'),e=>e.code==='ACCOUNT_CHANGED');await settle();
+ m.onNotification({method:'account/updated',params:{authMode:'apiKey'}});reject(Error('token_revoked'));await rejected;
+ assert.equal(m.status().loginRecovery,null);
+});

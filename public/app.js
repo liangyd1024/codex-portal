@@ -1,3 +1,4 @@
+import {authRecoveryMessage} from './shared/account-state.js';
 import {RenderCache,renderSignature} from './render-cache.js';
 import {createToasts,confirmAction} from './feedback.js';
 import {configureProjectBrowser} from './project-picker.js';
@@ -340,6 +341,7 @@ function renderConnectionBanner() {
   if (!state.transport) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '与网页服务的连接已中断，正在自动重连。已有内容和草稿保留，恢复后将自动同步。'; }
   else if (error) { banner.hidden = false; banner.className = 'connection-banner error'; banner.textContent = error; }
   else if (['connecting','reconnecting'].includes(conn)) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '正在连接目标机器。' + (c.stage ? (stages[c.stage] || c.stage) + '…' : '正在核验连接状态…'); }
+  else if(connected()&&s.loginRecovery&&!state.desktopMode){banner.hidden=false;banner.className='connection-banner error';banner.textContent=s.loginRecovery;}
   else if(connected()&&service.protocolValidation?.status==='limited'){const names={create:'新建会话',takeover:'接管会话',message:'发送消息',steer:'补充要求',stop:'停止',queue:'排队输入',handoff:'交还桌面端',release:'释放控制'};const disabled=Object.entries(service.protocolValidation.features||{}).filter(([,v])=>!v.supported).map(([name])=>names[name]||name);banner.hidden=false;banner.className='connection-banner';banner.textContent='已连接。当前引擎暂不支持：'+(disabled.join('、')||'部分协议读取')+'。其他已核验功能仍可使用。详见连接诊断。';}
   else if(connected()&&selectedRecoveryMessage(s.recoveryFailures,newChatOpen?null:state.selectedId)){banner.hidden=false;banner.className='connection-banner';banner.textContent=selectedRecoveryMessage(s.recoveryFailures,state.selectedId);}
   else banner.hidden = true;
@@ -355,9 +357,10 @@ function renderControls() {
     supported:state.status?.service?.protocolValidation?.features?.handoff?.supported===true,busy:handing,archived:state.selectedArchived,conflict:state.detail?.controlState==='conflict'});
   const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
   $('connection-select').disabled=creating;
-  $('new-thread').disabled = !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels;
+  $('new-thread').disabled = !!state.status?.loginRecovery || !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels;
   $('connect-button').disabled = state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release');
   $('welcome-connect').disabled = connectionPending() || state.busy.has('connect') || state.busy.has('disconnect') || (connected() && (!ready || !state.models.length||!featureReady('create')));
+  $('reload-login').disabled=!ready||!featureReady('release')||state.busy.has('release');
   $('release-service').disabled = !ready || !featureReady('release') || !state.status?.service?.running || state.busy.has('release');
   $('release-service').textContent = state.busy.has('release') ? '正在检查并释放…' : '停止目标服务（影响所有入口）';
   $('refresh-projects').disabled = !ready || state.refreshing; $('refresh-all').disabled = state.refreshing || state.busy.has('refresh');
@@ -368,7 +371,7 @@ function renderControls() {
   input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? '补充要求…' : '发送消息…';
   const hasModel = Boolean(state.model && state.models.some(m => modelId(m) === state.model));
   const hasEffort = effortsFor(state.model).some(e => e.value === state.effort);
-  $('send-message').disabled = !ready || !own || !featureReady(active?'steer':'message') || posting || attachments?.pending() || (!input.value.trim()&&!attachments?.has()) || (!active && (!hasModel || !hasEffort));
+  $('send-message').disabled = !!state.status?.loginRecovery || !ready || !own || !featureReady(active?'steer':'message') || posting || attachments?.pending() || (!input.value.trim()&&!attachments?.has()) || (!active && (!hasModel || !hasEffort));
   $('send-message').setAttribute('aria-label',active ? '补充当前轮次' : '发送消息');
   $('message-form').setAttribute('aria-busy',String(posting));
   $('send-message').title = posting ? '正在发送…' : active ? '补充当前轮次' : '发送消息';
@@ -661,7 +664,11 @@ function renderMessages() {
       for (const item of group.items) { body.append(cachedItem(item,t.id)); }
       processGroup.append(summary,body); turn.append(processGroup);
     }
-    if (t.error) turn.append(el('div','turn-error',messageOf(t.error)));
+    if (t.error) {
+      turn.append(el('div','turn-error',messageOf(t.error)));
+      const recovery=authRecoveryMessage(t.error);
+      if(recovery)turn.append(el('div','history-notice','登录恢复提示：'+recovery));
+    }
     return turn;
     });
     n.append(cachedTurn);
@@ -706,6 +713,9 @@ function renderThread() {
 }
 function renderSession() {
   const queued=clear($('queued-inputs')), queue=state.detail?.queue;
+  const queueSection=queued.closest('details');
+  queueSection.dataset.empty=String(!(queue?.data?.length||queue?.error||queue?.nextCursor));
+  queueSection.hidden=queueSection.dataset.empty==='true'||queueSection.dataset.viewHidden==='true';
   if(!queue)queued.append(el('p','subtle','接管会话后核对排队输入。'));
   else if(queue.error)queued.append(el('p','turn-error','排队输入未确认：'+queue.error));
   else if(!queue.data?.length)queued.append(el('p','subtle','没有排队输入。'));
@@ -713,12 +723,7 @@ function renderSession() {
     queued.append(el('p','subtle',`${queue.data.length}${queue.nextCursor?' 条以上':' 条'}输入等待执行。`));
     queue.data.forEach(item=>queued.append(el('p','queued-input',(item.input||[]).map(i=>i.text||`[${i.type}]`).join('\n'))));
   }
-  const n = clear($('session-status')), t = currentThread();
-  if (!t) { n.append(el('p','subtle','尚未选择会话。')); return; }
-  const pairs = [['控制状态',controlled() ? '当前工作台' : '查看模式'],['执行状态',uncertainHistory() ? '状态未确认' : statusNames[typeOf(t.status)] || typeOf(t.status) || '状态未确认'],['当前模型',t.model || '目标机器未提供'],['当前思考档位',t.reasoningEffort ? effortNames[t.reasoningEffort] || t.reasoningEffort : '目标机器未提供'],['最近更新',dateTime(t.updatedAt,true)]];
-  pairs.forEach(([k,v]) => { const d = el('div','session-detail'); d.append(el('span','',k),el('span','',v)); n.append(d); });
-  n.append(el('p','session-id','会话 ID · ' + t.id));
-  if (state.detail?.goal) { const g = state.detail.goal; n.append(el('div','goal-card','目标：' + (g.objective || g.prompt || g.description || pretty(g)))); }
+
 }
 function renderFiles() {
   const map = new Map(); turns().forEach(t => (t.items || []).forEach(item => { if (item.type === 'fileChange') (item.changes || []).forEach(c => map.set(c.path,c)); }));
@@ -728,6 +733,7 @@ function renderFiles() {
 }
 function renderDiagnostics() {
   const n = clear($('diagnostic-content')), s = state.status || {}, c = s.connection || {};
+  if(state.selectedId)n.append(el('p','session-id','会话 ID · '+state.selectedId));
   if(s.recoveryFailures?.length){const d=el('div','diagnostic-entry');d.append(el('time','','历史会话恢复'),el('p','',recoveryMessage(s.recoveryFailures)));for(const failure of s.recoveryFailures)d.append(el('p','',failure.threadId+'：'+failure.message));n.append(d);}
   if (c.stage) { const d = el('div','diagnostic-entry'); d.append(el('time','','当前阶段'),el('p','',stages[c.stage] || c.stage)); n.append(d); }
   if (s.service?.pid) { const d = el('div','diagnostic-entry'); d.append(el('time','','目标机器服务'),el('p','','PID ' + s.service.pid + (s.service.running ? ' · 运行中' : ' · 未运行'))); n.append(d); }
@@ -745,6 +751,8 @@ function renderRequests() {
   if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();
   const saved = new Map([...document.querySelectorAll('.request-card')].map(card => [card.dataset.requestId, {fields:[...card.querySelectorAll('input,textarea')].map(f => ({name:f.name,value:f.value,checked:f.checked})),open:Boolean(card.querySelector('details[open]'))}]));
   const n = clear($('pending-requests')); const inline = clear($('conversation-requests'));
+  const requestSection=n.closest('details');requestSection.dataset.empty=String(!list.length);
+  requestSection.hidden=!list.length||requestSection.dataset.viewHidden==='true';
   $('request-count').hidden = !list.length; setText('request-count',list.length);
   if (!list.length) { const empty = el('div','inspector-empty'); empty.append(icon('check'),el('span','','暂无待处理请求')); n.append(empty); renderControls(); return; }
   list.forEach(r => {
@@ -786,13 +794,15 @@ function renderRequests() {
 }
 
 async function loadStatus() { applyStatus(await api('/api/status')); renderStatus(); renderRequests(); return state.status; }
-let modelLoadPromise, projectLoadPromise, workspaceRefreshPromise;
+let modelLoadPromise, projectLoadPromise, workspaceRefreshPromise, accountViewVersion=0;
 async function loadModels(force = false) {
   if (modelLoadPromise) return modelLoadPromise;
+  const version=accountViewVersion;
   state.loadingModels = true; renderModels();
   modelLoadPromise = (async () => {
     const all = []; let cursor = null;
     do { const data = await api('/api/models' + (force ? '?refresh=1' : '') + (cursor ? (force ? '&' : '?') + 'cursor=' + encodeURIComponent(cursor) : '')); all.push(...(data.data || [])); cursor = data.nextCursor; } while (cursor);
+    if(version!==accountViewVersion)return;
     const seen = new Set(); state.models = all.filter(m => { const id = modelId(m); if (!id || m.hidden || seen.has(id)) return false; seen.add(id); return true; });
   })();
   try { await modelLoadPromise; }
@@ -800,8 +810,9 @@ async function loadModels(force = false) {
 }
 async function loadProjects() {
   if (projectLoadPromise) return projectLoadPromise;
+  const version=accountViewVersion;
   state.loadingProjects = true; renderProjects();
-  projectLoadPromise = (async () => { const d = await api('/api/projects'); state.projects = d.data || []; if (state.projectId && !state.projects.some(p => p.id === state.projectId)) state.projectId = null; })();
+  projectLoadPromise = (async () => { const d = await api('/api/projects'); if(version!==accountViewVersion)return; state.projects = d.data || []; if (state.projectId && !state.projects.some(p => p.id === state.projectId)) state.projectId = null; })();
   try { await projectLoadPromise; }
   finally { projectLoadPromise = null; state.loadingProjects = false; renderProjects(); }
 }
@@ -837,6 +848,8 @@ async function readThreads(append = false, reportFailure = false) {
     if(state.sidebarArchived)q.set('archived','true');
     const d = await api('/api/sidebar?' + q); if (seq !== state.listVersion) return;
     if(state.sidebar?.accountScope===d.accountScope){const previous=new Map(state.threads.map(t=>[t.id,t.activity]));for(const t of d.data||[])if(!t.activity&&previous.has(t.id))t.activity=previous.get(t.id);}
+    const accountChanged=state.sidebar&&state.sidebar.accountScope!==d.accountScope;
+    if(accountChanged){createdThreads.clear();if(append){void loadThreads(false,false,true);return;}}
     state.sidebar=d;state.projects=d.projects||[];if(d.selectedThread?.id===state.selectedId)state.selectedArchived=!!d.selectedThread.archived;
     state.threadListSource = d.historySource || null;
     for (const thread of d.data || []) createdThreads.delete(thread.id);
@@ -959,8 +972,8 @@ async function refreshWorkspace(forceModels = false, statusReady = false) {
   if (workspaceRefreshPromise) return workspaceRefreshPromise;
   workspaceRefreshPromise = showRefresh('工作区', async () => {
     if(!statusReady)await loadStatus(); if (!connected()) throw new Error('目标机器未连接。请先连接，再刷新。');
-    const results = await Promise.allSettled([loadModels(forceModels),loadProjects(),loadThreads(false,true),refreshSelected()]);
-    const labels = ['模型列表','项目列表','会话列表','当前会话'];
+    const results = await Promise.allSettled([loadModels(forceModels),loadProjects(),loadThreads(false,true),refreshSelected(),refreshAccountUsage?.(true)]);
+    const labels = ['模型列表','项目列表','会话列表','当前会话','账号与用量'];
     const failures = results.flatMap((r,i) => r.status === 'rejected' ? [labels[i] + '：' + (r.reason?.message || String(r.reason))] : []);
     if (failures.length) throw new Error(failures.join('；'));
   });
@@ -1111,6 +1124,18 @@ async function endThreadUse() {
       await loadStatus();renderThread();
       if(id===state.selectedId&&selection===state.selectionVersion)handoffControls.focus();
     }catch(error){recordError(error,'handoff');await loadStatus().catch(()=>{});renderThread();if(id===state.selectedId&&selection===state.selectionVersion)handoffControls.showError(messageOf(error));}
+  });
+}
+async function reloadLogin() {
+  const host=targetHost;
+  if(!await confirmAction('请先在目标机器 Codex 中完成 ChatGPT 或 API Key 登录。此操作将重启 RCM 专用原生引擎以重新加载登录，影响该引擎的所有入口。请确认其他入口已断开，且任务已结束。系统会再次检查；失败消息不会自动重发。',{title:'重新加载登录',accept:'检查并重新加载',danger:true}))return;
+  if(host!==targetHost)return;
+  flushDrafts();
+  await action('release',async()=>{
+    await api('/api/account/reload',{method:'POST',body:{allEntrancesDisconnected:true}});
+    if(host!==targetHost)return;
+    await refreshWorkspace(true);
+    toast('已重新加载原生引擎登录。请核对账号后继续。',false,10000);
   });
 }
 async function releaseService() {
@@ -1291,11 +1316,24 @@ function scheduleListRefresh() { clearTimeout(listRefreshTimer); listRefreshTime
 function handleEvent(event) {
   let data; try { data = JSON.parse(event.data); } catch { return; }
   const method = data.method || event.type, p = data.params || {};
+  if(method==='account/updated'){
+    const version=++accountViewVersion;
+    state.listVersion++;createdThreads.clear();state.sidebar=null;state.threads=[];state.projects=[];state.models=[];state.threadCursor=null;
+    renderThreads();renderProjects();renderModels();
+    void refreshAccountUsage?.(true);
+    // Drain old reads before reloading; their version guards discard late data.
+    void Promise.allSettled([modelLoadPromise,projectLoadPromise,listRead?.promise]).then(()=>{
+      if(version!==accountViewVersion||!connected())return;
+      return Promise.allSettled([loadModels(true),loadProjects(),loadThreads(false,true)]).then(results=>{for(const result of results)if(result.status==='rejected')recordError(result.reason,'账号切换刷新');});
+    });
+    return;
+  }
   if (method==='manager/sidebarChanged'||/thread\/(section|readState)\//.test(method)||method.startsWith('threadSection/'))scheduleListRefresh();
   if(method==='manager/taskNotice'){
     // Historical notifications are intentionally not replayed.
     return;
   }
+  if(authRecoveryMessage(p.turn?.error||p.error))void refreshAccountUsage?.(true);
   if(!data.replayed)notifyTaskEvent(method,p);
   if (method === 'manager/status') {
     const was = connected(); applyStatus(p.status || p); renderStatus(); renderRequests(); renderThread();
@@ -1479,7 +1517,7 @@ function wireEvents() {
   }).observe($('message-input'));
   $('connect-button').onclick = () => connected()||connectionPending() ? disconnectRemote() : connectRemote();
   $('welcome-connect').onclick = () => connected() ? openNewDialog() : connectRemote();
-  $('new-thread').onclick = openNewDialog; $('takeover').onclick = takeoverThread; $('release-service').onclick = releaseService;
+  $('new-thread').onclick = openNewDialog; $('takeover').onclick = takeoverThread; $('release-service').onclick = releaseService; $('reload-login').onclick = reloadLogin;
   $('refresh-all').onclick = () => action('refresh',() => refreshWorkspace(true)); $('refresh-projects').onclick = () => action('projects',() => showRefresh('侧边栏',()=>loadThreads(false,true)));
   $('project-list').addEventListener('scroll',loadVisibleThreads,{passive:true});
   new ResizeObserver(loadVisibleThreads).observe($('project-list'));
@@ -1546,7 +1584,7 @@ async function init() {
   function showInspectorView(view){
     if(view==='settings')loadSettings();
     if(view==='mobile')loadMobile();
-    groups.forEach(group=>{group.hidden=category(group)!==view;});
+    groups.forEach(group=>{group.dataset.viewHidden=String(category(group)!==view);group.hidden=group.dataset.viewHidden==='true'||group.dataset.empty==='true';});
     navigation.querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.view===view)));
     inspector.scrollTop = 0;
   }

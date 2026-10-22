@@ -20,6 +20,8 @@ export function installAccountUsage({node,identityNode,api,connected,context}) {
   const clear=()=>{node.hidden=true;node.textContent='';node.title='';node.setAttribute('aria-label','');showIdentity();};
   return async function refresh(force=false) {
     const key=context();
+    // Forced refresh is also an identity boundary: retire any in-flight reply.
+    if(force){version++;pending=false;lastRead=0;clear();}
     if(key!==lastContext||!connected()) {lastContext=key;version++;pending=false;lastRead=0;clear();}
     if(!connected()||pending||(!force&&Date.now()-lastRead<60000))return;
     const seq=version;pending=true;lastRead=Date.now();
@@ -27,6 +29,7 @@ export function installAccountUsage({node,identityNode,api,connected,context}) {
     try {
       const usage=await api('/api/account/usage');
       if(seq!==version||key!==context()||!connected())return;
+      if(usage.recovery){clear();showIdentity(usage.signedOut?'未登录':'引擎登录已失效',usage.recovery);return;}
       node.hidden=!usage.visible;
       const label=usage.visible?usageLabel(usage):{text:'',detail:''};node.textContent=label.text;node.title=label.detail;node.setAttribute('aria-label',label.detail);
       const identity=identityLabel(usage.account);showIdentity(identity.text,identity.detail);

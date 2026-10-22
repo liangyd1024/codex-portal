@@ -1,10 +1,11 @@
+import {authRecoveryMessage} from '../shared/account-state.js';
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';
 import {taskNotice} from '../shared/connection-state.js';import {deliverNotice} from '../public/notification-delivery.js';
 const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 function fixture(success=true){
  const values=new Map([['rcm.taskNotifications.local','true']]),sent=[],acks=[];let lock=Promise.resolve();
  const storage={getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)};
- const c=vm.createContext({taskNotificationsEnabled:true,window:{Notification:{}},Notification:{permission:'granted'},targetHost:'local',state:{threads:[{id:'a'}],status:{},selectedId:null,detail:null},currentThread:()=>null,threadName:()=> 'test',taskNotice,deliverNotice,localStorage:storage,navigator:{locks:{request:(_key,work)=>{const next=lock.then(work);lock=next.catch(()=>{});return next;}}},sendTaskNotification:async(...args)=>{sent.push(args);return success;},api:async(path,options)=>acks.push({path,options}),notificationDiagnostic(){},recordError(){},scheduleListRefresh(){}});
+ const c=vm.createContext({authRecoveryMessage,taskNotificationsEnabled:true,window:{Notification:{}},Notification:{permission:'granted'},targetHost:'local',state:{threads:[{id:'a'}],status:{},selectedId:null,detail:null},currentThread:()=>null,threadName:()=> 'test',taskNotice,deliverNotice,localStorage:storage,navigator:{locks:{request:(_key,work)=>{const next=lock.then(work);lock=next.catch(()=>{});return next;}}},sendTaskNotification:async(...args)=>{sent.push(args);return success;},api:async(path,options)=>acks.push({path,options}),notificationDiagnostic(){},recordError(){},scheduleListRefresh(){}});
  vm.runInContext(source.slice(source.indexOf('const attemptedNotices='),source.indexOf('async function connectRemote()')),c);
  vm.runInContext(source.slice(source.indexOf('function handleEvent('),source.indexOf('function setupEvents()')),c);
  return {c,sent,acks,values,emit:(id)=>c.notifyTaskEvent('turn/completed',{threadId:'a',turn:{id,status:'completed'}})};

@@ -63,18 +63,29 @@ def main():
             finally:
                 if conn: conn.close()
         return
-    if action == 'release':
+    if action in ('release', 'reload-login'):
         marker = ROOT / 'maintenance.json'
-        marker.write_text(json.dumps({'reason':'manual release','createdAt':time.time()})); os.chmod(marker,0o600)
+        if action == 'reload-login' and marker.exists():
+            raise RuntimeError('目标已有维护标记，请先完成原维护流程。未重启引擎。')
+        if action == 'reload-login':
+            if not BINARY.is_file(): raise RuntimeError('找不到原生引擎，未重启。')
+            check_protocol(BINARY, command([str(BINARY), '--version']).stdout.strip().replace('codex-cli ', ''), ROOT)
+        marker.write_text(json.dumps({'reason':'reload login' if action == 'reload-login' else 'manual release','createdAt':time.time()})); os.chmod(marker,0o600)
         result = command(['/bin/launchctl', 'bootout', DOMAIN + '/' + LABEL])
         if result.returncode and 'No such process' not in result.stderr and 'Could not find service' not in result.stderr:
             raise RuntimeError('停止专用服务失败：' + result.stderr[-500:])
         for _ in range(30):
             if command(['/bin/launchctl', 'print', DOMAIN + '/' + LABEL]).returncode != 0:
-                emit({'running': False, 'released': True})
-                return
+                if action == 'release':
+                    emit({'running': False, 'released': True})
+                    return
+                break
             time.sleep(0.2)
-        raise RuntimeError('专用服务尚未退出。请勿切回桌面。')
+        else:
+            raise RuntimeError('专用服务尚未退出。请勿切回桌面。')
+        # Preserve this operation's maintenance record. Never clear an existing
+        # restore/maintenance marker to force a login refresh.
+        marker.rename(ROOT / ('maintenance.login-reloaded-' + str(time.time_ns()) + '.json'))
     if (ROOT / 'maintenance.json').exists(): raise RuntimeError('目标处于维护模式，请在目标机完成维护后恢复。')
     if not BINARY.is_file():
         raise RuntimeError('找不到远端桌面版 Codex。请检查安装路径。')

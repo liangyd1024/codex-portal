@@ -57,3 +57,32 @@ test('identity refresh handles failure, recovery, auth mode change and logout',a
  result={visible:false,account:{type:'apiKey'}};await refresh(true);assert.equal(identityNode.textContent,'API Key');assert.equal(node.textContent,'');
  result={visible:false,account:null};await refresh(true);assert.equal(identityNode.hidden,true);assert.equal(identityNode.textContent,'');assert.equal(identityNode.attributes['aria-label'],'');
 });
+test('account notification refresh retires a pending reply on the same connection',async()=>{
+ for(const account of [{type:'apiKey'},null,{type:'chatgpt',email:'new@example.test'}]){
+  let resolve,calls=0;const node=element(),identityNode=element();
+  const refresh=installAccountUsage({node,identityNode,connected:()=>true,context:()=>1,api:()=>++calls===1?new Promise(r=>resolve=r):Promise.resolve({visible:false,account})});
+  const old=refresh();await refresh(true);
+  resolve({visible:true,account:{type:'chatgpt',email:'old@example.test'},rateLimits:{primary:{usedPercent:15}}});await old;
+  assert.equal(identityNode.textContent,identityLabel(account).text);assert.equal(node.hidden,true);
+ }
+});
+test('quota must not be attached to identity read before an account switch',async()=>{
+ let reads=0;const m=manager();m.rpc.request=async method=>method==='account/read'?{account:++reads===1?{type:'chatgpt',email:'old@example.test'}:{type:'apiKey'}}:{rateLimits:{}};
+ await assert.rejects(readAccountUsage(m),e=>e.code==='ACCOUNT_CHANGED');
+});
+test('known token invalidation hides obsolete identity and quota and gives recovery guidance',async()=>{
+ const m=manager();m.rpc.request=async method=>{if(method==='account/read')return {account:{type:'chatgpt',email:'old@example.test'}};throw Error('Your access token could not be refreshed because you have since logged out or signed in to another account. Please sign in again.');};
+ const result=await readAccountUsage(m);assert.equal(result.account,null);assert.equal(result.visible,false);assert.match(result.recovery,/API Key/);
+ const node=element(),identityNode=element();const refresh=installAccountUsage({node,identityNode,connected:()=>true,context:()=>1,api:async()=>result});
+ await refresh();assert.equal(node.hidden,true);assert.equal(identityNode.textContent,'引擎登录已失效');
+});
+test('revoked identity reads use the same recovery path as revoked quota reads',async()=>{
+ const m=manager();m.rpc.request=async()=>{throw Error('401: token_revoked');};
+ const result=await readAccountUsage(m);assert.equal(result.account,null);assert.equal(result.visible,false);assert.match(result.recovery,/重新加载登录/);
+});
+test('signed out native provider is visible and cannot be mistaken for API key mode',async()=>{
+ const m=manager();m.rpc.request=async()=>({account:null,requiresOpenaiAuth:true});
+ const result=await readAccountUsage(m);assert.equal(result.signedOut,true);assert.equal(result.visible,false);
+ const node=element(),identityNode=element();await installAccountUsage({node,identityNode,connected:()=>true,context:()=>1,api:async()=>result})();
+ assert.equal(identityNode.textContent,'未登录');
+});
