@@ -1,0 +1,2199 @@
+[
+  {
+    "label": "desktop-repeat-1",
+    "width": 1440,
+    "height": 900,
+    "audit": {
+      "longTasks": [],
+      "marks": {
+        "ready": 119,
+        "sidebar": 2877.7999999523163
+      },
+      "cls": 0.07063859522941181
+    },
+    "paint": [
+      {
+        "name": "first-paint",
+        "start": 80
+      },
+      {
+        "name": "first-contentful-paint",
+        "start": 80
+      }
+    ],
+    "nav": [
+      {
+        "ttfb": 6.799999952316284,
+        "dom": 39.10000002384186,
+        "load": 107.89999997615814
+      }
+    ],
+    "resources": [
+      {
+        "path": "/styles.css",
+        "start": 26.899999976158142,
+        "duration": 17,
+        "transfer": 84367,
+        "encoded": 84067,
+        "decoded": 84067,
+        "status": 200
+      },
+      {
+        "path": "/new-chat.css",
+        "start": 27,
+        "duration": 18,
+        "transfer": 1728,
+        "encoded": 1428,
+        "decoded": 1428,
+        "status": 200
+      },
+      {
+        "path": "/sidebar.css",
+        "start": 27.100000023841858,
+        "duration": 18.699999928474426,
+        "transfer": 5464,
+        "encoded": 5164,
+        "decoded": 5164,
+        "status": 200
+      },
+      {
+        "path": "/project-picker.css",
+        "start": 27.100000023841858,
+        "duration": 19.5,
+        "transfer": 5404,
+        "encoded": 5104,
+        "decoded": 5104,
+        "status": 200
+      },
+      {
+        "path": "/mobile-ui.css",
+        "start": 27.100000023841858,
+        "duration": 19.299999952316284,
+        "transfer": 12220,
+        "encoded": 11920,
+        "decoded": 11920,
+        "status": 200
+      },
+      {
+        "path": "/bootstrap.js",
+        "start": 27.100000023841858,
+        "duration": 22,
+        "transfer": 4007,
+        "encoded": 3707,
+        "decoded": 3707,
+        "status": 200
+      },
+      {
+        "path": "/project-picker.js",
+        "start": 27.200000047683716,
+        "duration": 20,
+        "transfer": 13369,
+        "encoded": 13069,
+        "decoded": 13069,
+        "status": 200
+      },
+      {
+        "path": "/automations.css",
+        "start": 27.200000047683716,
+        "duration": 20.299999952316284,
+        "transfer": 4688,
+        "encoded": 4388,
+        "decoded": 4388,
+        "status": 200
+      },
+      {
+        "path": "/manifest.webmanifest",
+        "start": 40,
+        "duration": 8.399999976158142,
+        "transfer": 476,
+        "encoded": 176,
+        "decoded": 176,
+        "status": 200
+      },
+      {
+        "path": "/mobile-ui.js",
+        "start": 47.799999952316284,
+        "duration": 2.700000047683716,
+        "transfer": 9523,
+        "encoded": 9223,
+        "decoded": 9223,
+        "status": 200
+      },
+      {
+        "path": "/app.js",
+        "start": 49.700000047683716,
+        "duration": 2.299999952316284,
+        "transfer": 123726,
+        "encoded": 123426,
+        "decoded": 123426,
+        "status": 200
+      },
+      {
+        "path": "/capacity-retry.js",
+        "start": 57.799999952316284,
+        "duration": 13,
+        "transfer": 4442,
+        "encoded": 4142,
+        "decoded": 4142,
+        "status": 200
+      },
+      {
+        "path": "/account-usage.js",
+        "start": 57.89999997615814,
+        "duration": 12.600000023841858,
+        "transfer": 2860,
+        "encoded": 2560,
+        "decoded": 2560,
+        "status": 200
+      },
+      {
+        "path": "/system-update.js",
+        "start": 57.89999997615814,
+        "duration": 13.899999976158142,
+        "transfer": 4914,
+        "encoded": 4614,
+        "decoded": 4614,
+        "status": 200
+      },
+      {
+        "path": "/goal-submit.js",
+        "start": 58,
+        "duration": 13.100000023841858,
+        "transfer": 2507,
+        "encoded": 2207,
+        "decoded": 2207,
+        "status": 200
+      },
+      {
+        "path": "/notification-delivery.js",
+        "start": 58,
+        "duration": 13.299999952316284,
+        "transfer": 1307,
+        "encoded": 1007,
+        "decoded": 1007,
+        "status": 200
+      },
+      {
+        "path": "/notification-platform.js",
+        "start": 58,
+        "duration": 13.600000023841858,
+        "transfer": 1846,
+        "encoded": 1546,
+        "decoded": 1546,
+        "status": 200
+      },
+      {
+        "path": "/question-form.js",
+        "start": 58.10000002384186,
+        "duration": 15.5,
+        "transfer": 3654,
+        "encoded": 3354,
+        "decoded": 3354,
+        "status": 200
+      },
+      {
+        "path": "/questions.js",
+        "start": 58.10000002384186,
+        "duration": 16.100000023841858,
+        "transfer": 4788,
+        "encoded": 4488,
+        "decoded": 4488,
+        "status": 200
+      },
+      {
+        "path": "/activity.js",
+        "start": 58.10000002384186,
+        "duration": 17.199999928474426,
+        "transfer": 5680,
+        "encoded": 5380,
+        "decoded": 5380,
+        "status": 200
+      },
+      {
+        "path": "/message-files.js",
+        "start": 58.10000002384186,
+        "duration": 17.799999952316284,
+        "transfer": 5799,
+        "encoded": 5499,
+        "decoded": 5499,
+        "status": 200
+      },
+      {
+        "path": "/message-media.js",
+        "start": 58.10000002384186,
+        "duration": 18.5,
+        "transfer": 4747,
+        "encoded": 4447,
+        "decoded": 4447,
+        "status": 200
+      },
+      {
+        "path": "/recovery-state.js",
+        "start": 58.10000002384186,
+        "duration": 19.399999976158142,
+        "transfer": 1418,
+        "encoded": 1118,
+        "decoded": 1118,
+        "status": 200
+      },
+      {
+        "path": "/message-dom.js",
+        "start": 58.200000047683716,
+        "duration": 19.59999990463257,
+        "transfer": 2435,
+        "encoded": 2135,
+        "decoded": 2135,
+        "status": 200
+      },
+      {
+        "path": "/new-chat.js",
+        "start": 58.200000047683716,
+        "duration": 19.799999952316284,
+        "transfer": 1120,
+        "encoded": 820,
+        "decoded": 820,
+        "status": 200
+      },
+      {
+        "path": "/message-time.js",
+        "start": 58.200000047683716,
+        "duration": 20,
+        "transfer": 2435,
+        "encoded": 2135,
+        "decoded": 2135,
+        "status": 200
+      },
+      {
+        "path": "/attachments.js",
+        "start": 58.200000047683716,
+        "duration": 20.899999976158142,
+        "transfer": 5915,
+        "encoded": 5615,
+        "decoded": 5615,
+        "status": 200
+      },
+      {
+        "path": "/message-body.js",
+        "start": 58.200000047683716,
+        "duration": 21.199999928474426,
+        "transfer": 9262,
+        "encoded": 8962,
+        "decoded": 8962,
+        "status": 200
+      },
+      {
+        "path": "/automations.js",
+        "start": 58.299999952316284,
+        "duration": 22.800000071525574,
+        "transfer": 11138,
+        "encoded": 10838,
+        "decoded": 10838,
+        "status": 200
+      },
+      {
+        "path": "/input-state.js",
+        "start": 58.299999952316284,
+        "duration": 22.40000009536743,
+        "transfer": 2262,
+        "encoded": 1962,
+        "decoded": 1962,
+        "status": 200
+      },
+      {
+        "path": "/sidebar.js",
+        "start": 58.299999952316284,
+        "duration": 23.100000023841858,
+        "transfer": 27982,
+        "encoded": 27682,
+        "decoded": 27682,
+        "status": 200
+      },
+      {
+        "path": "/thread-handoff.js",
+        "start": 58.39999997615814,
+        "duration": 23.399999976158142,
+        "transfer": 4328,
+        "encoded": 4028,
+        "decoded": 4028,
+        "status": 200
+      },
+      {
+        "path": "/thread-sync.js",
+        "start": 58.39999997615814,
+        "duration": 23.200000047683716,
+        "transfer": 2314,
+        "encoded": 2014,
+        "decoded": 2014,
+        "status": 200
+      },
+      {
+        "path": "/browser-backup.js",
+        "start": 58.39999997615814,
+        "duration": 24,
+        "transfer": 5666,
+        "encoded": 5366,
+        "decoded": 5366,
+        "status": 200
+      },
+      {
+        "path": "/composer.js",
+        "start": 58.39999997615814,
+        "duration": 25.100000023841858,
+        "transfer": 20607,
+        "encoded": 20307,
+        "decoded": 20307,
+        "status": 200
+      },
+      {
+        "path": "/mobile.js",
+        "start": 58.39999997615814,
+        "duration": 25.399999976158142,
+        "transfer": 8976,
+        "encoded": 8676,
+        "decoded": 8676,
+        "status": 200
+      },
+      {
+        "path": "/detail-cache.js",
+        "start": 58.39999997615814,
+        "duration": 25.899999976158142,
+        "transfer": 5312,
+        "encoded": 5012,
+        "decoded": 5012,
+        "status": 200
+      },
+      {
+        "path": "/output-window.js",
+        "start": 58.5,
+        "duration": 25.100000023841858,
+        "transfer": 903,
+        "encoded": 603,
+        "decoded": 603,
+        "status": 200
+      },
+      {
+        "path": "/connection-state.js",
+        "start": 58.5,
+        "duration": 26,
+        "transfer": 8222,
+        "encoded": 7922,
+        "decoded": 7922,
+        "status": 200
+      },
+      {
+        "path": "/inline-mentions.js",
+        "start": 104.79999995231628,
+        "duration": 2.4000000953674316,
+        "transfer": 2786,
+        "encoded": 2486,
+        "decoded": 2486,
+        "status": 200
+      },
+      {
+        "path": "/skill-suggestions.js",
+        "start": 104.79999995231628,
+        "duration": 2.700000047683716,
+        "transfer": 6998,
+        "encoded": 6698,
+        "decoded": 6698,
+        "status": 200
+      },
+      {
+        "path": "/api/connections",
+        "start": 109.29999995231628,
+        "duration": 3.4000000953674316,
+        "transfer": 1383,
+        "encoded": 1083,
+        "decoded": 1083,
+        "status": 200
+      },
+      {
+        "path": "/api/system/update",
+        "start": 113.60000002384186,
+        "duration": 1.7999999523162842,
+        "transfer": 732,
+        "encoded": 432,
+        "decoded": 432,
+        "status": 200
+      },
+      {
+        "path": "/api/access/status",
+        "start": 114.5,
+        "duration": 116.5,
+        "transfer": 529,
+        "encoded": 229,
+        "decoded": 229,
+        "status": 200
+      },
+      {
+        "path": "/handoff.css",
+        "start": 114.79999995231628,
+        "duration": 9.700000047683716,
+        "transfer": 1234,
+        "encoded": 934,
+        "decoded": 934,
+        "status": 200
+      },
+      {
+        "path": "/composer.css",
+        "start": 115,
+        "duration": 12.700000047683716,
+        "transfer": 15176,
+        "encoded": 14876,
+        "decoded": 14876,
+        "status": 200
+      },
+      {
+        "path": "/api/csrf",
+        "start": 119.10000002384186,
+        "duration": 7,
+        "transfer": 376,
+        "encoded": 76,
+        "decoded": 76,
+        "status": 200
+      },
+      {
+        "path": "/api/status",
+        "start": 132.5,
+        "duration": 4.100000023841858,
+        "transfer": 8759,
+        "encoded": 8459,
+        "decoded": 8459,
+        "status": 200
+      },
+      {
+        "path": "/api/status",
+        "start": 137.39999997615814,
+        "duration": 2.100000023841858,
+        "transfer": 8759,
+        "encoded": 8459,
+        "decoded": 8459,
+        "status": 200
+      },
+      {
+        "path": "/api/account/usage",
+        "start": 137.70000004768372,
+        "duration": 641.7999999523163,
+        "transfer": 718,
+        "encoded": 418,
+        "decoded": 418,
+        "status": 200
+      },
+      {
+        "path": "/api/status",
+        "start": 141.39999997615814,
+        "duration": 1.5,
+        "transfer": 8759,
+        "encoded": 8459,
+        "decoded": 8459,
+        "status": 200
+      },
+      {
+        "path": "/api/sidebar",
+        "start": 148.10000002384186,
+        "duration": 1365,
+        "transfer": 25705,
+        "encoded": 25405,
+        "decoded": 93627,
+        "status": 200
+      },
+      {
+        "path": "/api/models",
+        "start": 149.89999997615814,
+        "duration": 2.600000023841858,
+        "transfer": 8162,
+        "encoded": 7862,
+        "decoded": 7862,
+        "status": 200
+      },
+      {
+        "path": "/api/projects",
+        "start": 149.89999997615814,
+        "duration": 94.89999997615814,
+        "transfer": 5746,
+        "encoded": 5446,
+        "decoded": 5446,
+        "status": 200
+      },
+      {
+        "path": "/api/sidebar",
+        "start": 150,
+        "duration": 2716.600000023842,
+        "transfer": 25705,
+        "encoded": 25405,
+        "decoded": 93627,
+        "status": 200
+      },
+      {
+        "path": "/api/access/qr",
+        "start": 232.10000002384186,
+        "duration": 1.399999976158142,
+        "transfer": 1010,
+        "encoded": 710,
+        "decoded": 710,
+        "status": 200
+      },
+      {
+        "path": "/api/access/qr",
+        "start": 232.20000004768372,
+        "duration": 2.0999999046325684,
+        "transfer": 858,
+        "encoded": 558,
+        "decoded": 558,
+        "status": 200
+      }
+    ],
+    "dom": 1976,
+    "overflow": false
+  },
+  {
+    "label": "desktop-repeat-2",
+    "width": 1440,
+    "height": 900,
+    "audit": {
+      "longTasks": [],
+      "marks": {
+        "ready": 123,
+        "sidebar": 2919.899999976158
+      },
+      "cls": 0.07063859522941181
+    },
+    "paint": [
+      {
+        "name": "first-paint",
+        "start": 88
+      },
+      {
+        "name": "first-contentful-paint",
+        "start": 88
+      }
+    ],
+    "nav": [
+      {
+        "ttfb": 3.299999952316284,
+        "dom": 30.299999952316284,
+        "load": 98.39999997615814
+      }
+    ],
+    "resources": [
+      {
+        "path": "/styles.css",
+        "start": 20.200000047683716,
+        "duration": 13.399999976158142,
+        "transfer": 84367,
+        "encoded": 84067,
+        "decoded": 84067,
+        "status": 200
+      },
+      {
+        "path": "/new-chat.css",
+        "start": 20.299999952316284,
+        "duration": 24,
+        "transfer": 1728,
+        "encoded": 1428,
+        "decoded": 1428,
+        "status": 200
+      },
+      {
+        "path": "/bootstrap.js",
+        "start": 20.299999952316284,
+        "duration": 27.200000047683716,
+        "transfer": 4007,
+        "encoded": 3707,
+        "decoded": 3707,
+        "status": 200
+      },
+      {
+        "path": "/sidebar.css",
+        "start": 20.399999976158142,
+        "duration": 24.300000071525574,
+        "transfer": 5464,
+        "encoded": 5164,
+        "decoded": 5164,
+        "status": 200
+      },
+      {
+        "path": "/project-picker.css",
+        "start": 20.399999976158142,
+        "duration": 24.5,
+        "transfer": 5404,
+        "encoded": 5104,
+        "decoded": 5104,
+        "status": 200
+      },
+      {
+        "path": "/project-picker.js",
+        "start": 20.399999976158142,
+        "duration": 25,
+        "transfer": 13369,
+        "encoded": 13069,
+        "decoded": 13069,
+        "status": 200
+      },
+      {
+        "path": "/automations.css",
+        "start": 20.399999976158142,
+        "duration": 25.300000071525574,
+        "transfer": 4688,
+        "encoded": 4388,
+        "decoded": 4388,
+        "status": 200
+      },
+      {
+        "path": "/mobile-ui.css",
+        "start": 20.399999976158142,
+        "duration": 25.5,
+        "transfer": 12220,
+        "encoded": 11920,
+        "decoded": 11920,
+        "status": 200
+      },
+      {
+        "path": "/manifest.webmanifest",
+        "start": 30.399999976158142,
+        "duration": 16.899999976158142,
+        "transfer": 476,
+        "encoded": 176,
+        "decoded": 176,
+        "status": 200
+      },
+      {
+        "path": "/mobile-ui.js",
+        "start": 46.299999952316284,
+        "duration": 2.8000000715255737,
+        "transfer": 9523,
+        "encoded": 9223,
+        "decoded": 9223,
+        "status": 200
+      },
+      {
+        "path": "/app.js",
+        "start": 61,
+        "duration": 3.200000047683716,
+        "transfer": 123726,
+        "encoded": 123426,
+        "decoded": 123426,
+        "status": 200
+      },
+      {
+        "path": "/capacity-retry.js",
+        "start": 79.10000002384186,
+        "duration": 11.399999976158142,
+        "transfer": 4442,
+        "encoded": 4142,
+        "decoded": 4142,
+        "status": 200
+      },
+      {
+        "path": "/system-update.js",
+        "start": 79.10000002384186,
+        "duration": 10.5,
+        "transfer": 4914,
+        "encoded": 4614,
+        "decoded": 4614,
+        "status": 200
+      },
+      {
+        "path": "/account-usage.js",
+        "start": 79.20000004768372,
+        "duration": 10.699999928474426,
+        "transfer": 2860,
+        "encoded": 2560,
+        "decoded": 2560,
+        "status": 200
+      },
+      {
+        "path": "/goal-submit.js",
+        "start": 79.20000004768372,
+        "duration": 11,
+        "transfer": 2507,
+        "encoded": 2207,
+        "decoded": 2207,
+        "status": 200
+      },
+      {
+        "path": "/notification-platform.js",
+        "start": 79.29999995231628,
+        "duration": 11.300000071525574,
+        "transfer": 1846,
+        "encoded": 1546,
+        "decoded": 1546,
+        "status": 200
+      },
+      {
+        "path": "/notification-delivery.js",
+        "start": 79.29999995231628,
+        "duration": 11.900000095367432,
+        "transfer": 1307,
+        "encoded": 1007,
+        "decoded": 1007,
+        "status": 200
+      },
+      {
+        "path": "/questions.js",
+        "start": 79.29999995231628,
+        "duration": 14,
+        "transfer": 4788,
+        "encoded": 4488,
+        "decoded": 4488,
+        "status": 200
+      },
+      {
+        "path": "/question-form.js",
+        "start": 79.29999995231628,
+        "duration": 13.600000023841858,
+        "transfer": 3654,
+        "encoded": 3354,
+        "decoded": 3354,
+        "status": 200
+      },
+      {
+        "path": "/recovery-state.js",
+        "start": 79.39999997615814,
+        "duration": 14.5,
+        "transfer": 1418,
+        "encoded": 1118,
+        "decoded": 1118,
+        "status": 200
+      },
+      {
+        "path": "/message-files.js",
+        "start": 79.39999997615814,
+        "duration": 14.300000071525574,
+        "transfer": 5799,
+        "encoded": 5499,
+        "decoded": 5499,
+        "status": 200
+      },
+      {
+        "path": "/activity.js",
+        "start": 79.39999997615814,
+        "duration": 15,
+        "transfer": 5680,
+        "encoded": 5380,
+        "decoded": 5380,
+        "status": 200
+      },
+      {
+        "path": "/message-media.js",
+        "start": 79.39999997615814,
+        "duration": 15.200000047683716,
+        "transfer": 4747,
+        "encoded": 4447,
+        "decoded": 4447,
+        "status": 200
+      },
+      {
+        "path": "/message-time.js",
+        "start": 79.39999997615814,
+        "duration": 16,
+        "transfer": 2435,
+        "encoded": 2135,
+        "decoded": 2135,
+        "status": 200
+      },
+      {
+        "path": "/message-body.js",
+        "start": 79.39999997615814,
+        "duration": 16.399999976158142,
+        "transfer": 9262,
+        "encoded": 8962,
+        "decoded": 8962,
+        "status": 200
+      },
+      {
+        "path": "/message-dom.js",
+        "start": 79.5,
+        "duration": 16.200000047683716,
+        "transfer": 2435,
+        "encoded": 2135,
+        "decoded": 2135,
+        "status": 200
+      },
+      {
+        "path": "/new-chat.js",
+        "start": 79.5,
+        "duration": 16.5,
+        "transfer": 1120,
+        "encoded": 820,
+        "decoded": 820,
+        "status": 200
+      },
+      {
+        "path": "/attachments.js",
+        "start": 79.5,
+        "duration": 17.100000023841858,
+        "transfer": 5915,
+        "encoded": 5615,
+        "decoded": 5615,
+        "status": 200
+      },
+      {
+        "path": "/sidebar.js",
+        "start": 79.5,
+        "duration": 17.200000047683716,
+        "transfer": 27982,
+        "encoded": 27682,
+        "decoded": 27682,
+        "status": 200
+      },
+      {
+        "path": "/input-state.js",
+        "start": 79.5,
+        "duration": 18.200000047683716,
+        "transfer": 2262,
+        "encoded": 1962,
+        "decoded": 1962,
+        "status": 200
+      },
+      {
+        "path": "/automations.js",
+        "start": 79.60000002384186,
+        "duration": 18.699999928474426,
+        "transfer": 11138,
+        "encoded": 10838,
+        "decoded": 10838,
+        "status": 200
+      },
+      {
+        "path": "/thread-sync.js",
+        "start": 79.60000002384186,
+        "duration": 19,
+        "transfer": 2314,
+        "encoded": 2014,
+        "decoded": 2014,
+        "status": 200
+      },
+      {
+        "path": "/thread-handoff.js",
+        "start": 79.60000002384186,
+        "duration": 19.799999952316284,
+        "transfer": 4328,
+        "encoded": 4028,
+        "decoded": 4028,
+        "status": 200
+      },
+      {
+        "path": "/browser-backup.js",
+        "start": 79.60000002384186,
+        "duration": 19.899999976158142,
+        "transfer": 5666,
+        "encoded": 5366,
+        "decoded": 5366,
+        "status": 200
+      },
+      {
+        "path": "/composer.js",
+        "start": 79.60000002384186,
+        "duration": 20.100000023841858,
+        "transfer": 20607,
+        "encoded": 20307,
+        "decoded": 20307,
+        "status": 200
+      },
+      {
+        "path": "/mobile.js",
+        "start": 79.60000002384186,
+        "duration": 20.100000023841858,
+        "transfer": 8976,
+        "encoded": 8676,
+        "decoded": 8676,
+        "status": 200
+      },
+      {
+        "path": "/detail-cache.js",
+        "start": 79.70000004768372,
+        "duration": 21.59999990463257,
+        "transfer": 5312,
+        "encoded": 5012,
+        "decoded": 5012,
+        "status": 200
+      },
+      {
+        "path": "/output-window.js",
+        "start": 79.70000004768372,
+        "duration": 22,
+        "transfer": 903,
+        "encoded": 603,
+        "decoded": 603,
+        "status": 200
+      },
+      {
+        "path": "/connection-state.js",
+        "start": 79.70000004768372,
+        "duration": 22.299999952316284,
+        "transfer": 8222,
+        "encoded": 7922,
+        "decoded": 7922,
+        "status": 200
+      },
+      {
+        "path": "/skill-suggestions.js",
+        "start": 101.79999995231628,
+        "duration": 6.700000047683716,
+        "transfer": 6998,
+        "encoded": 6698,
+        "decoded": 6698,
+        "status": 200
+      },
+      {
+        "path": "/inline-mentions.js",
+        "start": 101.79999995231628,
+        "duration": 7.600000023841858,
+        "transfer": 2786,
+        "encoded": 2486,
+        "decoded": 2486,
+        "status": 200
+      },
+      {
+        "path": "/api/connections",
+        "start": 114.20000004768372,
+        "duration": 2.5999999046325684,
+        "transfer": 1383,
+        "encoded": 1083,
+        "decoded": 1083,
+        "status": 200
+      },
+      {
+        "path": "/api/system/update",
+        "start": 118.20000004768372,
+        "duration": 7,
+        "transfer": 732,
+        "encoded": 432,
+        "decoded": 432,
+        "status": 200
+      },
+      {
+        "path": "/api/access/status",
+        "start": 119.10000002384186,
+        "duration": 74,
+        "transfer": 529,
+        "encoded": 229,
+        "decoded": 229,
+        "status": 200
+      },
+      {
+        "path": "/handoff.css",
+        "start": 119.29999995231628,
+        "duration": 5.600000023841858,
+        "transfer": 1234,
+        "encoded": 934,
+        "decoded": 934,
+        "status": 200
+      },
+      {
+        "path": "/composer.css",
+        "start": 119.60000002384186,
+        "duration": 5.899999976158142,
+        "transfer": 15176,
+        "encoded": 14876,
+        "decoded": 14876,
+        "status": 200
+      },
+      {
+        "path": "/api/csrf",
+        "start": 123.20000004768372,
+        "duration": 1.1999999284744263,
+        "transfer": 376,
+        "encoded": 76,
+        "decoded": 76,
+        "status": 200
+      },
+      {
+        "path": "/api/status",
+        "start": 129.5,
+        "duration": 5.799999952316284,
+        "transfer": 8759,
+        "encoded": 8459,
+        "decoded": 8459,
+        "status": 200
+      },
+      {
+        "path": "/api/status",
+        "start": 139.70000004768372,
+        "duration": 1.7999999523162842,
+        "transfer": 8759,
+        "encoded": 8459,
+        "decoded": 8459,
+        "status": 200
+      },
+      {
+        "path": "/api/account/usage",
+        "start": 139.89999997615814,
+        "duration": 704.5,
+        "transfer": 718,
+        "encoded": 418,
+        "decoded": 418,
+        "status": 200
+      },
+      {
+        "path": "/api/status",
+        "start": 143.10000002384186,
+        "duration": 3.5,
+        "transfer": 8759,
+        "encoded": 8459,
+        "decoded": 8459,
+        "status": 200
+      },
+      {
+        "path": "/api/sidebar",
+        "start": 161.79999995231628,
+        "duration": 1351.1000000238419,
+        "transfer": 25705,
+        "encoded": 25405,
+        "decoded": 93627,
+        "status": 200
+      },
+      {
+        "path": "/api/models",
+        "start": 164.10000002384186,
+        "duration": 1.5,
+        "transfer": 8162,
+        "encoded": 7862,
+        "decoded": 7862,
+        "status": 200
+      },
+      {
+        "path": "/api/projects",
+        "start": 164.20000004768372,
+        "duration": 75.19999992847443,
+        "transfer": 5746,
+        "encoded": 5446,
+        "decoded": 5446,
+        "status": 200
+      },
+      {
+        "path": "/api/sidebar",
+        "start": 164.29999995231628,
+        "duration": 2726.9000000953674,
+        "transfer": 25705,
+        "encoded": 25405,
+        "decoded": 93627,
+        "status": 200
+      },
+      {
+        "path": "/api/access/qr",
+        "start": 198.29999995231628,
+        "duration": 1.4000000953674316,
+        "transfer": 1010,
+        "encoded": 710,
+        "decoded": 710,
+        "status": 200
+      },
+      {
+        "path": "/api/access/qr",
+        "start": 198.39999997615814,
+        "duration": 2.5,
+        "transfer": 858,
+        "encoded": 558,
+        "decoded": 558,
+        "status": 200
+      }
+    ],
+    "dom": 1976,
+    "overflow": false
+  },
+  {
+    "label": "desktop-repeat-3",
+    "width": 1440,
+    "height": 900,
+    "audit": {
+      "longTasks": [],
+      "marks": {
+        "ready": 114.20000004768372,
+        "sidebar": 2846.2000000476837
+      },
+      "cls": 0.0706375455251937
+    },
+    "paint": [
+      {
+        "name": "first-paint",
+        "start": 72
+      },
+      {
+        "name": "first-contentful-paint",
+        "start": 72
+      }
+    ],
+    "nav": [
+      {
+        "ttfb": 3.700000047683716,
+        "dom": 30.799999952316284,
+        "load": 99.5
+      }
+    ],
+    "resources": [
+      {
+        "path": "/styles.css",
+        "start": 20.600000023841858,
+        "duration": 15.100000023841858,
+        "transfer": 84367,
+        "encoded": 84067,
+        "decoded": 84067,
+        "status": 200
+      },
+      {
+        "path": "/new-chat.css",
+        "start": 20.700000047683716,
+        "duration": 14.399999976158142,
+        "transfer": 1728,
+        "encoded": 1428,
+        "decoded": 1428,
+        "status": 200
+      },
+      {
+        "path": "/sidebar.css",
+        "start": 20.700000047683716,
+        "duration": 14.5,
+        "transfer": 5464,
+        "encoded": 5164,
+        "decoded": 5164,
+        "status": 200
+      },
+      {
+        "path": "/bootstrap.js",
+        "start": 20.700000047683716,
+        "duration": 18.59999990463257,
+        "transfer": 4007,
+        "encoded": 3707,
+        "decoded": 3707,
+        "status": 200
+      },
+      {
+        "path": "/mobile-ui.css",
+        "start": 20.799999952316284,
+        "duration": 14.600000023841858,
+        "transfer": 12220,
+        "encoded": 11920,
+        "decoded": 11920,
+        "status": 200
+      },
+      {
+        "path": "/automations.css",
+        "start": 20.799999952316284,
+        "duration": 15.5,
+        "transfer": 4688,
+        "encoded": 4388,
+        "decoded": 4388,
+        "status": 200
+      },
+      {
+        "path": "/project-picker.css",
+        "start": 20.799999952316284,
+        "duration": 15.400000095367432,
+        "transfer": 5404,
+        "encoded": 5104,
+        "decoded": 5104,
+        "status": 200
+      },
+      {
+        "path": "/project-picker.js",
+        "start": 20.799999952316284,
+        "duration": 18.300000071525574,
+        "transfer": 13369,
+        "encoded": 13069,
+        "decoded": 13069,
+        "status": 200
+      },
+      {
+        "path": "/manifest.webmanifest",
+        "start": 31.299999952316284,
+        "duration": 7.5,
+        "transfer": 476,
+        "encoded": 176,
+        "decoded": 176,
+        "status": 200
+      },
+      {
+        "path": "/app.js",
+        "start": 55,
+        "duration": 3.200000047683716,
+        "transfer": 123726,
+        "encoded": 123426,
+        "decoded": 123426,
+        "status": 200
+      },
+      {
+        "path": "/mobile-ui.js",
+        "start": 67.20000004768372,
+        "duration": 5.299999952316284,
+        "transfer": 9523,
+        "encoded": 9223,
+        "decoded": 9223,
+        "status": 200
+      },
+      {
+        "path": "/capacity-retry.js",
+        "start": 67.60000002384186,
+        "duration": 5.100000023841858,
+        "transfer": 4442,
+        "encoded": 4142,
+        "decoded": 4142,
+        "status": 200
+      },
+      {
+        "path": "/system-update.js",
+        "start": 67.60000002384186,
+        "duration": 7,
+        "transfer": 4914,
+        "encoded": 4614,
+        "decoded": 4614,
+        "status": 200
+      },
+      {
+        "path": "/account-usage.js",
+        "start": 67.60000002384186,
+        "duration": 6.799999952316284,
+        "transfer": 2860,
+        "encoded": 2560,
+        "decoded": 2560,
+        "status": 200
+      },
+      {
+        "path": "/goal-submit.js",
+        "start": 67.70000004768372,
+        "duration": 7.299999952316284,
+        "transfer": 2507,
+        "encoded": 2207,
+        "decoded": 2207,
+        "status": 200
+      },
+      {
+        "path": "/notification-platform.js",
+        "start": 67.70000004768372,
+        "duration": 7.5,
+        "transfer": 1846,
+        "encoded": 1546,
+        "decoded": 1546,
+        "status": 200
+      },
+      {
+        "path": "/notification-delivery.js",
+        "start": 67.79999995231628,
+        "duration": 7.900000095367432,
+        "transfer": 1307,
+        "encoded": 1007,
+        "decoded": 1007,
+        "status": 200
+      },
+      {
+        "path": "/questions.js",
+        "start": 67.79999995231628,
+        "duration": 8.400000095367432,
+        "transfer": 4788,
+        "encoded": 4488,
+        "decoded": 4488,
+        "status": 200
+      },
+      {
+        "path": "/question-form.js",
+        "start": 67.79999995231628,
+        "duration": 13.600000023841858,
+        "transfer": 3654,
+        "encoded": 3354,
+        "decoded": 3354,
+        "status": 200
+      },
+      {
+        "path": "/recovery-state.js",
+        "start": 67.79999995231628,
+        "duration": 13.800000071525574,
+        "transfer": 1418,
+        "encoded": 1118,
+        "decoded": 1118,
+        "status": 200
+      },
+      {
+        "path": "/message-files.js",
+        "start": 67.79999995231628,
+        "duration": 14,
+        "transfer": 5799,
+        "encoded": 5499,
+        "decoded": 5499,
+        "status": 200
+      },
+      {
+        "path": "/activity.js",
+        "start": 67.79999995231628,
+        "duration": 14.600000023841858,
+        "transfer": 5680,
+        "encoded": 5380,
+        "decoded": 5380,
+        "status": 200
+      },
+      {
+        "path": "/message-media.js",
+        "start": 67.79999995231628,
+        "duration": 14.700000047683716,
+        "transfer": 4747,
+        "encoded": 4447,
+        "decoded": 4447,
+        "status": 200
+      },
+      {
+        "path": "/message-body.js",
+        "start": 67.79999995231628,
+        "duration": 14.800000071525574,
+        "transfer": 9262,
+        "encoded": 8962,
+        "decoded": 8962,
+        "status": 200
+      },
+      {
+        "path": "/message-time.js",
+        "start": 67.79999995231628,
+        "duration": 16.100000023841858,
+        "transfer": 2435,
+        "encoded": 2135,
+        "decoded": 2135,
+        "status": 200
+      },
+      {
+        "path": "/new-chat.js",
+        "start": 67.89999997615814,
+        "duration": 16.5,
+        "transfer": 1120,
+        "encoded": 820,
+        "decoded": 820,
+        "status": 200
+      },
+      {
+        "path": "/message-dom.js",
+        "start": 67.89999997615814,
+        "duration": 16.200000047683716,
+        "transfer": 2435,
+        "encoded": 2135,
+        "decoded": 2135,
+        "status": 200
+      },
+      {
+        "path": "/input-state.js",
+        "start": 67.89999997615814,
+        "duration": 16.800000071525574,
+        "transfer": 2262,
+        "encoded": 1962,
+        "decoded": 1962,
+        "status": 200
+      },
+      {
+        "path": "/attachments.js",
+        "start": 67.89999997615814,
+        "duration": 17.100000023841858,
+        "transfer": 5915,
+        "encoded": 5615,
+        "decoded": 5615,
+        "status": 200
+      },
+      {
+        "path": "/sidebar.js",
+        "start": 67.89999997615814,
+        "duration": 17.200000047683716,
+        "transfer": 27982,
+        "encoded": 27682,
+        "decoded": 27682,
+        "status": 200
+      },
+      {
+        "path": "/automations.js",
+        "start": 68,
+        "duration": 18.5,
+        "transfer": 11138,
+        "encoded": 10838,
+        "decoded": 10838,
+        "status": 200
+      },
+      {
+        "path": "/thread-sync.js",
+        "start": 68,
+        "duration": 19.899999976158142,
+        "transfer": 2314,
+        "encoded": 2014,
+        "decoded": 2014,
+        "status": 200
+      },
+      {
+        "path": "/thread-handoff.js",
+        "start": 68,
+        "duration": 20.600000023841858,
+        "transfer": 4328,
+        "encoded": 4028,
+        "decoded": 4028,
+        "status": 200
+      },
+      {
+        "path": "/browser-backup.js",
+        "start": 68,
+        "duration": 21.5,
+        "transfer": 5666,
+        "encoded": 5366,
+        "decoded": 5366,
+        "status": 200
+      },
+      {
+        "path": "/composer.js",
+        "start": 68.10000002384186,
+        "duration": 21.100000023841858,
+        "transfer": 20607,
+        "encoded": 20307,
+        "decoded": 20307,
+        "status": 200
+      },
+      {
+        "path": "/mobile.js",
+        "start": 68.10000002384186,
+        "duration": 21.299999952316284,
+        "transfer": 8976,
+        "encoded": 8676,
+        "decoded": 8676,
+        "status": 200
+      },
+      {
+        "path": "/detail-cache.js",
+        "start": 68.20000004768372,
+        "duration": 21.399999976158142,
+        "transfer": 5312,
+        "encoded": 5012,
+        "decoded": 5012,
+        "status": 200
+      },
+      {
+        "path": "/output-window.js",
+        "start": 68.20000004768372,
+        "duration": 22.699999928474426,
+        "transfer": 903,
+        "encoded": 603,
+        "decoded": 603,
+        "status": 200
+      },
+      {
+        "path": "/connection-state.js",
+        "start": 68.20000004768372,
+        "duration": 23.299999952316284,
+        "transfer": 8222,
+        "encoded": 7922,
+        "decoded": 7922,
+        "status": 200
+      },
+      {
+        "path": "/skill-suggestions.js",
+        "start": 98.70000004768372,
+        "duration": 6.899999976158142,
+        "transfer": 6998,
+        "encoded": 6698,
+        "decoded": 6698,
+        "status": 200
+      },
+      {
+        "path": "/inline-mentions.js",
+        "start": 98.70000004768372,
+        "duration": 6.899999976158142,
+        "transfer": 2786,
+        "encoded": 2486,
+        "decoded": 2486,
+        "status": 200
+      },
+      {
+        "path": "/api/connections",
+        "start": 106.39999997615814,
+        "duration": 1.399999976158142,
+        "transfer": 1383,
+        "encoded": 1083,
+        "decoded": 1083,
+        "status": 200
+      },
+      {
+        "path": "/api/system/update",
+        "start": 108.60000002384186,
+        "duration": 5.100000023841858,
+        "transfer": 732,
+        "encoded": 432,
+        "decoded": 432,
+        "status": 200
+      },
+      {
+        "path": "/api/access/status",
+        "start": 109.5,
+        "duration": 71.70000004768372,
+        "transfer": 529,
+        "encoded": 229,
+        "decoded": 229,
+        "status": 200
+      },
+      {
+        "path": "/handoff.css",
+        "start": 109.89999997615814,
+        "duration": 3.600000023841858,
+        "transfer": 1234,
+        "encoded": 934,
+        "decoded": 934,
+        "status": 200
+      },
+      {
+        "path": "/composer.css",
+        "start": 110.10000002384186,
+        "duration": 3.799999952316284,
+        "transfer": 15176,
+        "encoded": 14876,
+        "decoded": 14876,
+        "status": 200
+      },
+      {
+        "path": "/api/csrf",
+        "start": 114.39999997615814,
+        "duration": 1.399999976158142,
+        "transfer": 376,
+        "encoded": 76,
+        "decoded": 76,
+        "status": 200
+      },
+      {
+        "path": "/api/status",
+        "start": 120.5,
+        "duration": 9.799999952316284,
+        "transfer": 8759,
+        "encoded": 8459,
+        "decoded": 8459,
+        "status": 200
+      },
+      {
+        "path": "/api/status",
+        "start": 131.79999995231628,
+        "duration": 1.5,
+        "transfer": 8759,
+        "encoded": 8459,
+        "decoded": 8459,
+        "status": 200
+      },
+      {
+        "path": "/api/account/usage",
+        "start": 132.10000002384186,
+        "duration": 951.1999999284744,
+        "transfer": 718,
+        "encoded": 418,
+        "decoded": 418,
+        "status": 200
+      },
+      {
+        "path": "/api/status",
+        "start": 135.20000004768372,
+        "duration": 1.399999976158142,
+        "transfer": 8759,
+        "encoded": 8459,
+        "decoded": 8459,
+        "status": 200
+      },
+      {
+        "path": "/api/sidebar",
+        "start": 150,
+        "duration": 1344.3999999761581,
+        "transfer": 25705,
+        "encoded": 25405,
+        "decoded": 93627,
+        "status": 200
+      },
+      {
+        "path": "/api/models",
+        "start": 152,
+        "duration": 1.7000000476837158,
+        "transfer": 8162,
+        "encoded": 7862,
+        "decoded": 7862,
+        "status": 200
+      },
+      {
+        "path": "/api/projects",
+        "start": 152.10000002384186,
+        "duration": 77.5,
+        "transfer": 5746,
+        "encoded": 5446,
+        "decoded": 5446,
+        "status": 200
+      },
+      {
+        "path": "/api/sidebar",
+        "start": 152.10000002384186,
+        "duration": 2682.2999999523163,
+        "transfer": 25704,
+        "encoded": 25404,
+        "decoded": 93627,
+        "status": 200
+      },
+      {
+        "path": "/api/access/qr",
+        "start": 187.10000002384186,
+        "duration": 1.399999976158142,
+        "transfer": 1010,
+        "encoded": 710,
+        "decoded": 710,
+        "status": 200
+      },
+      {
+        "path": "/api/access/qr",
+        "start": 187.20000004768372,
+        "duration": 5.899999976158142,
+        "transfer": 858,
+        "encoded": 558,
+        "decoded": 558,
+        "status": 200
+      }
+    ],
+    "dom": 1976,
+    "overflow": false
+  },
+  {
+    "label": "mobile-390",
+    "width": 390,
+    "height": 844,
+    "audit": {
+      "longTasks": [],
+      "marks": {
+        "ready": 119.89999997615814,
+        "sidebar": 4227.799999952316
+      },
+      "cls": 0.062465523778320695
+    },
+    "paint": [
+      {
+        "name": "first-paint",
+        "start": 72
+      },
+      {
+        "name": "first-contentful-paint",
+        "start": 72
+      }
+    ],
+    "nav": [
+      {
+        "ttfb": 3.799999952316284,
+        "dom": 31.299999952316284,
+        "load": 93.5
+      }
+    ],
+    "resources": [
+      {
+        "path": "/new-chat.css",
+        "start": 20.799999952316284,
+        "duration": 15,
+        "transfer": 1728,
+        "encoded": 1428,
+        "decoded": 1428,
+        "status": 200
+      },
+      {
+        "path": "/styles.css",
+        "start": 20.799999952316284,
+        "duration": 16.299999952316284,
+        "transfer": 84367,
+        "encoded": 84067,
+        "decoded": 84067,
+        "status": 200
+      },
+      {
+        "path": "/sidebar.css",
+        "start": 20.899999976158142,
+        "duration": 15.600000023841858,
+        "transfer": 5464,
+        "encoded": 5164,
+        "decoded": 5164,
+        "status": 200
+      },
+      {
+        "path": "/mobile-ui.css",
+        "start": 20.899999976158142,
+        "duration": 16,
+        "transfer": 12220,
+        "encoded": 11920,
+        "decoded": 11920,
+        "status": 200
+      },
+      {
+        "path": "/bootstrap.js",
+        "start": 20.899999976158142,
+        "duration": 19,
+        "transfer": 4007,
+        "encoded": 3707,
+        "decoded": 3707,
+        "status": 200
+      },
+      {
+        "path": "/project-picker.css",
+        "start": 21,
+        "duration": 15.899999976158142,
+        "transfer": 5404,
+        "encoded": 5104,
+        "decoded": 5104,
+        "status": 200
+      },
+      {
+        "path": "/automations.css",
+        "start": 21,
+        "duration": 16.299999952316284,
+        "transfer": 4688,
+        "encoded": 4388,
+        "decoded": 4388,
+        "status": 200
+      },
+      {
+        "path": "/project-picker.js",
+        "start": 21,
+        "duration": 17.299999952316284,
+        "transfer": 13369,
+        "encoded": 13069,
+        "decoded": 13069,
+        "status": 200
+      },
+      {
+        "path": "/manifest.webmanifest",
+        "start": 32.89999997615814,
+        "duration": 6.699999928474426,
+        "transfer": 476,
+        "encoded": 176,
+        "decoded": 176,
+        "status": 200
+      },
+      {
+        "path": "/mobile-ui.js",
+        "start": 44.799999952316284,
+        "duration": 2.600000023841858,
+        "transfer": 9523,
+        "encoded": 9223,
+        "decoded": 9223,
+        "status": 200
+      },
+      {
+        "path": "/app.js",
+        "start": 45.199999928474426,
+        "duration": 2.3000000715255737,
+        "transfer": 123726,
+        "encoded": 123426,
+        "decoded": 123426,
+        "status": 200
+      },
+      {
+        "path": "/capacity-retry.js",
+        "start": 74.19999992847443,
+        "duration": 4.399999976158142,
+        "transfer": 4442,
+        "encoded": 4142,
+        "decoded": 4142,
+        "status": 200
+      },
+      {
+        "path": "/system-update.js",
+        "start": 74.19999992847443,
+        "duration": 6.399999976158142,
+        "transfer": 4914,
+        "encoded": 4614,
+        "decoded": 4614,
+        "status": 200
+      },
+      {
+        "path": "/account-usage.js",
+        "start": 74.19999992847443,
+        "duration": 6,
+        "transfer": 2860,
+        "encoded": 2560,
+        "decoded": 2560,
+        "status": 200
+      },
+      {
+        "path": "/notification-platform.js",
+        "start": 74.29999995231628,
+        "duration": 6.600000023841858,
+        "transfer": 1846,
+        "encoded": 1546,
+        "decoded": 1546,
+        "status": 200
+      },
+      {
+        "path": "/notification-delivery.js",
+        "start": 74.29999995231628,
+        "duration": 7.600000023841858,
+        "transfer": 1307,
+        "encoded": 1007,
+        "decoded": 1007,
+        "status": 200
+      },
+      {
+        "path": "/goal-submit.js",
+        "start": 74.29999995231628,
+        "duration": 7.200000047683716,
+        "transfer": 2507,
+        "encoded": 2207,
+        "decoded": 2207,
+        "status": 200
+      },
+      {
+        "path": "/questions.js",
+        "start": 74.29999995231628,
+        "duration": 9.100000023841858,
+        "transfer": 4788,
+        "encoded": 4488,
+        "decoded": 4488,
+        "status": 200
+      },
+      {
+        "path": "/question-form.js",
+        "start": 74.39999997615814,
+        "duration": 8.5,
+        "transfer": 3654,
+        "encoded": 3354,
+        "decoded": 3354,
+        "status": 200
+      },
+      {
+        "path": "/recovery-state.js",
+        "start": 74.39999997615814,
+        "duration": 9,
+        "transfer": 1418,
+        "encoded": 1118,
+        "decoded": 1118,
+        "status": 200
+      },
+      {
+        "path": "/message-files.js",
+        "start": 74.39999997615814,
+        "duration": 9.299999952316284,
+        "transfer": 5799,
+        "encoded": 5499,
+        "decoded": 5499,
+        "status": 200
+      },
+      {
+        "path": "/activity.js",
+        "start": 74.39999997615814,
+        "duration": 9.600000023841858,
+        "transfer": 5680,
+        "encoded": 5380,
+        "decoded": 5380,
+        "status": 200
+      },
+      {
+        "path": "/message-media.js",
+        "start": 74.39999997615814,
+        "duration": 9.899999976158142,
+        "transfer": 4747,
+        "encoded": 4447,
+        "decoded": 4447,
+        "status": 200
+      },
+      {
+        "path": "/message-body.js",
+        "start": 74.39999997615814,
+        "duration": 14.100000023841858,
+        "transfer": 9262,
+        "encoded": 8962,
+        "decoded": 8962,
+        "status": 200
+      },
+      {
+        "path": "/message-dom.js",
+        "start": 74.39999997615814,
+        "duration": 14.299999952316284,
+        "transfer": 2435,
+        "encoded": 2135,
+        "decoded": 2135,
+        "status": 200
+      },
+      {
+        "path": "/message-time.js",
+        "start": 74.39999997615814,
+        "duration": 13.899999976158142,
+        "transfer": 2435,
+        "encoded": 2135,
+        "decoded": 2135,
+        "status": 200
+      },
+      {
+        "path": "/new-chat.js",
+        "start": 74.59999990463257,
+        "duration": 14.400000095367432,
+        "transfer": 1120,
+        "encoded": 820,
+        "decoded": 820,
+        "status": 200
+      },
+      {
+        "path": "/attachments.js",
+        "start": 74.59999990463257,
+        "duration": 14.700000047683716,
+        "transfer": 5915,
+        "encoded": 5615,
+        "decoded": 5615,
+        "status": 200
+      },
+      {
+        "path": "/sidebar.js",
+        "start": 74.59999990463257,
+        "duration": 15,
+        "transfer": 27982,
+        "encoded": 27682,
+        "decoded": 27682,
+        "status": 200
+      },
+      {
+        "path": "/input-state.js",
+        "start": 74.59999990463257,
+        "duration": 16.600000023841858,
+        "transfer": 2262,
+        "encoded": 1962,
+        "decoded": 1962,
+        "status": 200
+      },
+      {
+        "path": "/thread-sync.js",
+        "start": 74.59999990463257,
+        "duration": 17,
+        "transfer": 2314,
+        "encoded": 2014,
+        "decoded": 2014,
+        "status": 200
+      },
+      {
+        "path": "/automations.js",
+        "start": 74.59999990463257,
+        "duration": 17.200000047683716,
+        "transfer": 11138,
+        "encoded": 10838,
+        "decoded": 10838,
+        "status": 200
+      },
+      {
+        "path": "/thread-handoff.js",
+        "start": 74.69999992847443,
+        "duration": 17.5,
+        "transfer": 4328,
+        "encoded": 4028,
+        "decoded": 4028,
+        "status": 200
+      },
+      {
+        "path": "/browser-backup.js",
+        "start": 74.69999992847443,
+        "duration": 17.899999976158142,
+        "transfer": 5666,
+        "encoded": 5366,
+        "decoded": 5366,
+        "status": 200
+      },
+      {
+        "path": "/composer.js",
+        "start": 74.79999995231628,
+        "duration": 18,
+        "transfer": 20607,
+        "encoded": 20307,
+        "decoded": 20307,
+        "status": 200
+      },
+      {
+        "path": "/detail-cache.js",
+        "start": 74.79999995231628,
+        "duration": 19.700000047683716,
+        "transfer": 5312,
+        "encoded": 5012,
+        "decoded": 5012,
+        "status": 200
+      },
+      {
+        "path": "/mobile.js",
+        "start": 74.79999995231628,
+        "duration": 19.899999976158142,
+        "transfer": 8976,
+        "encoded": 8676,
+        "decoded": 8676,
+        "status": 200
+      },
+      {
+        "path": "/output-window.js",
+        "start": 74.79999995231628,
+        "duration": 19.5,
+        "transfer": 903,
+        "encoded": 603,
+        "decoded": 603,
+        "status": 200
+      },
+      {
+        "path": "/connection-state.js",
+        "start": 74.79999995231628,
+        "duration": 20.200000047683716,
+        "transfer": 8222,
+        "encoded": 7922,
+        "decoded": 7922,
+        "status": 200
+      },
+      {
+        "path": "/inline-mentions.js",
+        "start": 94.5,
+        "duration": 5.5,
+        "transfer": 2786,
+        "encoded": 2486,
+        "decoded": 2486,
+        "status": 200
+      },
+      {
+        "path": "/skill-suggestions.js",
+        "start": 94.5,
+        "duration": 5.899999976158142,
+        "transfer": 6998,
+        "encoded": 6698,
+        "decoded": 6698,
+        "status": 200
+      },
+      {
+        "path": "/api/connections",
+        "start": 101.19999992847443,
+        "duration": 2.899999976158142,
+        "transfer": 1383,
+        "encoded": 1083,
+        "decoded": 1083,
+        "status": 200
+      },
+      {
+        "path": "/api/system/update",
+        "start": 114.09999990463257,
+        "duration": 1.8000000715255737,
+        "transfer": 732,
+        "encoded": 432,
+        "decoded": 432,
+        "status": 200
+      },
+      {
+        "path": "/api/access/status",
+        "start": 115,
+        "duration": 45.299999952316284,
+        "transfer": 529,
+        "encoded": 229,
+        "decoded": 229,
+        "status": 200
+      },
+      {
+        "path": "/handoff.css",
+        "start": 115.29999995231628,
+        "duration": 1.5,
+        "transfer": 1234,
+        "encoded": 934,
+        "decoded": 934,
+        "status": 200
+      },
+      {
+        "path": "/composer.css",
+        "start": 115.39999997615814,
+        "duration": 1.6999999284744263,
+        "transfer": 15176,
+        "encoded": 14876,
+        "decoded": 14876,
+        "status": 200
+      },
+      {
+        "path": "/api/csrf",
+        "start": 120.09999990463257,
+        "duration": 1.600000023841858,
+        "transfer": 376,
+        "encoded": 76,
+        "decoded": 76,
+        "status": 200
+      },
+      {
+        "path": "/api/status",
+        "start": 126.59999990463257,
+        "duration": 2,
+        "transfer": 8759,
+        "encoded": 8459,
+        "decoded": 8459,
+        "status": 200
+      },
+      {
+        "path": "/api/status",
+        "start": 130.19999992847443,
+        "duration": 2.200000047683716,
+        "transfer": 8759,
+        "encoded": 8459,
+        "decoded": 8459,
+        "status": 200
+      },
+      {
+        "path": "/api/account/usage",
+        "start": 130.39999997615814,
+        "duration": 755.6000000238419,
+        "transfer": 718,
+        "encoded": 418,
+        "decoded": 418,
+        "status": 200
+      },
+      {
+        "path": "/api/status",
+        "start": 133.69999992847443,
+        "duration": 1.399999976158142,
+        "transfer": 8759,
+        "encoded": 8459,
+        "decoded": 8459,
+        "status": 200
+      },
+      {
+        "path": "/api/sidebar",
+        "start": 139.39999997615814,
+        "duration": 1344.5,
+        "transfer": 25702,
+        "encoded": 25402,
+        "decoded": 93627,
+        "status": 200
+      },
+      {
+        "path": "/api/models",
+        "start": 141.39999997615814,
+        "duration": 1.2999999523162842,
+        "transfer": 8162,
+        "encoded": 7862,
+        "decoded": 7862,
+        "status": 200
+      },
+      {
+        "path": "/api/projects",
+        "start": 141.5,
+        "duration": 76.79999995231628,
+        "transfer": 5746,
+        "encoded": 5446,
+        "decoded": 5446,
+        "status": 200
+      },
+      {
+        "path": "/api/sidebar",
+        "start": 141.59999990463257,
+        "duration": 2691.9000000953674,
+        "transfer": 25707,
+        "encoded": 25407,
+        "decoded": 93629,
+        "status": 200
+      },
+      {
+        "path": "/api/access/qr",
+        "start": 165.29999995231628,
+        "duration": 1.600000023841858,
+        "transfer": 1010,
+        "encoded": 710,
+        "decoded": 710,
+        "status": 200
+      },
+      {
+        "path": "/api/access/qr",
+        "start": 165.5,
+        "duration": 2.5,
+        "transfer": 858,
+        "encoded": 558,
+        "decoded": 558,
+        "status": 200
+      },
+      {
+        "path": "/api/sidebar",
+        "start": 2785.5999999046326,
+        "duration": 1425.4000000953674,
+        "transfer": 25710,
+        "encoded": 25410,
+        "decoded": 93628,
+        "status": 200
+      }
+    ],
+    "dom": 1980,
+    "overflow": false
+  }
+]

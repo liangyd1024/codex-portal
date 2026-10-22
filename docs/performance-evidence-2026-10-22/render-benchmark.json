@@ -1,0 +1,300 @@
+[
+  {
+    "n": 5,
+    "width": 1440,
+    "height": 900,
+    "samples": [
+      {
+        "ms": 6,
+        "createdElements": 688
+      },
+      {
+        "ms": 5.100000023841858,
+        "createdElements": 688
+      },
+      {
+        "ms": 5.600000023841858,
+        "createdElements": 688
+      },
+      {
+        "ms": 6.299999952316284,
+        "createdElements": 688
+      },
+      {
+        "ms": 7.600000023841858,
+        "createdElements": 688
+      },
+      {
+        "ms": 5.599999904632568,
+        "createdElements": 688
+      },
+      {
+        "ms": 7,
+        "createdElements": 688
+      },
+      {
+        "ms": 14.700000047683716,
+        "createdElements": 688
+      },
+      {
+        "ms": 9.699999928474426,
+        "createdElements": 688
+      },
+      {
+        "ms": 14.5,
+        "createdElements": 688
+      }
+    ],
+    "longTasks": [],
+    "dom": 581,
+    "overflow": false,
+    "errors": [],
+    "realApiRequests": 0
+  },
+  {
+    "n": 50,
+    "width": 1440,
+    "height": 900,
+    "samples": [
+      {
+        "ms": 34.59999990463257,
+        "createdElements": 6628
+      },
+      {
+        "ms": 34.10000002384186,
+        "createdElements": 6628
+      },
+      {
+        "ms": 32.5,
+        "createdElements": 6628
+      },
+      {
+        "ms": 36.39999997615814,
+        "createdElements": 6628
+      },
+      {
+        "ms": 39.60000002384186,
+        "createdElements": 6628
+      },
+      {
+        "ms": 36.10000002384186,
+        "createdElements": 6628
+      },
+      {
+        "ms": 38.799999952316284,
+        "createdElements": 6628
+      },
+      {
+        "ms": 33.10000002384186,
+        "createdElements": 6628
+      },
+      {
+        "ms": 30.5,
+        "createdElements": 6628
+      },
+      {
+        "ms": 35.10000002384186,
+        "createdElements": 6628
+      }
+    ],
+    "longTasks": [],
+    "dom": 5801,
+    "overflow": false,
+    "errors": [],
+    "realApiRequests": 0
+  },
+  {
+    "n": 200,
+    "width": 1440,
+    "height": 900,
+    "samples": [
+      {
+        "ms": 135,
+        "createdElements": 26428
+      },
+      {
+        "ms": 126.39999997615814,
+        "createdElements": 26428
+      },
+      {
+        "ms": 127.79999995231628,
+        "createdElements": 26428
+      },
+      {
+        "ms": 124.39999997615814,
+        "createdElements": 26428
+      },
+      {
+        "ms": 129.20000004768372,
+        "createdElements": 26428
+      },
+      {
+        "ms": 127.39999997615814,
+        "createdElements": 26428
+      },
+      {
+        "ms": 127.80000007152557,
+        "createdElements": 26428
+      },
+      {
+        "ms": 128.89999997615814,
+        "createdElements": 26428
+      },
+      {
+        "ms": 137.39999997615814,
+        "createdElements": 26428
+      },
+      {
+        "ms": 119.70000004768372,
+        "createdElements": 26428
+      }
+    ],
+    "longTasks": [
+      {
+        "duration": 135,
+        "start": 821.7999999523163
+      },
+      {
+        "duration": 126,
+        "start": 1080.1000000238419
+      },
+      {
+        "duration": 127,
+        "start": 1640.8999999761581
+      },
+      {
+        "duration": 124,
+        "start": 1880.8999999761581
+      },
+      {
+        "duration": 129,
+        "start": 2129.399999976158
+      },
+      {
+        "duration": 127,
+        "start": 2381.5
+      },
+      {
+        "duration": 127,
+        "start": 2623.7999999523163
+      },
+      {
+        "duration": 128,
+        "start": 2872.2999999523163
+      },
+      {
+        "duration": 137,
+        "start": 3126.399999976158
+      },
+      {
+        "duration": 119,
+        "start": 3379.399999976158
+      }
+    ],
+    "dom": 23201,
+    "overflow": false,
+    "errors": [],
+    "realApiRequests": 0
+  },
+  {
+    "n": 50,
+    "width": 390,
+    "height": 844,
+    "samples": [
+      {
+        "ms": 81.60000002384186,
+        "createdElements": 6628
+      },
+      {
+        "ms": 82.19999992847443,
+        "createdElements": 6628
+      },
+      {
+        "ms": 80.39999997615814,
+        "createdElements": 6628
+      },
+      {
+        "ms": 77.89999997615814,
+        "createdElements": 6628
+      },
+      {
+        "ms": 81,
+        "createdElements": 6628
+      },
+      {
+        "ms": 77.20000004768372,
+        "createdElements": 6628
+      },
+      {
+        "ms": 79.60000002384186,
+        "createdElements": 6628
+      },
+      {
+        "ms": 79.19999992847443,
+        "createdElements": 6628
+      },
+      {
+        "ms": 84.20000004768372,
+        "createdElements": 6628
+      },
+      {
+        "ms": 77.89999997615814,
+        "createdElements": 6628
+      }
+    ],
+    "longTasks": [
+      {
+        "duration": 52,
+        "start": 722
+      },
+      {
+        "duration": 81,
+        "start": 802.8999999761581
+      },
+      {
+        "duration": 82,
+        "start": 1003
+      },
+      {
+        "duration": 80,
+        "start": 1212.6000000238419
+      },
+      {
+        "duration": 77,
+        "start": 1482.8999999761581
+      },
+      {
+        "duration": 81,
+        "start": 1799.6000000238419
+      },
+      {
+        "duration": 77,
+        "start": 1998.8999999761581
+      },
+      {
+        "duration": 79,
+        "start": 2227
+      },
+      {
+        "duration": 76,
+        "start": 2342.899999976158
+      },
+      {
+        "duration": 79,
+        "start": 2547.7000000476837
+      },
+      {
+        "duration": 84,
+        "start": 2805
+      },
+      {
+        "duration": 77,
+        "start": 3030.899999976158
+      }
+    ],
+    "dom": 5801,
+    "overflow": false,
+    "errors": [],
+    "realApiRequests": 0
+  }
+]
