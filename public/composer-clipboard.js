@@ -21,7 +21,7 @@ export function installComposerClipboard({input,list,context,items,replace,addFi
    if(!items().length)return;e.preventDefault();input.select();selected=context().id;list.classList.add('attachments-selected');return;
   }
   if(all()&&['Backspace','Delete'].includes(e.key)&&!context().busy){e.preventDefault();replace([]);input.value='';clear();changed();return;}
-  if(!['Meta','Control','Shift','Alt','c','x'].includes(e.key))clear();
+  if(!['meta','control','shift','alt','c','x'].includes(e.key.toLowerCase()))clear();
  });
  input.addEventListener('pointerdown',clear);input.addEventListener('blur',clear);
  input.addEventListener('select',()=>{if(input.value.length&&input.selectionStart===0&&input.selectionEnd===input.value.length&&items().length){selected=context().id;list.classList.add('attachments-selected');}else if(selected&&!all())clear();});

@@ -1050,7 +1050,7 @@ function notificationDiagnostic(message) {
   let list = $('notification-history');
   if (!list) { list = el('div','notification-history'); list.id = 'notification-history'; list.setAttribute('role','log'); document.querySelector('.notification-controls').append(list); }
   list.prepend(el('p','',dateTime(new Date()) + ' · ' + message));
-  while (list.children.length > 8) list.lastElementChild.remove();
+  while (list.children.length > 3) list.lastElementChild.remove();
 }
 function openNotificationThread({host,threadId}) {
   if(host!==targetHost){

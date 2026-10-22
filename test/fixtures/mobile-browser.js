@@ -37,6 +37,14 @@
     if(p==='/api/system/update'){f.systemUpdate??={available:true,version:'fixture',job:null};if(method==='POST')f.systemUpdate.job={id:'fixture-update',phase:'queued',message:'已接收，正在准备更新…'};return json(f.systemUpdate);}
     if(p==='/api/models')return json({data:models});
     if(p==='/api/projects')return json({data:[{id:'qa-project',name:'验收项目',roots:['/test/project']}]});
+    if(p==='/api/project-folders'){
+      const path=method==='POST'?body.parent+'/'+body.name:u.searchParams.get('path')||'/test';
+      return json({path,parent:path==='/test'?null:'/test',hostName:'验收机器',entries:path==='/test'?[{name:'project',path:'/test/project'},{name:'.hidden',path:'/test/.hidden'}]:[]});
+    }
+    if(p==='/api/projects/open')return json({project:{id:'qa-project',name:'验收项目',roots:[body.path]}});
+    if(p==='/api/automations')return json({threadId:'qa-b',observedAt:Date.now(),items:[{id:'qa-task',name:'手机验收定时任务',status:'ACTIVE',rrule:'FREQ=HOURLY;INTERVAL=1',prompt:'只用于界面验收，不会实际执行。',target_thread_id:'qa-b'},{id:'qa-paused',name:'已暂停的验收任务',status:'PAUSED',rrule:'FREQ=DAILY;BYHOUR=9',prompt:'暂停状态验收。'}],runs:[{automation_id:'qa-task',thread_id:'qa-b',created_at:Date.now(),status:'ACCEPTED'}]});
+    if(p==='/api/automations/candidates')return json({data:f.threads});
+    if(p==='/api/automations/binding')return json({threadId:body.threadId});
     if(p==='/api/sidebar')return json(sidebar(u));
     if(p==='/api/sidebar/activity')return json({accountScope:'qa-account',data:JSON.parse(u.searchParams.get('ids')).map(id=>({id}))});
     if(p==='/api/connect'||p==='/api/disconnect'||p==='/api/service/release'){f.connected=p==='/api/connect';f.update();return json(status());}
@@ -56,6 +64,12 @@
     if(match){const id=match[1],action=match[2],t=f.threads.find(t=>t.id===id);
       if(!t)return json({error:{message:'找不到模拟会话'}},404);
       if(!action)return json(detail(id));
+      if(action==='side-chat'){
+        const child=thread('qa-side','验收侧边聊天');child.ephemeral=true;
+        if(!f.threads.some(t=>t.id===child.id))f.threads.push(child);
+        return json({thread:child});
+      }
+      if(action==='side-chat-view')return json(detail(id));
       if(action==='goal'){f.goal=body;return json({goal:body});}
       if(action==='takeover'){f.owned.add(id);f.handoffs=f.handoffs.filter(h=>h.threadId!==id);return json(detail(id));}
       if(action==='handoff'){f.owned.delete(id);const h={threadId:id,state:'released'};f.handoffs.push(h);return json(h);}
@@ -65,7 +79,7 @@
     }
     if(p==='/api/access/status')return json({local:f.local,sessionExpires:null,origins:f.origins,canSetup:f.local});
     if(p==='/api/access/setup'){f.origins.push(body.mode==='tailscale'?'https://qa.ts.net':'https://192.0.2.1:4319');return json({ok:true});}
-    if(p==='/api/access/code')return json({code:'123456',expires:Date.now()+600000,sessionTtlSeconds:604800});
+    if(p==='/api/access/code')return json({code:'123456',expires:body.ttlSeconds===null?null:Date.now()+(body.ttlSeconds??600)*1000,sessionTtlSeconds:body.sessionTtlSeconds===null?null:body.sessionTtlSeconds??604800});
     if(['/api/access/revoke','/api/access/logout','/api/access/login','/api/notices/ack'].includes(p))return json({ok:true});
     return json({error:{message:'未实现的模拟接口：'+p}},404);
   };

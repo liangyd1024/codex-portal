@@ -1,0 +1,37 @@
+[
+  {
+    "width": 402,
+    "height": 874,
+    "overflow": false,
+    "sendBottom": 858,
+    "sendHit": true
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "overflow": false,
+    "sendBottom": 828,
+    "sendHit": true
+  },
+  {
+    "width": 874,
+    "height": 402,
+    "overflow": false,
+    "sendBottom": 402,
+    "sendHit": true
+  },
+  {
+    "width": 844,
+    "height": 390,
+    "overflow": false,
+    "sendBottom": 390,
+    "sendHit": true
+  },
+  {
+    "width": 390,
+    "height": 500,
+    "overflow": false,
+    "sendBottom": 484,
+    "sendHit": true
+  }
+]
