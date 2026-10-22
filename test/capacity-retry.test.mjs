@@ -48,3 +48,39 @@ test('retry HTTP route requires CSRF and returns the native turn',async()=>{
  const app=createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',m]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
  try{const {token}=await fetch(base+'/api/csrf').then(r=>r.json());const post=csrf=>fetch(base+'/api/threads/thread/retry-capacity',{method:'POST',headers:{'Content-Type':'application/json','x-csrf-token':csrf},body:JSON.stringify({turnId:'failed'})});assert.equal((await post('')).status,403);const response=await post(token);assert.equal(response.status,200);assert.equal((await response.json()).turn.id,'retry');assert.equal(calls.filter(c=>c.method==='turn/start').length,1);}finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));}
 });
+
+test('native systemError with latest capacity failure retries instead of waiting forever for idle',async()=>{
+ const {m,calls}=fixture(),request=m.rpc.request;m.controlled.get('thread').status={type:'systemError'};
+ m.rpc.request=async(method,p)=>method==='thread/read'?{thread:{status:{type:'systemError'}}}:request(method,p);
+ await retryCapacity(m,'thread',{turnId:'failed'});
+ assert.equal(calls.filter(c=>c.method==='turn/start').length,1);
+ assert.deepEqual(calls.find(c=>c.method==='turn/start').params.input,[]);
+});
+test('systemError is never enough without the exact latest failed capacity turn',async()=>{
+ for(const last of [{...failed(),status:'inProgress'},{...failed(),error:{codexErrorInfo:'usageLimitExceeded'}},failed('new'),null]){
+  const {m,calls}=fixture(),request=m.rpc.request;
+  m.rpc.request=async(method,p)=>method==='thread/read'?{thread:{status:{type:'systemError'}}}:method==='thread/turns/list'?{data:last?[last]:[]}:request(method,p);
+  await assert.rejects(retryCapacity(m,'thread',{turnId:'failed'}),e=>e.code==='RETRY_TURN_CHANGED');
+  assert.equal(calls.filter(c=>c.method==='turn/start').length,0);
+ }
+});
+test('active, unloaded, missing and unknown native states fail closed with an actionable reason',async()=>{
+ for(const state of ['active','notLoaded',undefined,'unknown']){
+  const {m,calls}=fixture(),request=m.rpc.request;
+  m.rpc.request=async(method,p)=>method==='thread/read'?{thread:{status:{type:state}}}:request(method,p);
+  await assert.rejects(retryCapacity(m,'thread',{turnId:'failed'}),e=>e.code===(state==='active'?'RETRY_THREAD_BUSY':'RETRY_STATE_UNKNOWN'));
+  assert.equal(calls.filter(c=>c.method==='turn/start').length,0);
+ }
+});
+test('native status is rechecked before sending and a busy refusal can be retried after settling',async()=>{
+ const {m,calls}=fixture(),request=m.rpc.request;let reads=0;
+ m.rpc.request=async(method,p)=>method==='thread/read'?{thread:{status:{type:++reads===2?'active':'systemError'}}}:request(method,p);
+ await assert.rejects(retryCapacity(m,'thread',{turnId:'failed'}),e=>e.code==='RETRY_THREAD_BUSY');
+ assert.equal(calls.filter(c=>c.method==='turn/start').length,0);
+ await retryCapacity(m,'thread',{turnId:'failed'});assert.equal(calls.filter(c=>c.method==='turn/start').length,1);
+});
+test('busy rejection pauses automatic retry and clears its error on a later explicit attempt',async()=>{
+ const f=ui();let fail=true;f.config.send=async()=>{if(fail)throw Object.assign(Error('会话正在运行'),{status:409,code:'RETRY_THREAD_BUSY'});};
+ const c=new CapacityRetry(f.config);await c.retry();assert.equal(c.sync().entry.phase,'paused');f.advance(600000);c.tick();assert.equal(c.sync().entry.phase,'paused');
+ fail=false;await c.retry();assert.equal(c.sync().entry.phase,'sent');assert.equal(c.sync().entry.error,undefined);
+});

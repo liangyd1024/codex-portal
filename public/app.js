@@ -1488,9 +1488,9 @@ function wireEvents() {
   document.querySelector('.main-panel').classList.toggle('desktop-chat',state.desktopMode);
   setInterval(()=>{if(automations.opened&&!document.hidden)void automations.refresh();},15000);
 
-  capacityRetry=installCapacityRetry({container:document.querySelector('.composer-region'),storage:sessionStorage,
-    context:()=>({host:targetHost,id:state.selectedId,turns:!newChatOpen&&!state.desktopMode?turns():[],ready:!newChatOpen&&!state.desktopMode&&usable()&&controlled()&&!running()&&!uncertainHistory()&&!state.loadingDetail&&!state.historyError&&!state.busy.size}),
-    send:async(c,turnId,automatic)=>{const result=await api('/api/threads/'+encodeURIComponent(c.id)+'/retry-capacity',{method:'POST',body:{turnId,automatic,model:state.model,effort:state.effort,mode:composer.options().mode}});if(c.host===targetHost&&c.id===state.selectedId){upsertTurn(result.turn);renderThread();scheduleDetailRefresh();}}});
+  capacityRetry=installCapacityRetry({container:document.querySelector('.composer-region'),storage:sessionStorage,refresh:refreshSelected,
+    context:()=>({host:targetHost,id:state.selectedId,turns:!newChatOpen&&!state.desktopMode?turns():[],unavailableReason:!usable()?'连接尚未恢复，暂不能重试。':running()?'会话正在运行，暂不能重试。':!controlled()?'接管会话后可重试。':'正在确认会话状态，暂不能重试。',ready:!newChatOpen&&!state.desktopMode&&usable()&&controlled()&&!running()&&!uncertainHistory()&&!state.loadingDetail&&!state.historyError&&!state.busy.size}),
+    send:async(c,turnId,automatic)=>{try{const result=await api('/api/threads/'+encodeURIComponent(c.id)+'/retry-capacity',{method:'POST',body:{turnId,automatic,model:state.model,effort:state.effort,mode:composer.options().mode}});if(c.host===targetHost&&c.id===state.selectedId){upsertTurn(result.turn);renderThread();scheduleDetailRefresh();}}catch(error){if(c.host===targetHost&&c.id===state.selectedId)await refreshSelected().catch(()=>{});throw error;}}});
   scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
   attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady()&&!state.desktopMode,busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});

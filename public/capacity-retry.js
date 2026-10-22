@@ -30,25 +30,34 @@ export class CapacityRetry {
   cancel(){const v=this.sync();if(v){v.entry.phase='paused';this.save(v.key,v.entry);this.changed(this.sync());}}
   async retry(automatic=false){
     const v=this.sync();if(!v?.ready||['sending','sent','uncertain'].includes(v.entry.phase)||automatic&&v.entry.phase!=='waiting')return;
-    const c=this.context();v.entry.phase='sending';this.save(v.key,v.entry);this.changed(this.sync());
+    const c=this.context();v.entry.phase='sending';delete v.entry.error;delete v.entry.errorCode;this.save(v.key,v.entry);this.changed(this.sync());
     try{await this.send(c,v.failure.turnId,automatic);v.entry.phase='sent';}
-    catch(error){v.entry.phase=error.code==='OUTCOME_UNKNOWN'||!error.status?'uncertain':'paused';v.entry.error=error.message;}
+    catch(error){v.entry.phase=error.code==='OUTCOME_UNKNOWN'||!error.status?'uncertain':'paused';v.entry.error=error.message;v.entry.errorCode=error.code;}
     this.save(v.key,v.entry);this.changed(this.sync());
   }
 }
-export function installCapacityRetry({context,send,container,storage}){
+export function installCapacityRetry({context,send,refresh,container,storage}){
   const panel=document.createElement('div');panel.className='capacity-retry';panel.hidden=true;
   const status=document.createElement('span');status.setAttribute('role','status');
   const retry=document.createElement('button');retry.type='button';retry.className='secondary-button';retry.textContent='立即重试';
   const cancel=document.createElement('button');cancel.type='button';cancel.className='text-button';cancel.textContent='取消自动重试';
-  panel.append(status,retry,cancel);container.prepend(panel);
+  const reload=document.createElement('button');reload.type='button';reload.className='text-button';reload.textContent='刷新状态';
+  panel.append(status,retry,cancel,reload);container.prepend(panel);
+  let refreshing=false;
   const controller=new CapacityRetry({context,send,storage,changed:v=>{
     panel.hidden=!v;if(!v)return;
     const phase=v.entry.phase;
     status.textContent=phase==='waiting'?`模型容量已满，${v.seconds} 秒后重试。`:phase==='blocked'?'正在确认会话状态…':phase==='sending'?'正在重试…':phase==='sent'?'已提交重试，正在同步…':phase==='uncertain'?'重试结果未确认，请刷新会话核对。':v.entry.error||'自动重试已暂停，可稍后重试或选择其他模型。';
-    retry.disabled=!v.ready||['sending','sent','uncertain'].includes(phase);cancel.hidden=phase!=='waiting';
+    if(!v.ready&&!['sending','sent','uncertain'].includes(phase))status.textContent=context().unavailableReason||'正在确认会话状态，暂不能重试。';
+    retry.disabled=refreshing||!v.ready||['sending','sent','uncertain'].includes(phase);cancel.hidden=phase!=='waiting';
+    reload.hidden=!refresh||!['blocked','paused','uncertain'].includes(phase);reload.disabled=refreshing;reload.textContent=refreshing?'正在刷新…':'刷新状态';
   }});
   retry.onclick=()=>controller.retry();cancel.onclick=()=>controller.cancel();
+  reload.onclick=async()=>{
+    if(refreshing)return;refreshing=true;const key=controller.sync()?.key;controller.tick();
+    try{await refresh();const v=controller.sync();if(v?.key===key&&v.ready&&['RETRY_THREAD_BUSY','RETRY_STATE_UNKNOWN','RETRY_STATE_CHANGED'].includes(v.entry.errorCode)){delete v.entry.error;delete v.entry.errorCode;controller.save(key,v.entry);}}catch{const v=controller.sync();if(v?.key===key){v.entry.error='状态刷新失败，请检查连接后重试。';controller.save(key,v.entry);}}
+    finally{refreshing=false;controller.tick();}
+  };
   let timer=setInterval(()=>controller.tick(),1000);
   window.addEventListener('pagehide',()=>{clearInterval(timer);timer=null;});
   window.addEventListener('pageshow',()=>{if(timer===null)timer=setInterval(()=>controller.tick(),1000);controller.tick();});
