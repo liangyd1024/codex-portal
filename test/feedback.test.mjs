@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createToasts,confirmAction} from '../public/feedback.js';
+import {createToasts,confirmAction,createStopFeedback,copyText} from '../public/feedback.js';
 function dom(){
  const make=(tag,cls='',text='')=>({tag,className:cls,textContent:text,children:[],attrs:{},isConnected:false,
  append(...xs){for(const x of xs){x.parent=this;x.isConnected=true;this.children.push(x);}},
@@ -36,4 +36,41 @@ test('all floating tips expire after three seconds regardless of legacy duration
   assert.equal(card.isConnected,true);scheduled.at(-1).fn();assert.equal(card.isConnected,false);
  }
  const card=toast('重复提示');assert.equal(toast('重复提示'),card);assert.equal(scheduled.at(-1).ms,3000);
+});
+
+
+test('stop feedback waits for native confirmation and isolates sessions and turns',()=>{
+ const f=createStopFeedback(),key='local:one';
+ const request=f.begin(key,'turn-a');
+ const idle={confirmed:true,status:'idle',turns:[]};
+ assert.equal(f.observe(key,idle),true); // HTTP is still in flight.
+ assert.equal(f.observe('local:two',idle),false);
+ f.settle(key,request);
+ assert.equal(f.observe(key,{...idle,confirmed:false}),true);
+ assert.equal(f.observe(key,{confirmed:true,status:'active',turns:[{id:'turn-a',status:'inProgress'}]}),true);
+ assert.equal(f.observe(key,{confirmed:true,status:'active',turns:[{id:'turn-a',status:'interrupted'},{id:'turn-b',status:'inProgress'}]}),false);
+});
+test('stop feedback retains unknown outcomes and background activity, but allows retry after rejection',()=>{
+ const f=createStopFeedback();let r=f.begin('one','turn');
+ f.settle('one',r,new Error('network unavailable'));assert.equal(f.has('one'),true);
+ assert.equal(f.observe('one',{confirmed:true,status:'unknown'}),true);
+ assert.equal(f.observe('one',{confirmed:true,status:'idle'}),false);
+ r=f.begin('one','turn');f.settle('one',r,{status:409});assert.equal(f.has('one'),false);
+ r=f.begin('one',null,true);f.settle('one',r);
+ for(const background of ['running','unknown'])assert.equal(f.observe('one',{confirmed:true,status:'idle',background}),true);
+ assert.equal(f.observe('one',{confirmed:true,status:'idle',background:'idle'}),false);
+ const old=f.begin('one','old'),next=f.begin('one','new');f.settle('one',old,{status:409});assert.equal(f.has('one'),true);f.settle('one',next);
+});
+test('copy feedback expires locally, blocks duplicate clicks, and preserves failures',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const previous=Object.getOwnPropertyDescriptor(globalThis,'navigator');let finish,calls=0;
+ Object.defineProperty(globalThis,'navigator',{configurable:true,value:{clipboard:{writeText:()=>{calls++;return new Promise(resolve=>finish=resolve);}}}});
+ t.after(()=>{if(previous)Object.defineProperty(globalThis,'navigator',previous);else delete globalThis.navigator;});
+ const button={disabled:false},status={textContent:''};
+ const work=copyText('text',{button,status});await copyText('text',{button,status});assert.equal(calls,1);assert.equal(status.textContent,'正在复制…');
+ finish();await work;assert.equal(status.textContent,'已复制');assert.equal(button.disabled,false);
+ t.mock.timers.tick(1999);assert.equal(status.textContent,'已复制');t.mock.timers.tick(1);assert.equal(status.textContent,'');
+ navigator.clipboard.writeText=async()=>{};await copyText('text',{button,status});
+ navigator.clipboard.writeText=async()=>{throw Error('denied');};await copyText('text',{button,status});
+ t.mock.timers.tick(2000);assert.match(status.textContent,/无法自动复制/);assert.equal(button.disabled,false);
 });

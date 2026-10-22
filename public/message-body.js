@@ -1,3 +1,4 @@
+import {copyText} from './feedback.js';
 function el(tag, cls, text) { const n=document.createElement(tag); if(cls)n.className=cls; if(text != null)n.textContent=text; return n; }
 // Only explicit commentary with a final answer is collapsed. Legacy messages,
 // interrupted turns without an answer and live progress remain readable.
@@ -76,7 +77,7 @@ export function markdown(text, depth = 0, options = {}) {
       const block=el('div','code-block'),header=el('div','code-block-header'),copy=el('button','code-copy','复制代码');
       copy.type='button';copy.setAttribute('aria-label','复制'+(language?' '+language:'')+'代码');
       const feedback=el('span','code-copy-status');feedback.setAttribute('role','status');
-      copy.onclick=async()=>{copy.disabled=true;feedback.textContent='正在复制…';try{await navigator.clipboard.writeText(value);feedback.textContent='已复制';}catch{feedback.textContent='复制失败，请选择代码复制';}finally{copy.disabled=false;}};
+      copy.onclick=()=>copyText(value,{button:copy,status:feedback,failure:'复制失败，请选择代码复制'});
       header.append(el('span','code-language',language||'代码'),feedback,copy);
       const pre=el('pre'), content=el('code','',value);pre.tabIndex=0;pre.setAttribute('aria-label',(language||'')+'代码，可横向滚动');
       pre.append(content);block.append(header,pre);n.append(block);continue;

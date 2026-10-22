@@ -248,27 +248,27 @@ export class Sidebar {
 
     const label=action==='archive'?'正在归档会话…':action==='restore'?'正在恢复会话…':'正在更新…';
     this.progress.textContent=label;
-    const notice=this.o.toast((target?.name?target.name+'：':'')+(this.operations.size>1?'已排队…':label),false,0);
     let started=false;
-    const slow=setTimeout(()=>{if(!current())return;this.progress.textContent='正在处理会话…';if(notice)notice.querySelector('p').textContent=(target?.name?target.name+'：':'')+(started?'仍在等待目标机器…':'已排队，等待前面的操作完成…');},5000);
+    const slow=setTimeout(()=>{if(!current())return;this.progress.textContent=started?'仍在等待目标机器…':'已排队，等待前面的操作完成…';},5000);
     let completed=false;
-    try{await this.enqueue(()=>{if(!current()||!this.o.connected())throw Error('连接或账号已变化，未执行排队操作。');started=true;if(notice?.querySelector)notice.querySelector('p').textContent=(target?.name?target.name+'：':'')+label;return this.o.api('/api/sidebar/actions',{method:'POST',body:{action,id:target?.id,expectedRevision:target?.revision,accountScope:scope,...extra}});});
+    try{await this.enqueue(()=>{if(!current()||!this.o.connected())throw Error('连接或账号已变化，未执行排队操作。');started=true;this.progress.textContent=label;return this.o.api('/api/sidebar/actions',{method:'POST',body:{action,id:target?.id,expectedRevision:target?.revision,accountScope:scope,...extra}});});
       if(!current())return;
-      completed=true;clearTimeout(slow);notice?.remove();
+      completed=true;clearTimeout(slow);
       this.progress.textContent='正在刷新列表…';
       await this.o.changed(action,target);
       if(!current())return;
       if(action==='archive'){if(!this.snapshot.archived&&!this.snapshot.data?.some(t=>t.id===target.id))this.archiving.delete(key);this.undo(target.id);}if(action==='restore'&&this.undoId===target.id)this.undoNode?.remove();
     }catch(error){
       // Show the outcome before another potentially slow remote read.
-      clearTimeout(slow);notice?.remove();
+      clearTimeout(slow);
       if(!current())return;
       if(action==='archive'&&!completed&&error.code!=='DESKTOP_SYNC_FAILED'){this.archiving.delete(key);this.render(this.snapshot,this.view);}
-      this.o.toast(completed?'操作已完成，但刷新失败：'+error.message:error.message,true);
+      if(completed)error=new Error('操作已完成，但刷新失败：'+error.message,{cause:error});
+      if(!propagate)this.o.toast(error.message,true);
       void this.o.refresh().catch(()=>{});
       if(propagate)throw error;
     }
-    finally{clearTimeout(slow);notice?.remove();if(!current())this.archiving.delete(key);this.operations.delete(key);this.pending=this.operations.size>0;this.setBusy(this.pending);this.progress.textContent=this.pending?'正在处理会话…':'正在更新…';if(dialog)dialog.dataset.busy='false';if(!this.dialog&&globalThis.document?.activeElement===globalThis.document?.body&&this.menuAnchor===anchor)this.focusAnchor();}
+    finally{clearTimeout(slow);if(!current())this.archiving.delete(key);this.operations.delete(key);this.pending=this.operations.size>0;this.setBusy(this.pending);this.progress.textContent=this.pending?'正在处理会话…':'正在更新…';if(dialog)dialog.dataset.busy='false';if(!this.dialog&&globalThis.document?.activeElement===globalThis.document?.body&&this.menuAnchor===anchor)this.focusAnchor();}
   }
 
   undo(id){

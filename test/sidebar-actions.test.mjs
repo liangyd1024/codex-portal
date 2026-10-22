@@ -213,10 +213,19 @@ test('sidebar success refreshes the result without a success toast and preserves
   const changes=[];const {ui,messages}=queuedUI(async()=>{},async a=>changes.push(a));
   await ui.run(action,{id:'a'});
   assert.deepEqual(changes,[action]);
-  assert.equal(messages.length,1,'only the existing progress notice remains for '+action);
-  assert.match(messages[0],/^正在/);
+  assert.deepEqual(messages,[],'no floating progress or success notice for '+action);
  }
  const {ui,messages}=queuedUI(async()=>{},async()=>{throw Error('列表不可用');});
  await ui.run('archive',{id:'a'});
  assert.ok(messages.includes('操作已完成，但刷新失败：列表不可用'));
+});
+
+
+test('sidebar dialog errors propagate once without a duplicate floating alert',async()=>{
+ const {ui,messages}=queuedUI(async()=>{throw Error('无法重命名');});
+ await assert.rejects(ui.run('rename',{id:'a'},{name:'new'},true),/无法重命名/);
+ assert.deepEqual(messages,[]);assert.equal(ui.pending,false);
+ const next=queuedUI(async()=>{},async()=>{throw Error('列表不可用');});
+ await assert.rejects(next.ui.run('rename',{id:'a'},{name:'new'},true),/操作已完成，但刷新失败：列表不可用/);
+ assert.deepEqual(next.messages,[]);
 });

@@ -35,3 +35,40 @@ export function confirmAction(message,{title='确认操作',accept='确认',dang
     actions.append(cancel,ok);dialog.append(heading,body,actions);document.body.append(dialog);dialog.showModal();cancel.focus();
   });
 }
+
+// Feedback for a pending stop request only; native snapshots remain authoritative.
+export function createStopFeedback() {
+  const pending=new Map();
+  const kind=status=>status?.type||status;
+  return {
+    begin(key,turnId,background=false){const request={turnId,background,requesting:true};pending.set(key,request);return request;},
+    settle(key,request,error){
+      if(pending.get(key)!==request)return;
+      if(error?.status>=400&&error.status<500&&!['OUTCOME_UNKNOWN','RPC_TIMEOUT'].includes(error.code))pending.delete(key);
+      else request.requesting=false;
+    },
+    observe(key,{confirmed,turns=[],status,background}){
+      const request=pending.get(key);
+      if(!request||request.requesting||!confirmed)return Boolean(request);
+      const turn=turns.find(t=>t.id===request.turnId);
+      const finished=turn&&['completed','interrupted','failed'].includes(kind(turn.status));
+      const idle=kind(status)==='idle'&&!turns.some(t=>['inProgress','in_progress','running'].includes(kind(t.status)));
+      if(request.background?background==='idle':finished||idle)pending.delete(key);
+      return pending.has(key);
+    },
+    has:key=>pending.has(key),
+  };
+}
+
+const copyTimers=new WeakMap();
+export async function copyText(text,{button,status,failure='无法自动复制。请选中文字后复制。'}) {
+  if(button.disabled)return;
+  clearTimeout(copyTimers.get(status));copyTimers.delete(status);
+  button.disabled=true;status.textContent='正在复制…';
+  try {
+    await navigator.clipboard.writeText(text);
+    status.textContent='已复制';
+    copyTimers.set(status,setTimeout(()=>{copyTimers.delete(status);if(status.textContent==='已复制')status.textContent='';},2000));
+  } catch { status.textContent=failure; }
+  finally { button.disabled=false; }
+}

@@ -7,7 +7,9 @@ import {installSideChat} from './side-chat.js';
 let annotations,sideChat;
 import {authRecoveryMessage} from './shared/account-state.js';
 import {RenderCache,renderSignature,ProgressiveTurns} from './render-cache.js';
-import {createToasts,confirmAction} from './feedback.js';
+import {createToasts,confirmAction,createStopFeedback} from './feedback.js';
+const stopFeedback=createStopFeedback();
+const stopContext=()=>JSON.stringify([targetHost,state.desktopMode,state.selectedId]);
 import {configureProjectBrowser} from './project-picker.js';
 let projectFolders;
 import {installCapacityRetry} from './capacity-retry.js';
@@ -354,6 +356,8 @@ function renderControls() {
   renderConnectionBanner();
   const ready = usable(), own = newChatOpen||controlled()&&!state.selectedArchived, active = !newChatOpen&&running();
   const background = backgroundActivity(state.detail,{controlled:own,connected:ready});
+  const stopping=!newChatOpen&&stopFeedback.observe(stopContext(),{confirmed:!state.detail?.recovering&&(state.desktopMode?state.transport&&state.detail?.desktop?.available:ready&&own&&!uncertainHistory()),turns:turns(),status:currentThread()?.status,background:Array.isArray(state.detail?.backgroundTerminals?.data)?background.state:'unknown'});
+  const stopLabel=stopping?(state.transport&&(state.desktopMode?state.detail?.desktop?.available:ready)?'停止中…':'停止状态待确认'):'停止';
   const handoff=currentHandoff(),handing=state.busy.has('handoff:'+state.selectedId)||handoff?.state==='checking';
   handoffControls??=createHandoffControls({endUse:endThreadUse});
   handoffControls.render({id:newChatOpen||state.desktopMode?null:state.selectedId,context:targetHost+':'+state.selectedId+':'+state.selectionVersion,running:active,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId)),handoff,connected:ready,
@@ -380,19 +384,20 @@ function renderControls() {
   const guide=$('guide-message');if(guide){guide.hidden=!active||touchInput()||state.desktopMode;guide.disabled=!ready||!own||posting||attachments?.pending()||!featureReady('steer')||(!input.value.trim()&&!attachments?.has()&&!annotations?.has());}
   $('message-form').setAttribute('aria-busy',String(posting));
   $('send-message').title = posting ? '正在发送…' : active ? (followUp==='queue'?'排队发送':'引导当前任务') : '发送消息';
-  $('interrupt').hidden = !active&&background.state!=='running'; $('interrupt').disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt');
+  $('interrupt').hidden = !active&&background.state!=='running'&&!stopping; $('interrupt').disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt') || stopping;
   $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || handing || !state.selectedId;
   $('takeover').querySelector('span').textContent = switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话';
   const availability = $('composer-availability');
-  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '' : state.busy.has('interrupt') ? '正在请求停止，请稍候…' : !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !hasModel ? '请选择一个可用模型。' : own && !hasEffort ? '请选择思考档位。' : '';
+  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '' : !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !hasModel ? '请选择一个可用模型。' : own && !hasEffort ? '请选择思考档位。' : '';
   availability.textContent = unavailable; availability.hidden = !unavailable;
   $('new-thread').setAttribute('aria-description',!ready ? '连接恢复后可新建会话。' : !state.models.length ? '正在等待目标机器模型目录。' : creating ? '正在创建，请稍候。' : '');
   controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
   controlReason('takeover',!ready ? '连接恢复后可接管。' : switching ? '正在接管，请稍候。' : handing ? '交还状态正在确认，请稍候。' : '当前引擎暂不支持接管。');
   controlReason('release-service',!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。');
-  $('interrupt').title=active?'停止当前轮次':'停止后台命令';
-  $('interrupt').setAttribute('aria-label',state.busy.has('interrupt') ? '正在请求停止' : $('interrupt').title);
-  $('interrupt').setAttribute('aria-busy',String(state.busy.has('interrupt')));
+  $('interrupt').querySelector('span').textContent=stopLabel;
+  $('interrupt').title=stopping?'停止请求已发出，等待目标确认。':active?'停止当前轮次':'停止后台命令';
+  $('interrupt').setAttribute('aria-label',stopping?stopLabel:$('interrupt').title);
+  $('interrupt').setAttribute('aria-busy',String(stopping));
   const indicator=$('running-indicator'),nextIndicator=el('div');
   renderConversationActivity(nextIndicator,newChatOpen?null:conversationActivity(currentThread(),{
     connected:ready,controlled:controlled(),active,background,needsAnswer:needsAnswer(state.selectedId),
@@ -437,7 +442,7 @@ function renderControls() {
     $('takeover').hidden=true;
     $('send-message').disabled=!online||!desktop?.canSend||!!unconfirmed||posting||(!input.value.trim()&&!annotations?.has());
     $('send-message').title='发送到桌面会话';$('send-message').setAttribute('aria-label','发送到桌面会话');
-    $('interrupt').hidden=!active;$('interrupt').disabled=!online||state.busy.has('interrupt');
+    $('interrupt').hidden=!active&&!stopping;$('interrupt').disabled=!online||state.busy.has('interrupt')||stopping;
     const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     availability.textContent=reason;availability.hidden=!reason;
     $('desktop-review').hidden=!unconfirmed;$('desktop-review').disabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
@@ -1107,6 +1112,7 @@ async function notifyTaskEvent(method, params) {
 }
 
 async function connectRemote() {
+  maintenanceFeedback('');
   const success = await action('connect',async () => {
     const data = await api('/api/connect',{method:'POST',body:{},timeout:150000});
     if (data.connection) { applyStatus(data); renderStatus(); } else await loadStatus();
@@ -1115,6 +1121,7 @@ async function connectRemote() {
   if (success) { renderStatus(); if(connected())refreshWorkspace().catch(e => recordError(e,'sync')); }
 }
 async function disconnectRemote() {
+  maintenanceFeedback('');
   return action('disconnect',async () => { await api('/api/disconnect',{method:'POST'}); await loadStatus(); if (state.detail) state.detail.controlled = false; renderThread(); });
 }
 async function takeoverThread() {
@@ -1145,22 +1152,26 @@ async function endThreadUse() {
     }catch(error){recordError(error,'handoff');await loadStatus().catch(()=>{});renderThread();if(id===state.selectedId&&selection===state.selectionVersion)handoffControls.showError(messageOf(error));}
   });
 }
+function maintenanceFeedback(message) {
+  const note=$('maintenance-feedback');note.textContent=message;note.hidden=!message;
+}
 async function reloadLogin() {
   const host=targetHost;
   if(!await confirmAction('请先在目标机器 Codex 中完成 ChatGPT 或 API Key 登录。此操作将重启 RCM 专用原生引擎以重新加载登录，影响该引擎的所有入口。请确认其他入口已断开，且任务已结束。系统会再次检查；失败消息不会自动重发。',{title:'重新加载登录',accept:'检查并重新加载',danger:true}))return;
   if(host!==targetHost)return;
-  flushDrafts();
+  flushDrafts();maintenanceFeedback('');
   await action('release',async()=>{
     await api('/api/account/reload',{method:'POST',body:{allEntrancesDisconnected:true}});
     if(host!==targetHost)return;
     await refreshWorkspace(true);
-    toast('已重新加载原生引擎登录。请核对账号后继续。',false,10000);
+    maintenanceFeedback('请核对当前账号，再继续发送消息。');
   });
 }
 async function releaseService() {
   if(!await confirmAction('将停止目标机器的专用服务，影响所有入口。请确认任务已结束，且其他入口已断开。停止后需在目标机执行 maintenance resume 才能重连。',{title:'停止目标服务',accept:'确认停止',danger:true}))return;
+  maintenanceFeedback('');
   await action('release',async () => {
-    try { await api('/api/service/release',{method:'POST',body:{allEntrancesDisconnected:true}}); if (state.detail) state.detail.controlled = false; await loadStatus(); renderThread(); toast('已释放专用服务。可以在目标机器打开 Codex 桌面应用。',false,10000); }
+    try { await api('/api/service/release',{method:'POST',body:{allEntrancesDisconnected:true}}); if (state.detail) state.detail.controlled = false; await loadStatus(); renderThread(); maintenanceFeedback('可以在目标机器打开 Codex 桌面应用。重新连接前，请按连接维护说明恢复专用服务。'); }
     catch (e) { if (e.status === 409) { const blockers = Array.isArray(e.details) ? e.details.map(b => (state.threads.find(t=>t.id===b.threadId)?.name || b.threadId) + '：' + b.reason).join('\n') : e.details ? pretty(e.details) : ''; throw new Error(messageOf(e) + (blockers ? '\n' + blockers : '') + '\n请先结束相关任务，再释放控制。'); } throw e; }
   });
 }
@@ -1302,14 +1313,23 @@ async function sendDesktopMessage(){
   });
 }
 async function interruptThread() {
-  if(state.desktopMode){
-    const threadId=state.selectedId,turnId=[...turns()].reverse().find(t=>['inProgress','in_progress','running'].includes(typeOf(t.status)))?.id;
-    if(!turnId)return;
-    await action('interrupt',async()=>{await api('/api/desktop/threads/'+encodeURIComponent(threadId)+'/interrupt',{method:'POST',body:{turnId}});toast('停止请求已交给桌面，等待状态确认。');if(threadId===state.selectedId)await refreshSelected();});return;
-  }
-  if (!state.selectedId || !controlled()) return;
-  const id = state.selectedId;
-  await action('interrupt',async () => { await api('/api/threads/' + encodeURIComponent(id) + '/interrupt',{method:'POST'}); toast('已请求停止。等待目标机器确认。'); await refreshSelected(); });
+  if(state.busy.has('interrupt')||stopFeedback.has(stopContext())||!state.selectedId||newChatOpen)return;
+  const desktop=state.desktopMode,id=state.selectedId,selection=state.selectionVersion,key=stopContext();
+  const turnId=[...turns()].reverse().find(t=>['inProgress','in_progress','running'].includes(typeOf(t.status)))?.id;
+  if(desktop?!turnId:!controlled())return;
+  const current=()=>key===stopContext()&&selection===state.selectionVersion&&!newChatOpen;
+  const request=stopFeedback.begin(key,turnId,!desktop&&!running());
+  await action('interrupt',async()=>{
+    try {
+      await api((desktop?'/api/desktop/threads/':'/api/threads/')+encodeURIComponent(id)+'/interrupt',{method:'POST',...(desktop?{body:{turnId}}:{})});
+    } catch(error) {
+      stopFeedback.settle(key,request,error);
+      if(current())throw error;
+      recordError(error,'interrupt');return;
+    }
+    stopFeedback.settle(key,request);
+    if(current())await refreshSelected();
+  });
 }
 async function moreHistory() {
   if (!state.historyCursor || !state.selectedId || !state.detail || state.loadingDetail || state.busy.has('history')) return;

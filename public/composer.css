@@ -111,3 +111,8 @@
 .goal-toolbar button{width:44px;height:44px;display:grid;place-items:center;flex-shrink:0;border:0;border-radius:8px;background:transparent;color:#777}
 .goal-toolbar button .icon{width:20px;height:20px}.goal-toolbar button:hover:not(:disabled){background:var(--soft,#f5f5f5)}.goal-toolbar .goal-clear:hover:not(:disabled){color:#a53f3f}.goal-toolbar button:disabled{opacity:.4;cursor:not-allowed}.goal-toolbar button:focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:2px}
 .goal-toolbar-feedback{flex-basis:100%;font-size:14px;color:#a53f3f;overflow-wrap:anywhere}.goal-toolbar-feedback:empty{display:none}
+
+/* Keep pending stop feedback visible beside the control, including touch layouts. */
+.composer #interrupt[aria-busy="true"]{width:auto;padding:0 10px;gap:6px;border-radius:8px}
+.composer #interrupt[aria-busy="true"] span{display:inline;font-size:14px;white-space:nowrap}
+.composer #interrupt[aria-busy="true"] .icon{width:16px;height:16px}
