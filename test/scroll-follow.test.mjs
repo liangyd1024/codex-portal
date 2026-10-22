@@ -33,3 +33,10 @@ test('touch and keyboard history reading stay put; reaching the bottom or changi
   f.event('keydown',{key:'PageUp'});s.scrollTop=500;f.event('scroll');f.resize();assert.equal(s.scrollTop,500);
   f.follow.reset();f.flush();assert.equal(s.scrollTop,1000);assert.equal(f.follow.following,true);
 });
+test('navigation pause survives bottom-clamped layout and resumes only on reader intent',t=>{
+ const f=fixture(t),s=f.scroller;
+ f.follow.pause({sticky:true});f.event('scroll');assert.equal(f.follow.following,false);
+ s.scrollHeight=1800;f.resize();assert.equal(s.scrollTop,600);
+ f.button.dispatchEvent(new Event('click'));f.flush();assert.equal(s.scrollTop,1400);assert.equal(f.follow.following,true);
+ f.follow.pause({sticky:true});f.event('wheel',{deltaY:20});f.event('scroll');assert.equal(f.follow.following,true);
+});

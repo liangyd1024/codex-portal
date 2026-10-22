@@ -118,7 +118,7 @@ export function installMobileUI({closeDrawers, layoutChanged}) {
 
 // Following is a reading preference, not a distance remeasured after layout changes.
 export function installScrollFollow(scroller,content) {
-  let following=true,frame=0,touchY=null,dragging=false;
+  let following=true,frame=0,touchY=null,dragging=false,stickyPause=false;
   const controls=document.createElement('div');controls.className='latest-message-controls';
   const button=document.createElement('button');button.type='button';button.className='latest-message-button';
   button.textContent='↓';button.title='回到最新';button.setAttribute('aria-label','回到最新');button.hidden=true;
@@ -129,21 +129,21 @@ export function installScrollFollow(scroller,content) {
     cancelAnimationFrame(frame);
     frame=requestAnimationFrame(()=>{if(following)scroller.scrollTop=scroller.scrollHeight;update();});
   };
-  const pause=()=>{following=false;cancelAnimationFrame(frame);update();};
-  const latest=()=>{following=true;schedule();};
+  const pause=({sticky=false}={})=>{stickyPause=sticky;following=false;cancelAnimationFrame(frame);update();};
+  const latest=()=>{stickyPause=false;following=true;schedule();};
   button.addEventListener('click',latest);
-  scroller.addEventListener('wheel',e=>{if(e.deltaY<0)pause();},{passive:true});
+  scroller.addEventListener('wheel',e=>{if(e.deltaY<0)pause();else stickyPause=false;},{passive:true});
   scroller.addEventListener('touchstart',e=>{touchY=e.touches[0]?.clientY;},{passive:true});
-  scroller.addEventListener('touchmove',e=>{const y=e.touches[0]?.clientY;if(touchY!=null&&y>touchY+2)pause();touchY=y;},{passive:true});
+  scroller.addEventListener('touchmove',e=>{const y=e.touches[0]?.clientY;if(touchY!=null&&y>touchY+2)pause();if(touchY!=null&&y<touchY)stickyPause=false;touchY=y;},{passive:true});
   scroller.addEventListener('keydown',e=>{if(['ArrowUp','PageUp','Home'].includes(e.key))pause();});
   scroller.addEventListener('pointerdown',e=>{dragging=e.pointerType==='mouse';});
   window.addEventListener('pointerup',()=>{dragging=false;});
   window.addEventListener('pointercancel',()=>{dragging=false;});
   scroller.addEventListener('scroll',()=>{
     if(dragging)following=nearBottom();
-    else if(nearBottom())following=true;
+    else if(!stickyPause&&nearBottom())following=true;
     update();
   },{passive:true});
   const observer=new ResizeObserver(schedule);observer.observe(scroller);observer.observe(content);
-  return {get following(){return following;},reset:latest,schedule};
+  return {get following(){return following;},reset:latest,pause,schedule};
 }

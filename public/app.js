@@ -16,7 +16,8 @@ import {questionForm} from './question-form.js';
 import {fileLink,closeFileViewer} from './message-files.js';
 import {notifyManagerError, recoveryMessage, selectedRecoveryMessage} from './recovery-state.js';
 import {activitySource,conversationActivity,renderConversationActivity,processGroupStatus} from './activity.js';
-let scrollFollow,scrollContext;
+import {installTurnNavigation} from './turn-navigation.js';
+let scrollFollow,scrollContext,turnNavigation;
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message-media.js';
 import {markdown} from './message-body.js';
 import {userMessageTime, timedTurnGroups} from './message-time.js';
@@ -347,6 +348,7 @@ function renderConnectionBanner() {
   else banner.hidden = true;
 }
 function renderControls() {
+  queueMicrotask(()=>turnNavigation?.update());
   capacityRetry?.tick();
   renderConnectionBanner();
   const ready = usable(), own = newChatOpen||controlled()&&!state.selectedArchived, active = !newChatOpen&&running();
@@ -608,11 +610,12 @@ function kindName(kind) { const k = typeOf(kind); return {add:'新增',delete:'�
 let lastMessageShape;
 const messageCache=new RenderCache();
 function renderMessages() {
+  queueMicrotask(()=>turnNavigation?.update());
   // Keep the jump input stable while the user types; render after blur.
   if(document.activeElement?.matches('.output-controls input')) return;
   const scroller = $('messages-scroller');
   const context=targetHost+':'+state.selectedId;
-  if(scrollContext!==context){closeFileViewer();scrollContext=context;scrollFollow?.reset();clear($('messages'));lastMessageShape=undefined;messageCache.clear();}
+  if(scrollContext!==context){turnNavigation?.switchContext(context);closeFileViewer();scrollContext=context;scrollFollow?.reset();clear($('messages'));lastMessageShape=undefined;messageCache.clear();}
   const nearBottom = scrollFollow?.following ?? true;
   const shape=JSON.stringify([state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],turns()],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
   if(shape===lastMessageShape){
@@ -1283,13 +1286,13 @@ async function moreHistory() {
   if (!state.historyCursor || !state.selectedId || !state.detail || state.loadingDetail || state.busy.has('history')) return;
   const id = state.selectedId, version = state.selectionVersion;
   $('messages-scroller').setAttribute('aria-busy','true');
-  try { await action('history',async () => {
+  try { return await action('history',async () => {
     let d;
     try{d=await api((state.desktopMode?'/api/desktop/threads/'+encodeURIComponent(id)+'/history':'/api/threads/'+encodeURIComponent(id)+'/history')+'?cursor='+encodeURIComponent(state.historyCursor)+(state.desktopMode?'&threadId='+encodeURIComponent(id):''));}
     catch(error){if(error.code==='HISTORY_CURSOR_CHANGED')throw new Error('历史记录已更新。请刷新会话后再向上滚动。');throw error;}
     if (id !== state.selectedId || version !== state.selectionVersion) return;
     const old = new Map(turns().map(t => [t.id,t])); const all = [...[...(d.data || [])].reverse(),...turns()]; const seen = new Set(); state.detail.turns = all.filter(t => !seen.has(t.id) && seen.add(t.id)).map(t => old.get(t.id) || t);
-    state.historyCursor = d.nextCursor || null; state.loadedOlderHistory = true; if (d.historySource === 'snapshot') state.detail.historySource = 'snapshot'; renderThread();
+    state.historyCursor = d.nextCursor || null; state.loadedOlderHistory = true; if (d.historySource === 'snapshot') state.detail.historySource = 'snapshot'; renderThread();return true;
   }); } finally { $('messages-scroller').setAttribute('aria-busy','false'); }
 }
 let inputSizeKey;
@@ -1566,6 +1569,7 @@ function wireEvents() {
   $('project-list').hidden = !readLayout('projects',true);
   $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
   mobileUI = installMobileUI({closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:mobile=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
+  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),turns:state.loadingDetail?[]:turns(),uncertain:uncertainHistory(),hasEarlier:Boolean(state.historyCursor),loading:state.busy.has('history'),historyError:state.historyError})});
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {
