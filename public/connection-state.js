@@ -12,12 +12,14 @@ export function createSendReceipts() {
       const list=(scopes.get(scope)||[]).filter(r=>r.status!=='failed');list.push(receipt);scopes.set(scope,list);return receipt;
     },
     remove(scope,receipt) {const list=(scopes.get(scope)||[]).filter(r=>r!==receipt);if(list.length)scopes.set(scope,list);else scopes.delete(scope);},
-    accept(receipt, result) {receipt.status='accepted';receipt.turnId=result.turn?.id||result.turnId;},
+    accept(receipt, result) {receipt.status=result.goalOnly?'confirmed':'accepted';receipt.turnId=result.turn?.id||result.turnId;},
     fail(receipt, error) {receipt.status=error.status>=400&&error.status<500&&!['OUTCOME_UNKNOWN','SEND_PENDING'].includes(error.code)?'failed':'unknown';},
     view(scope, turns) {
       const list=scopes.get(scope)||[];if(!list.length)return [];
       const native=messages(turns), remaining=[];
       for(const receipt of list){
+        // Goal-only submissions are confirmed by the native goal endpoint, not a userMessage.
+        if(receipt.status==='confirmed')continue;
         const match=receipt.status!=='failed'&&native.find(i=>!receipt.seen.has(i.id)&&(!receipt.turnId||receipt.turnId===i.turnId)&&i.key===userContentKey(receipt.content));
         if(match){for(const other of list)other.seen.add(match.id);}
         else remaining.push(receipt);

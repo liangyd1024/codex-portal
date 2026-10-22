@@ -27,7 +27,7 @@ export async function prepareGoalSubmission({selection,text,id,active,api,save})
 
 export async function sendAfterGoal({goalStarted,id,payload,active,api}) {
   // A native active goal starts its own turn; text-only goals need no second send.
-  if(goalStarted&&!payload.images?.length)return {};
+  if(goalStarted&&!payload.images?.length)return {goalOnly:true};
   const route='/api/threads/'+encodeURIComponent(id);
   let steering=active;
   if(goalStarted){const detail=await api(route);steering=detail.thread?.status?.type==='active';}

@@ -29,3 +29,22 @@ test('failure and uncertain delivery stay explicit, image content survives, fail
  r.accept(retry,{turn:{id:'t'}});
  assert.deepEqual(r.view('a',[{id:'t',items:[{id:'i',type:'userMessage',content:image}]}]),[]);
 });
+
+// Exercise the same goal result -> receipt path used by the composer.
+test('confirmed text-only goal removes its echo without a native user message',async()=>{
+ const {sendAfterGoal}=await import('../public/goal-submit.js');
+ const r=createSendReceipts(),receipt=r.begin('a',content,[]);
+ assert.equal(r.view('a',[])[0].status,'sending');
+ const result=await sendAfterGoal({goalStarted:true,id:'goal',payload:{text:'追加中文要求'},api:()=>assert.fail('must not send a second message')});
+ r.accept(receipt,result);
+ assert.deepEqual(r.view('a',[]),[]);
+ assert.deepEqual(r.view('a',[{id:'goal-turn',items:[{id:'reply',type:'agentMessage',text:'开始执行'}]}]),[]);
+});
+test('goal attachments still wait for their own native user message',async()=>{
+ const {sendAfterGoal}=await import('../public/goal-submit.js');
+ const r=createSendReceipts(),images=[{url:'image'}],input=[...content,{type:'image',url:'image'}],receipt=r.begin('a',input,[]);
+ const result=await sendAfterGoal({goalStarted:true,id:'goal',payload:{text:'追加中文要求',images},api:async path=>path.endsWith('/steer')?{turnId:'t'}:{thread:{status:{type:'active'}}}});
+ r.accept(receipt,result);
+ assert.equal(r.view('a',[])[0].status,'accepted');
+ assert.deepEqual(r.view('a',[{id:'t',items:[{id:'image-message',type:'userMessage',content:input}]}]),[]);
+});
