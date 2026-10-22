@@ -24,3 +24,8 @@ test('errors expose retry and disappear across selection context changes',t=>{
  f.controls.showError('交还结果未确认');assert.equal(banner.hidden,false);assert.equal(banner.children[1].hidden,false);assert.equal(banner.children[1].disabled,false);
  f.controls.render({...f.state,context:'host:b:2',id:'b'});assert.equal(banner.hidden,true);
 });
+test('takeover conflict never creates a permanent handoff warning',t=>{
+ const f=controlsFixture(t),banner=f.nodes.get('handoff-status');
+ f.controls.render({...f.state,owned:false,running:false,conflict:true});assert.equal(banner.hidden,true);assert.equal(banner.children[0].textContent,'');
+ f.controls.render({...f.state,owned:false,running:false,conflict:true,handoff:{state:'waiting'}});assert.equal(banner.hidden,false);assert.match(banner.children[0].textContent,/等待引擎释放/);
+});

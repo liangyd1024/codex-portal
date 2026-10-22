@@ -18,7 +18,7 @@
 #project-picker-dialog{width:440px;max-width:calc(100vw - 32px);max-height: min(560px,calc(100dvh - 48px));padding:16px;border:1px solid var(--line);border-radius:16px;overflow:hidden;color:var(--ink)}
 #project-picker-trigger:hover:not(:disabled){background:var(--green-light)}
 #project-picker-trigger:disabled{opacity:.55;cursor:default}
-#project-picker-dialog :focus-visible{outline:2px solid #377cf6;outline-offset:-2px}
+#project-picker-dialog :focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:-2px}
 .project-picker-option:hover:not(:disabled){background:var(--soft)}
 
 #project-picker-browse{flex-shrink:0;min-height:44px;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
@@ -28,7 +28,7 @@
 #project-folders-dialog header,#project-folders-dialog nav,.folder-location,#project-folders-dialog footer{display:flex;align-items:center;gap:8px;flex-shrink:0}
 #project-folders-dialog header{justify-content:space-between}#project-folders-dialog h2{margin:0;font-size:18px}#project-folders-dialog header button{font-size:26px}
 #project-folders-dialog button{min-height:44px;min-width:44px;padding:8px 12px;border-radius:8px;background:var(--soft)}
-#project-folders-dialog :focus-visible{outline:2px solid #000;outline-offset:-2px}
+#project-folders-dialog :focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:-2px}
 #project-folders-dialog nav{flex-wrap:wrap}.folder-location input{min-width:0;flex:1}
 #project-folders-dialog input:not([type=checkbox]){font:inherit;font-size:16px;min-height:44px;padding:8px;border:1px solid var(--line);border-radius:8px}
 .folder-create{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.folder-create label{grid-column:1 / -1}.folder-create input{min-width:0}

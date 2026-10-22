@@ -17,5 +17,6 @@ test('sidebar routes use target identity and require the existing origin and CSR
   managers.get('b').rpc.request=read;
   assert.equal((await fetch(base+'/api/sidebar?host=b').then(r=>r.json())).accountScope,'b');
   assert.equal(calls.at(-1).id,'b');assert.equal((await fetch(base+'/sidebar.js')).status,200);assert.equal((await fetch(base+'/sidebar.css')).status,200);
+  for(const file of ['feedback.js','feedback.css']){const resource=await fetch(base+'/'+file);assert.equal(resource.status,200);assert.match(resource.headers.get('content-type'),file.endsWith('.js')?/javascript/:/css/);}
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
 });

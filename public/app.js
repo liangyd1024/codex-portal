@@ -1,3 +1,4 @@
+import {createToasts,confirmAction} from './feedback.js';
 import {configureProjectBrowser} from './project-picker.js';
 let projectFolders;
 import {installCapacityRetry} from './capacity-retry.js';
@@ -243,6 +244,7 @@ async function showRefresh(scope, work) {
   } catch (error) {
     state.refreshMessage = scope + '刷新失败：' + (error.message || String(error));
     recordError(error,'refresh');
+    refreshNoticeTimer=setTimeout(()=>{refreshNoticeTimer=null;state.refreshMessage='';renderRefresh();},8000);
   } finally { state.refreshing = false; renderRefresh(); }
 }
 function recordError(error, stage = 'client') {
@@ -251,12 +253,8 @@ function recordError(error, stage = 'client') {
   if (!last || last.message !== message || Date.now() - last.time > 5000) state.errors.push({message,stage,time:Date.now()});
   state.errors = state.errors.slice(-20); renderDiagnostics();
 }
-function toast(message, error = false, duration = 7500) {
-  const n = el('div','toast' + (error ? ' error' : '')); n.setAttribute('role', error ? 'alert' : 'status');
-  n.append(icon(error ? 'alert' : 'check'), el('p','', message));
-  const close = el('button','icon-button'); close.type = 'button'; close.setAttribute('aria-label','关闭提示'); close.append(icon('close')); close.onclick = () => n.remove(); n.append(close);
-  $('toasts').append(n); if(duration>0)setTimeout(() => n.remove(), duration); return n;
-}
+function toast(...args) { return (toast.presenter??=createToasts({region:$('toasts'),make:el,icon}))(...args); }
+
 async function api(path, options = {}) {
   path=targetUrl(path);
   const method = options.method || 'GET';
@@ -685,8 +683,8 @@ function renderThread() {
   const own = controlled(), control = typeOf(state.detail?.controlState), busy = ['busy','occupied','active_writer','conflict'].includes(control);
   const badge = $('control-badge'); badge.className = 'control-badge' + (own ? ' controlled' : busy ? ' busy' : ''); badge.textContent = own ? '已取得控制' : busy ? '已被占用' : '查看模式';
   const note = $('control-note');
-  note.className = 'control-note' + (busy ? ' error' : '');
-  note.textContent = own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话仍在另一个入口中使用。请在原入口结束此会话的使用并等待释放，再重试。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
+  note.className = 'control-note';
+  note.textContent = own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话由其他入口管理，当前为查看模式。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
   if (snapshotHistory()) note.textContent = (own ? '历史来自快照。实时状态由目标机器控制连接确认。' : '历史快照，运行状态需接管后确认。') + (busy ? ' ' + note.textContent : '');
   if(state.desktopMode){badge.textContent='桌面托管';note.textContent='消息由 Codex 桌面执行，定时任务与桌面共用。';}
   renderMessages(); renderSession(); renderFiles(); renderControls(); resizeInput();
@@ -1041,12 +1039,15 @@ async function disconnectRemote() {
 }
 async function takeoverThread() {
   if (!state.selectedId || !usable()) return;
-  const id = state.selectedId;
+  const id = state.selectedId,selection=state.selectionVersion;
+  const current=()=>id===state.selectedId&&selection===state.selectionVersion&&!newChatOpen;
   await action('takeover',async () => {
-    try { const d = await api('/api/threads/' + encodeURIComponent(id) + '/takeover',{method:'POST'}); if (id === state.selectedId) applyDetail(d,true); await loadStatus(); toast('已取得原会话的控制权。'); }
+    try { const d = await api('/api/threads/' + encodeURIComponent(id) + '/takeover',{method:'POST'}); if(current())applyDetail(d,true); await loadStatus(); if(current())toast('已取得原会话的控制权。',false,7500,'takeover'); }
     catch (e) {
-      if (e.code==='WRITER_CONFLICT'&&id === state.selectedId && state.detail) { state.detail.controlled = false; state.detail.controlState = 'conflict'; renderThread(); }
-      recordError(e,'takeover'); toast(messageOf(e),true,17000);
+      recordError(e,'takeover');
+      if(!current())return;
+      if (e.code==='WRITER_CONFLICT'&&state.detail) { state.detail.controlled = false; state.detail.controlState = 'conflict'; renderThread(); }
+      toast(messageOf(e),true,8000,'takeover');
     }
   });
 }
@@ -1065,7 +1066,7 @@ async function endThreadUse() {
   });
 }
 async function releaseService() {
-  if(!confirm('将停止目标机器的专用服务，影响所有入口。请确认任务已结束，且其他入口已断开。停止后需在目标机执行 maintenance resume 才能重连。'))return;
+  if(!await confirmAction('将停止目标机器的专用服务，影响所有入口。请确认任务已结束，且其他入口已断开。停止后需在目标机执行 maintenance resume 才能重连。',{title:'停止目标服务',accept:'确认停止',danger:true}))return;
   await action('release',async () => {
     try { await api('/api/service/release',{method:'POST',body:{allEntrancesDisconnected:true}}); if (state.detail) state.detail.controlled = false; await loadStatus(); renderThread(); toast('已释放专用服务。可以在目标机器打开 Codex 桌面应用。',false,10000); }
     catch (e) { if (e.status === 409) { const blockers = Array.isArray(e.details) ? e.details.map(b => (state.threads.find(t=>t.id===b.threadId)?.name || b.threadId) + '：' + b.reason).join('\n') : e.details ? pretty(e.details) : ''; throw new Error(messageOf(e) + (blockers ? '\n' + blockers : '') + '\n请先结束相关任务，再释放控制。'); } throw e; }

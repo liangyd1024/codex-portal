@@ -36,8 +36,8 @@ export function createHandoffControls({endUse}) {
       button.disabled=!connected||!supported||busy||handoff?.state==='checking'||(!owned&&handoff?.state!=='unknown');
       button.textContent=busy||handoff?.state==='checking'?'正在检查…':handoff?.state==='unknown'?'重试交还':'交还桌面端';
       button.title=!supported?'当前引擎尚未核验交还能力，请重连后检查。':'只结束此会话的网页使用，其他会话继续运行。';
-      banner.hidden=!id||(!notice&&!handoff&&!conflict);
-      message.textContent=notice?.text||handoffMessage(handoff,connected)||(conflict?'此会话仍在另一个入口中使用。请在原入口结束使用并等待释放，然后重试；其他会话无需关闭。':'');
+      banner.hidden=!id||(!notice&&!handoff);
+      message.textContent=notice?.text||handoffMessage(handoff,connected);
       retry.hidden=notice?.kind!=='error'&&handoff?.state!=='unknown';retry.disabled=!connected||busy||running;
       close.hidden=!notice;banner.classList.toggle('error',notice?.kind==='error');
       banner.setAttribute('aria-busy',String(busy||handoff?.state==='checking'));

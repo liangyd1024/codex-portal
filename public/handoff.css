@@ -2,7 +2,7 @@
 .handoff-status span{flex:1;min-width:0}
 .handoff-status button{flex:none;min-height:32px}
 .handoff-status.error{background:#fff8f2;color:#975635}
-.handoff-status:focus-visible{outline:2px solid #738b73;outline-offset:-2px}
+.handoff-status:focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:-2px}
 .handoff-button[hidden],.handoff-status[hidden]{display:none}
 .handoff-button{flex:none;white-space:nowrap}
 .handoff-dismiss{font-size:20px;align-self:flex-start}
