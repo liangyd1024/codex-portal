@@ -16,7 +16,7 @@ export function submitNotification(create,{shown=()=>{},failed=()=>{},timeoutMs=
       const notification=create();
       notification.onshow=()=>{if(settled)return;shown();finish(true);};
       notification.onerror=()=>{if(settled)return;failed('浏览器报告发送失败');finish(false);};
-      timer=setTimeout(()=>{if(settled)return;failed('浏览器未确认显示，提醒保留待重试');finish(false);},timeoutMs);
+      timer=setTimeout(()=>{if(settled)return;failed('浏览器未确认显示，请检查系统通知设置');finish(false);},timeoutMs);
     } catch(error){failed(error.message);finish(false);}
   });
 }

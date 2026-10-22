@@ -5,7 +5,7 @@ export function notificationSupport(env=window) {
   if(!env.isSecureContext)return {supported:false,message:'系统通知需要安全连接，请使用 HTTPS 地址打开。'};
   if(ios && !standalone)return {supported:false,message:'iPhone / iPad 请先点浏览器的分享按钮 →「添加到主屏幕」，再从主屏幕图标打开，开启任务系统通知（需要 iOS 16.4 或更新版本）。'};
   if(!('Notification' in env) || (ios && !nav.serviceWorker))return {supported:false,message:'当前浏览器不支持系统通知，请更新系统或使用支持通知的浏览器。'};
-  return {supported:true,worker:!!nav.serviceWorker && (ios || /Android/.test(nav.userAgent))};
+  return {supported:true,worker:!!nav.serviceWorker};
 }
 
 export async function prepareNotificationWorker(nav=navigator) {

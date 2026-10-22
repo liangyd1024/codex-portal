@@ -992,7 +992,7 @@ function renderTaskNotifications() {
   $('task-notifications').disabled = !supported || notificationPending;
   $('task-notifications').checked = taskNotificationsEnabled && supported && Notification.permission === 'granted';
   $('test-notification').disabled = !$('task-notifications').checked;
-  setText('notification-status', !supported ? message : Notification.permission === 'denied' ? '通知已被阻止。请在浏览器网站设置中允许通知。' : $('task-notifications').checked ? '已开启。任务完成或需要处理时通知；页面关闭后，恢复连接时补发。' : '通知未开启');
+  setText('notification-status', !supported ? message : Notification.permission === 'denied' ? '通知已被阻止。请在浏览器网站设置中允许通知。' : $('task-notifications').checked ? '已开启。页面保持打开时提醒新发生的任务完成和待处理事项；不补发历史通知。' : '通知未开启');
 }
 let notificationPending = false;
 let notificationRegistration;
@@ -1050,7 +1050,8 @@ async function sendTaskNotification(title, body, tag, threadId, host=targetHost)
     failed:message=>{liveNotifications.delete(notification);notificationDiagnostic(title + '：' + message);setText('notification-status',message+'。请检查浏览器和系统的通知设置。');},
   });
 }
-async function notifyTaskEvent(method, params, replayKey) {
+const attemptedNotices=new Set();
+async function notifyTaskEvent(method, params) {
   if (!taskNotificationsEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
   const host=targetHost;
   const threadId = params.threadId || params.thread?.id || (params.request || params).params?.threadId;
@@ -1061,11 +1062,16 @@ async function notifyTaskEvent(method, params, replayKey) {
   try {
     const delivered = await navigator.locks.request('rcm.task-notifications', async () => {
       if (host!==targetHost || localStorage.getItem('rcm.taskNotifications.' + host) !== 'true') return false;
-      return deliverNotice(localStorage,notice.key,()=>sendTaskNotification('Codex · ' + notice.label,body,notice.key,threadId,host));
+      return deliverNotice(localStorage,notice.key,()=>{
+        if(attemptedNotices.has(notice.key))return false;
+        attemptedNotices.add(notice.key);
+        if(attemptedNotices.size>1000)attemptedNotices.delete(attemptedNotices.values().next().value);
+        return sendTaskNotification('Codex · ' + notice.label,body,notice.key,threadId,host);
+      });
     });
-    if(delivered && host===targetHost)await api('/api/notices/ack',{method:'POST',body:{key:replayKey || notice.key}});
+    if(delivered && host===targetHost)await api('/api/notices/ack',{method:'POST',body:{key:notice.key}});
     return delivered;
-  } catch (error) { notificationDiagnostic('通知处理失败：'+error.message);recordError(error,'notifications'); }
+  } catch (error) { notificationDiagnostic('通知处理失败：'+error.message);recordError(error,'notifications');return false; }
 }
 
 async function connectRemote() {
@@ -1287,9 +1293,10 @@ function handleEvent(event) {
   const method = data.method || event.type, p = data.params || {};
   if (method==='manager/sidebarChanged'||/thread\/(section|readState)\//.test(method)||method.startsWith('threadSection/'))scheduleListRefresh();
   if(method==='manager/taskNotice'){
-    notifyTaskEvent(p.event.method,p.event.params,p.key);return;
+    // Historical notifications are intentionally not replayed.
+    return;
   }
-  notifyTaskEvent(method,p);
+  if(!data.replayed)notifyTaskEvent(method,p);
   if (method === 'manager/status') {
     const was = connected(); applyStatus(p.status || p); renderStatus(); renderRequests(); renderThread();
     for(const request of state.status.pendingRequests||[])notifyTaskEvent('manager/request',request);
@@ -1449,7 +1456,9 @@ function wireEvents() {
   renderTaskNotifications();
   $('task-notifications').onchange = event => setTaskNotifications(event.target.checked);
   $('test-notification').onclick = () => { if (taskNotificationsEnabled && Notification.permission === 'granted') sendTaskNotification('Codex · 测试通知','浏览器通知已接入。请检查设备通知中心。','codex-test'); };
-  window.addEventListener('focus',renderTaskNotifications);
+  const syncNotificationPreference=()=>{try{taskNotificationsEnabled=localStorage.getItem('rcm.taskNotifications.'+targetHost)==='true';}catch{}renderTaskNotifications();};
+  window.addEventListener('focus',syncNotificationPreference);
+  window.addEventListener('storage',event=>{if(event.key==='rcm.taskNotifications.'+targetHost)syncNotificationPreference();});
 
   let autoRefresh = false;
   try { autoRefresh = localStorage.getItem('rcm.autoRefresh.' + targetHost) === 'true'; } catch {}

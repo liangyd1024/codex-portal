@@ -77,3 +77,14 @@ test('async question notifications retain native identity and deduplicate replay
  assert.equal(taskNotice('manager/request',{request:r},context).key,n.key);
  assert.notEqual(taskNotice('manager/request',{...r,params:{...r.params,itemId:'second'}},context).key,n.key);
 });
+
+test('desktop browsers with service workers use persistent system notification delivery',()=>{
+ const env={navigator:{userAgent:'Macintosh Chrome',serviceWorker:{}},isSecureContext:true,Notification:{permission:'granted'}};
+ return import('../public/notification-platform.js').then(({notificationSupport})=>assert.deepEqual(notificationSupport(env),{supported:true,worker:true}));
+});
+test('recovered completion events are distinguished from live native completions',async()=>{
+ const m=new Manager({host:{id:'local'}}),events=[];m.subscriptions.set('chat',{});m.on('event',e=>events.push(e));
+ const rpc={request:async method=>method==='thread/goal/get'?{goal:null}:{data:[{id:'old',status:'completed',completedAt:110}]}};m.rpc=rpc;
+ await m.recoverNotices(rpc,'chat',100);assert.equal(events.some(e=>e.method==='turn/completed'),false);
+ m.onNotification({method:'turn/completed',params:event('new','completed')});assert.equal(events.at(-1).replayed,undefined);
+});

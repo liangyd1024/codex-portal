@@ -1,0 +1,103 @@
+{
+  "checks": [
+    {
+      "name": "未开启时不发送",
+      "pass": true
+    },
+    {
+      "name": "其他标签页开启后当前页立即投递",
+      "pass": true
+    },
+    {
+      "name": "桌面使用ServiceWorker",
+      "pass": true
+    },
+    {
+      "name": "携带正确连接和会话",
+      "pass": true
+    },
+    {
+      "name": "同一完成事件不重复",
+      "pass": true
+    },
+    {
+      "name": "旧通知和恢复历史均不补发",
+      "pass": true
+    },
+    {
+      "name": "失败不重试",
+      "pass": true
+    },
+    {
+      "name": "失败不虚报已确认",
+      "pass": true
+    },
+    {
+      "name": "新任务失败正常提醒",
+      "pass": true
+    },
+    {
+      "name": "新待回答提醒正常",
+      "pass": true
+    },
+    {
+      "name": "扩展启动全程不占正文",
+      "pass": true
+    },
+    {
+      "name": "其他标签页关闭立即生效",
+      "pass": true
+    },
+    {
+      "name": "无页面脚本错误",
+      "pass": true
+    }
+  ],
+  "sent": [
+    {
+      "title": "Codex · 本次执行已完成",
+      "options": {
+        "body": "验收机器 · 手机验收：长标题与完整操作测试",
+        "tag": "[\"qa-notice-fix-final\",\"qa-a\",\"turn\",\"fresh-completion\"]",
+        "data": {
+          "host": "qa-notice-fix-final",
+          "threadId": "qa-a"
+        }
+      }
+    },
+    {
+      "title": "Codex · 本次执行已完成",
+      "options": {
+        "body": "验收机器 · 手机验收：长标题与完整操作测试",
+        "tag": "[\"qa-notice-fix-final\",\"qa-a\",\"turn\",\"failed-delivery\"]",
+        "data": {
+          "host": "qa-notice-fix-final",
+          "threadId": "qa-a"
+        }
+      }
+    },
+    {
+      "title": "Codex · 执行失败",
+      "options": {
+        "body": "验收机器 · 手机验收：长标题与完整操作测试",
+        "tag": "[\"qa-notice-fix-final\",\"qa-a\",\"failure\",\"fresh-failed-task\"]",
+        "data": {
+          "host": "qa-notice-fix-final",
+          "threadId": "qa-a"
+        }
+      }
+    },
+    {
+      "title": "Codex · 需要你回答",
+      "options": {
+        "body": "验收机器 · 手机验收：长标题与完整操作测试",
+        "tag": "[\"qa-notice-fix-final\",\"qa-a\",\"request\",\"string\",\"new-question\"]",
+        "data": {
+          "host": "qa-notice-fix-final",
+          "threadId": "qa-a"
+        }
+      }
+    }
+  ],
+  "errors": []
+}

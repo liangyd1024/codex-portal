@@ -105,22 +105,10 @@ export function claimNotice(storage, key) {
   storage.setItem(name,JSON.stringify([...entries.slice(-999),key]));
   return true;
 }
-// Startup events can arrive before thread/start returns or while another chat is open.
+// Startup is background engine state, never conversation content. Clear any
+// transient UI state retained by a caller; actual tool results render separately.
 export function updateExtensionNotice(threads, event) {
-  const {threadId,name,status,error}=event;
-  if (!threadId || !name) return;
-  // Apps initialize in the background. Failures belong in connection diagnostics,
-  // not the conversation; actual tool-call results still render normally.
-  if (name === 'codex_apps') return;
-  const notices=threads.get(threadId)||new Map();
-  if(status==='ready'||status==='cancelled')notices.delete(name);
-  else if(status==='starting'||status==='failed') {
-    const detail=typeof error==='string'?error:error?.message || (error?JSON.stringify(error):'未知原因');
-    const label=name==='codex_apps'?'应用连接器':`扩展 ${name}`;
-    notices.set(name,{name,status,summary:status==='starting'?`${label}正在连接…`:
-      `${label}${/timed out|timeout|超时/i.test(detail)?'连接超时':'启动失败'}，相关工具暂不可用。`,detail:status==='failed'?detail:''});
-  } else return;
-  if(notices.size)threads.set(threadId,notices);else threads.delete(threadId);
+  if (event.threadId) threads.delete(event.threadId);
 }
 
 export function renderExtensionNotice(notice, doc=document) {
