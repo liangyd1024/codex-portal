@@ -40,3 +40,19 @@ test('side chat uses one native ephemeral fork; creation retries never fork twic
 test('failed uncertain fork request cannot be automatically repeated',async()=>{
  const {m}=fixture();let forks=0;m.rpc.request=async method=>{if(method==='thread/read')return {thread:{}};forks++;throw Error('timeout');};const p={requestId:'22222222-2222-4222-8222-222222222222'};await assert.rejects(createSideChat(m,'p',p));await assert.rejects(createSideChat(m,'p',p));assert.equal(forks,1);
 });
+test('side cache presents original plan, reasoning and command streaming output',()=>{
+ const turns=[];
+ applySideEvent(turns,'item/plan/delta',{turnId:'t',itemId:'plan',delta:'计划原文'});
+ applySideEvent(turns,'item/commandExecution/outputDelta',{turnId:'t',itemId:'cmd',delta:'first\n'});
+ applySideEvent(turns,'item/commandExecution/outputDelta',{turnId:'t',itemId:'cmd',delta:'second\n'});
+ applySideEvent(turns,'item/reasoning/summaryTextDelta',{turnId:'t',itemId:'reason',summaryIndex:1,delta:'摘要'});
+ applySideEvent(turns,'item/reasoning/textDelta',{turnId:'t',itemId:'reason',contentIndex:0,delta:'原生思考'});
+ applySideEvent(turns,'error',{turnId:'t',error:{message:'原生错误'}});
+ assert.equal(turns[0].items.find(i=>i.id==='plan').type,'plan');
+ assert.equal(turns[0].items.find(i=>i.id==='cmd').aggregatedOutput,'first\nsecond\n');
+ assert.equal(turns[0].items.find(i=>i.id==='reason').summary[1],'摘要');
+ assert.equal(turns[0].items.find(i=>i.id==='reason').content[0],'原生思考');
+ assert.equal(turns[0].error.message,'原生错误');
+ applySideEvent(turns,'item/completed',{turnId:'t',item:{id:'cmd',type:'commandExecution',aggregatedOutput:'完整输出'}});
+ assert.equal(turns[0].items.find(i=>i.id==='cmd').aggregatedOutput,'完整输出');
+});

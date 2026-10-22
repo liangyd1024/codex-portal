@@ -34,7 +34,7 @@ export function matchingSkills(entries,query='') {
 }
 
 export function installSkillSuggestions({input,api,context,select}) {
-  const box=document.createElement('div');box.className='skill-suggestions';box.id='skill-suggestions';box.hidden=true;box.setAttribute('role','listbox');box.setAttribute('aria-label','技能');document.body.append(box);
+  const box=document.createElement('div');box.className='skill-suggestions';box.id='skill-suggestions-'+crypto.randomUUID();box.hidden=true;box.setAttribute('role','listbox');box.setAttribute('aria-label','技能');document.body.append(box);
   input.setAttribute('aria-controls',box.id);input.setAttribute('aria-expanded','false');input.setAttribute('aria-autocomplete','list');
   let version=0,rows=[],index=0,query=null,composing=false,ended=-Infinity;
   const close=()=>{version++;box.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');};
@@ -74,7 +74,7 @@ export function installSkillSuggestions({input,api,context,select}) {
       box.replaceChildren();index=0;
       const heading=document.createElement('div');heading.className='skill-suggestions-heading';heading.textContent=label;box.append(heading);
       for(const [i,entry] of rows.entries()){
-        const button=document.createElement('button');button.type='button';button.id='skill-option-'+i;button.setAttribute('role','option');
+        const button=document.createElement('button');button.type='button';button.id=box.id+'-option-'+i;button.setAttribute('role','option');
         const rowKind=entry.mentionKind||kind;
         const view=skillPresentation(entry);
         const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.classList.add('icon');icon.setAttribute('aria-hidden','true');const use=document.createElementNS(icon.namespaceURI,'use');use.setAttribute('href',rowKind==='threads'?'#i-chat':'#i-mark');icon.append(use);

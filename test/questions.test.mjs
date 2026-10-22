@@ -64,3 +64,17 @@ test('reconnect reads full active history to recover unanswered questions, not o
  m.rpc.request=async(method,p)=>method==='thread/goal/get'?{goal:null}:p.itemsView==='full'?{data:[active]}:{data:[{id:'turn',status:'inProgress'}]};
  await m.recoverNotices(m.rpc,'thread',0);assert.equal(m.status().pendingRequests.length,1);
 });
+test('temporary chat answers verify native active status without requesting unavailable history',async()=>{
+ const {m,calls}=manager();m.controlled.get('thread').ephemeral=true;m.activeTurns.set('thread','turn');m.pendingQuestions.entries.set(request().key,request());
+ m.history=async()=>{throw Error('temporary history must not be used');};
+ m.rpc.request=async(method,params)=>{calls.push({method,params});return method==='thread/read'?{thread:{status:{type:'active'}}}:{};};
+ await m.answerQuestions('thread',{turnId:'turn',itemId:'item',answers:answers()});
+ assert.deepEqual(calls.map(c=>c.method),['thread/read','turn/steer']);assert.equal(calls[1].params.expectedTurnId,'turn');
+});
+test('temporary chat stale status, removed questions and connection changes cannot submit answers',async()=>{
+ for(const scenario of ['idle','missing','changed']){
+  const {m,calls}=manager();m.controlled.get('thread').ephemeral=true;m.activeTurns.set('thread','turn');if(scenario!=='missing')m.pendingQuestions.entries.set(request().key,request());
+  m.history=async()=>{throw Error('no history');};m.rpc.request=async(method,params)=>{calls.push({method,params});if(scenario==='changed')m.generation++;return {thread:{status:{type:scenario==='idle'?'idle':'active'}}};};
+  await assert.rejects(m.answerQuestions('thread',{turnId:'turn',itemId:'item',answers:answers()}));assert.deepEqual(calls.map(c=>c.method),['thread/read']);
+ }
+});

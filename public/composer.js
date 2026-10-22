@@ -3,10 +3,12 @@ import {installSkillSuggestions} from './skill-suggestions.js';
 import {installInlineMentions,mentionRanges} from './inline-mentions.js';
 export const WEB_ACCESS='full';
 
-export function installComposer({host,api,context,refresh,notify,implementPlan}) {
+export function installComposer({host,api,context,refresh,notify,implementPlan,input=document.getElementById('message-input'),images=document.getElementById('add-images'),prefix=''}) {
   if(!document.querySelector('link[href="/composer.css"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/composer.css';document.head.append(link);}
   const bar=document.createElement('div');bar.className='composer-tools';
   bar.innerHTML='<button type="button" id="execution-mode" aria-pressed="false">计划</button><button type="button" id="goal-settings">目标</button><button type="button" id="skill-picker">技能</button><button type="button" id="plugin-picker">插件</button><span id="composer-tools-status" role="status"></span>';
+  for(const control of bar.querySelectorAll('[id]')){control.dataset.tool=control.id;control.id=prefix+control.id;}
+  const tool=id=>bar.querySelector('[data-tool="'+id+'"]');
   const tools=document.createElement('details');tools.className='composer-options';
   const summary=document.createElement('summary');summary.textContent='＋';summary.setAttribute('aria-label','更多输入工具');const panel=document.createElement('div');panel.className='composer-options-panel';
   for(const button of bar.querySelectorAll('button'))panel.append(button);tools.append(summary,panel);bar.querySelector('[role=status]').before(tools);
@@ -14,16 +16,16 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
   const planBadge=document.createElement('button');planBadge.type='button';planBadge.className='composer-mode-badge';planBadge.textContent='计划 ×';planBadge.setAttribute('aria-label','退出计划模式');
   const goalBadge=document.createElement('button');goalBadge.type='button';goalBadge.className='composer-mode-badge';
   badges.append(planBadge,goalBadge);tools.after(badges);
-  const position=()=>{if(!tools.open)return;const v=window.visualViewport,top=v?.offsetTop||0,left=v?.offsetLeft||0,height=v?.height||innerHeight,width=v?.width||innerWidth;panel.style.maxHeight=Math.max(44,height-24)+'px';panel.style.maxWidth=Math.max(0,width-16)+'px';panel.style.right='auto';panel.style.left=Math.max(left+8,Math.min(summary.getBoundingClientRect().left,left+width-panel.offsetWidth-8))+'px';panel.style.top=Math.max(top+8,summary.getBoundingClientRect().top-panel.offsetHeight-8)+'px';};
+  const position=()=>{if(!tools.open)return;const v=window.visualViewport,top=v?.offsetTop||0,left=v?.offsetLeft||0,height=v?.height||innerHeight,width=v?.width||innerWidth;panel.style.maxHeight=Math.max(44,height-24)+'px';panel.style.maxWidth=Math.max(0,width-16)+'px';panel.style.right='auto';panel.style.left=Math.max(left+8,Math.min(summary.getBoundingClientRect().left,left+width-panel.offsetWidth-8))+'px';panel.style.top=Math.max(top+8,Math.min(summary.getBoundingClientRect().top-panel.offsetHeight-8,top+height-panel.offsetHeight-8))+'px';};
   tools.addEventListener('toggle',()=>{summary.setAttribute('aria-expanded',String(tools.open));position();});window.visualViewport?.addEventListener('resize',position);window.visualViewport?.addEventListener('scroll',position);window.addEventListener('resize',position);window.addEventListener('scroll',position,true);
   tools.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();tools.open=false;summary.focus();}});
   document.addEventListener('pointerdown',e=>{if(!tools.contains(e.target))tools.open=false;});
-  document.querySelector('.composer-bottom').prepend(bar);
-  const images=document.getElementById('add-images');images.classList.remove('icon-button');images.textContent='添加图片';panel.prepend(images);images.addEventListener('click',()=>{tools.open=false;});
+  input.form.querySelector('.composer-bottom').prepend(bar);
+  images.classList.remove('icon-button');images.textContent='添加图片';panel.prepend(images);images.addEventListener('click',()=>{tools.open=false;});
   panel.addEventListener('keydown',e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key)||e.target.tagName==='SELECT')return;const items=[...panel.querySelectorAll('button:not(:disabled):not([hidden]),select:not(:disabled)')];const i=items.indexOf(document.activeElement);e.preventDefault();items[e.key==='Home'?0:e.key==='End'?items.length-1:(i+(e.key==='ArrowDown'?1:-1)+items.length)%items.length]?.focus();});
-  summary.addEventListener('click',e=>{if(summary.getAttribute('aria-disabled')==='true')e.preventDefault();});
-  summary.addEventListener('keydown',e=>{if(summary.getAttribute('aria-disabled')==='true'){e.preventDefault();return;}if(e.key==='ArrowDown'){e.preventDefault();tools.open=true;panel.querySelector('button:not(:disabled)')?.focus();}});
-  const mode=bar.querySelector('#execution-mode'),status=bar.querySelector('#composer-tools-status');
+  summary.addEventListener('click',e=>{e.preventDefault();if(summary.getAttribute('aria-disabled')==='true')return;tools.open=!tools.open;summary.setAttribute('aria-expanded',String(tools.open));position();});
+  summary.addEventListener('keydown',e=>{if(summary.getAttribute('aria-disabled')==='true'){e.preventDefault();return;}if(e.key==='ArrowDown'){e.preventDefault();tools.open=true;summary.setAttribute('aria-expanded','true');position();panel.querySelector('button:not(:disabled)')?.focus();}});
+  const mode=tool('execution-mode'),status=tool('composer-tools-status');
   const selectionKey='rcm.composer.'+host;let savedSelections;try{savedSelections=JSON.parse(sessionStorage.getItem(selectionKey)||'[]');}catch{}
   const selections=new Map(Array.isArray(savedSelections)?savedSelections.filter(v=>Array.isArray(v)&&typeof v[0]==='string'&&['default','plan'].includes(v[1]?.mode)&&Array.isArray(v[1]?.skills)&&Array.isArray(v[1]?.plugins)):[]);let selected,loading=false;
   const save=()=>{try{sessionStorage.setItem(selectionKey,JSON.stringify([...selections]));}catch{notify('输入工具选择暂未保存，刷新后请重新核对。',true);}};
@@ -31,7 +33,6 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
   mode.onclick=()=>{choice().mode=choice().mode==='plan'?'default':'plan';choice().goalPending=false;save();render();tools.open=false;summary.focus();};
   planBadge.onclick=()=>{choice().mode='default';save();render();summary.focus();};
   goalBadge.onclick=()=>{if(choice().goalPending){choice().goalPending=false;save();render();summary.focus();}else{editGoal(goalBadge);}};
-  const input=document.getElementById('message-input');
   const references=()=>Array.isArray(choice().references)?choice().references.filter(r=>r&&['skills','plugins','threads'].includes(r.kind)&&typeof r.key==='string'&&typeof r.token==='string'&&r.token.length>1):[];
   const present=()=>mentionRanges(input.value,references());
   const syncReferences=()=>{const active=present();for(const kind of ['skills','plugins','threads'])choice()[kind]=[...new Set(active.filter(r=>r.kind===kind).map(r=>r.key))];};
@@ -88,11 +89,12 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
     }catch(e){if(context().id===id&&context().cwd===current.cwd&&dialog.open&&version===dialogVersion){pending.remove();const failure=text('p','暂时无法加载'+(kind==='skills'?'技能':'插件')+'，请重试。你的草稿已保留。');failure.setAttribute('role','status');dialog.append(failure);const details=document.createElement('details');details.append(text('summary','错误详情'),text('p',e.message));dialog.append(details);const retry=text('button','重试');retry.type='button';retry.onclick=()=>{dialog.close();void picker(kind,button);};dialog.append(retry);}}
     finally{loading=false;}
   }
-  bar.querySelector('#skill-picker').onclick=e=>void picker('skills',e.currentTarget);
-  bar.querySelector('#plugin-picker').onclick=e=>void picker('plugins',e.currentTarget);
-  const goalButton=bar.querySelector('#goal-settings');
+  tool('skill-picker').onclick=e=>void picker('skills',e.currentTarget);
+  tool('plugin-picker').onclick=e=>void picker('plugins',e.currentTarget);
+  const goalButton=tool('goal-settings');
   goalButton.onclick=()=>{
     const c=context();
+    if(c.ephemeral){notify('临时聊天不支持目标模式，请在主聊天设置目标。',true);return;}
     if(c.goalError){notify('目标暂未读取，请刷新后重试。',true);return;}
     if(c.goal&&c.goal.status!=='complete'&&!choice().goalPending){editGoal(goalButton);return;}
     const next=!choice().goalPending;
@@ -160,7 +162,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
     };
   }
   const suggestions=installSkillSuggestions({input,api,context,select:(entry,range,kind)=>insertReference(entry,kind,range)});
-  const planCompletion=installPlanCompletion({host,context,notify,send:implementPlan,resetMode:()=>{choice().mode='default';save();}});
+  const planCompletion=installPlanCompletion({host,context,input,notify,send:implementPlan,resetMode:()=>{choice().mode='default';save();}});
   function render(){
     planCompletion.render();
     const c=context();if(selected!==JSON.stringify([c.id,c.cwd])){selected=JSON.stringify([c.id,c.cwd]);suggestions.close();if(dialog.open)dialog.close();}
@@ -177,14 +179,15 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
     badges.hidden=planBadge.hidden&&goalBadge.hidden;
     summary.textContent='＋';summary.title='添加图片、技能和工具';summary.dataset.mode=choice().mode;summary.setAttribute('aria-label',choice().mode==='plan'?'更多输入工具，计划模式':'更多输入工具');
     // Attachments can accompany a native turn/steer while the current turn runs.
-    for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||goalUpdating||(control!==images&&control!==goalBadge&&!(control===goalButton&&c.goal)&&control.id!=='skill-picker'&&control.id!=='plugin-picker'&&c.active);
-    goalButton.textContent=currentGoal&&!choice().goalPending?'编辑目标':'目标';goalButton.title=currentGoal?'编辑当前目标内容':'用下一条输入设置目标';goalButton.setAttribute('aria-pressed',String(Boolean(choice().goalPending)));
+    for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||goalUpdating||(control!==images&&control!==goalBadge&&!(control===goalButton&&c.goal)&&control.dataset.tool!=='skill-picker'&&control.dataset.tool!=='plugin-picker'&&c.active);
+    goalButton.disabled=goalButton.disabled||Boolean(c.ephemeral);
+    goalButton.textContent=currentGoal&&!choice().goalPending?'编辑目标':'目标';goalButton.title=c.ephemeral?'临时聊天不支持目标模式，请在主聊天使用。':currentGoal?'编辑当前目标内容':'用下一条输入设置目标';goalButton.setAttribute('aria-pressed',String(Boolean(choice().goalPending)));
     for(const {button,value} of goalActions)button.hidden=c.draft||!c.goal||Boolean(c.goalError)||(value==='paused'?c.goal.status!=='active':value==='active'?c.goal.status!=='paused':c.goal.status==='complete');
     summary.setAttribute('aria-disabled',String(!c.ready||c.busy));if(!c.ready||c.busy)tools.open=false;
     status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
-  return {render,isGoalPending:()=>Boolean(choice().goalPending),validateSend:(text,active)=>validateGoalDraft(choice(),text,active),prepareSend:async(id,text,active)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,api,save}):false;render();return started;},moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();return {mode,skills:[...skills],plugins:[...plugins],threads:[...threads],access:WEB_ACCESS};},isLoading:()=>loading};
+  return {render,dismiss:()=>{suggestions.close();tools.open=false;if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending),validateSend:(text,active)=>validateGoalDraft(choice(),text,active),prepareSend:async(id,text,active)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,api,save}):false;render();return started;},moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();return {mode,skills:[...skills],plugins:[...plugins],threads:[...threads],access:WEB_ACCESS};},isLoading:()=>loading};
 }
 
 // Match the desktop's completed native plan item, never infer plans from prose.
@@ -197,7 +200,7 @@ export function completedPlan(turns=[]) {
 }
 export function implementationText(plan){return 'PLEASE IMPLEMENT THIS PLAN:\n'+plan.text;}
 
-export function installPlanCompletion({host,context,resetMode,send,notify}) {
+export function installPlanCompletion({host,context,resetMode,send,notify,input=document.getElementById('message-input')}) {
   const key='rcm.planCompletion.'+host;
   let saved;try{saved=JSON.parse(sessionStorage.getItem(key)||'{}');}catch{}
   const records=saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:{};
@@ -210,7 +213,7 @@ export function installPlanCompletion({host,context,resetMode,send,notify}) {
   const review=document.createElement('button');review.type='button';review.textContent='已核对未执行，重新选择';
   const status=document.createElement('p');status.setAttribute('role','status');
   actions.append(yes,no,review);card.append(heading,actions,status);
-  document.getElementById('message-input').closest('form').before(card);
+  input.closest('form').before(card);
   let current=null,pending=null;
   const record=(id,plan)=>records[id]?.turnId===plan.turnId?records[id]:null;
   function render(){
@@ -226,7 +229,7 @@ export function installPlanCompletion({host,context,resetMode,send,notify}) {
     yes.hidden=uncertain;review.hidden=!uncertain;review.disabled=sending||!c.ready||c.busy;
     status.textContent=sending?'正在提交…':uncertain?'执行结果未确认，请先核对会话记录，避免重复执行。':r?.error||(!c.ready?'连接恢复后可执行，草稿已保留。':'');status.hidden=!status.textContent;
   }
-  function dismiss(){if(!current||pending===current.id)return;records[current.id].state='dismissed';save();render();document.getElementById('message-input').focus();}
+  function dismiss(){if(!current||pending===current.id)return;records[current.id].state='dismissed';save();render();input.focus();}
   no.onclick=dismiss;
   card.addEventListener('keydown',event=>{if(event.key==='Escape'&&!event.isComposing){event.preventDefault();event.stopPropagation();dismiss();}});
   review.onclick=()=>{if(!current||review.disabled)return;records[current.id].state='open';delete records[current.id].error;save();render();yes.focus();};
@@ -235,7 +238,7 @@ export function installPlanCompletion({host,context,resetMode,send,notify}) {
     const {id,plan}=current,r=record(id,plan);resetMode();pending=id;r.state='uncertain';delete r.error;save();render();
     try{await send(id,plan);r.state='sent';}
     catch(error){const rejected=error.status>=400&&error.status<500&&!['OUTCOME_UNKNOWN','RPC_TIMEOUT'].includes(error.code);r.state=rejected?'open':'uncertain';r.error=error.message;notify(error.message,true);}
-    finally{pending=null;save();render();if(context().id===id&&r.state==='sent')document.getElementById('message-input').focus();}
+    finally{pending=null;save();render();if(context().id===id&&r.state==='sent')input.focus();}
   };
   return {render};
 }

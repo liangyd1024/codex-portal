@@ -17,10 +17,10 @@ async function prepare(file){
     await img.decode();const scale=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);let data;for(const quality of [.86,.7,.5,.3]){data=canvas.toDataURL('image/jpeg',quality);if(data.length<=1000000)return data;}throw Error('图片压缩后仍过大，请裁剪后重试。');
   }catch(e){throw Error(e?.message?.includes('过大')?e.message:'无法读取此图片，请转为 JPEG、PNG 或 WebP 后重试。');}
 }
-export function installAttachments({host,context,changed,notify}){
-  const store=new AttachmentDrafts(sessionStorage,'rcm.images.'+host,notify),form=document.getElementById('message-form'),input=document.getElementById('message-input');
-  const button=document.createElement('button');button.id='add-images';button.type='button';button.className='icon-button';button.textContent='＋';button.setAttribute('aria-label','添加图片');button.title='添加图片';
-  const file=document.createElement('input');file.type='file';file.accept='image/*';file.multiple=true;file.hidden=true;file.id='image-files';
+export function installAttachments({host,context,changed,notify,form=document.getElementById('message-form'),input=document.getElementById('message-input'),prefix=''}){
+  const store=new AttachmentDrafts(sessionStorage,'rcm.images.'+host,notify);
+  const button=document.createElement('button');button.id=prefix+'add-images';button.type='button';button.className='icon-button';button.textContent='＋';button.setAttribute('aria-label','添加图片');button.title='添加图片';
+  const file=document.createElement('input');file.type='file';file.accept='image/*';file.multiple=true;file.hidden=true;file.id=prefix+'image-files';
   const list=document.createElement('div');list.className='attachment-list';list.setAttribute('aria-label','待发送图片');list.hidden=true;
   form.prepend(list);form.querySelector('.composer-bottom').prepend(button);form.append(file);
   const preview=document.createElement('dialog');preview.className='composer-dialog image-preview';document.body.append(preview);
@@ -32,5 +32,5 @@ export function installAttachments({host,context,changed,notify}){
   async function add(files){const c=context();if(!c.ready||c.busy)return;const id=c.id;for(const f of files){if(store.get(id).length>=4){notify('每条消息最多添加 4 张图片。',true);break;}const item={id:crypto.randomUUID(),name:f.name||'粘贴图片'};store.add(id,item);changed();try{const url=await prepare(f);if(store.get(id).includes(item)){item.url=url;store.save();}}catch(e){store.remove(id,item.id);notify(e.message,true);}finally{changed();}}}
   button.onclick=()=>file.click();file.onchange=()=>{const files=[...file.files];file.value='';void add(files);};
   clipboard=installComposerClipboard({input,list,context,items:()=>store.get(context().id),replace:items=>{store.items.set(context().id,items);store.save();changed();},addFiles:add,notify});
-  return {render,moveDraft:(from,to)=>{store.items.set(to,store.get(from));store.items.delete(from);store.save();},has:()=>store.get(context().id).some(i=>i.url),pending:()=>store.get(context().id).some(i=>!i.url),capture:()=>store.capture(context().id),acknowledge:s=>store.acknowledge(s)};
+  return {button,render,moveDraft:(from,to)=>{store.items.set(to,store.get(from));store.items.delete(from);store.save();},has:()=>store.get(context().id).some(i=>i.url),pending:()=>store.get(context().id).some(i=>!i.url),capture:()=>store.capture(context().id),acknowledge:s=>store.acknowledge(s)};
 }

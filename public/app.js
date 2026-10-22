@@ -191,7 +191,7 @@ function running() {
 }
 function requestThread(r) { return r.threadId || r.params?.threadId; }
 function requests() {
-  const all = [...(state.status?.pendingRequests || []), ...(state.detail?.pendingRequests || []), ...state.localRequests, ...(state.detail?.recovering?[]:asyncQuestions(turns(),state.selectedId))];
+  const all = [...(state.status?.pendingRequests || []), ...(state.detail?.pendingRequests || []), ...state.localRequests,...(sideChat?.requests()||[]), ...(state.detail?.recovering?[]:asyncQuestions(turns(),state.selectedId))];
   const map = new Map(); all.forEach(r => { if (r?.id != null) map.set(requestKey(r), r); });
   return [...map.values()];
 }
@@ -514,30 +514,30 @@ let outputPositions;
 try{outputPositions=new Map(JSON.parse(sessionStorage.getItem('rcm.outputPositions.'+targetHost)||'[]'));}catch{outputPositions=new Map();}
 function saveOutputPositions(){try{sessionStorage.setItem('rcm.outputPositions.'+targetHost,JSON.stringify([...outputPositions].slice(-200)));}catch{}}
 function savedOpenDetails(){try{return JSON.parse(sessionStorage.getItem('rcm.openDetails.'+targetHost+'.'+state.selectedId)||'[]');}catch{return [];}}
-function renderCommandOutput(item) {
+function renderCommandOutput(item,{threadId=state.selectedId,refresh=renderMessages}={}) {
   const output = item.aggregatedOutput || (uncertainHistory() ? '快照未包含命令输出。' : typeOf(item.status) === 'inProgress' ? '等待命令输出…' : '无命令输出');
   const wrap=el('div','command-output-view');
-  wrap.dataset.outputStamp=String(item.outputToken||output.length)+':'+String(outputPositions.get(state.selectedId+':'+item.id)??'tail');
+  wrap.dataset.outputStamp=String(item.outputToken||output.length)+':'+String(outputPositions.get(threadId+':'+item.id)??'tail');
   if(item.outputPartial){wrap.append(el('span','subtle','已显示输出开头，正在补齐完整日志…'),el('pre','tool-output',output));return wrap;}
   if(output.length<=OUTPUT_WINDOW_SIZE) { wrap.append(el('pre','tool-output',output)); return wrap; }
-  const key=state.selectedId+':'+item.id, page=outputWindow(output,outputPositions.get(key) ?? 'tail');
+  const key=threadId+':'+item.id, page=outputWindow(output,outputPositions.get(key) ?? 'tail');
   const controls=el('div','output-controls');
   controls.append(el('span','','完整输出已保留 · '+(page.start+1)+'–'+page.end+' / '+page.total+' 字符'));
   for(const [label,position,disabled] of [['开头',0,page.start===0],['上一段',Math.max(0,page.start-OUTPUT_WINDOW_SIZE),page.start===0],['下一段',page.end,page.end===page.total],['跟随最新','tail',page.following]]) {
     const b=el('button','secondary-button',label);b.type='button';b.disabled=disabled;
-    b.onclick=()=>{outputPositions.set(key,position);saveOutputPositions();renderMessages();};controls.append(b);
+    b.onclick=()=>{outputPositions.set(key,position);saveOutputPositions();refresh();};controls.append(b);
   }
   const jump=el('input');jump.type='number';jump.min='1';jump.max=String(Math.ceil(page.total/OUTPUT_WINDOW_SIZE));jump.value=String(page.following?Number(jump.max):Math.floor(page.start/OUTPUT_WINDOW_SIZE)+1);jump.setAttribute('aria-label','输出段号');jump.style.width='5em';
   jump.oninput=()=>{const n=Number(jump.value);if(Number.isInteger(n)&&n>=1&&n<=Number(jump.max))outputPositions.set(key,(n-1)*OUTPUT_WINDOW_SIZE);};
-  jump.onblur=()=>setTimeout(renderMessages,0);
-  const go=el('button','secondary-button','跳转');go.type='button';go.onclick=()=>{jump.oninput();saveOutputPositions();renderMessages();};
+  jump.onblur=()=>setTimeout(refresh,0);
+  const go=el('button','secondary-button','跳转');go.type='button';go.onclick=()=>{jump.oninput();saveOutputPositions();refresh();};
   controls.append(el('span','','跳转到段'),jump,el('span','','/ '+jump.max),go);
   const download=el('button','secondary-button','下载完整输出');download.type='button';
   download.onclick=()=>{const url=URL.createObjectURL(new Blob([output],{type:'text/plain;charset=utf-8'}));const a=el('a');a.href=url;a.download='command-'+item.id+'.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};controls.append(download);
   const pre=el('pre','tool-output',page.text);pre.dataset.followTail=String(page.following);
   wrap.append(controls,pre);return wrap;
 }
-function renderItem(item,{threadId=state.selectedId,side=false}={}) {
+function renderItem(item,{threadId=state.selectedId,side=false,refresh=renderMessages}={}) {
   const imageUrl=options=>itemImageUrl(threadId,item.id,{...options,host:targetHost});
   const fileContext={threadId,itemId:item.id,host:targetHost};
   const bodyMarkdown=text=>markdown(text,0,{file:(path,label)=>fileLink(path,label,fileContext),image:(path,label)=>{
@@ -581,7 +581,7 @@ function renderItem(item,{threadId=state.selectedId,side=false}={}) {
   if (item.type === 'commandExecution') {
     const {d,body} = toolDetails(item,'执行命令');
     body.append(el('div','tool-command','$ ' + (item.command || '')),el('div','tool-meta','目标机器目录：' + (item.cwd || '—')));
-    body.append(renderCommandOutput(item));
+    body.append(renderCommandOutput(item,{threadId,refresh}));
     if (item.exitCode != null) body.append(el('div','tool-meta','退出码：' + item.exitCode + (item.durationMs != null ? ' · 用时 ' + (item.durationMs / 1000).toFixed(1) + ' 秒' : '')));
     if (item.exitCode && item.exitCode !== 0) d.classList.add('failed'); return d;
   }
@@ -769,13 +769,13 @@ function renderDiagnostics() {
   if (!n.childNodes.length) n.append(el('p','subtle','暂无错误记录。连接后显示服务状态。'));
 }
 function renderRequests() {
-  const list = requests().filter(r=>!questionDrafts.get(r).sent), signature = JSON.stringify([state.selectedId,list]);
+  const list = requests().filter(r=>!questionDrafts.get(r).sent), signature = JSON.stringify([state.selectedId,sideChat?.id,list]);
   if (signature === state.requestSignature) { renderControls(); return; }
   state.requestSignature = signature;
   for(const r of list)if(r.params?.questions?.length)notifyTaskEvent('manager/request',r);
   if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();
   const saved = new Map([...document.querySelectorAll('.request-card')].map(card => [card.dataset.requestId, {fields:[...card.querySelectorAll('input,textarea')].map(f => ({name:f.name,value:f.value,checked:f.checked})),open:Boolean(card.querySelector('details[open]'))}]));
-  const n = clear($('pending-requests')); const inline = clear($('conversation-requests'));
+  const n = clear($('pending-requests')); const inline = clear($('conversation-requests'));if(sideChat)clear(sideChat.requestsHost);
   const requestSection=n.closest('details');requestSection.dataset.empty=String(!list.length);
   requestSection.hidden=!list.length||requestSection.dataset.viewHidden==='true';
   $('request-count').hidden = !list.length; setText('request-count',list.length);
@@ -790,7 +790,7 @@ function renderRequests() {
     if (requestThread(r)) {
       const target = currentThread()?.id===requestThread(r)?currentThread():state.threads.find(t => t.id === requestThread(r));
       card.append(el('p','request-origin','会话：' + (target ? threadName(target) : requestThread(r))));
-      if (requestThread(r) !== state.selectedId) { const open = el('button','text-button','查看此会话'); open.onclick = () => selectThread(requestThread(r)); card.append(open); }
+      if (requestThread(r) !== state.selectedId&&requestThread(r)!==sideChat?.id) { const open = el('button','text-button','查看此会话'); open.onclick = () => selectThread(requestThread(r)); card.append(open); }
     }
     if (p.reason) card.append(el('p','',p.reason));
     if (p.command) card.append(el('pre','',p.command));
@@ -813,7 +813,7 @@ function renderRequests() {
       card.querySelectorAll('input,textarea').forEach(f => { const found = previous.fields.find(x => x.name === f.name && (f.type !== 'radio' || x.value === f.value)); if (found) { if (f.type === 'radio') f.checked = found.checked; else f.value = found.value; } });
       if (previous.open && card.querySelector('details')) card.querySelector('details').open = true;
     }
-    if(requestThread(r) === state.selectedId) { inline.append(card); n.append(el('p','subtle','当前会话的请求显示在输入框上方。')); } else n.append(card);
+    if(requestThread(r)===sideChat?.id){sideChat.requestsHost.append(card);n.append(el('p','subtle','侧边聊天的请求显示在其输入框上方。'));}else if(requestThread(r) === state.selectedId) { inline.append(card); n.append(el('p','subtle','当前会话的请求显示在输入框上方。')); } else n.append(card);
   });
   renderControls();
 }
@@ -1179,7 +1179,7 @@ async function respondRequest(r, answer) {
     if(instance!==state.status?.instanceId)return;
     const remove = list => (list || []).filter(x => requestKey(x) !== requestKey(r));
     state.localRequests = remove(state.localRequests); if (state.status) state.status.pendingRequests = remove(state.status.pendingRequests); if (state.detail) state.detail.pendingRequests = remove(state.detail.pendingRequests);
-    renderRequests();if(returnFocus&&state.selectedId===requestThread(r))$('message-input').focus();await loadStatus(); toast('已提交处理结果。');
+    renderRequests();if(returnFocus){if(state.selectedId===requestThread(r))$('message-input').focus();else if(sideChat?.id===requestThread(r))document.querySelector('.side-chat-panel .composer textarea')?.focus();}await loadStatus(); toast('已提交处理结果。');
   });
 }
 function updateNewProjects(projectRoot) {
@@ -1537,7 +1537,7 @@ function wireEvents() {
     state.projects=[...state.projects.filter(p=>p.id!==project.id),project];updateNewProjects(project.roots[0]);renderProjects();renderControls();void loadThreads().catch(error=>recordError(error,'刷新新项目'));
   }});
   composer=installComposer({host:targetHost,api,implementPlan,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,desktop:state.desktopMode,threadReferencesSupported:state.detail?.desktop?.threadReferencesSupported===true,turns:turns(),goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
-  sideChat=installSideChat({api,context:()=>({id:inputId(),ready:usable(),model:state.model,effort:state.effort,models:state.models.map(m=>({id:modelId(m),label:m.displayName||modelId(m),efforts:effortsFor(modelId(m)).map(e=>e.value)}))}),renderItem,notify:toast,selectionChanged:()=>annotations?.refreshMarks()});
+  sideChat=installSideChat({api,requestsChanged:renderRequests,context:()=>({id:inputId(),cwd:currentThread()?.cwd,ready:usable(),model:state.model,effort:state.effort,models:state.models.map(m=>({id:modelId(m),label:m.displayName||modelId(m),defaultEffort:defaultEffort(modelId(m)),efforts:effortsFor(modelId(m)).map(e=>e.value)}))}),renderItem,notify:toast,selectionChanged:()=>annotations?.refreshMarks()});
   annotations=installResponseAnnotations({host:targetHost,context:()=>({id:inputId()}),onSideChat:fragment=>sideChat.open(fragment),sideSelections:()=>sideChat.fragments(),changed:renderControls,notify:toast});
   const settings = $('composer-settings');
   document.addEventListener('click',event => { if (!settings.contains(event.target)) settings.open = false; });
@@ -1591,8 +1591,8 @@ function wireEvents() {
   $('message-input').addEventListener('compositionstart',() => { composing = true; });
   $('message-input').addEventListener('compositionend',() => { composing = false; compositionEnded = performance.now(); });
   $('message-input').onkeydown = e => { if (shouldSendOnEnter(e,{touch:touchInput(),composing,compositionEnded})) { e.preventDefault(); if (!$('send-message').disabled) sendMessage(); } };
-  $('model-select').onchange = e => { state.model = e.target.value; state.effort = defaultEffort(state.model); fillEfforts($('effort-select'),state.model,state.effort); renderControls(); };
-  $('effort-select').onchange = e => { state.effort = e.target.value; renderControls(); };
+  $('model-select').onchange = e => { state.model = e.target.value; state.effort = defaultEffort(state.model); fillEfforts($('effort-select'),state.model,state.effort); settings.open=false;settings.querySelector('summary').focus();renderControls(); };
+  $('effort-select').onchange = e => { state.effort = e.target.value;settings.open=false;settings.querySelector('summary').focus();renderControls(); };
   $('new-retry-create').onclick=()=>{newDraft.complete();$('new-chat-error').hidden=true;renderControls();$('message-input').focus();};
   $('close-new-chat').onclick=()=>{if(!state.busy.has('create'))closeNewChat();};
 
