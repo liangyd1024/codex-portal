@@ -55,6 +55,6 @@
 
 - 在侧边栏工作树 `2e697d1` 上执行 `npm test`：32 项 Node、23 项 Python 测试通过。其中覆盖禁用能力不写入、账号/版本冲突、超时不重放及独立读状态保护。该结果是侧边栏分支回归，不能冒充已安装版本的全量验证。
 - 本机 `http://127.0.0.1:4317/api/version` 响应正常，实际已安装版本为 `cce024d592ebbf021f96cce0fa739fbd9e4433fe`，包含后续会话交接改动。
-- 本轮只新增研究报告，没有可发布的功能改动，因此未重启、未覆盖现有安装、未生成新部署备份，也未做浏览器 UI 变更验收。既有安装备份为 `~/Library/Application Support/RemoteCodexManager/backups/marco-20261018T041423798953Z.tar.gz.age`。
+- 本轮只新增研究报告，没有可发布的功能改动，因此未重启、未覆盖现有安装、未生成新部署备份，也未做浏览器 UI 变更验收。既有安装备份为 `~/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 
 下一次解除置灰必须先取得面向服务的真实桌面接入方式，具有账号/主机上下文、明确操作回执和版本/能力检查，再用独立测试会话核对桌面实际结果、断线与超时行为。无需、也不应通过改写数据库或桌面配置来补足接口语义。

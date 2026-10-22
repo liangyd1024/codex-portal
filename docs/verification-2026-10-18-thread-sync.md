@@ -34,7 +34,7 @@
 
 ## 真实存储验证与边界
 
-通过配置中的本机 transport 与实际 `Manager.detail`，只读访问专用会话“RCM 验收 RCM_MARCO_OK”（`01a14aa3-6a91-7a12-8a3e-b93bcc7656cc`）。本次测试 Manager 在内存中设置 released 标记，未改写正式交还记录。结果读取到 5 个历史轮次，来源 snapshot，controlled=false、handoff=released、subscribedThreads=[]，引擎 RPC 调用数为 0。
+通过配置中的本机 transport 与实际 `Manager.detail`，只读访问专用会话“RCM 验收 RCM_LOCAL_OK”（`REDACTED-ID`）。本次测试 Manager 在内存中设置 released 标记，未改写正式交还记录。结果读取到 5 个历史轮次，来源 snapshot，controlled=false、handoff=released、subscribedThreads=[]，引擎 RPC 调用数为 0。
 
 未在真实桌面端发送新消息，未做真实 SSH 双机端到端同步测试；原生中文输入法候选确认未人工验收，仅做浏览器事件模拟和自动化回归。跨进程历史可见速度仍取决于桌面端写入历史存储的时机。
 

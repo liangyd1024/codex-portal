@@ -19,4 +19,4 @@
 
 代码提交 b6eb51d58b5fd539ed5f0e37ff8b7b1e96beb1de 已推送 origin/master，包含正式基线 263cfc4 及后续文档变更。指定版本安装通过空闲检查、部署前加密备份和健康检查。正式 /api/version 返回该提交，project-picker.js/css 与已验证源码逐字节一致。正式入口未发送测试消息。
 
-备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T143800903567Z.tar.gz.age`。
+备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。

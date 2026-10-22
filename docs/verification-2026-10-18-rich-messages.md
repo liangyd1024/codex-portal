@@ -19,7 +19,7 @@
 
 正式安装通过空闲检查、加密备份及版本健康检查；正式图片接口返回 HTTP 200。正式完整会话页面复查因侧栏同步不稳定、目标会话未稳定出现在列表中未完成，不等同于完整端到端通过。
 
-备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T142606129605Z.tar.gz.age`。
+备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 
 ## 验证边界
 
@@ -45,7 +45,7 @@
 
 修复提交 `f29af4accda49628934300db7298ac082861e464` 已推送 master 并部署，保留其他会话已上线的桌面项目选择修改。完整 `npm test`：149 项 Node + 33 项 Python 全部通过；4327 独立状态预览用真实问答源验证 5 个回答后，正式页面重新加载并再次完成全部消息核对。
 
-安装通过空闲检查、加密备份和版本健康检查。部署前备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T144601362569Z.tar.gz.age`。
+安装通过空闲检查、加密备份和版本健康检查。部署前备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 
 本次正式验收已完成，替代上文未完成的正式页面复查状态。原生 Codex 像素级视觉对照和实体手机仍未验证。历史中的 workspace out of credits 属于原始轮次错误，并非本次读取失败。
 

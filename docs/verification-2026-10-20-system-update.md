@@ -26,6 +26,6 @@
 
 正式功能版本 `cd010569f4dafbe796d5fe69162a787473d92baa` 已推送 origin/master，并通过标准安装上线。安装源为持久化干净 master 副本 `~/Library/Application Support/RemoteCodexManager/update-source`，origin 指向原 GitHub 仓库；installed.json 已记录该路径和 origin，后续网页更新从该副本执行。真实 fetch origin/master 已成功，未修改 SSH 配置或主机校验。
 
-标准安装保留空闲检查、当前 Codex 会话精确豁免、加密备份和版本健康检查。备份：`~/Library/Application Support/RemoteCodexManager/backups/marco-20261020T081826773958Z.tar.gz.age`。正式 GET /api/version 与版本一致，GET /api/system/update available=true。
+标准安装保留空闲检查、当前 Codex 会话精确豁免、加密备份和版本健康检查。备份：`~/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。正式 GET /api/version 与版本一致，GET /api/system/update available=true。
 
 正式浏览器 p2 点击新按钮，独立 launchd worker PID 88781 实际执行运行状态检查。当前本机会话正在运行，job 转 failed 并明确提示等待空闲。正式版本保持不变，未停止任务；此检查证明网页操作没有伪造 Codex 会话豁免。后台进程正常退出并释放部署锁。浏览器空间 25 已关闭，预览已停止。

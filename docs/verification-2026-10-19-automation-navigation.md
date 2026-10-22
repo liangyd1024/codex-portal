@@ -22,6 +22,6 @@
 
 ## 部署
 
-部署前正式版本为 c3fc0ede4076f2388fed5bcce755575ad33d6e3a，属于当前 master 祖先；保留已上线功能。已提交并推送 3073bf0619a7153372e5a3383bdd3560a6e665a5，按指定版本安装流程部署成功；空闲检查、加密备份及健康检查通过，仅重启 RCM 网页服务。备份：`~/Library/Application Support/RemoteCodexManager/backups/marco-20261019T100746959220Z.tar.gz.age`。
+部署前正式版本为 c3fc0ede4076f2388fed5bcce755575ad33d6e3a，属于当前 master 祖先；保留已上线功能。已提交并推送 3073bf0619a7153372e5a3383bdd3560a6e665a5，按指定版本安装流程部署成功；空闲检查、加密备份及健康检查通过，仅重启 RCM 网页服务。备份：`~/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 
 正式网页 ego-browser 冒烟通过：入口仅存在于右侧，真实三条任务正常显示，编辑打开对应任务详情，管理会话与执行会话按钮独立；未发送消息。浏览器验证空间已关闭。

@@ -12,7 +12,7 @@
 
 - 新增 7 项行为回归：无预算且只设置一次、空文字/过长/忙状态拒绝、超时读取核对、状态不明保留、迟到响应隔离、原生目标不重复启动、附件路由与错误传播。
 - 相关测试通过。独立导出本次暂存快照 `/tmp/rcm-inline-goal-index-20261020` 后完整 npm test：243 个 Node、53 个 Python 通过。共享工作区另一次完整测试为 245 个 Node、53 个 Python 通过（包含另一会话的 2 项计划完成测试）。
-- ego-browser TaskSpace 3；4327、RCM_MOBILE=0、全新绝对路径状态目录。真实原生专用测试会话：01a156f8-a1d0-77a0-b66c-d61ff01fb875。
+- ego-browser TaskSpace 3；4327、RCM_MOBILE=0、全新绝对路径状态目录。真实原生专用测试会话：REDACTED-ID。
 - 首次原生验证证明新建空会话可以设置目标；设置后重复发送普通消息产生 TURN_ACTIVE，草稿保留，随后已按上述原生行为修正。
 - 最终原生发送仅一个 /goal POST，200；参数只有 objective 与 status=active。输入清空且无弹框；模型返回 GOAL_INLINE_FINAL_OK，随后目标为空、会话 idle。未执行文件操作或命令。原生目标返回 tokenBudget=null。
 - 桌面与 390px 页面无横向溢出；目标/计划互斥选择、取消保留文字、键盘导航通过。合成 composition/Enter/229 未发出 POST。截图 `/tmp/rcm-goal-inline-390.png` 和 `/tmp/rcm-goal-inline-desktop.png`。没有 iPhone 真机输入法验收。

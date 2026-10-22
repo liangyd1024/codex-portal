@@ -7,4 +7,4 @@
 - 桌面 1280px、窄屏 390px：计算样式为黑底白字、500 字重，无页面横向溢出，换行正常；Tab 焦点可见。截图 `user-message-desktop.png`、`user-message-mobile.png`。
 - `npm test`：103 项 Node、24 项 Python 通过。未改变异步及输入处理逻辑，未新增真实手机/中文输入法测试。
 
-正式发布 `2ed04c8b54b12bf0d31596b80f128b27ae79c911`：空闲检查、备份、健康检查通过；正式 `/styles.css` 与已验收源码逐字节一致。备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T123357067081Z.tar.gz.age`。真实会话未执行发送验收。
+正式发布 `2ed04c8b54b12bf0d31596b80f128b27ae79c911`：空闲检查、备份、健康检查通过；正式 `/styles.css` 与已验收源码逐字节一致。备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。真实会话未执行发送验收。

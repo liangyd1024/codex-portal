@@ -29,7 +29,7 @@ ego-browser space 69，借用既有 4327 预览的静态资源；所有 API 请�
 
 ## 真实引擎验证
 
-只创建并操作本机专用测试会话 `01a15e91-30e7-7382-9f20-c5f7715d1818`。真实异步题目触发新增 manager/request，提交原问题的 RCM-乙 后触发 manager/requestResolved。原轮次 completed，助手回复“已收到：RCM-乙”。随后目标读取为空，不能将本轮测试写成已核验目标 complete 状态；没有活动测试目标需要停止。
+只创建并操作本机专用测试会话 `REDACTED-ID`。真实异步题目触发新增 manager/request，提交原问题的 RCM-乙 后触发 manager/requestResolved。原轮次 completed，助手回复“已收到：RCM-乙”。随后目标读取为空，不能将本轮测试写成已核验目标 complete 状态；没有活动测试目标需要停止。
 
 测试脚本 `/tmp/rcm-attention-native.mjs`，日志 `/tmp/rcm-attention-native.log`。没有通过真实网页发送答案，没有验证 SSH 通知闭环；不将浏览器模拟与原生适配验证合称真实端到端系统弹窗验收。
 

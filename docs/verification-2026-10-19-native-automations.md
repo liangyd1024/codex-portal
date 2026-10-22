@@ -13,7 +13,7 @@ RCM 提供列表及会话入口，原生桌面负责工具调用、任务持久�
 
 ## 本机真实验证
 
-用户明确授权新建专用测试聊天及其中的测试任务。聊天 ID：`01a15364-8c7f-7581-a2e7-e982e4919400`，名称“RCM 定时任务验证”。只操作此前缀的测试任务；业务任务仅只读展示。
+用户明确授权新建专用测试聊天及其中的测试任务。聊天 ID：`REDACTED-ID`，名称“RCM 定时任务验证”。只操作此前缀的测试任务；业务任务仅只读展示。
 
 1. 原生工具创建桌面聊天；RCM 原生协调通道发送纯文字，得到 `RCM-DESKTOP-BRIDGE-OK`。
 2. 同一通道请求原生工具创建 `rcm-verify-20261019`，初始 PAUSED，每天 23:59。原生回复及只读任务快照确认同一 ID。
@@ -46,6 +46,6 @@ SSH 目标、纯 CLI、账户迁移库、跨版本兼容、跨时区规则、cro
 
 - 正式版本：`d1a986a48846f17ed512b9264f3700a8b0edca22`，已推送 origin/master；包含部署前已经上线的会话发现等功能。
 - 第一次修复版部署被另一条运行会话的空闲检查阻止；等待该会话自然空闲后重试通过。没有停止其他会话或绕过检查。
-- 使用 `node scripts/install-local.mjs --ref d1a986a` 完成加密备份、两次空闲检查、网页服务切换及健康检查。备份：`~/Library/Application Support/RemoteCodexManager/backups/marco-20261019T093023333712Z.tar.gz.age`。
+- 使用 `node scripts/install-local.mjs --ref d1a986a` 完成加密备份、两次空闲检查、网页服务切换及健康检查。备份：`~/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 - 正式 4317 端口 `/api/version` 核对版本正确；ego-browser 实际打开任务列表显示 3 条原生任务、无 RCM-VERIFY 测试任务、无同步错误。正式入口绑定专用测试聊天并读到原始回复，未再创建测试任务。
 - 仅重启 RCM 网页服务，没有重启或修改 Codex 桌面、引擎或原生调度器。文档补充提交无需再部署。

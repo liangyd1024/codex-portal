@@ -12,7 +12,7 @@
 
 - 全量 npm test：160 项 Node + 36 项 Python 通过；日志 `/tmp/rcm-routing-full-tests.log`。
 - 新增测试覆盖临时路由失败恢复、持续只读超时、登录拒绝、连接变化、不重试创建、预检失败允许重试和创建结果未知禁止重复发送。
-- 真实引擎：修复前专用空白会话 `01a14f9e-1aa3-7280-b75a-a7e8f965c332`，耗时 15945ms；修复后 `01a14f9f-0ddb-77a3-b096-d7d404e60dcc`，耗时 16463ms，状态 idle。均未发送任务消息；连接关闭后保留测试记录。不代表真实模型生成已经验证。
+- 真实引擎：修复前专用空白会话 `REDACTED-ID`，耗时 15945ms；修复后 `REDACTED-ID`，耗时 16463ms，状态 idle。均未发送任务消息；连接关闭后保留测试记录。不代表真实模型生成已经验证。
 - 独立开发预览 RCM_PORT=4327、RCM_MOBILE=0、全新 `/tmp/rcm-routing-preview.*` 状态目录。ego-browser 空间 88，实际前端 + fixture 全部验收 API 拦截。桌面预检失败时草稿保留、创建数为 0、发送恢复可用；390px 创建结果未知时发送禁用、核对重试入口可见，宽度 390 无溢出；用户确认核对后重试仅创建 1 个模拟会话、发送 1 次消息，页面无异常。截图 `/tmp/rcm-routing-mobile.png` 已检查，验收空间关闭。
 - 未执行真机 iOS 或中文输入法验收；本次不改变输入事件和页面布局。
 
@@ -23,7 +23,7 @@
 ### 正式部署结果
 
 - 已部署提交 `753867c876b16a5e07870db2842b31cfa4450e0c`，版本健康检查通过。正式 app.js、mobile-ui.js、composer.css 的 SHA-256 与工作区一致，前轮停止按钮和滚动跟随修复一并上线。
-- 部署前加密备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T152812231429Z.tar.gz.age`。
+- 部署前加密备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 - 正式入口恢复连接时仍报告旧订阅中的已归档会话，最终连接成功。没有为清除历史提示修改或恢复这些用户会话。
 - 本次启动的 4327 开发预览已停止；测试目录、空白验收会话和截图均保留。
-- 正式 API 新建验收返回 HTTP 201，耗时 32576ms，会话 `01a14fa1-ac7e-77c3-b124-f008b9b1104c`，状态 idle，未发送任务消息。首次发布后检查遇到 connecting 时未发送创建请求，等待恢复 connected 后仅发送一次创建。创建仍有约 33 秒延迟，未宣称底层网络延迟已消除。
+- 正式 API 新建验收返回 HTTP 201，耗时 32576ms，会话 `REDACTED-ID`，状态 idle，未发送任务消息。首次发布后检查遇到 connecting 时未发送创建请求，等待恢复 connected 后仅发送一次创建。创建仍有约 33 秒延迟，未宣称底层网络延迟已消除。

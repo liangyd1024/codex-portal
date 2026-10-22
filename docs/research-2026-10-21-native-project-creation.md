@@ -2,7 +2,7 @@
 
 ## 结论
 
-网页端可以通过目标机器的原生接口浏览目录、创建目录、登记项目，并在项目中创建会话。本机与 Ally 均取得真实接口回执。无需自建项目数据库，也无需直接写入 Codex 配置。
+网页端可以通过目标机器的原生接口浏览目录、创建目录、登记项目，并在项目中创建会话。本机与 机器 B 均取得真实接口回执。无需自建项目数据库，也无需直接写入 Codex 配置。
 
 桌面自动同步尚未通过：两台机器的原生项目列表已包含测试项目，但桌面 `local-projects` 和 `project-order` 中均没有测试项目。只读检查当前桌面代码也显示，桌面项目创建流程在调用引擎接口之外，还会维护桌面项目缓存、排序和活动项目。不能把引擎成功等同于桌面界面已显示。
 
@@ -20,7 +20,7 @@
 
 ## 实测结果
 
-| 检查 | 本机 | Ally |
+| 检查 | 本机 | 机器 B |
 | --- | --- | --- |
 | 原生读取 HOME 的目录与元数据 | 成功 | 成功 |
 | 创建独立父目录 | 成功 | 成功 |
@@ -37,7 +37,7 @@
 | 桌面持久化项目列表与顺序 | 未包含测试项目 | 未包含测试项目 |
 | 桌面实际可见项目列表 | 工具受限，待人工核对 | 未做远程桌面视觉检查 |
 
-本机 `thread/name/set` 返回 `Too many open files (os error 24)`；随后本机执行工具也间歇无法创建进程。因此命名失败不能归因于项目接口不支持，也不能当成完整创建流程通过。没有为了恢复测试而重启在用服务。Ally 后续命名与读回成功。测试结束关闭了本轮 RPC 连接及临时转发，不停止目标服务。
+本机 `thread/name/set` 返回 `Too many open files (os error 24)`；随后本机执行工具也间歇无法创建进程。因此命名失败不能归因于项目接口不支持，也不能当成完整创建流程通过。没有为了恢复测试而重启在用服务。机器 B 后续命名与读回成功。测试结束关闭了本轮 RPC 连接及临时转发，不停止目标服务。
 
 ## 接口与实施方案
 
@@ -54,14 +54,14 @@
 
 ## 证据与保留项
 
-- 本机项目：`01a15e31-8ce2-7a90-83b9-1be35b3f8357`，名称 `RCM 独立项目同步验收 local`。
-- 本机会话：`01a15e32-e250-7902-a803-c29e40be9e6b`。
-- 本机目录：`/Users/marco/rcm-project-probe-1792581668013/中文 新项目`。
-- Ally 项目：`01a15e32-14fe-7452-84f9-d292fce74049`，名称 `RCM 独立项目同步验收 ally`。
-- Ally 会话：`01a15e33-84a6-7f50-860f-9e60ce27f5a2`，名称 `RCM 新目录项目接口验收 ally`。
-- Ally 目录：`/Users/ally/rcm-project-probe-1792581698479/中文 新项目`。
+- 本机项目：`REDACTED-ID`，名称 `RCM 独立项目同步验收 local`。
+- 本机会话：`REDACTED-ID`。
+- 本机目录：`/Users/local-user/rcm-project-probe-1792581668013/中文 新项目`。
+- 机器 B 项目：`REDACTED-ID`，名称 `RCM 独立项目同步验收 machine-b`。
+- 机器 B 会话：`REDACTED-ID`，名称 `RCM 新目录项目接口验收 machine-b`。
+- 机器 B 目录：`/Users/remote-user/rcm-project-probe-1792581698479/中文 新项目`。
 - 临时探测程序：`/tmp/rcm-project-probe.mjs`、`/tmp/rcm-project-probe-check.mjs`。
-- 原始回执：`/tmp/rcm-project-probe-local.json`、`/tmp/rcm-project-probe-ally.json`。
+- 原始回执：`/tmp/rcm-project-probe-local.json`、`/tmp/rcm-project-probe-machine-b.json`。
 
 保留测试目录、项目和空会话供核对。没有删除文件或目录。以上 ID 与路径仅用于本次验收追溯，不作为产品配置。
 

@@ -12,5 +12,5 @@
 
 - 功能提交 `1f629fac28838929a7169e93f7737af46deeb3f5` 已推送 origin/master，包含此前正式版本 `8399014e6cdccc32436576cb5ae08aa1c2d6d59a`。
 - 永久 update-source 快进后通过标准安装流程完成部署；两次空闲检查、加密备份及健康检查通过，仅豁免当前本机部署会话。只重启 RCM 网页服务。
-- 备份：`~/Library/Application Support/RemoteCodexManager/backups/marco-20261020T153205438994Z.tar.gz.age`。
+- 备份：`~/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 - 正式版本接口与功能提交一致，正式首页及 styles.css 的 SHA-256 与源码一致。独立预览已停止。

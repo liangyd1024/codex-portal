@@ -30,7 +30,7 @@
 
 - 功能提交及正式版本：`fc1f1270deef6183a9d8ea9c182c7071409735f0`，已推送 origin/master。
 - 安装空闲检查通过，仅豁免当前部署会话；未停止目标引擎或其他会话。
-- 部署前加密备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261021T074219565613Z.tar.gz.age`。
+- 部署前加密备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 - 安装健康检查通过；正式 `/api/version` 返回上述版本，`/capacity-retry.js` 返回 200。
 - 正式 `/api/status` 显示 connected，`service.protocolValidation.features.capacityRetry.supported` 为 true。此前提问框字体与输入区占位改动同批上线。
 - 已关闭验收浏览器空间和本轮 4327 预览服务。后续仅补录文档，不再次部署。

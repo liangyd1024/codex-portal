@@ -19,6 +19,6 @@
 
 ## 部署
 
-正式部署版本 `16d096f096172b9edb181dbe2eaff21866cc5114`，已提交并推送 origin/master。安装完成空闲检查、加密备份及版本健康检查，当前部署会话按精确 ID 豁免，未停止原生引擎和任务。备份：`~/Library/Application Support/RemoteCodexManager/backups/marco-20261020T075437377632Z.tar.gz.age`。无 fixture 的正式浏览器页确认版本一致、自动恢复连接、新建入口可用、消息容器 scroll-behavior=auto；空间 21 已关闭。
+正式部署版本 `16d096f096172b9edb181dbe2eaff21866cc5114`，已提交并推送 origin/master。安装完成空闲检查、加密备份及版本健康检查，当前部署会话按精确 ID 豁免，未停止原生引擎和任务。备份：`~/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。无 fixture 的正式浏览器页确认版本一致、自动恢复连接、新建入口可用、消息容器 scroll-behavior=auto；空间 21 已关闭。
 
 部署前正式版本 3f7ef8a02e282b70e05b860254db7853e02d85f0；master 已包含该版本。Git 默认代理 SSH 超时，使用单次禁用 ProxyCommand 的 SSH 成功拉取最新 origin/master，未修改用户 SSH 配置。

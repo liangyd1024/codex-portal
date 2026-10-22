@@ -23,7 +23,7 @@
 
 ### 网页发布结果
 
-启动脚本已随 `ec67106dd8ea5d0d11e6a5a42c36cc4c024c1ae9` 安装到正式网页，版本健康检查通过。部署前备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T153735163355Z.tar.gz.age`。此次仅重启网页，未停止专用引擎；待用户按维护规则确认后应用新调度类别并验收。
+启动脚本已随 `ec67106dd8ea5d0d11e6a5a42c36cc4c024c1ae9` 安装到正式网页，版本健康检查通过。部署前备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。此次仅重启网页，未停止专用引擎；待用户按维护规则确认后应用新调度类别并验收。
 
 ## 2026-10-19 正式引擎维护与验收
 
@@ -32,7 +32,7 @@
 - 正式网页版本仍为 ec67106dd8ea5d0d11e6a5a42c36cc4c024c1ae9；原有部署前备份见上节，本轮只进行引擎维护，无新代码部署。
 - 新引擎 PID 1596，启动时间 2026-10-19 11:58:56 +08:00，连接恢复于 11:58:58；plist ProcessType=Interactive，launchctl 实际 spawn type=interactive (4)，运行正常。
 - 正式 HTTP 新建接口连续 3 次：163ms、199ms、266ms，均 HTTP 201，无路由超时或创建结果未知错误。参数为仓库 cwd、gpt-6.1-sol、medium、full；未将额外命名请求计入创建耗时。
-- 测试会话分别为 01a15253-dd7e-70b0-979f-64df7c9125b5、01a15253-de2c-7132-bc95-eabc65d6d897、01a15253-deff-7602-977c-31a8eb4ec603。随后逐个通过正式详情接口读取：160ms、80ms、69ms，均 HTTP 200，无空 rollout 错误。
+- 测试会话分别为 REDACTED-ID、REDACTED-ID、REDACTED-ID。随后逐个通过正式详情接口读取：160ms、80ms、69ms，均 HTTP 200，无空 rollout 错误。
 - 这些是真实正式服务空白会话验证，没有发送模型任务消息；没有重新进行浏览器点击、手机真机或模型首字耗时测试，不能将接口耗时当作手机网络端到端耗时。
 - 恢复状态保留既有归档/缺失会话的历史订阅错误，以及维护窗口内的连接错误记录；这些与上述新建请求不同，未擅自删除历史状态。
 - 本轮仅追加验收文档，无代码变更，无需重新运行应用测试或部署网页。

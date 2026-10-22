@@ -17,4 +17,4 @@
 
 ## 正式部署
 
-9e11b043f6be10a51462836eeb13d950646cdd8c 已推送并从永久 update-source 按标准安装流程部署。原正式 cc4efe22b6ccca184d827e44308557ad639d9f49 包含在新 master 中。空闲检查仅精确豁免当前会话，其他会话空闲；未停止目标引擎或任务。部署前备份为 backups/marco-20261020T084630311341Z.tar.gz.age。健康检查通过，正式 /api/version 返回目标提交，正式静态模块已无独立检查按钮。临时 launchd 验证 job 和 ego-browser 空间已关闭。
+9e11b043f6be10a51462836eeb13d950646cdd8c 已推送并从永久 update-source 按标准安装流程部署。原正式 cc4efe22b6ccca184d827e44308557ad639d9f49 包含在新 master 中。空闲检查仅精确豁免当前会话，其他会话空闲；未停止目标引擎或任务。部署前备份为 backups/MACHINE-TIMESTAMP.tar.gz.age。健康检查通过，正式 /api/version 返回目标提交，正式静态模块已无独立检查按钮。临时 launchd 验证 job 和 ego-browser 空间已关闭。

@@ -19,4 +19,4 @@
 
 ## 部署
 
-部署前正式版本为 `2bd9dd76797bcac5568fdd31af453930ccab49b9`，修复基于包含该版本的最新 master，保留已上线功能。正式部署 `66cc8db114996c716ebb75b5dfb3de930c0c9c07` 已完成并推送 origin/master。标准安装通过两次空闲检查、加密备份及健康检查，仅豁免当前部署会话。备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T143627875929Z.tar.gz.age`。4317 的 `/api/version` 已核对，`/login.js`、`/bootstrap.js` 均返回 200 与 JavaScript MIME，首页引用新启动脚本。仅重启网页服务，预览进程 81909 已关闭。
+部署前正式版本为 `2bd9dd76797bcac5568fdd31af453930ccab49b9`，修复基于包含该版本的最新 master，保留已上线功能。正式部署 `66cc8db114996c716ebb75b5dfb3de930c0c9c07` 已完成并推送 origin/master。标准安装通过两次空闲检查、加密备份及健康检查，仅豁免当前部署会话。备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。4317 的 `/api/version` 已核对，`/login.js`、`/bootstrap.js` 均返回 200 与 JavaScript MIME，首页引用新启动脚本。仅重启网页服务，预览进程 81909 已关闭。

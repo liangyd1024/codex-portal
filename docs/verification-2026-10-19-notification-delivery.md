@@ -8,4 +8,4 @@
 
 验证：npm test 218 Node / 53 Python 通过，日志 /tmp/rcm-notification-delivery-final-tests.log；新增稳定 ID/旧 alias 兼容、无效确认、构造异常、异步错误、超时、成功后去重测试。ego-browser 空间117、独立4327预览与 fixture：首次失败无确认，重放成功后按原始服务器键确认；无脚本错误。桌面及390px无横向溢出、测试按钮键盘可触发且焦点可见。截图 /tmp/rcm-delivery-desktop.png、/tmp/rcm-delivery-mobile.png。通知 API 为模拟验证；用户提供了真实系统设置前的结果。未修改输入流程，未复测中文输入法。预览进程70108已通过原执行工具Ctrl+C退出，浏览器验收空间已关闭。
 
-部署：5dc460ade17bafe3e1e85071871861ee175e569e 已推送 origin/master 并通过标准安装流程部署；基线 d1a986a48846f17ed512b9264f3700a8b0edca22 为其祖先，保留当前 master 其他已提交功能。备份 /Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T095400380911Z.tar.gz.age。两次空闲检查及健康检查通过，正式 notification-delivery.js 返回200且内容为新实现，仅重启 RCM 网页服务。
+部署：5dc460ade17bafe3e1e85071871861ee175e569e 已推送 origin/master 并通过标准安装流程部署；基线 d1a986a48846f17ed512b9264f3700a8b0edca22 为其祖先，保留当前 master 其他已提交功能。备份 /Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age。两次空闲检查及健康检查通过，正式 notification-delivery.js 返回200且内容为新实现，仅重启 RCM 网页服务。

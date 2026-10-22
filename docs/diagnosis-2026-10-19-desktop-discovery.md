@@ -2,9 +2,9 @@
 
 ## 核查结果与前次结论修正
 
-用户会话「为什么现在任务的通知没有收到呢」ID 为 `01a15344-61fa-7003-8c81-a37b9475f4c4`。只读 state_5.sqlite 显示 cwd 正确、archived=0、project_id=`01a14a84-7ba8-7220-93f4-1c4158aed87b`，与同项目另一网页会话一致。用户确实选了项目，创建未丢失项目参数。
+用户会话「为什么现在任务的通知没有收到呢」ID 为 `REDACTED-ID`。只读 state_5.sqlite 显示 cwd 正确、archived=0、project_id=`REDACTED-ID`，与同项目另一网页会话一致。用户确实选了项目，创建未丢失项目参数。
 
-同一桌面 list_threads 工具先返回该会话 projectId=null，后来返回桌面项目 ID `adca835c-405a-41f9-bf89-ed31e9dbb7a2`。用户同时报告后来显示。原生数据库的项目 ID 无变化，说明至少存在桌面读取/缓存/归属识别延迟。不能把工具 projectId=null 直接等同于所有桌面 UI 都没有项目：旧桌面会话也会返回 null，而界面可能按工作目录回退分组。
+同一桌面 list_threads 工具先返回该会话 projectId=null，后来返回桌面项目 ID `REDACTED-ID`。用户同时报告后来显示。原生数据库的项目 ID 无变化，说明至少存在桌面读取/缓存/归属识别延迟。不能把工具 projectId=null 直接等同于所有桌面 UI 都没有项目：旧桌面会话也会返回 null，而界面可能按工作目录回退分组。
 
 本机项目迁移状态 threadAssignmentsMigrated=false，threadAssignmentsReadMigrated 缺失，但这只是归属同步链路的条件，不足以独立证明此次延迟全部由迁移导致。前次回复将其直接作为根因过于确定。没有当时完整事件时间线，无法确认是哪一次桌面读取最终触发显示。
 
@@ -28,7 +28,7 @@
 
 - 定向测试：IPC 帧、持久化检查、只发送缓存通知、没有数据库写入、不安全 socket 拒绝；首条成功消息仅提示一次、发送失败不消耗提示、标题顺序、落盘重试、连接代次变化、诊断错误。
 - 初次全量 npm test：202 Node + 47 Python 全通过；随后新增 manager 集成回归，5 项 discovery 测试通过。
-- 真实预览：4327、RCM_MOBILE=0、全新 `/tmp/rcm-discovery-preview.*` 状态目录；仅创建专用会话「RCM 桌面发现同步验收 1019」（01a15362-c673-7e81-8875-d1b363e8506e）。创建 583ms、首条消息提交累计 629ms，项目 ID 与选择一致，模型轮次完成。
+- 真实预览：4327、RCM_MOBILE=0、全新 `/tmp/rcm-discovery-preview.*` 状态目录；仅创建专用会话「RCM 桌面发现同步验收 1019」（REDACTED-ID）。创建 583ms、首条消息提交累计 629ms，项目 ID 与选择一致，模型轮次完成。
 - 原生 IPC 未报告刷新错误，桌面 list_threads 可发现测试会话，但两次读取 projectId 仍为 null。因此不能标记“桌面项目归属立即同步”通过，也不能证明 UI 延迟已完全消除。测试过程中出现独立的 codex_apps 30 秒工具目录超时，已作为原生连接器诊断保留。
 - 桌面 UI 读取被 Computer Use 工具明确拒绝访问 com.openai.codex，未绕过。此次无 UI 布局/输入修改，未开展浏览器或中文输入法验收，不能把工具列表等同于截图验收。
 - 证据：`/tmp/rcm-discovery-probe.json`、`/tmp/rcm-discovery-tests.log`、`/tmp/rcm-discovery-change.diff`。
@@ -39,4 +39,4 @@
 
 功能提交 ad26f135eb3763da8511a76a609fa3d0c53aed20 已推送 origin/master。共享工作区存在另一会话未提交的 scripts/desktop-session.py，安装程序按规则拒绝脏目录；随后从当前 master 创建只含已提交内容的独立本地克隆，使用原安装脚本部署该同一提交，未修改或暂存其他会话文件。
 
-安装通过两次入口空闲检查、加密备份及版本健康检查。备份 `~/Library/Application Support/RemoteCodexManager/backups/marco-20261019T090454000525Z.tar.gz.age`。仅重启 RCM 网页，未停止 Codex 应用或引擎。正式版本接口确认 ad26f13；正式环境没有再次发送模型消息，不宣称正式桌面项目归属端到端通过。
+安装通过两次入口空闲检查、加密备份及版本健康检查。备份 `~/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。仅重启 RCM 网页，未停止 Codex 应用或引擎。正式版本接口确认 ad26f13；正式环境没有再次发送模型消息，不宣称正式桌面项目归属端到端通过。

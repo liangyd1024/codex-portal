@@ -22,11 +22,11 @@
 ## 正式部署与连续自动刷新
 
 - 已从 master 提交 `231c769c48be3d1d66ab503eb7d16839f0392499` 正式部署，安装器空闲检查、加密备份和版本健康检查通过。
-- 备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T125328437672Z.tar.gz.age`。
+- 备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 - 启动后等待原有订阅恢复；恢复期间有旧记录不存在、已归档及 thread/resume 超时诊断。没有停止目标引擎或运行任务，也没有将恢复期间尚未触发的自动刷新计为成功。
 - 连接恢复后，正式页面保持每 30 秒自动刷新，未手动调用模型接口。浏览器监测实际 fetch 请求并观察页面错误提示。
 - 北京时间 20:55:16、20:55:46、20:56:16、20:56:46、20:57:16 共五轮，模型强制刷新全部 HTTP 200，分别 506、954、227、324、2095 ms；观察期间无模型刷新失败或超时提示。
-- 证据： [请求记录](master-auto-refresh-evidence-2026-10-18/requests.json)、[正式页面](master-auto-refresh-evidence-2026-10-18/production.png)。五轮结果仅证明本次观察窗口，不保证未来网络不会超时。
+- 证据： [请求记录](master-auto-refresh-evidence-2026-10-18/requests.json)、正式页面（含个人信息，截图已移除）。五轮结果仅证明本次观察窗口，不保证未来网络不会超时。
 - 所有旧工作树中保留的未提交文件已逐文件核对与 master 一致；没有删除或重置旧工作树。主目录干净，所有本地分支提交被 master 包含。后续仅新增本段验收文档与证据，不重复部署文档提交。
 
 ### 截图中的额外超时提示

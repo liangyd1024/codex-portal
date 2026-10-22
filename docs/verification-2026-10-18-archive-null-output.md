@@ -2,7 +2,7 @@
 
 ## 根因和实现
 
-- 对截图中的报错会话 `01a14e0b-13c8-7992-b221-99d2ad802915` 实际执行完整历史读取，复现 `passive-store.py` 的 `len(text)` 对 `None` 报错。输出记录允许 `aggregatedOutput: null`，原逻辑只在局部变量计算哈希时归一化，压缩阶段仍使用原始空值。现统一归一化输出，并保持增量 token 语义。
+- 对截图中的报错会话 `REDACTED-ID` 实际执行完整历史读取，复现 `passive-store.py` 的 `len(text)` 对 `None` 报错。输出记录允许 `aggregatedOutput: null`，原逻辑只在局部变量计算哈希时归一化，压缩阶段仍使用原始空值。现统一归一化输出，并保持增量 token 语义。
 - 截图中的已归档验收会话在 `state_5.sqlite` 中已标为归档。网页版通过专用引擎写入成功，但没有发送桌面端使用的 `thread-archived` / `thread-unarchived` IPC 广播。依据本机已安装桌面端资源中的协议及处理器实现，补齐初始化、归档/恢复广播和顺序确认。
 - 通知在目标机器上执行，使用配置 HOME，检查 socket 所有者与父目录权限；数据库只读核对状态，不启动桌面进程、不改原生数据库。目标机器的本地桌面使用其 `local` host 标识，与网页连接 ID 无关。
 - 归档/恢复 RPC 超时后只读核对持久化状态，确认成功才通知；未确认时保留未知结果提示，不重放写操作。通知失败明确提示已归档/恢复但桌面通知失败，不把部分成功显示为完全失败。
@@ -25,6 +25,6 @@
 
 - 功能提交：`595e53e08dee1953694b5695984f4e45e9d38656`，已推送 `origin/master`。从干净 master 副本 `/tmp/rcm-archive-release-595e53e` 再跑全量测试，120 Node + 29 Python 通过，日志 `/tmp/rcm-archive-release-tests.log`。
 - 通过安装脚本原有空闲检查、加密备份及健康检查，正式 4317 `/api/version` 返回该提交。保留原正式版本 `a1bad52` 的全部功能，Git 祖先关系已核对。
-- 备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T134451848588Z.tar.gz.age`。
+- 备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 - 重启后首次请求因尚未连接返回 503；通过正常网页连接流程恢复后，原报错会话正式详情接口 HTTP 200、无 error。此结果与预览验证分开记录。
 - 验收 TaskSpace 已结束，独立预览服务已停止。共享工作区另一会话的未提交文件保留。桌面视觉与 SSH 双机端到端验证边界如上。

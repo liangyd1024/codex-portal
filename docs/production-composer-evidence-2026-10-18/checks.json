@@ -6,7 +6,7 @@
     ],
     "version": {
       "version": "12bcbaa02f99180e7acd60e9decd3ed7c712b6b4",
-      "machineId": "marco"
+      "machineId": "machine-a"
     },
     "fixture": false,
     "form": {
@@ -77,10 +77,10 @@
           "url": "/api/threads?host=local",
           "status": 201,
           "access": "full",
-          "threadId": "01a14efd-ba2d-7240-a682-1e84ef04fc48"
+          "threadId": "REDACTED-ID"
         },
         {
-          "url": "/api/threads/01a14efd-ba2d-7240-a682-1e84ef04fc48/message?host=local",
+          "url": "/api/threads/REDACTED-ID/message?host=local",
           "status": 200,
           "access": "full",
           "mode": "default",
@@ -90,7 +90,7 @@
               "length": 12799
             }
           ],
-          "turnId": "01a14efe-39a4-7b02-a578-2dbc192d816c"
+          "turnId": "REDACTED-ID"
         }
       ],
       "errors": [],
@@ -105,10 +105,10 @@
     "images": 0
   },
   "enginePolicy": {
-    "threadId": "01a14efd-ba2d-7240-a682-1e84ef04fc48",
+    "threadId": "REDACTED-ID",
     "contexts": [
       {
-        "turn_id": "01a14efe-39a4-7b02-a578-2dbc192d816c",
+        "turn_id": "REDACTED-ID",
         "approval_policy": "never",
         "sandbox_policy": {
           "type": "danger-full-access"
@@ -168,8 +168,8 @@
     "pendingRequests": []
   },
   "completedTurn": {
-    "threadId": "01a14efd-ba2d-7240-a682-1e84ef04fc48",
-    "turnId": "01a14efe-39a4-7b02-a578-2dbc192d816c",
+    "threadId": "REDACTED-ID",
+    "turnId": "REDACTED-ID",
     "status": "completed",
     "command": "/bin/zsh -lc 'printf WEB_FULL_ACCESS_FINAL_OK'",
     "exitCode": 0,

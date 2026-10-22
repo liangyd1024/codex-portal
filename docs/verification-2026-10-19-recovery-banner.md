@@ -27,6 +27,6 @@
 
 ## 重新部署完成（2026-10-19 14:50 北京时间）
 
-用户要求重新部署后，确认 local / ally 均无活动任务和待处理请求，工作目录干净，拉取 origin/master 无新增提交。正式原版本 db88b2d，最新 master 0fafc97 包含该版本及 ab0b3ed 恢复提示修复。部署前 npm test 全部通过：186 Node + 45 Python，日志 `/tmp/rcm-redeploy-tests-20261019.log`。
+用户要求重新部署后，确认 local / machine-b 均无活动任务和待处理请求，工作目录干净，拉取 origin/master 无新增提交。正式原版本 db88b2d，最新 master 0fafc97 包含该版本及 ab0b3ed 恢复提示修复。部署前 npm test 全部通过：186 Node + 45 Python，日志 `/tmp/rcm-redeploy-tests-20261019.log`。
 
-执行现有安装脚本成功安装 `0fafc97ab2829d8570a8cac06a32b01fb51466a2`，部署前加密备份 `/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T064955462179Z.tar.gz.age`。脚本健康检查通过，随后真实 `/api/version` 返回目标提交，`/api/status` 显示 connected、service.running=true；正式 recovery-state.js 已为修复版。8 条缺失历史记录的恢复错误仍保留，未删除或声称修复其历史数据。手机浏览器刷新一次加载新版后，正常会话不再显示这些无关恢复失败的全局横幅。本轮未追加 iPhone Chrome 真机验证。
+执行现有安装脚本成功安装 `0fafc97ab2829d8570a8cac06a32b01fb51466a2`，部署前加密备份 `/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。脚本健康检查通过，随后真实 `/api/version` 返回目标提交，`/api/status` 显示 connected、service.running=true；正式 recovery-state.js 已为修复版。8 条缺失历史记录的恢复错误仍保留，未删除或声称修复其历史数据。手机浏览器刷新一次加载新版后，正常会话不再显示这些无关恢复失败的全局横幅。本轮未追加 iPhone Chrome 真机验证。

@@ -19,8 +19,8 @@
 ## 正式部署结果
 
 - 正式发布：`004f9a899b3771754c146757fd5c05364662b1fd`，以上一正式版 `d871d54383e46301682b57e5c8bb45d5fdfd9d8a` 为父提交。
-- 备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T122527662629Z.tar.gz.age`。
+- 备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 - 首次安装被重连状态的空闲检查阻止；连接自然恢复后重新运行标准安装，备份和健康检查通过。未停止目标引擎。
 - 合入最新正式版后，首次全测遇到 Node test runner IPC 反序列化异常；原样重跑全量测试通过 98 项 Node 和 24 项 Python。
-- 新服务恢复原订阅期间约一分钟显示连接中；恢复后真实接口与正式网页均显示 9 个自定义分区。390px 正式页面截图见 `sidebar-stability-production-390.png`。
+- 新服务恢复原订阅期间约一分钟显示连接中；恢复后真实接口与正式网页均显示 9 个自定义分区。390px 正式页面截图见 `[含个人信息的截图已移除]`。
 - 安装目录全部 `public/` 文件与上一正式版逐一比较，差异为零；输入框按钮对齐修复保持。

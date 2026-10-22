@@ -20,7 +20,7 @@
 ## 交付及最终状态
 
 - `cfb0f5d6c45156321fab697cade92f1c4d40b6ba` 已提交并推送 master，从干净 master 副本验证和正式部署。全量 135 Node + 29 Python 通过，日志 `/tmp/rcm-archive-followup-release-tests.log`。其他会话的图片功能修改（含同一 manager 文件的 image 方法）未暂存，保留在共享目录。
-- 安装脚本空闲检查、备份、版本健康检查通过。备份 `/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T141217375206Z.tar.gz.age`，正式 `/api/version` 返回该功能提交。
+- 安装脚本空闲检查、备份、版本健康检查通过。备份 `/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`，正式 `/api/version` 返回该功能提交。
 - 本轮未完成“网页版归档后桌面立即消失”的视觉验收：原测试会话被桌面持锁，归档被明确拒绝；另建专用会话的请求发生创建超时，查询未找到指定名称，未重放创建。
 - 为恢复原状态，通过官方 `set_thread_archived` 将原测试会话归档，随后官方桌面活动列表不再包含它。此为桌面入口操作，不计为网页版归档成功。用户“已显示”的确认仅对应归档前恢复阶段。
 - 桌面自动化限制及跨进程写入锁边界未解除。不得以数据库一致或 IPC router 确认代替最终视觉验收。
@@ -30,6 +30,6 @@
 
 - 已确认桌面内置 `codex-app-tools/0.1.6/server.mjs` 经本地管道发送 `tools/call`，由桌面执行 `set_thread_archived`。它和现有 `thread-archived` IPC 列表失效广播是不同通道；广播不能替代归档写入。
 - 对当前 `/tmp/codex-app-tools/*.sock` 用普通 Python 客户端仅发送只读 `tools/list`，连接在返回响应前关闭，未发送归档请求。
-- 桌面日志 `~/Library/Logs/com.openai.codex/2026/10/18/codex-desktop-03a60c6c-337f-4a3f-894e-beccc4ead45f-83074-t0-i1-000005-2.log` 在 `2026-10-18T14:22:25.473Z` 记录 `dynamic_app_tools_peer_rejected reason=missing-code-signing-identity`。桌面代码也确认该管道执行 `socketPeerAuthorizer`，拒绝未授权客户端。
+- 桌面日志 `~/Library/Logs/com.openai.codex/2026/10/18/codex-desktop-REDACTED-ID-83074-t0-i1-000005-2.log` 在 `2026-10-18T14:22:25.473Z` 记录 `dynamic_app_tools_peer_rejected reason=missing-code-signing-identity`。桌面代码也确认该管道执行 `socketPeerAuthorizer`，拒绝未授权客户端。
 - 因此不能把会话内可用的官方工具当作网页服务可直接使用的外部接口。未通过替换执行器、伪造身份、修改签名检查或修改桌面安装文件绕过该授权边界。
 - 本轮只补充调查证据，没有新增提示或宣称功能修复，没有重新部署。网页版持锁归档及双端视觉同步仍未通过实测；接入该路径需要桌面提供允许外部客户端使用的归档接口或正式授权机制。

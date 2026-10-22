@@ -52,8 +52,8 @@
 ## 正式部署完成
 
 - 部署提交 `1a9a3899ab3a093e8a8b20b0cdac95782ebaba75` 已推送 origin/master。标准安装的空闲检查、备份、网页重启与健康检查通过。
-- 部署前备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261022T040420592974Z.tar.gz.age`。日志 `/tmp/rcm-login-production-install.log`。
+- 部署前备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。日志 `/tmp/rcm-login-production-install.log`。
 - 正式 `/api/version` 与部署提交一致。首页、app.js、account-usage.js、shared/account-state.js 的 HTTP 内容与已验证源码逐字节相同。
-- 本机及 Ally 均 connected，待处理请求为零，控制会话均 idle。本机专用引擎仍为 PID 57111，未因收尾重试或网页部署再次重启；Ally 引擎未重启。
+- 本机及 机器 B 均 connected，待处理请求为零，控制会话均 idle。本机专用引擎仍为 PID 57111，未因收尾重试或网页部署再次重启；机器 B 引擎未重启。
 - 正式本机账号已切为用户当前新账号，quota 可读、loginRecovery 为 null。侧栏返回 41 个原生项目、9 个自定义分区且 accountLayoutAvailable 为 true。
 - 原失败消息没有重发；未向业务会话提交模型轮次。真实验证覆盖登录恢复、用量、项目和分区读取；API Key 往返切换及模型发送端到端仍限于未执行/模拟范围，不标为真实通过。

@@ -4,7 +4,7 @@
 
 - 原版本：`7b27d4cb8688d018100e6eeec87d370bdb69c6b1`。
 - 本次版本：`c695f102883611bd3c49a45a74965cc3f275b403`，分支 `codex/composer-full-access`。
-- 部署前加密备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T120339318415Z.tar.gz.age`。
+- 部署前加密备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 - 按标准命令 `node scripts/install-local.mjs --ref c695f10` 安装已提交版本；空闲检查通过，未跳过备份或健康检查，未停止目标引擎。
 
 ## 已上线
@@ -22,8 +22,8 @@
 - 发布版本 92 项 Node、24 项 Python 测试全部通过，详见 [权限验收](verification-2026-10-18-full-access.md) 和 [输入修复验收](verification-2026-10-18-composer-fix.md)。
 - 正式 `/api/version` 返回本次完整提交；index.html、app.js、composer.js、composer.css、attachments.js、connection-state.js 均 HTTP 200，SHA-256 与发布工作树一致，CSP 保持原策略。
 - Ego Lite 打开真实 4317 页面，确认没有模拟 API，页面不存在权限选择控件。
-- 服务重启期间首次历史读取为暂未连接；自动重连后本机恢复 connected、pendingRequests=0。原会话 `01a14e0b-13c8-7992-b221-99d2ad802915` 读取 HTTP 200、idle、后台列表为空。
-- LAN `https://192.168.1.14:4319` 使用配置的 CA 校验，返回 HTTP 200。
+- 服务重启期间首次历史读取为暂未连接；自动重连后本机恢复 connected、pendingRequests=0。原会话 `REDACTED-ID` 读取 HTTP 200、idle、后台列表为空。
+- LAN `https://192.0.2.1:4319` 使用配置的 CA 校验，返回 HTTP 200。
 - 浏览器验收空间及本轮临时 4327 预览进程均已关闭，没有删除测试目录或证据。
 
 本轮未做实体手机、Safari/Android 或 SSH 图片端到端测试；图片发送和固定权限请求的交互验证使用模拟 API，不宣称真实模型发送已重新验收。现有网页标签页需要刷新加载新资源。

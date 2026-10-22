@@ -21,4 +21,4 @@
 
 已通过 `node scripts/install-local.mjs --ref 28f9e23` 完成部署，空闲检查、加密备份、网页服务重启和健康检查均成功。正式 `/api/version` 返回 `28f9e23f6fbb1a61a8120ef4ef099074e6c9155e`，正式静态模块已包含静默加载逻辑。
 
-部署前备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T073321677528Z.tar.gz.age`。没有停止或重启目标 Codex 引擎。验收结束后已停止本次 4327 预览进程，关闭测试浏览器空间；保留测试截图和记录。
+部署前备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。没有停止或重启目标 Codex 引擎。验收结束后已停止本次 4327 预览进程，关闭测试浏览器空间；保留测试截图和记录。

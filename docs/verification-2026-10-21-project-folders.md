@@ -33,13 +33,13 @@
 
 ## 真实服务验证
 
-独立脚本 `/tmp/rcm-folder-adapter-check.mjs` 通过现有传输直接调用本次新增后端模块，连接已运行的本机和 Ally 引擎。没有重启引擎，没有发送模型轮次。此项是原生适配模块实测；HTTP 路由使用上面的自动化模拟，不冒充完整真实浏览器端到端验收。
+独立脚本 `/tmp/rcm-folder-adapter-check.mjs` 通过现有传输直接调用本次新增后端模块，连接已运行的本机和 机器 B 引擎。没有重启引擎，没有发送模型轮次。此项是原生适配模块实测；HTTP 路由使用上面的自动化模拟，不冒充完整真实浏览器端到端验收。
 
 两端均成功：浏览既有测试父目录、创建中文及空格子目录、登记项目、重复打开复用相同项目、重新读回空目录。
 
-- 本机目录：`/Users/marco/rcm-project-probe-1792581668013/网页入口验收 1792585758811`；项目 `01a15e6f-f85f-7e21-b71c-a38125a3889e`。
-- Ally 目录：`/Users/ally/rcm-project-probe-1792581698479/网页入口验收 1792585789306`；项目 `01a15e70-7768-78c0-b028-a4dd22bd26db`。
-- 原始回执：`/tmp/rcm-folder-adapter-local.json`、`/tmp/rcm-folder-adapter-ally.json`。
+- 本机目录：`/Users/local-user/rcm-project-probe-1792581668013/网页入口验收 1792585758811`；项目 `REDACTED-ID`。
+- 机器 B 目录：`/Users/remote-user/rcm-project-probe-1792581698479/网页入口验收 1792585789306`；项目 `REDACTED-ID`。
+- 原始回执：`/tmp/rcm-folder-adapter-local.json`、`/tmp/rcm-folder-adapter-machine-b.json`。
 - 本机已生成的实际协议通过新增能力验证，policy 8、projectFolders supported=true。远程实际调用成功。没有修改 Codex 二进制、数据库或全局配置。
 
 上述目录和项目保留供核对，不做批量清理。独立连接及临时转发在脚本结束时关闭，不停止目标服务。

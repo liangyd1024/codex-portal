@@ -10,8 +10,8 @@
 
 使用配置中的本机连接，通过既有本机传输和 RPC 创建独立测试会话。没有接管或修改业务会话，没有重启网页、桌面或目标服务。
 
-- 测试会话：`01a15e7e-3528-7600-bf30-cf074c225779`。
-- 测试轮次：`01a15e7e-375b-7520-8b07-34a655548392`。
+- 测试会话：`REDACTED-ID`。
+- 测试轮次：`REDACTED-ID`。
 - `thread/goal/set` 设置专用验收目标，要求调用异步提问工具并等待回答。
 - 引擎返回真实 `agentMessage.questions`，题目为“验收代号选哪个？”，选项为 RCM-甲、RCM-乙。
 - 调用现有 `Manager.answerQuestions`，以原 item ID、问题 ID 和 expectedTurnId 提交 RCM-乙。该验证使用原生历史读取，没有通过网页 HTTP 提交真实答案。

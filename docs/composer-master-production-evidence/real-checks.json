@@ -15,24 +15,24 @@
       "method": "POST",
       "status": 201,
       "ms": 23855,
-      "id": "01a14f15-694e-77b2-87e7-d3aea23e9547",
+      "id": "REDACTED-ID",
       "access": "full"
     },
     {
-      "url": "/api/threads/01a14f15-694e-77b2-87e7-d3aea23e9547/message?host=local",
+      "url": "/api/threads/REDACTED-ID/message?host=local",
       "method": "POST",
       "status": 200,
       "ms": 3739,
-      "turnId": "01a14f15-c633-7fe0-b273-a7ba412a4d62",
+      "turnId": "REDACTED-ID",
       "access": "full",
       "images": 0
     },
     {
-      "url": "/api/threads/01a14f15-694e-77b2-87e7-d3aea23e9547/message?host=local",
+      "url": "/api/threads/REDACTED-ID/message?host=local",
       "method": "POST",
       "status": 200,
       "ms": 35635,
-      "turnId": "01a14f18-85fe-7792-a696-24d313f1fa6d",
+      "turnId": "REDACTED-ID",
       "access": "full",
       "images": 1
     }

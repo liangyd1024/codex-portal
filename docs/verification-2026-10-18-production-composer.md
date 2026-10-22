@@ -4,7 +4,7 @@
 
 正式页面 `http://127.0.0.1:4317` 使用 ego-browser TaskSpace 61 实测。样式、原生剪贴板图片、新建及发送固定完全访问均通过。最终验收版本为 `12bcbaa02f99180e7acd60e9decd3ed7c712b6b4`。
 
-最终版本真实测试会话 `01a14efd-ba2d-7240-a682-1e84ef04fc48`，轮次 `01a14efe-39a4-7b02-a578-2dbc192d816c`。页面没有 API fixture；只用透明 fetch 记录器保存请求参数与响应摘要，所有创建、发送及推理均由真实服务完成。
+最终版本真实测试会话 `REDACTED-ID`，轮次 `REDACTED-ID`。页面没有 API fixture；只用透明 fetch 记录器保存请求参数与响应摘要，所有创建、发送及推理均由真实服务完成。
 
 ## 三项实测
 
@@ -12,9 +12,9 @@
 - **粘贴图片**：通过浏览器原生剪贴板写入 PNG，聚焦输入框并按 Cmd+V。缩略图、预览解码、Escape 关闭、移除均正常；无 CSP 违规或浏览器脚本错误。真实新会话首条消息包含转换后的 JPEG data URL。模型回复 `RCM–FINAL–4827，红色，WEB_FULL_ACCESS_FINAL_OK`，证明图片内容已到达模型。发送成功才清空草稿和图片。
 - **完全访问**：新会话页面及输入区均无授权方式控件。新建请求 HTTP 201、首条发送 HTTP 200，均携带 `access: full`。从该轮原生 rollout 核对：`approval_policy: never`，`sandbox_policy.type: danger-full-access`。只读命令 `printf WEB_FULL_ACCESS_FINAL_OK` 退出码 0，全程无审批请求。
 
-首次在 `b44e325` 上也完成真实识图与只读命令验证，会话为 `01a14ef2-3aba-73c3-a787-ac77c7effbf5`。最终合并版本再次完整执行了上述新建与发送流程，未只依赖早期结果。
+首次在 `b44e325` 上也完成真实识图与只读命令验证，会话为 `REDACTED-ID`。最终合并版本再次完整执行了上述新建与发送流程，未只依赖早期结果。
 
-截图：[最终桌面附图](production-composer-evidence-2026-10-18/desktop-final.png)、[最终 390px 附图](production-composer-evidence-2026-10-18/mobile-final.png)、[新会话首条消息](production-composer-evidence-2026-10-18/new-chat-final.png)、[修复前按钮位置](production-composer-evidence-2026-10-18/desktop-attachment-before.png)。请求、布局和权限的脱敏摘要见 [checks.json](production-composer-evidence-2026-10-18/checks.json)。
+截图：最终桌面附图（含个人信息，截图已移除）、[最终 390px 附图](production-composer-evidence-2026-10-18/mobile-final.png)、新会话首条消息（含个人信息，截图已移除）、修复前按钮位置（含个人信息，截图已移除）。请求、布局和权限的脱敏摘要见 [checks.json](production-composer-evidence-2026-10-18/checks.json)。
 
 ## 并行发布与正式部署
 
@@ -22,7 +22,7 @@
 
 按标准命令 `node scripts/install-local.mjs --ref 12bcbaa02f99180e7acd60e9decd3ed7c712b6b4` 部署，空闲检查、加密备份和健康检查通过。备份：
 
-`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T122848688268Z.tar.gz.age`
+`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`
 
 正式 `/api/version` 返回最终提交，`app.js`、`composer.js`、`composer.css`、`attachments.js` 的实际响应 SHA-256 与提交源码一致。未改写已安装 release；未停止目标引擎或其他任务。
 

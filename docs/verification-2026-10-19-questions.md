@@ -25,7 +25,7 @@
 
 ## 真实服务闭环
 
-仅操作本轮测试会话 `01a152e0-14fc-7ca0-b9c8-1c5eccdc48ef`，名称“RCM 异步问答专项验收”，原轮次 `01a152e0-155b-7031-875b-223c1320b789`。
+仅操作本轮测试会话 `REDACTED-ID`，名称“RCM 异步问答专项验收”，原轮次 `REDACTED-ID`。
 
 1. 本机真实引擎生成 `delivery:async`、`questions:[{title:"验收代号是什么？",options:null}]`。
 2. 在预览网页接管该专用测试会话并填写代号、点击发送。
@@ -37,7 +37,7 @@
 部署前正式版本 `6c71e92cc1649fc65268ee5765e72fe813ef86d1` 是当前 master 的祖先。保留其他会话已提交的文件预览功能 `8fde9e9`。完整测试和空闲核对通过后按 README 指定版本安装。
 
 - 功能提交与正式部署：`db88b2d4a979e1330b22fac2a8bc245991b26116`，已推送 origin/master。
-- 安装前加密备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T064621183901Z.tar.gz.age`。
+- 安装前加密备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 - 安装脚本健康检查通过；正式 `/api/version` 返回上述提交，questions.js、question-form.js 和原有 message-files.js 均返回 200。
 - 正式静态资源通过 ego-browser 的隔离模拟接口复验：双问题卡片正常，无语音控件、无横向溢出、无 JS 错误；未用模拟结果代替上文真实预览闭环。真实任务没有在正式入口重复执行。
 - 已关闭本轮 ego-browser task space。后续仅补录此文档，不再次部署。

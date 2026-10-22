@@ -19,4 +19,4 @@
 
 修复提交 6c71e92cc1649fc65268ee5765e72fe813ef86d1 已推送 origin/master 并正式部署。安装通过入口空闲检查、部署前加密备份、版本健康检查，正式 /message-dom.js 返回成功。
 
-备份：/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T060120628525Z.tar.gz.age。
+备份：/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age。

@@ -6,7 +6,7 @@
 
 按用户授权串行协调，由「排查并修复问题」完成发布，本聊天核对版本并进行正式页验收。正式服务 `/api/version` 返回 231c769；app.js、composer.js、composer.css、new-chat.css、skill-suggestions.js 的 SHA-256 与 master 文件一致。后续 master 新增文档不影响本次运行代码。
 
-部署前备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T125328437672Z.tar.gz.age`。安装记录时间为北京时间 2026-10-18 20:53:33。
+部署前备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。安装记录时间为北京时间 2026-10-18 20:53:33。
 
 ## 自动测试
 
@@ -14,7 +14,7 @@ master 的 `npm test`：117 项 Node、25 项 Python 全部通过。日志 `/tmp
 
 ## 231c769 正式网页：真实服务
 
-Ego Lite TaskSpace 73 的 p1，访问 `http://127.0.0.1:4317/`，没有模拟 API。仅操作专用会话 `01a14f15-694e-77b2-87e7-d3aea23e9547`。
+Ego Lite TaskSpace 73 的 p1，访问 `http://127.0.0.1:4317/`，没有模拟 API。仅操作专用会话 `REDACTED-ID`。
 
 - 新建页选择 remote-codex-manager，真实技能目录返回 184 项；输入不存在的名字显示“没有匹配的技能”，搜索 ego-browser 恢复匹配行。
 - 创建会话 HTTP 201，一次创建。文本首轮 HTTP 200，收到“UI验收通过”。
@@ -27,7 +27,7 @@ Ego Lite TaskSpace 73 的 p1，访问 `http://127.0.0.1:4317/`，没有模拟 AP
 
 结构化证据：[真实请求与结果](composer-master-production-evidence/real-checks.json)。
 
-截图：[桌面新建](composer-master-production-evidence/production-new-desktop.png)、[技能搜索](composer-master-production-evidence/production-skill-search.png)、[窄屏图片草稿](composer-master-production-evidence/production-mobile-attachment.png)、[窄屏两轮完成](composer-master-production-evidence/production-mobile-completed.png)、[桌面恢复后](composer-master-production-evidence/production-desktop-completed.png)。
+截图：桌面新建（含个人信息，截图已移除）、[技能搜索](composer-master-production-evidence/production-skill-search.png)、[窄屏图片草稿](composer-master-production-evidence/production-mobile-attachment.png)、[窄屏两轮完成](composer-master-production-evidence/production-mobile-completed.png)、桌面恢复后（含个人信息，截图已移除）。
 
 ## 231c769 正式资源：模拟异常验证
 
@@ -54,7 +54,7 @@ Ego Lite TaskSpace 73 的 p1，访问 `http://127.0.0.1:4317/`，没有模拟 AP
 
 ## 窄屏菜单补修与再次发布
 
-最新正式版本：`a1bad52b8819678952b60aa06a14888ce6a230b6`，已提交并推送 master，安装脚本空闲检查、加密备份和健康检查通过。部署前备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T130523355048Z.tar.gz.age`。
+最新正式版本：`a1bad52b8819678952b60aa06a14888ce6a230b6`，已提交并推送 master，安装脚本空闲检查、加密备份和健康检查通过。部署前备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 
 - 自动测试再次通过 117 Node +25 Python，日志 `/tmp/rcm-master-menu-tests.log`。
 - 4327 空闲后使用全新 `/tmp/rcm-menu-preview-20261018-final` 状态目录、`RCM_MOBILE=0` 启动预览；未使用 4328，未停止其他预览。

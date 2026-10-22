@@ -4,9 +4,9 @@
 
 通过 read_thread 读取桌面会话原文，并从正式网页只读接口取样最近 5 轮：
 
-- 分析今日 MySQL 慢日志（01a14514-a35d-7241-a68c-537b3b1c758b）：过程说明、长命令记录、最终列表、文件报告引用。
-- 重新排查库存快照游标查询卡顿与优化方案（01a14834-76cd-78e1-b5c5-5bcee34c8696）：多张表格、数字列对齐、粗体和文件引用。
-- 优化执行模式与技能输入（01a14ee2-0deb-7230-acd0-18ec9065355d）：多条过程更新、最终回复、旧格式内容。
+- 分析今日 MySQL 慢日志（REDACTED-ID）：过程说明、长命令记录、最终列表、文件报告引用。
+- 重新排查库存快照游标查询卡顿与优化方案（REDACTED-ID）：多张表格、数字列对齐、粗体和文件引用。
+- 优化执行模式与技能输入（REDACTED-ID）：多条过程更新、最终回复、旧格式内容。
 
 没有接管、发送或修改上述会话。原文的最终答案仍存在；主要差异来自前端展示：commentary 没有与最终回复区分、工具记录全部插入第一处导致与说明顺序错位、预览输出自动展开、Markdown 列表和表格结构丢失。
 
@@ -41,7 +41,7 @@ Codex 原生界面读取被 Computer Use 安全策略阻止。本文核对的是
 
 代码版本：84f9a01baca61ee79621d3d65caeb3a4ca4998fc，已推送 origin/master。以最新 master 为基线，包含已上线的 595e53e 归档同步修复。安装脚本空闲检查、加密备份和健康检查成功。
 
-部署前备份：/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T135657113901Z.tar.gz.age。
+部署前备份：/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age。
 
 正式 4317 的版本接口确认 84f9a01；app.js、message-body.js、styles.css 的 SHA-256 均与该已提交版本一致。复验期间其他会话开始修改工作区 app.js / styles.css / index.html，因此资源校验以 Git 中的发布提交为准，未覆盖或部署这些后续未提交改动。
 

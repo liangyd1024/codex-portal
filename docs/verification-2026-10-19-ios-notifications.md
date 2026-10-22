@@ -10,4 +10,4 @@
 
 部署基线 3073bf0619a7153372e5a3383bdd3560a6e665a5 为当前 master 祖先，保留已上线功能。部署结果待执行标准安装后记录。
 
-正式部署：5b8984391ba59b54d9843682e668cfa35af4b9b2 已推送 origin/master，标准安装完成两次空闲检查、备份与健康检查，仅豁免当前部署会话。备份 /Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T102711910210Z.tar.gz.age。4317 /api/version 已核对；manifest 返回 200 和 application/manifest+json，notification-platform.js 为新代码。只重启 RCM 网页服务。独立预览进程 24270 已发送 TERM 关闭。
+正式部署：5b8984391ba59b54d9843682e668cfa35af4b9b2 已推送 origin/master，标准安装完成两次空闲检查、备份与健康检查，仅豁免当前部署会话。备份 /Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age。4317 /api/version 已核对；manifest 返回 200 和 application/manifest+json，notification-platform.js 为新代码。只重启 RCM 网页服务。独立预览进程 24270 已发送 TERM 关闭。

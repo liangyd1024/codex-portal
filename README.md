@@ -1,6 +1,6 @@
 # Remote Codex Manager
 
-用本机网页管理本机和远程 Codex。两台机器各有独立的管理器数据库，连接通过 SSH 复用目标机的专用 Codex 服务。源码最初直接从 Ally 当前安装目录建立 Git 基线。许可证为 Apache 2.0。
+通过浏览器管理本机与 SSH 目标上的 Codex。支持会话浏览与交接、消息输入、项目目录浏览、账号用量查看、原生定时任务浏览及手机访问。各管理入口独立保存连接配置与展示状态，通过原生接口操作目标机器。许可证为 Apache 2.0。
 
 同一会话同一时间只从一个入口操作，由使用者人工约定。本项目没有跨入口控制锁；`turn_owners` 仅用于输出采集归属。
 
@@ -14,7 +14,7 @@
 ~/Library/Application Support/RemoteCodexManager/connections.json
 ```
 
-实际配置置于仓库外，权限为 `600`。`machineId` 必须稳定；连接的 `id` 用于状态文件、`?host=` 路由及浏览器缓存，后续不要随意修改。Ally 保留 `local`（Ally）和 `work-mac`（Marco）；Marco 使用 `local`（Marco）和 `ally`（Ally）。`alias` 只负责展示。
+实际配置置于仓库外，权限为 `600`。`machineId` 必须稳定；连接的 `id` 用于状态文件、`?host=` 路由及浏览器缓存，后续不要随意修改。连接 ID 由部署者自行配置；示例使用 `local` 和 `remote-b`。`alias` 只负责展示。
 
 每个连接需设置真实用户名、HOME、Codex 二进制路径；SSH 连接另需地址、端口和本机私钥路径。私钥不复制到另一台机器、不进入备份。双方主机公钥必须事先核验。SSH 强制使用配置的密钥和严格主机校验。
 
@@ -107,7 +107,7 @@ node scripts/install-local.mjs --ref <commit>
 
 安装会在备份前及重启前检查当前网页入口，生成加密备份，再将 Git 提交安装到 `~/Library/Application Support/RemoteCodexManager/releases/<commit>`。旧安装、副本和配置不删除。仅重启本机网页服务；不会停止目标机引擎或更新正在运行的输出采集器。新版本健康检查失败会恢复原网页 plist。要回退，使用同一安装命令指定之前的兼容提交；需要回到最初基线时使用 `install-history/` 中保存的旧 plist。
 
-原始基线仍位于 Ally 的 `~/Library/Application Support/RemoteCodexManager/app`。开发代码位于 Git 工作目录；后台服务运行不可变的 release 目录。
+开发代码位于 Git 工作目录；后台服务运行不可变的 release 目录。
 
 已有手机入口继续使用原 `mobile/config.json` 和证书。安装不会自动创建手机入口；在本机正式工作台的“工作区详情 → 手机访问”点击“开启同一 Wi-Fi 访问”，即可创建证书和二维码，并启动 HTTPS 入口，无需重启网页服务。手机需与 Mac 在同一网络，并安装、信任页面提供的证书后扫码配对。未开启入口时不能生成配对码；失败可重试。开发预览（`RCM_MOBILE=0`）不开放此操作。
 
@@ -213,9 +213,9 @@ python3 scripts/data-backup.py download --repo OWNER/remote-codex-manager --tag 
 python3 scripts/data-backup.py restore /absolute/path/backup.age.index.json --identity /absolute/path/backup-identity.txt --machine MACHINE --destination /absolute/new/restore-directory
 ```
 
-这一步不改实时数据。错误密钥、错误来源机器、损坏文件、路径越界或不兼容格式在覆盖前拒绝。不支持自动把 Ally 数据覆盖到 Marco。验证目录是权限受限的明文数据，使用后按你的文件管理规则手动清理。
+这一步不改实时数据。错误密钥、错误来源机器、损坏文件、路径越界或不兼容格式在覆盖前拒绝。不支持自动将一台机器的备份覆盖到另一台机器。验证目录是权限受限的明文数据，使用后按你的文件管理规则手动清理。
 
-确需原地恢复时，先结束任务并断开两台网页的全部连接，再在目标机器运行：
+确需原地恢复时，先结束任务并断开所有网页入口的全部连接，再在目标机器运行：
 
 ```sh
 python3 scripts/restore-apply.py apply /absolute/restore-directory --entrances-disconnected
@@ -234,6 +234,6 @@ python3 -m unittest discover -s test -p 'test_*.py'
 
 参考：[SQLite Online Backup API](https://www.sqlite.org/backup.html)、[age](https://github.com/FiloSottile/age)、[GitHub 大文件说明](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github)。
 
-实际部署版本、测试结果和最终备份位置见 [2026-10-18 双机验收记录](docs/verification-2026-10-18.md)。
+项目验证范围和历史结果见 [验证文档](docs/README.md)。公开记录中的环境信息均使用通用标识，不提供个人部署入口或备份位置。
 
 测试入口 `npm test` 与网页更新共用 `scripts/run-tests.mjs`。网页更新直接使用服务的 Node 路径，不依赖后台 PATH 中存在 npm。Node 测试的保留目录等诊断信息使用 `t.diagnostic()`，避免旧 Node 测试运行器混合解析中文 stdout 时的序列化缺陷；不要以跳过测试或失败自动重跑代替修复。

@@ -6,13 +6,13 @@
 - 提交：`ab2ffc27070f378d1f30bdbfb7f4bbda6f5e617d`，安装时间 2026-10-18 13:01:31（北京时间）。
 - 此版本由并行进行的手机优化部署合入并安装。本聊天逐段比对了同步调度、状态版本保护、历史读取和回归测试，确认与已验收的同步修复一致；随后核对正式 `/api/version`、安装记录和正式 `thread-sync.js`，避免重复安装及回退已部署改动。
 - 安装遵循现有指定提交流程，包含空闲检查、加密备份、健康检查和失败回退。未改写 release 文件，未停止目标引擎。正式本机引擎 PID 在验收前后均为 26281。
-- 加密备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T050126747763Z.tar.gz.age`，已核对文件存在，大小 1,199,402 字节。
-- 原网页配置备份：`/Users/marco/Library/Application Support/RemoteCodexManager/install-history/1792299687930.plist`。
+- 加密备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`，已核对文件存在，大小 1,199,402 字节。
+- 原网页配置备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/install-history/1792299687930.plist`。
 - 合并版本再次执行 `npm test`：72 项 Node、23 项 Python 全部通过；`git diff --check` 通过。日志 `/tmp/rcm-sync-release-tests.log`。
 
 ## 真实桌面端到网页端验证
 
-专用会话为“RCM 交还部署验收 20261018”，ID `01a14d38-4bb3-7e51-928d-a938dc3801d4`。开始时该会话已经交还并处于 released 状态，桌面任务空闲。
+专用会话为“RCM 交还部署验收 20261018”，ID `REDACTED-ID`。开始时该会话已经交还并处于 released 状态，桌面任务空闲。
 
 通过 Codex 桌面应用的原生会话接口向此会话发送两条验收消息，限定不调用工具、不读写文件，只回复验收标记。仅对这个测试会话发消息。网页使用 ego-browser 访问正式 4317 入口，未注入模拟 API；监测代码只记录真实 fetch、浏览器事件和消息 DOM 的出现时间，不改写请求或响应。
 

@@ -22,6 +22,6 @@
 ## 部署
 
 - 已从最新 master 提交 `c89493ace9769e1f0ca6ea67671c00a28d279fd7` 部署本机正式网页；原正式版本 `f29af4accda49628934300db7298ac082861e464` 的功能已包含在基线中。
-- 安装器空闲检查、加密备份、健康检查全部通过。备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T150155089135Z.tar.gz.age`。
+- 安装器空闲检查、加密备份、健康检查全部通过。备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。
 - 正式 4317 页面真实读取当前桌面会话，左侧列表与正文电脑图标均已确认；390×844 正文图标位于可视区（y=624–658），无横向溢出。
 - 正式截图：`/tmp/rcm-activity-production-desktop.png`、`/tmp/rcm-activity-production-mobile.png`。浏览器验收空间已关闭；此次没有修改、停止目标桌面任务。

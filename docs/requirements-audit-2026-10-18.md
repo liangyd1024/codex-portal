@@ -1,6 +1,6 @@
 # 引用会话需求复核（2026-10-18）
 
-读取会话 `01a14e0b-13c8-7992-b221-99d2ad802915` 全部返回轮次（hasMore=false），当前标题“修复会话同步报错并支持全部授权”。去重后需求与结果：
+读取会话 `REDACTED-ID` 全部返回轮次（hasMore=false），当前标题“修复会话同步报错并支持全部授权”。去重后需求与结果：
 
 | 用户需求 | 当前实现与限制 |
 | --- | --- |
@@ -17,4 +17,4 @@
 
 验证：发布工作树 npm test 83 Node + 24 Python 全通过，日志 `/tmp/rcm-requirements-tests.log`；git diff --check 通过。ego-browser 空间 52 模拟技能失效、取消并持久化、目录部分失败、重试恢复成功；Escape 后 Tab 到消息输入。390px scrollWidth=390，无页面异常；桌面与窄屏截图已查看，位于 `/tmp/rcm-requirements-catalog-mobile.png`、`/tmp/rcm-requirements-catalog-desktop.png`。选择测试会话时浏览器高层 click 两次遇到 element not connected，改用 DOM click 进入专用模拟会话；不将此计为侧栏触控验收通过。手机真实键盘/相册、真实计划/目标/插件完整任务端到端仍待验。
 
-正式部署完成：`11a4a1063c37ebe45007ddb11c80fa62586d3528`，标准安装空闲检查及健康检查通过，正式 composer.js 已包含本轮恢复入口。部署前备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261018T110041687764Z.tar.gz.age`。
+正式部署完成：`11a4a1063c37ebe45007ddb11c80fa62586d3528`，标准安装空闲检查及健康检查通过，正式 composer.js 已包含本轮恢复入口。部署前备份：`/Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age`。

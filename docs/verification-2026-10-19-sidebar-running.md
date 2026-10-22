@@ -8,7 +8,7 @@
 
 部署前正式基线 5b8984391ba59b54d9843682e668cfa35af4b9b2 已包含在 master。部署结果后补。
 
-正式部署完成：f98d77e33248f7ab1de700ec24a570c653ea1f07。安装器通过当前会话精确豁免及其余空闲检查、加密备份、重启网页和版本健康检查。备份 /Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T110858766726Z.tar.gz.age。未停止原生引擎或运行任务。最终窄屏夹具补齐 sidebar-open 容器，在同轮设置 390px 并确认 innerWidth=390、无溢出、项目按钮焦点，截图已更新。
+正式部署完成：f98d77e33248f7ab1de700ec24a570c653ea1f07。安装器通过当前会话精确豁免及其余空闲检查、加密备份、重启网页和版本健康检查。备份 /Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age。未停止原生引擎或运行任务。最终窄屏夹具补齐 sidebar-open 容器，在同轮设置 390px 并确认 innerWidth=390、无溢出、项目按钮焦点，截图已更新。
 
 ## 图标尺寸微调
 
@@ -16,4 +16,4 @@
 
 npm test：221 Node、53 Python 全通过。ego-browser TaskSpace 125 使用真实 Sidebar、CSS 和页面原始 SVG，以模拟桌面运行数据检查 1440px / 390px：三层徽标均为 16/12/5px、无横向溢出，键盘展开折叠与焦点轮廓通过。截图 /tmp/rcm-compact-1440.png、/tmp/rcm-compact-390.png。没有新增真实任务、未复测状态流转；本次仅调整样式。正式基线 f98d77e 已包含在当前 master。
 
-尺寸调整已正式部署 cf5b206b4aa7d6936a787a52f597c4ecf91a0546，通过空闲检查、备份与版本健康检查。备份 /Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261019T111211048898Z.tar.gz.age。
+尺寸调整已正式部署 cf5b206b4aa7d6936a787a52f597c4ecf91a0546，通过空闲检查、备份与版本健康检查。备份 /Users/local-user/Library/Application Support/RemoteCodexManager/backups/MACHINE-TIMESTAMP.tar.gz.age。
