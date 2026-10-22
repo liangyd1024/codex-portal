@@ -11,7 +11,7 @@ test('async questions retain source IDs and only accepted replies resolve them',
  const text=replyText(r.params.questions,answers());assert.equal(questionReplies({type:'userMessage',content:[{type:'text',text}]}).length,2);
  t.items.push({type:'steeringUserMessage',status:'pending',input:[{type:'text',text}]});assert.equal(asyncQuestions([t],'thread').length,1);
  t.items.at(-1).status='accepted';assert.equal(asyncQuestions([t],'thread').length,0);
- assert.equal(asyncQuestions([{...turn(),status:'completed'}],'thread').length,0);
+ assert.equal(asyncQuestions([{...turn(),status:'completed'}],'thread').length,1);
  assert.deepEqual(questionReplies({type:'userMessage',content:[{type:'text',text:'<send_user_message_question_reply>invalid</send_user_message_question_reply>'}]}),[]);
 });
 test('question drafts survive refresh, remain scoped and skip never changes an answer',()=>{
@@ -26,7 +26,7 @@ test('async answer uses verified question wording and original expected turn, de
 });
 test('stale, foreign and incomplete questions cannot be submitted',async()=>{
  const {m,calls}=manager();for(const data of [{turnId:'other',itemId:'item',answers:answers()},{turnId:'turn',itemId:'item',answers:{}},{turnId:'turn',itemId:'foreign',answers:answers()}])await assert.rejects(m.answerQuestions('thread',data));
- m.history=async()=>({data:[{...turn(),status:'completed'}]});await assert.rejects(m.answerQuestions('thread',{turnId:'turn',itemId:'item',answers:answers()}),e=>e.code==='STALE_REQUEST');assert.equal(calls.length,0);
+ m.history=async()=>({data:[{...turn(),status:'interrupted'}]});await assert.rejects(m.answerQuestions('thread',{turnId:'turn',itemId:'item',answers:answers()}),e=>e.code==='STALE_REQUEST');assert.equal(calls.length,0);
 });
 test('concurrent answers send once and connection changes during verification abort',async()=>{
  const {m,calls}=manager();let release;m.history=()=>new Promise(r=>{release=()=>r({data:[turn()]});});const data={turnId:'turn',itemId:'item',answers:answers()};const pending=m.answerQuestions('thread',data);await assert.rejects(m.answerQuestions('thread',data),e=>e.code==='SEND_PENDING');m.generation++;release();await assert.rejects(pending,e=>e.code==='CONNECTION_CHANGED');assert.equal(calls.length,0);
@@ -57,6 +57,8 @@ test('native async question events publish attention for other chats and accepte
  m.onNotification({method:'turn/completed',params:{threadId:'other',turn:{id:'turn',status:'completed'}}});
  assert.equal(m.status().pendingRequests.length,1);
  m.onNotification({method:'turn/completed',params:{threadId:'thread',turn:{id:'turn',status:'completed'}}});
+ assert.equal(m.status().pendingRequests.length,1);
+ m.onNotification({method:'thread/closed',params:{threadId:'thread'}});
  assert.equal(m.status().pendingRequests.length,0);
 });
 test('reconnect reads full active history to recover unanswered questions, not old answered questions',async()=>{
@@ -77,4 +79,37 @@ test('temporary chat stale status, removed questions and connection changes cann
   m.history=async()=>{throw Error('no history');};m.rpc.request=async(method,params)=>{calls.push({method,params});if(scenario==='changed')m.generation++;return {thread:{status:{type:scenario==='idle'?'idle':'active'}}};};
   await assert.rejects(m.answerQuestions('thread',{turnId:'turn',itemId:'item',answers:answers()}));assert.deepEqual(calls.map(c=>c.method),['thread/read']);
  }
+});
+
+test('completed questions survive history and answers start one native turn when idle',async()=>{
+ const {m,calls}=manager();m.controlled.get('thread').status={type:'idle'};
+ m.history=async()=>({data:[{...turn(),status:'completed'}]});
+ m.rpc.request=async(method,params)=>{calls.push({method,params});return {turn:{id:'next',status:'inProgress'}};};
+ const data={turnId:'turn',itemId:'item',answers:answers()};
+ await m.answerQuestions('thread',data);await m.answerQuestions('thread',data);
+ assert.equal(calls.length,1);assert.equal(calls[0].method,'turn/start');
+ assert.equal(questionReplies({type:'userMessage',content:calls[0].params.input})[0].questionItemId,request().params.questions[0].id);
+ assert.equal(m.activeTurns.get('thread'),'next');
+});
+test('answer to completed question steers a newer active turn and resolves original question',async()=>{
+ const {m,calls}=manager();m.history=async()=>({data:[{id:'new',status:'inProgress',items:[]},{...turn(),status:'completed'}]});
+ m.pendingQuestions.entries.set(request().key,request());
+ m.onNotification({method:'turn/completed',params:{threadId:'thread',turn:{id:'turn',status:'completed'}}});
+ await m.answerQuestions('thread',{turnId:'turn',itemId:'item',answers:answers()});
+ assert.equal(calls[0].params.expectedTurnId,'new');assert.equal(m.pendingQuestions.entries.size,0);
+});
+test('accepted answer in a later turn clears a completed historical question',()=>{
+ const completed={...turn(),status:'completed'},text=replyText(request().params.questions,answers());
+ assert.equal(asyncQuestions([completed,{id:'later',status:'completed',items:[{type:'userMessage',content:[{type:'text',text}]}]}],'thread').length,0);
+});
+test('idle answer with unknown native start outcome cannot be replayed',async()=>{
+ const {m,calls}=manager();m.controlled.get('thread').status={type:'idle'};m.history=async()=>({data:[{...turn(),status:'completed'}]});
+ m.rpc.request=async(method,params)=>{calls.push({method,params});throw Object.assign(Error('timeout'),{code:'RPC_TIMEOUT'});};
+ const data={turnId:'turn',itemId:'item',answers:answers()};
+ await assert.rejects(m.answerQuestions('thread',data),e=>e.code==='OUTCOME_UNKNOWN');
+ await assert.rejects(m.answerQuestions('thread',data),e=>e.code==='OUTCOME_UNKNOWN');assert.equal(calls.length,1);
+});
+test('reconnect recovers questions from completed native turns',async()=>{
+ const {m}=manager();m.service={};m.rpc.request=async(method,p)=>method==='thread/goal/get'?{goal:null}:{data:[{...turn(),status:'completed'}]};
+ await m.recoverNotices(m.rpc,'thread',0);assert.equal(m.pendingQuestions.entries.size,1);
 });

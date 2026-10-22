@@ -530,3 +530,23 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .composer-queue-row button{flex-shrink:0;min-width:44px;min-height:44px}
 .conversation>.composer-region>.composer-queue{flex:0 1 auto;min-height:0;max-height:min(180px,25dvh)}
 #guide-message{min-width:44px;min-height:44px}
+
+/* Compact questions: keep readable text and touch targets, remove duplicate space. */
+.conversation-requests .request-card:has(.question-form){padding:8px 12px;border-radius:12px}
+.question-form .question-heading{margin-bottom:2px;font-size:12px;line-height:1.4}
+.question-form .question-close{min-height:32px;font-size:16px}
+.request-card .question-label{margin-bottom:4px}
+.question-form .question-fields{gap:8px}
+.question-form .question-group+.question-group{margin-top:4px}
+.question-form .question-option{padding:6px 10px;margin:3px 0;align-items:center}
+.question-form .question-option input{margin:0}
+.question-form .question-other{min-height:44px;padding:8px 10px;margin-top:4px;border-radius:8px}
+.question-form .request-actions{margin-top:0;gap:8px}
+.question-form .question-error{margin:0}
+.mobile-layout .question-form .question-close{min-height:44px}
+.mobile-layout .question-form .question-option{margin:3px 0}
+.mobile-layout .conversation-requests{max-height:calc(var(--visual-height,100dvh) * .5)}
+.conversation>.composer-region:has(.question-form){max-height:85%}
+.conversation>.composer-region>.conversation-requests:has(.question-form){max-height:50dvh}
+.mobile-layout .conversation>.composer-region:has(.question-form){max-height:85%}
+.mobile-layout .composer-region>.conversation-requests:has(.question-form){max-height:calc(var(--visual-height,100dvh) * .55)}

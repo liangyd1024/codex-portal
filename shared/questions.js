@@ -9,7 +9,7 @@ export function questionReplies(item) {
 }
 export function asyncQuestions(turns,threadId) {
   const answered=new Set((turns||[]).flatMap(t=>(t.items||[]).flatMap(questionReplies)).map(r=>r.questionItemId));
-  return (turns||[]).filter(t=>t.status==='inProgress').flatMap(turn=>(turn.items||[]).flatMap(item=>{
+  return (turns||[]).filter(t=>['inProgress','completed'].includes(t.status)).flatMap(turn=>(turn.items||[]).flatMap(item=>{
     if(item.type!=='agentMessage'||typeof item.id!=='string'||!Array.isArray(item.questions))return [];
     const questions=item.questions.flatMap((q,index)=>{
       const id=JSON.stringify(['request_user_input_async',item.id,index]);
@@ -39,14 +39,14 @@ export class PendingQuestions {
   update(method,p) {
     const before=new Map(this.entries),id=p.threadId||p.thread?.id;
     if(method==='turn/completed')this.remember(this.finished,JSON.stringify([id,p.turn?.id]));
-    if(method==='thread/closed'||method==='turn/completed')for(const [key,r] of this.entries)if(r.threadId===id&&(method==='thread/closed'||r.params.turnId===p.turn?.id))this.entries.delete(key);
-    if(['item/started','item/completed'].includes(method)&&id&&p.turnId&&p.item&&!this.finished.has(JSON.stringify([id,p.turnId]))){
+    if(method==='thread/closed'||(method==='turn/completed'&&p.turn?.status!=='completed'))for(const [key,r] of this.entries)if(r.threadId===id&&(method==='thread/closed'||r.params.turnId===p.turn?.id))this.entries.delete(key);
+    if(['item/started','item/completed'].includes(method)&&id&&p.turnId&&p.item){
       for(const reply of questionReplies(p.item))this.remember(this.answered,JSON.stringify([id,reply.questionItemId]));
       for(const reply of questionReplies(p.item))for(const [key,r] of this.entries)if(r.threadId===id){
         const questions=r.params.questions.filter(q=>q.id!==reply.questionItemId);
         if(questions.length)this.entries.set(key,{...r,params:{...r.params,questions}});else this.entries.delete(key);
       }
-      for(const r of asyncQuestions([{id:p.turnId,status:'inProgress',items:[p.item]}],id)){
+      for(const r of this.finished.has(JSON.stringify([id,p.turnId]))?[]:asyncQuestions([{id:p.turnId,status:'inProgress',items:[p.item]}],id)){
         r.params.questions=r.params.questions.filter(q=>!this.answered.has(JSON.stringify([id,q.id])));
         if(r.params.questions.length)this.entries.set(r.key,r);
       }

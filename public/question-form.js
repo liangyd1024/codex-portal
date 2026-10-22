@@ -15,7 +15,7 @@ export function questionForm(r,{drafts,submit,rerender}) {
       const label=make('label','question-option'),input=make('input');input.type='radio';input.name='q-'+index;input.value=opt.label||opt.value||String(oi);input.checked=saved.fields?.[q.id]?.choice===input.value;
       const copy=make('span','',input.value);if(opt.description)copy.append(make('small','',opt.description));label.append(input,copy);group.append(label);radios.push(input);
     }
-    const text=make('textarea','question-other');text.name='other-'+index;text.placeholder='回复…';text.rows=2;text.value=saved.fields?.[q.id]?.text||'';text.setAttribute('aria-label',q.question||q.header||'回答');group.append(text);body.append(group);
+    const text=make('textarea','question-other');text.name='other-'+index;text.placeholder='回复…';text.rows=1;text.value=saved.fields?.[q.id]?.text||'';text.setAttribute('aria-label',q.question||q.header||'回答');group.append(text);body.append(group);
     fields.push({q,text,radios});
   }
   const error=make('p','question-error');error.setAttribute('role','alert');error.hidden=true;body.append(error);

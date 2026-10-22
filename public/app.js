@@ -788,7 +788,7 @@ function renderRequests() {
     const title = question ? '需要你的回答' : /commandExecution/i.test(method) ? '命令执行审批' : /fileChange/i.test(method) ? '文件修改审批' : /requestPermissions/i.test(method) ? '权限请求' : knownApproval ? '操作审批' : '工具请求待处理';
     if(!question)card.append(el('h4','',title));
     card.dataset.asyncQuestion=String(r.kind==='asyncQuestion');card.dataset.threadId=requestThread(r)||'';
-    if (requestThread(r)) {
+    if (requestThread(r)&&(!question||(requestThread(r)!==state.selectedId&&requestThread(r)!==sideChat?.id))) {
       const target = currentThread()?.id===requestThread(r)?currentThread():state.threads.find(t => t.id === requestThread(r));
       card.append(el('p','request-origin','会话：' + (target ? threadName(target) : requestThread(r))));
       if (requestThread(r) !== state.selectedId&&requestThread(r)!==sideChat?.id) { const open = el('button','text-button','查看此会话'); open.onclick = () => selectThread(requestThread(r)); card.append(open); }
