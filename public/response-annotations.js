@@ -34,7 +34,7 @@ export function installResponseAnnotations({context,host,onSideChat,sideSelectio
     if(!begin||!n)return;ranges.set(item.id,r);
    }
    valid.push(r);const rect=r.getBoundingClientRect(),bounds=document.getElementById('messages-scroller').getBoundingClientRect();if(rect.bottom<bounds.top||rect.top>bounds.bottom||rect.width===0)return;
-   const number=item.side?item.sideIndex+1:index+1;const marker=button(String(number),()=>{if(item.side){document.querySelector('.side-chat-panel details').open=true;document.querySelector('.side-chat-panel .composer textarea').focus();return;}details.hidden=false;chip.setAttribute('aria-expanded','true');details.querySelectorAll('textarea')[index]?.focus();});marker.className='annotation-marker';marker.setAttribute('aria-label',(item.side?'已选文本片段 ':'注释 ')+number);marker.style.left=Math.min(innerWidth-44,Math.max(0,rect.right-20))+'px';marker.style.top=Math.max(bounds.top,rect.top-20)+'px';markers.append(marker);
+   const number=item.side?item.sideIndex+1:index+1;const marker=button(String(number),()=>{if(item.side){document.querySelector('.side-chat-fragments').open=true;document.querySelector('.side-chat-panel .composer textarea').focus();return;}details.hidden=false;chip.setAttribute('aria-expanded','true');details.querySelectorAll('textarea')[index]?.focus();});marker.className='annotation-marker';marker.setAttribute('aria-label',(item.side?'已选文本片段 ':'注释 ')+number);marker.style.left=Math.min(innerWidth-44,Math.max(0,rect.right-20))+'px';marker.style.top=Math.max(bounds.top,rect.top-20)+'px';markers.append(marker);
   });
   if(globalThis.CSS?.highlights&&globalThis.Highlight)CSS.highlights.set('rcm-annotations',new Highlight(...valid));
  }
