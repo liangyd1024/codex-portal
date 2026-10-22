@@ -64,8 +64,13 @@ class GoalHistoryTest(unittest.TestCase):
             self.goal('目标' + str(i))
             self.turn(str(i))
         first = store.read_history({'threadId':'thread', 'preview':True})
-        second = store.read_history({'threadId':'thread', 'cursor':first['nextCursor']})
-        turns = first['data'] + second['data']
+        self.assertEqual(len(first['data']), 1)
+        turns = first['data']
+        cursor = first['nextCursor']
+        while cursor:
+            page = store.read_history({'threadId':'thread', 'cursor':cursor})
+            turns += page['data']
+            cursor = page['nextCursor']
         self.assertEqual([t['items'][0]['objective'] for t in turns], ['目标'+str(i) for i in reversed(range(7))])
 
     def test_missing_rollout_preserves_normal_history(self):

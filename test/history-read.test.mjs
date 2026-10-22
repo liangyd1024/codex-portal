@@ -85,3 +85,15 @@ test('preview bounds command output but keeps the complete assistant message',as
   assert.equal(result.data[0].items[0].text,text);assert.equal(result.data[0].items[1].aggregatedOutput.length,16384);
   assert.equal(result.data[0].items[1].outputPartial,true);
 });
+
+test('first preview requests only the newest native turn with an older-history cursor',async()=>{
+  const {m,calls}=fixture();m.rpc.request=async(method,params)=>{calls.push([method,params]);return {data:[turn()],nextCursor:'older'};};
+  const result=await m.history('t',undefined,false,{},true);
+  assert.equal(calls[0][1].limit,1);assert.equal(result.nextCursor,'native:older');
+});
+test('cold preview and fast detail defer desktop activity; normal refresh still observes it',async()=>{
+  const {m}=fixture(),metadata=[];
+  m.passive=async(action,p)=>{if(action==='detail'){metadata.push(p);return {thread:{id:'t'}};}return {data:[turn()]};};
+  await m.detail('t',{},true);await m.detail('t',{},false,null,true);await m.detail('t');
+  assert.deepEqual(metadata.map(p=>p.includeActivity),[false,false,true]);
+});

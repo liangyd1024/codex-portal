@@ -1,5 +1,5 @@
 import {authRecoveryMessage} from './shared/account-state.js';
-import {RenderCache,renderSignature} from './render-cache.js';
+import {RenderCache,renderSignature,ProgressiveTurns} from './render-cache.js';
 import {createToasts,confirmAction} from './feedback.js';
 import {configureProjectBrowser} from './project-picker.js';
 let projectFolders;
@@ -609,6 +609,7 @@ function renderItem(item) {
 function kindName(kind) { const k = typeOf(kind); return {add:'新增',delete:'删除',update:'修改',create:'新增',modify:'修改'}[k] || k || '修改'; }
 let lastMessageShape;
 const messageCache=new RenderCache();
+const progressiveTurns=new ProgressiveTurns({render:()=>{if(!newChatOpen&&state.selectedId)renderMessages();}});
 function renderMessages() {
   queueMicrotask(()=>turnNavigation?.update());
   // Keep the jump input stable while the user types; render after blur.
@@ -616,10 +617,14 @@ function renderMessages() {
   const scroller = $('messages-scroller');
   const context=targetHost+':'+state.selectedId;
   if(scrollContext!==context){turnNavigation?.switchContext(context);closeFileViewer();scrollContext=context;scrollFollow?.reset();clear($('messages'));lastMessageShape=undefined;messageCache.clear();}
+  progressiveTurns.reset(context+':'+state.selectionVersion+':'+state.detailVersion);
+  const visibleTurns=progressiveTurns.view(state.loadingDetail?[]:turns());
+  $('messages').setAttribute('aria-busy',String(state.loadingDetail||progressiveTurns.pending));
+  progressiveTurns.enqueue();
   const nearBottom = scrollFollow?.following ?? true;
-  const shape=JSON.stringify([state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],turns()],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
+  const shape=JSON.stringify([state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],visibleTurns],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
   if(shape===lastMessageShape){
-    for(const turn of turns())for(const item of turn.items||[]){
+    for(const turn of visibleTurns)for(const item of turn.items||[]){
       if(item.type!=='commandExecution')continue;
       const previous=$('messages').querySelector('details[data-item-id="'+CSS.escape(item.id)+'"] .command-output-view');
       if(!previous)continue;
@@ -634,7 +639,8 @@ function renderMessages() {
   lastMessageShape=shape;
   const oldTop = scroller.scrollTop, oldHeight = scroller.scrollHeight;
   const viewportTop = scroller.getBoundingClientRect().top;
-  const anchor = state.busy.has('history') ? [...$('messages').querySelectorAll('.message-turn')].find(node => node.getBoundingClientRect().bottom > viewportTop) : null;
+  const preserveAnchor=state.busy.has('history')||!nearBottom;
+  const anchor = preserveAnchor ? [...$('messages').querySelectorAll('.message-turn')].find(node => node.getBoundingClientRect().bottom > viewportTop) : null;
   const anchorId = anchor?.dataset.turnId, anchorOffset = anchor ? anchor.getBoundingClientRect().top - viewportTop : 0;
   const opened = new Set($('messages').querySelector('details[data-item-id]') ? [...$('messages').querySelectorAll('details[open][data-item-id]')].map(n => n.dataset.itemId) : savedOpenDetails());
   const n = el('div');
@@ -646,7 +652,7 @@ function renderMessages() {
   if(state.detail?.recovering)n.append(el('div','history-notice','已恢复本机保存的输出，正在同步最新内容…')); 
   for (const notice of state.runtimeNotices.get(state.selectedId)?.values() || []) n.append(renderExtensionNotice(notice));
   if (!turns().length) { const empty = el('div','empty-history'); empty.append(icon('chat'),el('p','','此会话暂无消息。'),el('p','',state.desktopMode ? '通过桌面继续此会话。' : controlled() ? '输入要求，开始目标机器工作。' : '接管后，可以在此会话开始工作。')); n.append(empty); }
-  turns().forEach(t => {
+  visibleTurns.forEach(t => {
     const cachedTurn=messageCache.render('turn:'+t.id,renderSignature([renderContext,t]),()=>{
     const turn = el('section','message-turn'); turn.dataset.turnId = t.id;
     const meta = el('div','turn-meta'); meta.classList.toggle('needs-attention',['failed','declined','systemError','interrupted'].includes(typeOf(t.status))); meta.append(el('span','',dateTime(t.startedAt || t.createdAt,true)));
@@ -683,7 +689,7 @@ function renderMessages() {
   n.querySelectorAll('details[data-item-id]').forEach(d => { if (opened.has(d.dataset.itemId)) d.open = true; });
   commit();
   const rendered = $('messages');
-  for(const turn of turns())for(const item of turn.items||[]){
+  for(const turn of visibleTurns)for(const item of turn.items||[]){
     if(item.type!=='commandExecution')continue;
     const previous=rendered.querySelector('details[data-item-id="'+CSS.escape(item.id)+'"] .command-output-view');
     const stamp=String(item.outputToken||(item.aggregatedOutput||'').length)+':'+String(outputPositions.get(state.selectedId+':'+item.id)??'tail');
@@ -691,7 +697,7 @@ function renderMessages() {
   }
   rendered.querySelectorAll('.tool-output[data-follow-tail="true"]').forEach(pre=>{pre.scrollTop=pre.scrollHeight;});
   if (nearBottom && !state.busy.has('history')) scroller.scrollTop = scroller.scrollHeight;
-  else if (state.busy.has('history')) {
+  else if (preserveAnchor) {
     const restored = [...rendered.querySelectorAll('.message-turn')].find(node => node.dataset.turnId === anchorId);
     const targetTop = restored ? oldTop + restored.getBoundingClientRect().top - viewportTop - anchorOffset : oldTop + (scroller.scrollHeight - oldHeight);
     // A short initial page can leave blank space below the last message.
@@ -1569,7 +1575,7 @@ function wireEvents() {
   $('project-list').hidden = !readLayout('projects',true);
   $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
   mobileUI = installMobileUI({closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:mobile=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
-  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),turns:state.loadingDetail?[]:turns(),uncertain:uncertainHistory(),hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
+  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,reveal:id=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {

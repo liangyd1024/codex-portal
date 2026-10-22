@@ -41,6 +41,16 @@ class SidebarModelTest(unittest.TestCase):
 
     def read(self,**kw):return store.read_sidebar({'accountId':'account1',**kw})
 
+    def test_fast_detail_defers_activity_without_fabricating_a_status(self):
+        self.add('chat')
+        with patch.object(store, 'desktop_activity', return_value={'chat': {'state': 'running'}}) as probe:
+            first = store.read_detail({'threadId': 'chat', 'includeActivity': False})
+            probe.assert_not_called()
+            self.assertNotIn('activity', first['thread'])
+            later = store.read_detail({'threadId': 'chat'})
+            probe.assert_called_once_with(['chat'])
+            self.assertEqual(later['thread']['activity']['state'], 'running')
+
     def test_deferred_content_does_not_probe_desktop_and_activity_keeps_account_scope(self):
         self.add('chat')
         def activity(rows):

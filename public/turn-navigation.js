@@ -53,6 +53,7 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
     const r=button.getBoundingClientRect();preview.style.left=Math.min(r.right+10,innerWidth-preview.offsetWidth-12)+'px';preview.style.top=Math.max(12,Math.min(r.top-18,innerHeight-preview.offsetHeight-12))+'px';
   }
   function jump(id){
+    if(!locate(id))context().reveal?.(id);
     const target=locate(id);if(!target)return;restore=null;hide();if(dialog.open)dialog.close();follow.pause({sticky:true});
     const top=scroller.scrollTop+target.getBoundingClientRect().top-scroller.getBoundingClientRect().top-12;
     scroller.scrollTop=Math.max(0,top);target.tabIndex=-1;target.focus({preventScroll:true});schedule();
@@ -114,7 +115,7 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
       rows.forEach((row,index)=>{let b=buttons.get(row.id);if(!b){b=el('button','turn-tick');b.type='button';b.append(el('span'));buttons.set(row.id,b);}b.setAttribute('aria-label','预览并跳转到：'+row.question);b.setAttribute('aria-describedby','turn-preview');b.classList.toggle('turn-tick-running',row.running);b.onclick=()=>navigate(row.id);b.onpointerenter=()=>show(row,b);b.onpointerleave=deferHide;b.onfocus=()=>show(row,b);b.onblur=deferHide;if(ticks.children[index]!==b)ticks.insertBefore(b,ticks.children[index]||null);});
       if(dialog.open)renderList();if(hovered){const row=rows.find(r=>r.id===hovered);if(row)show(row,buttons.get(row.id));else hide();}
     }
-    if(restore&&rows.length){const target=locate(restore.id);if(restore.following){follow.reset();restore=null;}else if(target){follow.pause({sticky:true});scroller.scrollTop+=target.getBoundingClientRect().top-scroller.getBoundingClientRect().top-restore.offset;restore=null;}else if(!c.hasEarlier){restore=null;}}
+    if(restore&&rows.length){const target=locate(restore.id);if(restore.following){follow.reset();restore=null;}else if(target){follow.pause({sticky:true});scroller.scrollTop+=target.getBoundingClientRect().top-scroller.getBoundingClientRect().top-restore.offset;restore=null;}else if(!c.hasEarlier&&!c.rendering){restore=null;}}
     syncLoad();schedule();
   }
   for(const event of ['wheel','touchstart','keydown'])scroller.addEventListener(event,()=>{restore=null;},{passive:true});

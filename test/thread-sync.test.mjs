@@ -173,3 +173,9 @@ test('late recovery ignores changed selections, connection versions and failed r
     f.requests[0].reject(Error('read failed'));await read.catch(()=>{});
   }
 });
+
+test('latest-only preview expands in original order while retaining later streamed turns',()=>{
+  const result=mergeLiveTurns([{id:'latest',items:[{id:'reply',text:'streamed response'}]},{id:'new-live',items:[]}],[{id:'older-a',items:[]},{id:'older-b',items:[]},{id:'latest',items:[{id:'reply',text:'stream'}]}]);
+  assert.deepEqual(result.map(t=>t.id),['older-a','older-b','latest','new-live']);
+  assert.equal(result[2].items[0].text,'streamed response');
+});

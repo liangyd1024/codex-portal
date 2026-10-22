@@ -45,9 +45,17 @@ export function mergeLiveTurns(current = [], incoming = []) {
     return merged;
   };
   const result = current.map(turn => ({...turn, items:[...(turn.items || [])]}));
-  for (const turn of incoming) {
+  const knownIds=new Set(result.map(turn=>turn.id));
+  for (let position=0;position<incoming.length;position++) {
+    const turn=incoming[position];
     const index = result.findIndex(old => old.id === turn.id);
-    if (index < 0) { result.push(turn); continue; }
+    if (index < 0) {
+      // A latest-only preview is a suffix of the full page. Insert newly read
+      // older turns before the next known turn, retaining newer SSE turns.
+      const next=incoming.slice(position+1).find(value=>knownIds.has(value.id));
+      const at=next?result.findIndex(old=>old.id===next.id):result.length;
+      result.splice(at,0,turn);knownIds.add(turn.id);continue;
+    }
     const old = result[index], items = [...(old.items || [])];
     for (const item of turn.items || []) {
       const i = items.findIndex(value => value.id === item.id);

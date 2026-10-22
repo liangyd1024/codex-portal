@@ -340,7 +340,7 @@ def read_detail(payload):
         if row is None:
             raise ValueError('未找到会话：' + identifier)
         thread = normalized_thread(row)
-        activity = desktop_activity([identifier])
+        activity = desktop_activity([identifier]) if payload.get('includeActivity', True) else {}
         if identifier in activity:
             thread['activity'] = activity[identifier]
         return {'thread': thread, 'historySource': 'snapshot'}
@@ -677,9 +677,10 @@ def read_history(payload):
             parameters.append(before)
         sql = 'SELECT ' + ', '.join(TURN_COLUMNS) + ' FROM thread_turns WHERE ' + ' AND '.join(conditions)
         sql += ' ORDER BY rollout_ordinal DESC, turn_id DESC LIMIT ?'
-        rows = connection.execute(sql, parameters + [6]).fetchall()
-        goal_inputs = goal_input_items(connection, identifier, [row['turn_id'] for row in rows[:5]])
-        outputs = read_outputs({**payload, 'turnIds': [row['turn_id'] for row in rows[:5]]})['data'] if payload.get('withOutputs') else []
+        limit = 1 if payload.get('preview') else 5
+        rows = connection.execute(sql, parameters + [limit + 1]).fetchall()
+        goal_inputs = goal_input_items(connection, identifier, [row['turn_id'] for row in rows[:limit]])
+        outputs = read_outputs({**payload, 'turnIds': [row['turn_id'] for row in rows[:limit]]})['data'] if payload.get('withOutputs') else []
         journal_ids = [entry['item']['id'] for entry in outputs]
         item_sql = "CASE WHEN json_extract(item_json,'$.type')='commandExecution' THEN json_set(item_json,'$.aggregatedOutput',substr(coalesce(json_extract(item_json,'$.aggregatedOutput'),''),1,16384),'$.outputPartial',json('true')) ELSE item_json END" if payload.get('preview') else 'item_json'
         # Do not decode and transmit the same large command twice. Keep fallback
@@ -687,7 +688,7 @@ def read_history(payload):
         if journal_ids:
             item_sql = 'CASE WHEN item_id IN (' + ','.join('?' for _ in journal_ids) + ') THEN json_remove(item_json, \'$.aggregatedOutput\') ELSE ' + item_sql + ' END'
         turns = []
-        for row in rows[:5]:
+        for row in rows[:limit]:
             items = connection.execute(
                 'SELECT item_id' + item_time + ', ' + item_sql + ' AS item_json FROM thread_items WHERE thread_id = ? AND turn_id = ? '
                 'ORDER BY rollout_ordinal ASC, item_id ASC',
@@ -713,7 +714,7 @@ def read_history(payload):
             else: old.update(entry['item'])
         return {
             'data': turns,
-            'nextCursor': 'db:' + str(rows[4]['rollout_ordinal']) if len(rows) > 5 else None,
+            'nextCursor': 'db:' + str(rows[limit - 1]['rollout_ordinal']) if len(rows) > limit else None,
             'historySource': 'snapshot',
         }
     finally:
