@@ -31,4 +31,8 @@
 
 ## 部署
 
-验证完成后按 master 串行提交、推送与标准安装。正式部署及备份信息执行后补录。
+- 代码提交：`53182830b4ea5628341e3ae69f8e0a337b83144b`，已推送 `origin/master`。包含其他会话已提交的三秒浮动提示修复 `f25f62d`，没有覆盖已上线功能。
+- 本机标准安装成功，正式 4317 版本接口返回上述提交；新前端模块返回 200。部署前备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261022T020609540887Z.tar.gz.age`。
+- Ally 身份核验成功，源码干净且在 master；拉取后核对当前正式版本为新版本祖先，再快进。远端重新执行完整测试，338 项 Node、59 项 Python 通过；标准安装及健康检查成功。没有向远端传递本机会话豁免 ID。
+- Ally 安装版本同上。备份：`/Users/ally/Library/Application Support/RemoteCodexManager/backups/ally-20261022T020653617884Z.tar.gz.age`；部署日志：`/tmp/rcm-notifications-deploy-53182830b4ea.log`。
+- 安装按本机、Ally 顺序串行执行，未停止 Codex 引擎或在用任务。隔离预览已停止，浏览器测试 TaskSpace 已结束。真实操作系统横幅仍未实测，不能用安装健康检查代替此项验证。
