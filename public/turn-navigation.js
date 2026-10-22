@@ -35,7 +35,7 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
   const header=el('div','turn-directory-header'),title=el('h2','','对话轮次'),close=el('button','','关闭'),list=el('div','turn-directory-list'),more=el('button','turn-directory-more','加载更早轮次'),feedback=el('p','turn-directory-feedback');feedback.setAttribute('role','status');close.type=more.type='button';header.append(title,close);dialog.append(header,list,feedback,more);document.body.append(dialog);
   const notice=el('div','turn-navigation-notice'),noticeText=el('span'),noticeAction=el('button');noticeText.setAttribute('role','status');noticeAction.type='button';notice.append(noticeText,noticeAction);rail.append(notice);notice.hidden=true;
   let key=null,rows=[],signature='',hovered=null,hideTimer,frame,currentId,loading=false,loadVersion=0,loadMessage='';
-  const buttons=new Map(),positions=new Map();let restore=null;
+  const buttons=new Map(),positions=new Map();let restore=null,directoryTarget=null;
   const nodes=()=>[...content.querySelectorAll('.message-turn')];
   const locate=id=>nodes().find(n=>n.dataset.turnId===id);
   const reading=()=>{const top=scroller.getBoundingClientRect().top;return nodes().find(n=>n.getBoundingClientRect().bottom>top+24);};
@@ -54,14 +54,15 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
   }
   function jump(id){
     if(!locate(id))context().reveal?.(id);
-    const target=locate(id);if(!target)return;restore=null;hide();if(dialog.open)dialog.close();follow.pause({sticky:true});
+    const target=locate(id);if(!target)return;restore=null;hide();if(dialog.open){directoryTarget=target;dialog.close();}follow.pause({sticky:true});
     const top=scroller.scrollTop+target.getBoundingClientRect().top-scroller.getBoundingClientRect().top-12;
     scroller.scrollTop=Math.max(0,top);target.tabIndex=-1;target.focus({preventScroll:true});schedule();
   }
   function renderList(){
-    const top=list.scrollTop,focused=document.activeElement?.dataset.turnTarget;list.replaceChildren();
+    const top=list.scrollTop,focused=document.activeElement?.dataset.turnTarget,bounds=list.getBoundingClientRect();
+    const first=[...list.children].find(n=>n.getBoundingClientRect().bottom>bounds.top),anchor=first?{id:first.dataset.turnTarget,offset:first.getBoundingClientRect().top-bounds.top}:null;list.replaceChildren();
     for(const row of rows){const button=el('button','turn-directory-row');button.type='button';button.dataset.turnTarget=row.id;button.setAttribute('aria-label','跳转到：'+row.question);button.append(card(row));button.onclick=()=>navigate(row.id);if(row.id===currentId)button.setAttribute('aria-current','location');list.append(button);}
-    list.scrollTop=top;if(focused)list.querySelector('[data-turn-target="'+CSS.escape(focused)+'"]')?.focus({preventScroll:true});
+    list.scrollTop=top;if(anchor){const node=list.querySelector('[data-turn-target="'+CSS.escape(anchor.id)+'"]');if(node)list.scrollTop+=node.getBoundingClientRect().top-list.getBoundingClientRect().top-anchor.offset;}if(focused)list.querySelector('[data-turn-target="'+CSS.escape(focused)+'"]')?.focus({preventScroll:true});
   }
   function report(message){loadMessage=message;feedback.textContent=message;noticeText.textContent=message;syncLoad();}
   async function earlier(){
@@ -90,10 +91,11 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
   function navigate(id){jump(id);void earlier();}
   entry.onclick=()=>{hide();renderList();dialog.showModal();const active=list.querySelector('[aria-current]');if(active)list.scrollTop=active.offsetTop-list.offsetTop-Math.max(0,(list.clientHeight-active.offsetHeight)/2);close.focus();void earlier();syncLoad();};close.onclick=()=>dialog.close();
   dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
-  dialog.addEventListener('close',()=>{syncLoad();(entry.checkVisibility()?entry:document.querySelector('#mobile-more>summary'))?.focus({preventScroll:true});});
+  dialog.addEventListener('close',()=>{syncLoad();const target=directoryTarget;directoryTarget=null;if(target?.isConnected)target.focus({preventScroll:true});else(entry.checkVisibility()?entry:document.querySelector('#mobile-more>summary'))?.focus({preventScroll:true});});
   preview.addEventListener('pointerenter',()=>clearTimeout(hideTimer));preview.addEventListener('pointerleave',deferHide);
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!preview.hidden){hide();e.preventDefault();}});
-  rail.addEventListener('keydown',e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;const entries=[...buttons.values()],index=entries.indexOf(document.activeElement);if(index<0)return;e.preventDefault();entries[e.key==='Home'?0:e.key==='End'?entries.length-1:Math.max(0,Math.min(entries.length-1,index+(e.key==='ArrowDown'?1:-1)))]?.focus();});
+  document.addEventListener('pointerdown',e=>{if(!rail.contains(e.target)&&!preview.contains(e.target))hide();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!e.isComposing&&!preview.hidden){hide();e.preventDefault();}});
+  rail.addEventListener('keydown',e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;const entries=[...ticks.children],index=entries.indexOf(document.activeElement);if(index<0)return;e.preventDefault();entries[e.key==='Home'?0:e.key==='End'?entries.length-1:Math.max(0,Math.min(entries.length-1,index+(e.key==='ArrowDown'?1:-1)))]?.focus();});
   function measure(){
     frame=null;const c=context(),r=scroller.getBoundingClientRect();const visible=c.visible&&rows.length>0&&r.height>0;
     rail.hidden=!visible||compactLayout();entry.hidden=!visible;
@@ -119,6 +121,7 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
     syncLoad();schedule();
   }
   for(const event of ['wheel','touchstart','keydown'])scroller.addEventListener(event,()=>{restore=null;},{passive:true});
-  scroller.addEventListener('scroll',schedule,{passive:true});window.addEventListener('resize',()=>{hide();schedule();});new ResizeObserver(schedule).observe(scroller);
+  ticks.addEventListener('scroll',hide,{passive:true});
+  scroller.addEventListener('scroll',()=>{hide();schedule();},{passive:true});window.addEventListener('resize',()=>{hide();schedule();});new ResizeObserver(schedule).observe(scroller);
   return {update,switchContext};
 }
