@@ -7,3 +7,7 @@
 - 当前工作区 npm test 出现 3 个 extension-notice 失败，与其他会话正在修改的 shared/connection-state.js 相关；没有覆盖这些修改。
 - 从 HEAD 导出独立临时目录，仅叠加本次 feedback.js 和测试后执行 npm test：332 Node、59 Python 全通过。日志 /tmp/rcm-tip-isolated-tests.log，验证目录记录于 /tmp/rcm-tip-verified-root.txt。
 - 正式部署结果后续补录。
+
+## 交付
+
+代码 f25f62d 已推送 origin/master。安装命令 node scripts/install-local.mjs --ref f25f62d 被工作区未提交修改检查拒绝，未进入备份、空闲检查或重启阶段。本次未正式部署；其他会话的修改保留。
