@@ -24,7 +24,7 @@ import {reconcileMessages} from './message-dom.js';
 import {NewChatDraft} from './new-chat.js';
 import {installAttachments} from './attachments.js';
 let attachments;
-import {Sidebar} from './sidebar.js';
+import {Sidebar,projectFolderOptions} from './sidebar.js';
 import {DraftStore, shouldSendOnEnter, coalesceRefresh} from './input-state.js';
 import {installAutomations} from './automations.js';
 let automations;
@@ -1160,7 +1160,7 @@ async function respondRequest(r, answer) {
 function updateNewProjects(projectRoot) {
   const preferred=(typeof projectRoot==='string'?projectRoot:null)||newDraft.cwd||state.projects.find(p=>p.id===state.projectId)?.roots?.[0]||currentThread()?.cwd;
   const select=clear($('new-cwd'));
-  const options=state.projects.flatMap(p=>(p.roots||[]).map(root=>({root,name:p.name||baseName(root)})));
+  const options=projectFolderOptions(state.projects);
   for(const p of options){const option=el('option','',p.name);option.value=p.root;select.append(option);}
   if(options.some(p=>p.root===preferred))select.value=preferred;
   newDraft.cwd=select.value;rememberNewDraft();

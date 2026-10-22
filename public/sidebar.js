@@ -6,7 +6,37 @@ function orderItems(items,keys=[],orderedThreadIds=null){
   if(orderedThreadIds){const byId=new Map(result.filter(i=>i.kind==='thread').map(i=>[i.value.id,i]));const ordered=orderedThreadIds.flatMap(id=>byId.has(id)?[byId.get(id)]:[]);let index=0;return result.map(i=>i.kind==='thread'?ordered[index++]||i:i);}
   return result;
 }
+// Collapse only the presentation. Native project IDs and thread membership stay intact.
+const rootKey=roots=>Array.isArray(roots)&&roots.length&&roots.every(r=>typeof r==='string'&&r.startsWith('/'))?JSON.stringify([...new Set(roots.map(r=>r.replace(/\/+$/,'')||'/'))].sort()):null;
+export function projectFolderOptions(projects){
+  const seen=new Set();
+  return projects.flatMap(p=>(p.roots||[]).filter(root=>typeof root==='string'&&root.startsWith('/')).flatMap(root=>{
+    const key=root.replace(/\/+$/,'')||'/';
+    if(seen.has(key))return [];seen.add(key);return [{root,name:p.name||key.split('/').pop()||'/'}];
+  }));
+}
+function projectPresentation(snapshot){
+  const preferred=[...snapshot.pinnedProjectIds,...snapshot.sections.flatMap(s=>s.projectIds),...snapshot.projects.filter(p=>p.legacyId&&p.legacyId!==p.id).map(p=>p.id),...snapshot.rootProjectIds];
+  const rank=new Map();preferred.forEach((id,i)=>{if(!rank.has(id))rank.set(id,i);});
+  const groups=new Map(),aliases=new Map();
+  for(const p of snapshot.projects){const key=rootKey(p.roots)||'id:'+p.id;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p);}
+  const projects=[];
+  for(const group of groups.values()){
+    const ordered=[...group].sort((a,b)=>(rank.get(a.id)??Infinity)-(rank.get(b.id)??Infinity));
+    const selected=ordered[0];group.forEach(p=>aliases.set(p.id,selected.id));
+    let threadIds=[...new Set(ordered.flatMap(p=>p.threadIds))];
+    if(group.length>1&&snapshot.preferences?.chats!=='manual'){
+      const threads=new Map(snapshot.data.map(t=>[t.id,t]));
+      threadIds.sort((a,b)=>(threads.get(b)?.recencyAt||threads.get(b)?.updatedAt||0)-(threads.get(a)?.recencyAt||threads.get(a)?.updatedAt||0)||a.localeCompare(b));
+    }
+    projects.push({...selected,aliasIds:group.map(p=>p.id),threadIds,recencyAt:Math.max(...group.map(p=>p.recencyAt||0))});
+  }
+  const ids=values=>[...new Set(values.map(id=>aliases.get(id)||id))];
+  const keys=values=>(values||[]).map(key=>key.startsWith('project:')?'project:'+(aliases.get(key.slice(8))||key.slice(8)):key);
+  return {...snapshot,projects,pinnedProjectIds:ids(snapshot.pinnedProjectIds),rootProjectIds:ids(snapshot.rootProjectIds),pinnedOrder:keys(snapshot.pinnedOrder),sections:snapshot.sections.map(s=>({...s,projectIds:ids(s.projectIds),itemOrder:keys(s.itemOrder)}))};
+}
 export function sidebarGroups(snapshot){
+  snapshot=projectPresentation(snapshot);
   const threads=new Map(snapshot.data.map(t=>[t.id,t])),projects=new Map(snapshot.projects.map(p=>[p.id,p]));
   const seenThreads=new Set(),seenProjects=new Set();
   const thread=ids=>ids.filter(id=>threads.has(id)&&!seenThreads.has(id)&&seenThreads.add(id)).map(id=>({kind:'thread',value:threads.get(id)}));
@@ -51,7 +81,9 @@ export class Sidebar {
   save(){try{localStorage.setItem(this.key(),JSON.stringify([...this.expanded]));}catch{}}
   expandProject(id){
     this.expanded.add('project:'+id);
-    const group=this.snapshot&&sidebarGroups({...this.snapshot,archived:false}).find(g=>g.items.some(i=>i.kind==='project'&&i.value.id===id));
+    const group=this.snapshot&&sidebarGroups({...this.snapshot,archived:false}).find(g=>g.items.some(i=>i.kind==='project'&&(i.value.id===id||i.value.aliasIds?.includes(id))));
+    const item=group?.items.find(i=>i.kind==='project'&&(i.value.id===id||i.value.aliasIds?.includes(id)));
+    if(item)this.expanded.add('project:'+item.value.id);
     this.expanded.add('section:'+(group?.id||'threads'));this.save();
   }
   isExpanded(key){return this.view?.search?(this.searchOverrides.get(key)??this.searchExpanded):this.expanded.has(key);}
