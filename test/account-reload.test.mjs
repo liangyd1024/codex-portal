@@ -57,3 +57,15 @@ test('invalid login blocks new submissions while keeping recovery available',asy
  assert.equal(calls.length,0);
  await m.reloadLogin({allEntrancesDisconnected:true});assert.equal(m.status().loginRecovery,null);
 });
+test('startup identity notification retries only reads after one native restart',async()=>{
+ const {m,calls}=fixture();let reads=0;
+ m.connect=async()=>{m.connection.state='connected';m.rpc={connected:true,request:async()=>{reads++;if(reads===1)m.onNotification({method:'account/updated',params:{authMode:'apiKey'}});return {account:{type:'apiKey'}};}};};
+ await m.reloadLogin({allEntrancesDisconnected:true});
+ assert.equal(reads,2);assert.equal(calls.filter(([method])=>method==='reload-login').length,1);
+});
+test('unstable post-restart identity tells the user to refresh without repeating restart',async()=>{
+ const {m,calls}=fixture();let reads=0;
+ m.connect=async()=>{m.connection.state='connected';m.rpc={connected:true,request:async()=>{reads++;m.onNotification({method:'account/updated',params:{authMode:'apiKey'}});return {account:{type:'apiKey'}};}};};
+ await assert.rejects(m.reloadLogin({allEntrancesDisconnected:true}),e=>e.code==='LOGIN_READ_UNCONFIRMED');
+ assert.equal(reads,3);assert.equal(calls.filter(([method])=>method==='reload-login').length,1);
+});
