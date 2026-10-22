@@ -3,6 +3,15 @@ export function skillQuery(value, caret) {
   return match?{start:caret-match[2].length-1,end:caret,query:match[2].toLowerCase()}:null;
 }
 
+export function pluginQuery(value, caret) {
+  const match=value.slice(0,caret).match(/(?:^|\s)@([^\s/@$]*)$/u);
+  return match?{start:caret-match[1].length-1,end:caret,query:match[1].toLowerCase(),kind:'plugins'}:null;
+}
+
+export function matchingPlugins(entries,query='') {
+  return matchingSkills(entries.filter(e=>e.installed).map(e=>({...e,path:e.id})),query);
+}
+
 export function skillPresentation(entry) {
   return {name:entry.interface?.displayName||entry.name,
     description:entry.interface?.shortDescription||entry.shortDescription||entry.description||'',
@@ -25,19 +34,20 @@ export function installSkillSuggestions({input,api,context,select}) {
   const close=()=>{version++;box.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');};
   const position=()=>{if(box.hidden)return;const r=input.getBoundingClientRect(),v=window.visualViewport;box.style.left=Math.max(8,r.left)+'px';box.style.width=Math.max(0,Math.min(r.width,(v?.width||innerWidth)-16))+'px';box.style.bottom=Math.max(8,innerHeight-r.top+8)+'px';box.style.maxHeight=Math.max(60,Math.min(300,r.top-(v?.offsetTop||0)-16))+'px';};
   const highlight=()=>{[...box.querySelectorAll('[role=option]')].forEach((node,i)=>node.setAttribute('aria-selected',String(i===index)));const node=box.querySelectorAll('[role=option]')[index];if(node){input.setAttribute('aria-activedescendant',node.id);node.scrollIntoView({block:'nearest'});}};
-  const choose=entry=>{if(!query||input.disabled||!context().ready||context().busy)return;const range={...query};close();select(entry,range);};
+  const choose=entry=>{if(!query||input.disabled||!context().ready||context().busy)return;const range={...query};close();select(entry,range,query.kind||'skills');};
   async function update(){
     close();rows=[];if(composing||input.disabled||!context().ready||context().busy)return;
-    query=skillQuery(input.value,input.selectionStart);if(!query)return;
+    query=pluginQuery(input.value,input.selectionStart)||skillQuery(input.value,input.selectionStart);if(!query)return;
+    const kind=query.kind||'skills',label=kind==='plugins'?'插件':'技能';box.setAttribute('aria-label',label);
     const stamp=version,id=context().id,cwd=context().cwd,value=input.value,caret=input.selectionStart;
-    box.replaceChildren();box.hidden=false;input.setAttribute('aria-expanded','true');position();box.textContent='正在读取技能…';input.removeAttribute('aria-activedescendant');
+    box.replaceChildren();box.hidden=false;input.setAttribute('aria-expanded','true');position();box.textContent='正在读取'+label+'…';input.removeAttribute('aria-activedescendant');
     try{
-      const catalog=await api('/api/composer?cwd='+encodeURIComponent(cwd)+'&kind=skills');
+      const catalog=await api('/api/composer?cwd='+encodeURIComponent(cwd)+'&kind='+kind);
       if(stamp!==version||context().id!==id||context().cwd!==cwd||input.value!==value||input.selectionStart!==caret)return;
-      if(catalog.skills.error)throw Error(catalog.skills.error);
-      rows=matchingSkills((catalog.skills.data||[]).flatMap(e=>e.skills||[]),query.query);
+      const source=catalog[kind];if(source.error)throw Error(source.error);
+      rows=kind==='plugins'?matchingPlugins((source.marketplaces||[]).flatMap(e=>e.plugins||[]),query.query):matchingSkills((source.data||[]).flatMap(e=>e.skills||[]),query.query);
       box.replaceChildren();index=0;
-      const heading=document.createElement('div');heading.className='skill-suggestions-heading';heading.textContent='技能';box.append(heading);
+      const heading=document.createElement('div');heading.className='skill-suggestions-heading';heading.textContent=label;box.append(heading);
       for(const [i,entry] of rows.entries()){
         const button=document.createElement('button');button.type='button';button.id='skill-option-'+i;button.setAttribute('role','option');
         const view=skillPresentation(entry);
@@ -48,10 +58,10 @@ export function installSkillSuggestions({input,api,context,select}) {
         button.title=[view.name,view.description,view.source,entry.path].filter(Boolean).join('\n');
         button.append(icon,name,description,source);button.onpointerdown=e=>{if(e.pointerType==='mouse')e.preventDefault();};button.onclick=()=>choose(entry);box.append(button);
       }
-      if(!rows.length)box.append(document.createTextNode('没有匹配的可用技能。'));
-      if((catalog.skills.data||[]).some(e=>e.errors?.length))box.append(document.createTextNode('部分目录未能读取，请重新输入以重试。'));
+      if(!rows.length)box.append(document.createTextNode('没有匹配的可用'+label+'。'));
+      if((source.data||[]).some(e=>e.errors?.length)||source.marketplaceLoadErrors?.length)box.append(document.createTextNode('部分目录未能读取，请重新输入以重试。'));
       highlight();position();
-    }catch(error){if(stamp===version){rows=[];box.textContent='技能读取失败，重新输入可重试：'+error.message;}}
+    }catch(error){if(stamp===version){rows=[];box.textContent=label+'读取失败，重新输入可重试：'+error.message;}}
   }
   input.addEventListener('input',()=>void update());input.addEventListener('click',()=>void update());
   input.addEventListener('compositionstart',()=>{composing=true;close();});input.addEventListener('compositionend',()=>{composing=false;ended=performance.now();void update();});

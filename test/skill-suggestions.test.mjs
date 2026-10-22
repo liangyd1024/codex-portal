@@ -36,3 +36,18 @@ test('deduplicate only identical paths and preserve native selection identities'
  assert.deepEqual(matchingSkills([a,a,b],''),[a,b]);assert.equal(skillPresentation(a).source,'个人');assert.equal(skillPresentation(b).source,'项目');
  assert.equal(skillPresentation({...a,shortDescription:'short',description:'long'}).description,'short');
 });
+
+import {pluginQuery,matchingPlugins} from '../public/skill-suggestions.js';
+test('at completion matches the caret query but excludes emails and paths',()=>{
+ assert.deepEqual(pluginQuery('请用 @ima 后续',7),{start:3,end:7,query:'ima',kind:'plugins'});
+ assert.equal(pluginQuery('hello@example.com',17),null);
+ assert.equal(pluginQuery('/path/@plugin',13),null);
+ assert.equal(pluginQuery('@one/two',8),null);
+ assert.equal(pluginQuery('@',1).query,'');
+});
+test('plugin completion uses native IDs, display names and enabled installed entries',()=>{
+ const a={id:'image@market',name:'image',enabled:true,installed:true,interface:{displayName:'Image Gen',shortDescription:'Generate images'}};
+ const b={...a,id:'other@market',name:'other',interface:{displayName:'Other'}};
+ assert.deepEqual(matchingPlugins([a,a,b,{...a,id:'off',enabled:false},{...a,id:'new',installed:false}],'ima').map(e=>e.id),[a.id]);
+ assert.deepEqual(matchingPlugins([a,b],'').map(e=>e.id),[a.id,b.id]);
+});

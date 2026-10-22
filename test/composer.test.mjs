@@ -30,7 +30,7 @@ test('skills and plugins are resolved against target catalogs, not arbitrary bro
   const {m}=fixture();m.controlled.set('a',{cwd:'/project',model:'test'});
   const options=await turnOptions(m,'a',{skills:['/skills/SKILL.md'],plugins:['plugin']},{});
   assert.deepEqual(options.input[0],{type:'skill',name:'skill',path:'/skills/SKILL.md'});
-  assert.match(options.input[1].text,/插件/);
+  assert.deepEqual(options.input[1],{type:'mention',name:'插件',path:'plugin://plugin'});
   await assert.rejects(turnOptions(m,'a',{skills:['/arbitrary/file']},{}),/不可用/);
   await assert.rejects(turnOptions(m,'a',{plugins:['missing']},{}),/不可用/);
 });
@@ -93,7 +93,7 @@ test('running-turn steering includes verified skills and plugins without changin
  const {m,calls}=fixture();m.controlled.set('a',{cwd:'/project',status:{type:'active'}});m.activeTurns.set('a','running');
  await m.steer('a',{text:'请用 $skill 补充验证',skills:['/skills/SKILL.md'],plugins:['plugin'],mode:'plan',access:'full'});
  const request=calls.find(c=>c.method==='turn/steer').params;
- assert.equal(request.expectedTurnId,'running');assert.equal(request.input[0].text,'请用 $skill 补充验证');assert.deepEqual(request.input[1],{type:'skill',name:'skill',path:'/skills/SKILL.md'});assert.match(request.input[2].text,/插件/);
+ assert.equal(request.expectedTurnId,'running');assert.equal(request.input[0].text,'请用 $skill 补充验证');assert.deepEqual(request.input[1],{type:'skill',name:'skill',path:'/skills/SKILL.md'});assert.deepEqual(request.input[2],{type:'mention',name:'插件',path:'plugin://plugin'});
  assert.equal(request.collaborationMode,undefined);assert.equal(request.approvalPolicy,undefined);assert.equal(calls.some(c=>c.method==='turn/start'),false);
 });
 test('running skill selection rejects stale paths and connection changes before steering',async()=>{

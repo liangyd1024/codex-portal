@@ -109,7 +109,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
       finally{goalUpdating=false;render();}
     };
   }
-  const suggestions=installSkillSuggestions({input,api,context,select:(entry,range)=>insertReference(entry,'skills',range)});
+  const suggestions=installSkillSuggestions({input,api,context,select:(entry,range,kind)=>insertReference(entry,kind,range)});
   const planCompletion=installPlanCompletion({host,context,notify,send:implementPlan,resetMode:()=>{choice().mode='default';save();}});
   function render(){
     planCompletion.render();
