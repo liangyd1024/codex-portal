@@ -96,4 +96,12 @@
 
 ## 提交与部署记录
 
-代码和上述验证完成后，在 master 提交并推送。正式部署通过现有安装程序执行空闲检查、加密备份、版本安装和健康检查；执行结果补记于此。
+- 实施提交：`93dbe65020926b3a50d51a03db185f68a8b52651`，已推送 `origin/master`。
+- 部署前正式版本：`8c414c8be53f66013fd13e3845bcbc426a7b5647`。已确认是实施提交祖先，保留其全部功能及其后的黑白反馈修复。
+- 安装命令：`node scripts/install-local.mjs --ref 93dbe65`。两次空闲检查通过，安装程序仅豁免当前部署会话；未中断其他任务。
+- 部署前加密备份：`/Users/marco/Library/Application Support/RemoteCodexManager/backups/marco-20261022T012627509448Z.tar.gz.age`。
+- 正式网页 4317 已运行实施版本，安装健康检查通过。未停止或重启 Codex 原生引擎。
+- 上线只读复核：`/api/version` 精确匹配提交；`app.js` 包含新渲染模块且返回 gzip；条件请求返回 304；共享模块返回 200；本机连接为 connected。
+- 正式桌面列表出现耗时为 404、291、335ms，390px 为 290ms；每次首屏侧栏与状态各 1 次。各样本无页面长任务和横向溢出。首轮新 JS/CSS 响应体 143894 字节。真实数据在验证期间略有变化，样本用于确认上线效果，不代表固定 SLA。
+- 上线证据：[加载数据](performance-implementation-evidence-2026-10-22/production-loading.json)、[健康与缓存检查](performance-implementation-evidence-2026-10-22/production-health.json)。
+- 开发预览已停止，仅关闭本轮预览进程；临时测试目录保留。此后仅补充验收文档，不再部署纯文档提交。
