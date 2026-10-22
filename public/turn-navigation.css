@@ -5,3 +5,5 @@
 @media(pointer:coarse){.turn-tick{min-width:44px;min-height:44px}.turn-navigation{width:44px}.turn-navigation-older{min-width:44px;min-height:44px}}
 
 .turn-navigation-notice{position:absolute;top:0;left:44px;display:flex;align-items:center;gap:8px;width:max-content;max-width:min(300px,calc(100vw - 120px));padding:6px 10px;background:var(--panel,#fff);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px #0000000d;font-size:13px;pointer-events:auto}.turn-navigation-notice[hidden]{display:none}.turn-navigation-notice button{background:transparent;color:var(--ink);min-width:44px;min-height:44px;flex-shrink:0}
+
+.turn-navigation-count{font-size:12px;line-height:1.5;color:var(--muted);text-align:center;overflow-wrap:anywhere;padding:4px 0;pointer-events:auto}

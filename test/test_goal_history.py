@@ -64,11 +64,14 @@ class GoalHistoryTest(unittest.TestCase):
             self.goal('目标' + str(i))
             self.turn(str(i))
         first = store.read_history({'threadId':'thread', 'preview':True})
+        self.assertEqual(first['totalTurns'], 7)
+        self.assertEqual(store.read_history({'threadId':'other'})['totalTurns'], 0)
         self.assertEqual(len(first['data']), 1)
         turns = first['data']
         cursor = first['nextCursor']
         while cursor:
             page = store.read_history({'threadId':'thread', 'cursor':cursor})
+            self.assertEqual(page['totalTurns'], 7)
             turns += page['data']
             cursor = page['nextCursor']
         self.assertEqual([t['items'][0]['objective'] for t in turns], ['目标'+str(i) for i in reversed(range(7))])

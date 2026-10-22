@@ -25,10 +25,14 @@ export async function loadAllEarlier({context,loadEarlier,isCurrent,onProgress=(
   }
   return isCurrent();
 }
+export function turnCountLabel({totalTurns,turns=[],hasEarlier}) {
+  const total=Number.isSafeInteger(totalTurns)&&totalTurns>=0?Math.max(totalTurns,turns.length):!hasEarlier?turns.length:null;
+  return total===null?'总数未知':'共 '+total+' 轮';
+}
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
 export function installTurnNavigation({scroller,content,entryHost,context,follow,loadEarlier}) {
   const rail=el('nav','turn-navigation');rail.setAttribute('aria-label','对话轮次');
-  const ticks=el('div','turn-navigation-ticks'),older=el('button','turn-navigation-older','↑');older.type='button';older.setAttribute('aria-label','加载全部轮次');rail.append(older,ticks);document.body.append(rail);
+  const ticks=el('div','turn-navigation-ticks'),older=el('button','turn-navigation-older','↑');older.type='button';older.setAttribute('aria-label','加载全部轮次');const count=el('div','turn-navigation-count');rail.append(count,older,ticks);document.body.append(rail);
   const preview=el('div','turn-preview');preview.hidden=true;preview.id='turn-preview';document.body.append(preview);
   const entry=el('button','turn-navigation-entry','轮次');entry.type='button';entry.setAttribute('aria-haspopup','dialog');entryHost.append(entry);
   const dialog=el('dialog','turn-directory');dialog.setAttribute('aria-label','对话轮次');
@@ -113,6 +117,7 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
   function update(){
     const c=context();const next=c.turns.map(t=>turnPreview(t,{uncertain:c.uncertain})),sig=JSON.stringify(next);
     rows=next;
+    const label=turnCountLabel(c);count.textContent=label;count.title=label;entry.textContent='轮次 · '+label;title.textContent='对话轮次 · '+label;
     if(sig!==signature){signature=sig;const keep=new Set(rows.map(r=>r.id));for(const [id,b] of buttons)if(!keep.has(id)){b.remove();buttons.delete(id);}
       rows.forEach((row,index)=>{let b=buttons.get(row.id);if(!b){b=el('button','turn-tick');b.type='button';b.append(el('span'));buttons.set(row.id,b);}b.setAttribute('aria-label','预览并跳转到：'+row.question);b.setAttribute('aria-describedby','turn-preview');b.classList.toggle('turn-tick-running',row.running);b.onclick=()=>navigate(row.id);b.onpointerenter=()=>show(row,b);b.onpointerleave=deferHide;b.onfocus=()=>show(row,b);b.onblur=deferHide;if(ticks.children[index]!==b)ticks.insertBefore(b,ticks.children[index]||null);});
       if(dialog.open)renderList();if(hovered){const row=rows.find(r=>r.id===hovered);if(row)show(row,buttons.get(row.id));else hide();}

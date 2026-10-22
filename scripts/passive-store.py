@@ -659,7 +659,7 @@ def read_history(payload):
     # On a new installation even the history database is absent until the first
     # turn. Only the manager's successful new-thread path may allow that absence.
     if payload.get('allowMissingStore') is True and not (STORE / 'thread_history_1.sqlite').exists():
-        return {'data': [], 'nextCursor': None, 'historySource': 'snapshot'}
+        return {'data': [], 'nextCursor': None, 'historySource': 'snapshot', 'totalTurns': 0}
     connection = connect_store('thread_history_1.sqlite')
     try:
         require_columns(connection, 'thread_history_1.sqlite', 'thread_turns', TURN_COLUMNS)
@@ -669,6 +669,7 @@ def read_history(payload):
         # start time: steered user messages can arrive much later in that turn.
         item_time = ', created_at_ms' if 'created_at_ms' in item_columns else ''
         identifier = thread_id(payload)
+        total_turns = connection.execute('SELECT COUNT(*) FROM thread_turns WHERE thread_id = ?', [identifier]).fetchone()[0]
         before = cursor_number(payload)
         conditions = ['thread_id = ?']
         parameters = [identifier]
@@ -714,6 +715,7 @@ def read_history(payload):
             else: old.update(entry['item'])
         return {
             'data': turns,
+            'totalTurns': total_turns,
             'nextCursor': 'db:' + str(rows[limit - 1]['rollout_ordinal']) if len(rows) > limit else None,
             'historySource': 'snapshot',
         }
