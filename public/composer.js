@@ -92,7 +92,9 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
   bar.querySelector('#plugin-picker').onclick=e=>void picker('plugins',e.currentTarget);
   const goalButton=bar.querySelector('#goal-settings');
   goalButton.onclick=()=>{
-    if(context().goal&&!choice().goalPending){editGoal(goalButton);return;}
+    const c=context();
+    if(c.goalError){notify('目标暂未读取，请刷新后重试。',true);return;}
+    if(c.goal&&c.goal.status!=='complete'&&!choice().goalPending){editGoal(goalButton);return;}
     const next=!choice().goalPending;
     choice().goalPending=next;
     if(next){choice().mode='default';delete choice().goalUncertain;}
@@ -167,7 +169,8 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
     mode.title=choice().mode==='plan'?'退出计划模式':'计划：先制定方案';
     mode.setAttribute('aria-pressed',String(choice().mode==='plan'));
     planBadge.hidden=choice().mode!=='plan';
-    goalBadge.hidden=!choice().goalPending&&!c.goal&&!c.goalError;
+    const currentGoal=c.goal&&c.goal.status!=='complete';
+    goalBadge.hidden=!choice().goalPending&&!currentGoal&&!c.goalError;
     goalBadge.textContent=choice().goalPending?'目标 ×':c.goalError?'目标待确认':({active:'目标',paused:'目标已暂停',complete:'目标已完成'}[c.goal?.status]||'目标待确认');
     goalBadge.title=choice().goalPending?'发送时将输入内容设为目标，点击取消':c.goalError?'目标状态暂未读取，点击重新检查':c.goal?.objective||'查看目标';
     goalBadge.setAttribute('aria-label',choice().goalPending?'取消本次目标设置':goalBadge.textContent+'，目标操作');
@@ -175,7 +178,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan})
     summary.textContent='＋';summary.title='添加图片、技能和工具';summary.dataset.mode=choice().mode;summary.setAttribute('aria-label',choice().mode==='plan'?'更多输入工具，计划模式':'更多输入工具');
     // Attachments can accompany a native turn/steer while the current turn runs.
     for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||goalUpdating||(control!==images&&control!==goalBadge&&!(control===goalButton&&c.goal)&&control.id!=='skill-picker'&&control.id!=='plugin-picker'&&c.active);
-    goalButton.textContent=c.goal&&!choice().goalPending?'编辑目标':'目标';goalButton.title=c.goal?'编辑当前目标内容':'用下一条输入设置目标';goalButton.setAttribute('aria-pressed',String(Boolean(choice().goalPending)));
+    goalButton.textContent=currentGoal&&!choice().goalPending?'编辑目标':'目标';goalButton.title=currentGoal?'编辑当前目标内容':'用下一条输入设置目标';goalButton.setAttribute('aria-pressed',String(Boolean(choice().goalPending)));
     for(const {button,value} of goalActions)button.hidden=c.draft||!c.goal||Boolean(c.goalError)||(value==='paused'?c.goal.status!=='active':value==='active'?c.goal.status!=='paused':c.goal.status==='complete');
     summary.setAttribute('aria-disabled',String(!c.ready||c.busy));if(!c.ready||c.busy)tools.open=false;
     status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
