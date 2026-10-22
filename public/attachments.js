@@ -1,3 +1,4 @@
+import {installComposerClipboard} from './composer-clipboard.js';
 export class AttachmentDrafts {
   constructor(storage,key,notify=()=>{}) {Object.assign(this,{storage,key,notify,items:new Map()});try{for(const [id,items] of JSON.parse(storage.getItem(key)||'[]'))if(typeof id==='string'&&Array.isArray(items))this.items.set(id,items.filter(i=>typeof i.id==='string'&&/^data:image\/(png|jpeg|webp);base64,/.test(i.url)));}catch{}}
   get(id){return this.items.get(id)||[];}
@@ -24,12 +25,12 @@ export function installAttachments({host,context,changed,notify}){
   form.prepend(list);form.querySelector('.composer-bottom').prepend(button);form.append(file);
   const preview=document.createElement('dialog');preview.className='composer-dialog image-preview';document.body.append(preview);
   preview.addEventListener('click',e=>{if(e.target===preview)preview.close();});
-  let selected;
-  function render(){const c=context();if(selected!==c.id){selected=c.id;if(preview.open)preview.close();}button.disabled=!c.ready||c.busy;list.replaceChildren();const items=store.get(c.id);list.hidden=!items.length;
+  let selected,clipboard;
+  function render(){clipboard?.sync();const c=context();if(selected!==c.id){selected=c.id;if(preview.open)preview.close();}button.disabled=!c.ready||c.busy;list.replaceChildren();const items=store.get(c.id);list.hidden=!items.length;
     for(const item of items){const card=document.createElement('div');card.className='attachment-card';const show=document.createElement('button');show.type='button';show.className='attachment-preview';show.setAttribute('aria-label','预览 '+item.name);if(item.url){const img=document.createElement('img');img.src=item.url;img.alt=item.name;show.append(img);show.onclick=()=>{preview.replaceChildren();const close=document.createElement('button');close.type='button';close.textContent='关闭';close.onclick=()=>preview.close();const large=document.createElement('img');large.src=item.url;large.alt=item.name;preview.append(close,large);preview.showModal();};}else{show.textContent='处理中…';show.disabled=true;}
     const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.setAttribute('aria-label','移除 '+item.name);remove.disabled=c.busy;remove.onclick=()=>{store.remove(c.id,item.id);changed();};card.append(show,remove);list.append(card);}}
   async function add(files){const c=context();if(!c.ready||c.busy)return;const id=c.id;for(const f of files){if(store.get(id).length>=4){notify('每条消息最多添加 4 张图片。',true);break;}const item={id:crypto.randomUUID(),name:f.name||'粘贴图片'};store.add(id,item);changed();try{const url=await prepare(f);if(store.get(id).includes(item)){item.url=url;store.save();}}catch(e){store.remove(id,item.id);notify(e.message,true);}finally{changed();}}}
   button.onclick=()=>file.click();file.onchange=()=>{const files=[...file.files];file.value='';void add(files);};
-  input.addEventListener('paste',e=>{const files=[...e.clipboardData.files].filter(f=>f.type.startsWith('image/'));if(files.length){e.preventDefault();void add(files);}});
+  clipboard=installComposerClipboard({input,list,context,items:()=>store.get(context().id),replace:items=>{store.items.set(context().id,items);store.save();changed();},addFiles:add,notify});
   return {render,moveDraft:(from,to)=>{store.items.set(to,store.get(from));store.items.delete(from);store.save();},has:()=>store.get(context().id).some(i=>i.url),pending:()=>store.get(context().id).some(i=>!i.url),capture:()=>store.capture(context().id),acknowledge:s=>store.acknowledge(s)};
 }

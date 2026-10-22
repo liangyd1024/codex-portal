@@ -5,8 +5,9 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 9
+PROTOCOL_POLICY = 10
 REQUEST_FIELDS = {
+    'thread/fork': {'threadId','ephemeral','excludeTurns','developerInstructions','approvalPolicy','sandbox','model','config'},
     'thread/items/list': {'threadId','limit','sortDirection','cursor'},
     'mcpServerStatus/list': {'threadId','serverName','detail'},
     'mcpServer/tool/call': {'threadId','server','tool','arguments'},
@@ -47,6 +48,7 @@ REQUEST_FIELDS = {
     'turn/interrupt': {'threadId', 'turnId'},
 }
 FEATURE_METHODS = {
+    'sideChat': ['thread/fork','thread/read','turn/start','turn/interrupt'],
     'threadReferences': ['thread/start','thread/resume','thread/read','thread/items/list','mcpServerStatus/list','mcpServer/tool/call'],
     'projectFolders': ['fs/getMetadata','fs/readDirectory','fs/createDirectory','project/list','project/create'],
     'capacityRetry': ['turn/start','thread/read','thread/turns/list'],

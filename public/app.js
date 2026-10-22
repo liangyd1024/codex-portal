@@ -1,3 +1,6 @@
+import {installResponseAnnotations,annotatedText} from './response-annotations.js';
+import {installSideChat} from './side-chat.js';
+let annotations,sideChat;
 import {authRecoveryMessage} from './shared/account-state.js';
 import {RenderCache,renderSignature,ProgressiveTurns} from './render-cache.js';
 import {createToasts,confirmAction} from './feedback.js';
@@ -348,6 +351,7 @@ function renderConnectionBanner() {
   else banner.hidden = true;
 }
 function renderControls() {
+  annotations?.render();sideChat?.sync();
   queueMicrotask(()=>turnNavigation?.update());
   capacityRetry?.tick();
   renderConnectionBanner();
@@ -373,7 +377,7 @@ function renderControls() {
   input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? '补充要求…' : '发送消息…';
   const hasModel = Boolean(state.model && state.models.some(m => modelId(m) === state.model));
   const hasEffort = effortsFor(state.model).some(e => e.value === state.effort);
-  $('send-message').disabled = !!state.status?.loginRecovery || !ready || !own || !featureReady(active?'steer':'message') || posting || attachments?.pending() || (!input.value.trim()&&!attachments?.has()) || (!active && (!hasModel || !hasEffort));
+  $('send-message').disabled = !!state.status?.loginRecovery || !ready || !own || !featureReady(active?'steer':'message') || posting || attachments?.pending() || (!input.value.trim()&&!attachments?.has()&&!annotations?.has()) || (!active && (!hasModel || !hasEffort));
   $('send-message').setAttribute('aria-label',active ? '补充当前轮次' : '发送消息');
   $('message-form').setAttribute('aria-busy',String(posting));
   $('send-message').title = posting ? '正在发送…' : active ? '补充当前轮次' : '发送消息';
@@ -432,7 +436,7 @@ function renderControls() {
     const desktop=state.detail?.desktop,online=state.transport&&desktop?.available,unconfirmed=desktop?.unconfirmed||desktopSends[state.selectedId]?.messageId;
     input.disabled=posting;input.placeholder=active?'任务执行中，可先输入下一条要求…':'发送消息，输入 @ 引用会话…';
     $('takeover').hidden=true;
-    $('send-message').disabled=!online||!desktop?.canSend||!!unconfirmed||posting||!input.value.trim();
+    $('send-message').disabled=!online||!desktop?.canSend||!!unconfirmed||posting||(!input.value.trim()&&!annotations?.has());
     $('send-message').title='发送到桌面会话';$('send-message').setAttribute('aria-label','发送到桌面会话');
     $('interrupt').hidden=!active;$('interrupt').disabled=!online||state.busy.has('interrupt');
     const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'正在发送到桌面…':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
@@ -531,9 +535,9 @@ function renderCommandOutput(item) {
   const pre=el('pre','tool-output',page.text);pre.dataset.followTail=String(page.following);
   wrap.append(controls,pre);return wrap;
 }
-function renderItem(item) {
-  const imageUrl=options=>itemImageUrl(state.selectedId,item.id,{...options,host:targetHost});
-  const fileContext={threadId:state.selectedId,itemId:item.id,host:targetHost};
+function renderItem(item,{threadId=state.selectedId,side=false}={}) {
+  const imageUrl=options=>itemImageUrl(threadId,item.id,{...options,host:targetHost});
+  const fileContext={threadId,itemId:item.id,host:targetHost};
   const bodyMarkdown=text=>markdown(text,0,{file:(path,label)=>fileLink(path,label,fileContext),image:(path,label)=>{
     if(!isRasterImage(path))return null;
     if(path.startsWith('/')&&!path.startsWith('//'))return imageCard(imageUrl({reference:path}),label||'回复图片');
@@ -560,7 +564,7 @@ function renderItem(item) {
   if (['agentMessage','plan'].includes(item.type)) {
     const m = el('article','message agent'); m.setAttribute('aria-label',item.type === 'plan' ? '计划' : 'Codex 回复'); const label = el('div','agent-label' + (item.type === 'agentMessage' ? ' message-author' : '')); label.append(icon('mark'),el('span','',item.type === 'plan' ? '计划' : 'Codex')); m.append(label);
     const text=String(item.text||''), heartbeat=text.match(/<heartbeat>\s*<automation_id>([^<]+)<\/automation_id>\s*<decision>([^<]+)<\/decision>\s*<message>([\s\S]*?)<\/message>\s*<\/heartbeat>/);
-    if(heartbeat){
+    if(heartbeat&&!side){
       m.append(bodyMarkdown(text.slice(0,heartbeat.index)));
       const card=el('section','decision-notice');card.append(el('strong','','自动任务通知 · '+heartbeat[1]),el('p','',heartbeat[3].trim()));
       const reply=el('button','secondary-button',controlled()?'回复决策':'接管并回复决策');
@@ -1222,7 +1226,8 @@ async function sendMessage(e) {
   if ($('send-message').disabled) return;
   if(newChatOpen){await createThreadFromDraft();return;}
   if(state.desktopMode){await sendDesktopMessage();return;}
-  const text = $('message-input').value.trim(), id = state.selectedId;
+  const annotationDraft=annotations.capture();
+  const text = annotatedText($('message-input').value.trim(),annotationDraft.items), id = state.selectedId;
   if ((!text&&!attachments?.has()) || attachments?.pending() || !id || !usable() || !controlled() || state.busy.has('message')) return;
   const active = running(), selection = state.selectionVersion;
   try{composer.validateSend(text,active);}catch(error){toast(error.message,true);return;}
@@ -1234,7 +1239,7 @@ async function sendMessage(e) {
     const payload = active ? {text,images,skills:options.skills,plugins:options.plugins,threads:options.threads} : {text,images,model:state.model,effort:state.effort,...options};
     const goalStarted=await composer.prepareSend(id,text,active);
     const d=await sendAfterGoal({goalStarted,id,payload,active,api});
-    attachments.acknowledge(pictures);
+    attachments.acknowledge(pictures);annotations.acknowledge(annotationDraft);
     const cleared = state.drafts.acknowledge(sent);
     if (id === state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }
     if (id === state.selectedId && selection === state.selectionVersion) { if (d.turn) { upsertTurn(d.turn); const t = ensureTurn(d.turn.id); const content=[...(text?[{type:'text',text}]:[]),...images.map(i=>({type:'image',url:i.url}))]; if (!t.items.some(item => item.type === 'userMessage' && userContentKey(item.content) === userContentKey(content))) t.items.unshift({id:'accepted-'+d.turn.id,type:'userMessage',content,localAccepted:true}); } renderThread(); }
@@ -1256,7 +1261,8 @@ async function implementPlan(id,plan){
   }finally{state.busy.delete('message');renderControls();}
 }
 async function sendDesktopMessage(){
-  const id=state.selectedId,selection=state.selectionVersion,text=$('message-input').value.trim();
+  const annotationDraft=annotations.capture();
+  const id=state.selectedId,selection=state.selectionVersion,text=annotatedText($('message-input').value.trim(),annotationDraft.items);
   if(!text||state.busy.has('message')||!state.detail?.desktop?.canSend)return;
   if(desktopSends[id])return;
   if(attachments?.has()){toast('桌面入口暂不支持草稿中的图片，请返回网页入口处理图片后再发送。',true);return;}
@@ -1267,6 +1273,7 @@ async function sendDesktopMessage(){
   await action('message',async()=>{
     try{
       await api('/api/desktop/threads/'+encodeURIComponent(id)+'/message',{method:'POST',body:{messageId,text,threads:options.threads}});
+      annotations.acknowledge(annotationDraft);
       delete desktopSends[id];saveDesktopSends();
       const cleared=state.drafts.acknowledge(sent);
       if(id===state.selectedId&&selection===state.selectionVersion&&cleared&&$('message-input').value===sent.text){$('message-input').value='';resizeInput();}
@@ -1336,6 +1343,7 @@ function scheduleListRefresh() { clearTimeout(listRefreshTimer); listRefreshTime
 function handleEvent(event) {
   let data; try { data = JSON.parse(event.data); } catch { return; }
   const method = data.method || event.type, p = data.params || {};
+  sideChat?.event(method,p);
   if(method==='account/updated'){
     const version=++accountViewVersion;
     state.listVersion++;createdThreads.clear();state.sidebar=null;state.threads=[];state.projects=[];state.models=[];state.threadCursor=null;
@@ -1411,6 +1419,7 @@ function handleEvent(event) {
 function setupEvents() {
   const es = new EventSource(targetUrl('/api/events')); state.eventSource = es;
   es.onopen = () => {
+    sideChat?.reconnect();
     const restored = !state.transport; state.transport = true; renderStatus();
     if (restored) resumeWorkspace().catch(e => { recordError(e,'sync'); renderStatus(); });
   };
@@ -1507,6 +1516,8 @@ function wireEvents() {
     state.projects=[...state.projects.filter(p=>p.id!==project.id),project];updateNewProjects(project.roots[0]);renderProjects();renderControls();void loadThreads().catch(error=>recordError(error,'刷新新项目'));
   }});
   composer=installComposer({host:targetHost,api,implementPlan,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,desktop:state.desktopMode,threadReferencesSupported:state.detail?.desktop?.threadReferencesSupported===true,turns:turns(),goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
+  sideChat=installSideChat({api,context:()=>({id:inputId(),ready:usable(),model:state.model,effort:state.effort,models:state.models.map(m=>({id:modelId(m),label:m.displayName||modelId(m),efforts:effortsFor(modelId(m)).map(e=>e.value)}))}),renderItem,notify:toast,selectionChanged:()=>annotations?.refreshMarks()});
+  annotations=installResponseAnnotations({host:targetHost,context:()=>({id:inputId()}),onSideChat:fragment=>sideChat.open(fragment),sideSelections:()=>sideChat.fragments(),changed:renderControls,notify:toast});
   const settings = $('composer-settings');
   document.addEventListener('click',event => { if (!settings.contains(event.target)) settings.open = false; });
   settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); settings.open = false; settings.querySelector('summary').focus(); } });
