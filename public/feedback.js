@@ -1,18 +1,19 @@
 // Keep one visible notification per message or explicitly named operation.
 export function createToasts({region,make,icon,setTimer=setTimeout,clearTimer=clearTimeout}) {
   const active=new Map();
-  return (message,error=false,duration=7500,key=JSON.stringify([error,message]))=>{
+  // Keep the legacy duration argument for callers; all floating tips expire after 3s.
+  return (message,error=false,_duration=3000,key=JSON.stringify([error,message]))=>{
     for(const [id,entry] of active)if(!entry.node.isConnected){clearTimer(entry.timer);active.delete(id);}
     const previous=active.get(key);
-    if(previous?.node.isConnected&&previous.error===error){previous.node.querySelector('p').textContent=message;previous.restart(duration);return previous.node;}
+    if(previous?.node.isConnected&&previous.error===error){previous.node.querySelector('p').textContent=message;previous.restart();return previous.node;}
     if(previous){clearTimer(previous.timer);previous.node.remove();}
     const node=make('div','toast'+(error?' error':''));node.setAttribute('role',error?'alert':'status');
     node.append(icon(error?'alert':'check'),make('p','',message));
     const anchor=region.ownerDocument?.activeElement;
-    const entry={node,error,timer:null,restart(ms){clearTimer(entry.timer);if(ms>0)entry.timer=setTimer(dismiss,ms);}};
+    const entry={node,error,timer:null,restart(){clearTimer(entry.timer);entry.timer=setTimer(dismiss,3000);}};
     const dismiss=()=>{const focused=node.contains?.(region.ownerDocument?.activeElement);clearTimer(entry.timer);node.remove();if(active.get(key)===entry)active.delete(key);if(focused&&anchor?.isConnected)anchor.focus({preventScroll:true});};
     const close=make('button','icon-button');close.type='button';close.setAttribute('aria-label','关闭提示');close.append(icon('close'));close.onclick=dismiss;node.append(close);
-    active.set(key,entry);region.append(node);entry.restart(duration);return node;
+    active.set(key,entry);region.append(node);entry.restart();return node;
   };
 }
 

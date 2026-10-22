@@ -28,3 +28,12 @@ test('confirmation defaults to cancel, Escape cancels, and explicit confirm reso
  assert.equal(await confirmAction('重复'),false);d.oncancel({preventDefault(){}});assert.equal(await first,false);assert.equal(anchor.focused,true);assert.equal(region.children.length,0);
  const second=confirmAction('导入',{accept:'确认导入'});region.children[0].children[2].children[1].onclick();assert.equal(await second,true);assert.equal(region.children.length,0);
 });
+test('all floating tips expire after three seconds regardless of legacy duration',()=>{
+ const {make,region}=dom(),scheduled=[];
+ const toast=createToasts({region,make,icon:()=>make('svg'),setTimer:(fn,ms)=>{scheduled.push({fn,ms});return scheduled.length;},clearTimer:()=>{}});
+ for(const duration of [undefined,0,7500,8000,11000]){
+  const card=toast('提示 '+duration,true,duration);assert.equal(scheduled.at(-1).ms,3000);
+  assert.equal(card.isConnected,true);scheduled.at(-1).fn();assert.equal(card.isConnected,false);
+ }
+ const card=toast('重复提示');assert.equal(toast('重复提示'),card);assert.equal(scheduled.at(-1).ms,3000);
+});
