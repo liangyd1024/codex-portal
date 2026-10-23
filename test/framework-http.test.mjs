@@ -242,3 +242,51 @@ test('connection services preserve catalog cache rules, account reads and asynch
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+
+test('thread routes preserve query rules, helper validation and native queue forwarding',async()=>{
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),m=env.managers.get('a');
+  Object.assign(m,{generation:1,activeTurns:new Set(),service:{protocolValidation:{features:{capacityRetry:{supported:true}}}},
+   requireLogin(){},requireWritable(){},assertControl(id){env.calls.push(['control',id]);},
+   requireCapability(name){env.calls.push(['capability',name]);},
+   withMutation:async(fn,id)=>{env.calls.push(['mutation',id]);return fn();},
+   rpc:{connected:true,request:async(method,params,options)=>{env.calls.push(['rpc',method,params,options??null]);return method==='thread/read'?{thread:{status:{type:'idle'}}}:{raw:'原文\n\n',future:{preserved:true}};}},
+  });
+  const requests=[
+   ['/api/thread-references?search=first&search=last&cursor=one&cursor=two',undefined,200],
+   ['/api/threads?search=first&search=last&cursor=one&cursor=two',undefined,200],
+   ['/api/threads/id/history?cursor=one&cursor=two',undefined,200],
+   ['/api/threads/id/side-chat-view',undefined,410],
+   ['/api/threads/id/side-chat',{},400],
+   ['/api/threads/id/retry-capacity',{},400],
+   ['/api/threads/id/queue-add',{threads:['reference']},400],
+   ['/api/threads/id/queue-delete',{},400],
+   ['/api/threads/id/queue-delete',{queuedSubmissionId:'queue-1',future:42},200],
+   ['/api/threads/id/queue-steer',{queuedSubmissionId:'queue-2'},200],
+   ['/api/threads/id/goal',{clear:true},200],
+   ['/api/threads/id/goal',{tokenBudget:-1},400],
+   ['/api/threads/id/history',{},404],
+   ['/api/threads/id/message',undefined,404],
+   ['/api/threads/invalid.id',undefined,404],
+   ['/api/threads/'+ 'x'.repeat(161),undefined,404],
+  ];
+  try{
+   const records=[];
+   for(const [url,data,status] of requests){env.calls.length=0;
+    const response=await fetch(env.base+url,data===undefined?{}:{method:'POST',headers:{'x-csrf-token':env.token},body:JSON.stringify(data)});
+    assert.equal(response.status,status,url);
+    records.push({status:response.status,body:await response.json(),calls:structuredClone(env.calls)});
+   }
+   assert.deepEqual(records[0].calls,[['a','threads',{search:'first',cursor:'one'}]]);
+   assert.deepEqual(records[1].calls,[['a','threads',{search:'last',cursor:'two'}]]);
+   assert.deepEqual(records[2].calls,[['a','history',['id','one']]]);
+   assert.deepEqual(records[8].calls.filter(c=>c[0]==='rpc'),[['rpc','thread/queue/delete',{threadId:'id',queuedSubmissionId:'queue-1'},null]]);
+   assert.deepEqual(records[9].calls.filter(c=>c[0]==='rpc'),[['rpc','thread/read',{threadId:'id',includeTurns:false},null],['rpc','thread/queue/start',{threadId:'id',queuedSubmissionId:'queue-2'},null]]);
+   assert.deepEqual(records[10].calls.filter(c=>c[0]==='rpc'),[['rpc','thread/goal/clear',{threadId:'id',origin:'user'},{timeoutMs:10000}]]);
+   outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});

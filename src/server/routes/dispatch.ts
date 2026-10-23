@@ -2,17 +2,15 @@ import type {IncomingMessage} from 'node:http';
 import type {AddressInfo} from 'node:net';
 import type {Response,MobileConfig,Host} from '../types';
 import type {ApplicationOptions} from '../types';
-import {queueInput} from '../../../lib/queued-inputs.mjs';
-import {createSideChat,readSideChat} from '../../../lib/side-chats.mjs';
+import {createThreadRoutes,matchThreadRoute} from './threads';
 import {createStaticResponse} from '../../../lib/http/static-response.mjs';
 import {browseFolders,createFolder,openFolderProject} from '../../../lib/project-folders.mjs';
-import {retryCapacity} from '../../../lib/capacity-retry.mjs';
 import {deploymentStatus} from '../../../lib/deployment-status.mjs';
 import {WebUpdate} from '../../../lib/web-update.mjs';
 import {createConnectionRoutes} from './connections';
 import {fileResponse} from '../../../lib/file-response.mjs';
 import {readSidebar,readSidebarActivity,sidebarAction} from '../../../lib/sidebar.mjs';
-import {composerCatalog,setGoal} from '../../../lib/composer.mjs';
+import {composerCatalog} from '../../../lib/composer.mjs';
 import http from 'node:http';
 import {json,body} from '../protocol';
 import {MobileAccess} from '../../../lib/mobile-access.mjs';
@@ -33,6 +31,8 @@ export interface RouteServices {
  server:()=>import('node:http').Server;mobileConfig:()=>MobileConfig|null;setMobileConfig:(value:MobileConfig)=>void;
 }
 export function createDispatcher(context:RouteServices){
+ const threadRoutes=new WeakMap<Manager,ReturnType<typeof createThreadRoutes>>();
+ const threadRoutesFor=(manager:Manager)=>{let routes=threadRoutes.get(manager);if(!routes){routes=createThreadRoutes(manager);threadRoutes.set(manager,routes);}return routes;};
  const connectionRoutes=new WeakMap<Manager,ReturnType<typeof createConnectionRoutes>>();
  const routesFor=(manager:Manager)=>{let routes=connectionRoutes.get(manager);if(!routes){routes=createConnectionRoutes(manager);connectionRoutes.set(manager,routes);}return routes;};
  const {config,managers,automations,desktopSessions,desktopSession,csrf,clients,staticResponse,access,setupMobile,updater,providedManagers,buildVersion,staticRoot,extraAssets}=context;
@@ -83,7 +83,6 @@ export function createDispatcher(context:RouteServices){
       }
       if(req.method==='GET'){const route=routesFor(manager).get('GET '+p);if(route){await route(url,undefined,res);return;}}
       if(req.method==='GET'&&p==='/api/system/deployment-status'){if(remote)throw new AppError('仅限本机部署检查。',403);return json(res,200,await deploymentStatus(manager));}
-      if(req.method==='GET'&&p==='/api/thread-references')return json(res,200,await manager.threads({search:url.searchParams.get('search')||'',cursor:url.searchParams.get('cursor')}));
       const desktopMatch=p.match(/^\/api\/desktop\/threads\/([0-9a-f-]{36})(?:\/(history|message|interrupt|acknowledge))?$/i);
       if(req.method==='GET'&&p==='/api/desktop/candidates')return json(res,200,await manager.passive('threads',{search:url.searchParams.get('search')||'',cursor:url.searchParams.get('cursor')}));
       if(req.method==='GET'&&desktopMatch){const session=desktopSession(targetKey,desktopMatch[1]);if(!desktopMatch[2])return json(res,200,await session.detail());if(desktopMatch[2]==='history')return json(res,200,await session.history(url.searchParams.get('cursor'),desktopMatch[1]));}
@@ -95,7 +94,6 @@ export function createDispatcher(context:RouteServices){
       if(req.method==='GET'&&p==='/api/sidebar/activity')return json(res,200,await readSidebarActivity(manager,Object.fromEntries(url.searchParams)));
       if(req.method==='GET'&&p==='/api/sidebar')return json(res,200,await readSidebar(manager,Object.fromEntries(url.searchParams)));
       if(req.method==='GET'&&p==='/api/project-folders')return json(res,200,await browseFolders(manager,url.searchParams.get('path')));
-      if(req.method==='GET'&&p==='/api/threads')return json(res,200,await manager.threads(Object.fromEntries(url.searchParams)));
       const fileMatch=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})\/items\/([A-Za-z0-9_-]{1,160})\/file$/);
       if(['GET','HEAD'].includes(req.method||'')&&fileMatch){await fileResponse(manager,req,res,fileMatch[1],fileMatch[2],url);return;}
       const image=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})\/items\/([A-Za-z0-9_-]{1,160})\/image$/);
@@ -105,8 +103,8 @@ export function createDispatcher(context:RouteServices){
         if(!['image/png','image/jpeg','image/webp','image/gif'].includes(result.mime))throw new AppError('不支持此图片格式。');
         res.writeHead(200,{'Content-Type':result.mime,'Content-Length':content.length,'Cache-Control':'private, max-age=300',...(url.searchParams.get('download')==='1'?{'Content-Disposition':`attachment; filename="${image[2]}.${result.extension}"`}:{})});res.end(content);return;
       }
-      const match=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(side-chat|side-chat-view|history|takeover|handoff|message|steer|queue-add|queue-steer|queue-delete|interrupt|goal|question-answer|retry-capacity))?$/);
-      if(req.method==='GET'&&match){const[,id,action]=match;if(action==='side-chat-view')return json(res,200,await readSideChat(manager,id));if(action==='history')return json(res,200,await manager.history(id,url.searchParams.get('cursor')));if(!action)return json(res,200,await manager.detail(id,JSON.parse(String(req.headers['x-output-versions']||'{}')),url.searchParams.get('preview')==='1',url.searchParams.get('outputEncoding'),url.searchParams.get('fast')==='1'));}
+      const match=matchThreadRoute(p);
+      if(req.method==='GET'){const route=threadRoutesFor(manager).read(p,match);if(route){await route(req,res,url,undefined);return;}}
       if(req.method==='POST'){
         const token=req.headers['x-csrf-token']||'';
         if(typeof token!=='string'||Buffer.byteLength(token)!==Buffer.byteLength(csrf)||!timingSafeEqual(Buffer.from(token),Buffer.from(csrf)))throw new AppError('本机会话已变化。请刷新页面。',403,'CSRF');
@@ -127,8 +125,7 @@ export function createDispatcher(context:RouteServices){
         if(p==='/api/access/revoke'&&!remote){access.revoke();for(const client of clients)if(client.mobileRequest){client.end();clients.delete(client);}return json(res,200,{ok:true});}
         if(p==='/api/access/logout'){access.logout(req);res.setHeader('Set-Cookie',access.cookie());for(const client of clients)if(client.mobileRequest&&!access.valid(client.mobileRequest)){client.end();clients.delete(client);}return json(res,200,{ok:true});}
         const connectionRoute=routesFor(manager).get('POST '+p);if(connectionRoute){await connectionRoute(url,data,res);return;}
-        if(p==='/api/threads')return json(res,201,await manager.newThread(data));
-        if(match){const[,id,action]=match;const fn={'queue-add':()=>queueInput(manager,id,'add',data),'queue-steer':()=>queueInput(manager,id,'steer',data),'queue-delete':()=>queueInput(manager,id,'delete',data),'side-chat':()=>createSideChat(manager,id,data),'retry-capacity':()=>retryCapacity(manager,id,data),'question-answer':()=>manager.answerQuestions(id,data),goal:()=>setGoal(manager,id,data),takeover:()=>manager.takeover(id),handoff:()=>manager.handoff(id),message:()=>manager.message(id,data),steer:()=>manager.steer(id,data),interrupt:()=>manager.interrupt(id)}[action];if(fn)return json(res,200,await fn());}
+        const threadRoute=threadRoutesFor(manager).write(p,match);if(threadRoute){await threadRoute(req,res,url,data);return;}
         const approval=p.match(/^\/api\/requests\/([^/]+)\/respond$/);
         if(approval)return json(res,200,manager.respond(decodeURIComponent(approval[1]),data));
       }
