@@ -84,7 +84,16 @@ const retiredStatusInstances=new Set();
 function applyStatus(status){
   const next=selectConnectionStatus(state.status,status,retiredStatusInstances);
   const previous=state.status;
-  if(previous&&(previous.instanceId!==next.instanceId||previous.connection?.state!==next.connection?.state||
+  const connectionChanged=previous&&(previous.instanceId!==next.instanceId||previous.connection?.state!==next.connection?.state||previous.connection?.connectedAt!==next.connection?.connectedAt);
+  if(connectionChanged){
+    state.listVersion++;state.loadingThreads=false;
+    for(const thread of state.threads||[]){delete thread.activity;thread.status={type:'unknown'};}
+    if(state.detail){
+      state.detail.backgroundTerminals={error:'连接已变化，正在重新核对后台命令。'};
+      if(state.detail.thread){delete state.detail.thread.activity;state.detail.thread.status={type:'unknown'};}
+    }
+  }
+  if(previous&&(connectionChanged||
     previous.controlledThreads?.includes(state.selectedId)!==next.controlledThreads?.includes(state.selectedId)||
     Boolean(previous.handoffs?.some(h=>h.threadId===state.selectedId))!==Boolean(next.handoffs?.some(h=>h.threadId===state.selectedId))))state.detailVersion++;
   if(state.status?.instanceId&&next.instanceId!==state.status.instanceId){
@@ -632,7 +641,7 @@ function renderMessages() {
   progressiveTurns.enqueue();
   const receipts=sendReceipts.view(context,turns());
   const nearBottom = scrollFollow?.following ?? true;
-  const shape=JSON.stringify([receipts.map(r=>[r.id,r.status]),state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],visibleTurns],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
+  const shape=JSON.stringify([receipts.map(r=>[r.id,r.status]),state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,backgroundActivity(state.detail,{controlled:controlled(),connected:usable()}),[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],visibleTurns],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
   if(shape===lastMessageShape){
     for(const turn of visibleTurns)for(const item of turn.items||[]){
       if(item.type!=='commandExecution')continue;
@@ -1409,9 +1418,9 @@ function handleEvent(event) {
   if(authRecoveryMessage(p.turn?.error||p.error))void refreshAccountUsage?.(true);
   if(!data.replayed)notifyTaskEvent(method,p);
   if (method === 'manager/status') {
-    const was = connected(); applyStatus(p.status || p); renderStatus(); renderRequests(); renderThread();
+    const was = connected(),previousConnection=state.status?.connection?.connectedAt,previousInstance=state.status?.instanceId; applyStatus(p.status || p); renderStatus(); renderRequests(); renderThread();
     for(const request of state.status.pendingRequests||[])notifyTaskEvent('manager/request',request);
-    if (!workspaceStarting && !was && connected()) refreshWorkspace().catch(e => recordError(e,'sync'));
+    if (!workspaceStarting && connected() && (!was||previousConnection!==state.status?.connection?.connectedAt||previousInstance!==state.status?.instanceId)) resumeWorkspace().catch(e => recordError(e,'sync'));
     return;
   }
   if (method === 'manager/error') { recordError(p.message || p.error || p,p.stage || 'remote'); if(notifyManagerError(p))toast(messageOf(p.message || p.error || p),true,11000); return; }

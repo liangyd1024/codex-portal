@@ -179,3 +179,33 @@ test('latest-only preview expands in original order while retaining later stream
   assert.deepEqual(result.map(t=>t.id),['older-a','older-b','latest','new-live']);
   assert.equal(result[2].items[0].text,'streamed response');
 });
+
+test('a connected-to-connected restart invalidates old detail, process and sidebar activity',async()=>{
+  const f=detailFixture();
+  f.state.status.connection.connectedAt='old';
+  f.state.threads=[{id:'a',status:{type:'active'},activity:{source:'desktop',state:'running'}}];
+  f.state.detail.backgroundTerminals={data:[{processId:'old'}]};
+  const pending=f.read();
+  f.status({...f.state.status,revision:2,connection:{state:'connected',connectedAt:'new'}});
+  assert.equal(f.state.threads[0].activity,undefined);
+  assert.equal(f.state.threads[0].status.type,'unknown');
+  assert.ok(f.state.detail.backgroundTerminals.error);
+  f.requests[0].resolve({thread:{id:'a'},backgroundTerminals:{data:[{processId:'old'}]},turns:[]});
+  await pending;assert.equal(f.applied.length,0);
+  const next=f.read();f.requests[1].resolve({thread:{id:'a'},backgroundTerminals:{data:[]},turns:[]});await next;
+  assert.equal(f.state.detail.backgroundTerminals.data.length,0);
+});
+
+test('native metadata repairs missed running notifications without overriding newer events or snapshot state',async()=>{
+  for(const mode of ['native','event','snapshot','connection']){
+    const m=new Manager({host:{alias:'test'}});m.connection={state:'connected'};m.rpc={connected:true};
+    const known={status:{type:'active'}};m.controlled.set('a',known);
+    let finish;m.readWithFallback=()=>new Promise(resolve=>finish=resolve);
+    const pending=m.readThreadMetadata('a',false);
+    if(mode==='event')m.onNotification({method:'thread/status/changed',params:{threadId:'a',status:{type:'active',activeFlags:['waiting']}}});
+    if(mode==='snapshot')m.passiveMethods.add('thread/read');
+    if(mode==='connection')m.generation++;
+    finish({thread:{id:'a',status:{type:'idle'}}});await pending;
+    assert.equal(known.status.type,mode==='native'?'idle':'active');
+  }
+});
