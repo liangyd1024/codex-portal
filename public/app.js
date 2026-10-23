@@ -388,7 +388,7 @@ function renderControls() {
   const input = $('message-input'); input.disabled = !ready || !own || posting || handing;
   const followUp=followUpAction({active,touch:touchInput()});
   input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? (followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…') : '发送消息…';
-  const hasModel = Boolean(state.model && state.models.some(m => modelId(m) === state.model));
+  const hasModel = Boolean(modelFor(state.model));
   const hasEffort = effortsFor(state.model).some(e => e.value === state.effort);
   $('send-message').disabled = !!state.status?.loginRecovery || !ready || !own || !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') || posting || attachments?.pending() || (!input.value.trim()&&!attachments?.has()&&!annotations?.has()) || (!active && (!hasModel || !hasEffort));
   $('send-message').setAttribute('aria-label',active ? (followUp==='queue'?'排队发送':'引导当前任务') : '发送消息');
@@ -399,7 +399,7 @@ function renderControls() {
   $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || handing || !state.selectedId;
   $('takeover').querySelector('span').textContent = switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话';
   const availability = $('composer-availability');
-  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '' : !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !hasModel ? '请选择一个可用模型。' : own && !hasEffort ? '请选择思考档位。' : '';
+  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '' : !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !active && !hasModel ? '请选择一个可用模型。' : own && !active && !hasEffort ? '请选择思考档位。' : '';
   availability.textContent = unavailable; availability.hidden = !unavailable;
   $('new-thread').setAttribute('aria-description',!ready ? '连接恢复后可新建会话。' : !state.models.length ? '正在等待目标机器模型目录。' : creating ? '正在创建，请稍候。' : '');
   controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
@@ -511,7 +511,7 @@ function renderModels(preferThread = false) {
     fillModels($('model-select'),state.model); fillEfforts($('effort-select'),state.model,state.effort);
     renderControls(); return;
   }
-  if (!modelFor(state.model)) state.model = state.models.length ? modelId(state.models.find(m => m.isDefault) || state.models[0]) : '';
+  state.model = modelId(modelFor(state.model) || state.models.find(m => m.isDefault) || state.models[0]);
   if (preferThread && !newChatOpen && t?.reasoningEffort) state.effort = t.reasoningEffort;
   if (!effortsFor(state.model).some(e => e.value === state.effort)) state.effort = defaultEffort(state.model);
   fillModels($('model-select'),state.model); fillEfforts($('effort-select'),state.model,state.effort);
