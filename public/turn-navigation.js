@@ -2,9 +2,17 @@ import {userMessageContent} from './message-media.js';
 import {markdown} from './message-body.js';
 import {compactLayout} from './mobile-ui.js';
 
+const questionItem=turn=>(turn.items||[]).find(i=>i.type==='userMessage'||i.type==='goalMessage');
+// Navigation follows explicit inputs. Native continuation turns remain in the transcript.
+export function navigationIndex(turns=[]) {
+  const inputs=[],owners=new Map();let owner;
+  for(const turn of turns){if(questionItem(turn)){inputs.push(turn);owner=turn.id;}owners.set(turn.id,owner);}
+  return {inputs,owners};
+}
+
 const clip=(text,length)=>{const chars=Array.from(String(text||''));return chars.length>length?chars.slice(0,length).join('')+'…':chars.join('');};
 export function turnPreview(turn,{uncertain=false}={}) {
-  const items=turn.items||[],question=items.find(i=>i.type==='userMessage'||i.type==='goalMessage');
+  const items=turn.items||[],question=questionItem(turn);
   const input=question?.type==='goalMessage'?{text:question.objective}:userMessageContent(question?.content);
   const answer=items.find(i=>i.type==='agentMessage'&&i.phase==='final_answer'&&i.text?.trim())||items.find(i=>i.type==='agentMessage'&&i.text?.trim());
   const status=turn.status?.type||turn.status;
@@ -25,9 +33,9 @@ export async function loadAllEarlier({context,loadEarlier,isCurrent,onProgress=(
   }
   return isCurrent();
 }
-export function turnCountLabel({totalTurns,turns=[],hasEarlier}) {
-  const total=Number.isSafeInteger(totalTurns)&&totalTurns>=0?Math.max(totalTurns,turns.length):!hasEarlier?turns.length:null;
-  return total===null?'总数未知':'共 '+total+' 轮';
+export function turnCountLabel({turns=[],hasEarlier},count=navigationIndex(turns).inputs.length) {
+  // The engine total includes automatic executions, not just explicit inputs.
+  return (hasEarlier?'已加载 ':'共 ')+count+' 轮';
 }
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
 export function installTurnNavigation({scroller,content,entryHost,context,follow,loadEarlier}) {
@@ -39,6 +47,7 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
   const header=el('div','turn-directory-header'),title=el('h2','','对话轮次'),close=el('button','','关闭'),list=el('div','turn-directory-list'),more=el('button','turn-directory-more','加载更早轮次'),feedback=el('p','turn-directory-feedback');feedback.setAttribute('role','status');close.type=more.type='button';header.append(title,close);dialog.append(header,list,feedback,more);document.body.append(dialog);
   const notice=el('div','turn-navigation-notice'),noticeText=el('span'),noticeAction=el('button');noticeText.setAttribute('role','status');noticeAction.type='button';notice.append(noticeText,noticeAction);rail.append(notice);notice.hidden=true;
   let key=null,rows=[],signature='',hovered=null,hideTimer,frame,currentId,loading=false,loadVersion=0,loadMessage='';
+  let owners=new Map();
   const buttons=new Map(),positions=new Map();let restore=null,directoryTarget=null;
   const nodes=()=>[...content.querySelectorAll('.message-turn')];
   const locate=id=>nodes().find(n=>n.dataset.turnId===id);
@@ -73,7 +82,7 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
     if(loading||!context().hasEarlier)return;
     const version=++loadVersion,started=key,isCurrent=()=>started===key&&version===loadVersion;
     loading=true;follow.pause({sticky:true});
-    const progress=()=>report('正在加载全部轮次 · 已加载 '+context().turns.length+' 轮');
+    const progress=()=>report('正在加载全部轮次 · 已加载 '+navigationIndex(context().turns).inputs.length+' 轮');
     progress();
     try{
       const loaded=await loadAllEarlier({context,loadEarlier,isCurrent,onProgress:progress});
@@ -101,13 +110,13 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!e.isComposing&&!preview.hidden){hide();e.preventDefault();}});
   rail.addEventListener('keydown',e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;const entries=[...ticks.children],index=entries.indexOf(document.activeElement);if(index<0)return;e.preventDefault();entries[e.key==='Home'?0:e.key==='End'?entries.length-1:Math.max(0,Math.min(entries.length-1,index+(e.key==='ArrowDown'?1:-1)))]?.focus();});
   function measure(){
-    frame=null;const c=context(),r=scroller.getBoundingClientRect();const visible=c.visible&&rows.length>0&&r.height>0;
+    frame=null;const c=context(),r=scroller.getBoundingClientRect();const visible=c.visible&&(rows.length>0||c.hasEarlier)&&r.height>0;
     rail.hidden=!visible||compactLayout();entry.hidden=!visible;
     document.querySelector('.main-panel').classList.toggle('has-turn-navigation',visible);
     rail.style.left=(r.left+4)+'px';rail.style.top=(r.top+12)+'px';rail.style.height=Math.max(0,r.height-24)+'px';
-    const active=reading();currentId=active?.dataset.turnId;
+    const active=reading();currentId=owners.get(active?.dataset.turnId);
     for(const [id,button] of buttons){if(id===currentId)button.setAttribute('aria-current','location');else button.removeAttribute('aria-current');}
-    if(!restore&&key&&active)positions.set(key,{id:currentId,offset:active.getBoundingClientRect().top-r.top,following:follow.following});
+    if(!restore&&key&&active)positions.set(key,{id:active.dataset.turnId,offset:active.getBoundingClientRect().top-r.top,following:follow.following});
     if(positions.size>50)positions.delete(positions.keys().next().value);
   }
   function schedule(){if(!frame)frame=requestAnimationFrame(measure);}
@@ -115,9 +124,10 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
     if(next===key)return;key=next;restore=positions.get(next)||null;signature='';hide();if(dialog.open)dialog.close();loadVersion++;loading=false;loadMessage='';feedback.textContent='';noticeText.textContent='';notice.hidden=true;
   }
   function update(){
-    const c=context();const next=c.turns.map(t=>turnPreview(t,{uncertain:c.uncertain})),sig=JSON.stringify(next);
+    const c=context(),index=navigationIndex(c.turns);owners=index.owners;
+    const next=index.inputs.map(t=>turnPreview(t,{uncertain:c.uncertain})),sig=JSON.stringify(next);
     rows=next;
-    const label=turnCountLabel(c);count.textContent=label;count.title=label;entry.textContent='轮次 · '+label;title.textContent='对话轮次 · '+label;
+    const label=turnCountLabel(c,rows.length);count.textContent=label;count.title=label;entry.textContent='轮次 · '+label;title.textContent='对话轮次 · '+label;
     if(sig!==signature){signature=sig;const keep=new Set(rows.map(r=>r.id));for(const [id,b] of buttons)if(!keep.has(id)){b.remove();buttons.delete(id);}
       rows.forEach((row,index)=>{let b=buttons.get(row.id);if(!b){b=el('button','turn-tick');b.type='button';b.append(el('span'));buttons.set(row.id,b);}b.setAttribute('aria-label','预览并跳转到：'+row.question);b.setAttribute('aria-describedby','turn-preview');b.classList.toggle('turn-tick-running',row.running);b.onclick=()=>navigate(row.id);b.onpointerenter=()=>show(row,b);b.onpointerleave=deferHide;b.onfocus=()=>show(row,b);b.onblur=deferHide;if(ticks.children[index]!==b)ticks.insertBefore(b,ticks.children[index]||null);});
       if(dialog.open)renderList();if(hovered){const row=rows.find(r=>r.id===hovered);if(row)show(row,buttons.get(row.id));else hide();}
