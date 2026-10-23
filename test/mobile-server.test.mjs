@@ -2,8 +2,9 @@ import http from 'node:http';
 import {test} from 'node:test';import assert from 'node:assert/strict';import {EventEmitter,once} from 'node:events';import {createApp} from '../server.mjs';import {MobileAccess} from '../lib/mobile-access.mjs';
 function fetch(url,options={}) {return new Promise((resolve,reject)=>{const req=http.request(url,{method:options.method||'GET',headers:options.headers||{}},res=>{const headers={get:key=>Array.isArray(res.headers[key])?res.headers[key].join(';'):res.headers[key]};if(url.endsWith('/api/events')&&res.statusCode===200){const iterator=res[Symbol.asyncIterator]();resolve({status:res.statusCode,headers,body:{getReader:()=>({read:()=>iterator.next()})}});return;}let raw='';res.on('data',c=>raw+=c);res.on('end',()=>resolve({status:res.statusCode,headers,json:async()=>JSON.parse(raw)}));});req.on('error',reject);req.end(options.body);});}
 class Fake extends EventEmitter{status(){return {connection:{state:'connected'},pendingRequests:[]};}disconnect(){} }
-test('remote ingress requires pairing, exact origin and CSRF; revocation closes SSE',async t=>{
- const a=new MobileAccess(null),fake=new Fake();const {server,proxyServer}=createApp({config:{defaultConnection:"test",connections:[]},managers:new Map([["test",fake]]),updater:{status:async()=>({}),subscribe:()=>()=>{}},access:a,mobileConfig:{origins:['https://phone.test']}});
+test('remote ingress requires pairing, exact origin and CSRF; revocation closes SSE',{timeout:5000},async t=>{
+ let sendUpdate;
+ const a=new MobileAccess(null),fake=new Fake();const {server,proxyServer}=createApp({config:{defaultConnection:"test",connections:[]},managers:new Map([["test",fake]]),updater:{status:async()=>({}),subscribe:fn=>{sendUpdate=fn;return ()=>{};}},access:a,mobileConfig:{origins:['https://phone.test']}});
  server.listen(0,'127.0.0.1');proxyServer.listen(0,'127.0.0.1');await Promise.all([once(server,'listening'),once(proxyServer,'listening')]);
  t.after(()=>{server.closeAllConnections();proxyServer.closeAllConnections();server.close();proxyServer.close();});
  const local='http://127.0.0.1:'+server.address().port,remote='http://127.0.0.1:'+proxyServer.address().port;
@@ -21,6 +22,9 @@ test('remote ingress requires pairing, exact origin and CSRF; revocation closes 
  assert.equal((await fetch(remote+'/api/disconnect',{method:'POST',headers,body:'{}'})).status,403);
  assert.equal((await fetch(remote+'/api/csrf',{headers:{...headers,Origin:'https://evil.test'}})).status,403);
  const stream=await fetch(remote+'/api/events',{headers});const reader=stream.body.getReader();await reader.read();
+ // A queued update may arrive after the first network chunk. It is not a live connection.
+ sendUpdate({version:'queued-before-revoke'});
  await fetch(local+'/api/access/revoke',{method:'POST',headers:{'X-CSRF-Token':csrf},body:'{}'});
- assert.equal((await reader.read()).done,true);assert.equal((await fetch(remote+'/api/status',{headers})).status,401);
+ let buffered='';for(;;){const chunk=await reader.read();if(chunk.done)break;buffered+=chunk.value.toString();}
+ assert.match(buffered,/queued-before-revoke/);assert.equal((await fetch(remote+'/api/status',{headers})).status,401);
 });

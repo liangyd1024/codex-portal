@@ -6,6 +6,7 @@ function fixture(change={}){
  const calls=[],stages=[];let cleanReads=0;
  const run=async(command,args)=>{calls.push([command,args]);const operation=args[2];if(command==='git'){
   if(operation==='status')return change.dirty&&++cleanReads>=change.dirty?' M file':'';
+  if(operation==='diff')return change.diff??'public/app.js\0';
   if(operation==='branch')return change.branch||'master';if(operation==='remote')return change.remote||'git@example:repo';
   if(operation==='rev-parse')return args[3]==='HEAD'&&change.head?change.head:change.target||target;
   if(operation==='merge-base'&&change.behind)throw Error('not ancestor');
@@ -86,4 +87,25 @@ test('independent entries observe atomic background update writes through one sh
   const results=await Promise.race([Promise.all([first,second]),timeout]);
   assert.equal(results[0].job.targetVersion,target);assert.deepEqual(results[0],results[1]);
  }finally{clearTimeout(deadline);off1();off2();}
+});
+
+test('documentation-only revisions advance source without testing or restarting the unchanged website',async()=>{
+ for(const diff of ['README.md\0AGENTS.md\0docs/验证记录.md\0','']){
+  const f=fixture({diff,busy:true});assert.equal(await updateWorkflow(f.options),baseline);
+  assert.ok(!f.calls.some(([c])=>c===process.execPath));
+  assert.deepEqual(f.stages.at(-1)[2],{sourceVersion:target,targetVersion:baseline,documentationOnly:true});
+  assert.ok(f.calls.some(([c,a])=>c==='git'&&a.includes('--no-renames')&&a.includes('-z')));
+ }
+});
+test('runtime, test, unknown and renamed files still require the full test and install path',async()=>{
+ for(const diff of ['public/app.js\0','test/server.test.mjs\0','scripts/install-local.mjs\0','package.json\0','public/prompt.md\0',' docs/guide.md\0','docs/tool.js\0','docs/moved.md\0lib/removed.mjs\0','README.md\0public/styles.css\0']){
+  const f=fixture({diff});assert.equal(await updateWorkflow(f.options),target,diff);
+  assert.ok(f.calls.some(([,a])=>a[0]==='/source/scripts/run-tests.mjs'),diff);
+  assert.ok(f.calls.some(([,a])=>a[0]==='/source/scripts/install-local.mjs'),diff);
+ }
+});
+test('documentation shortcut never hides dirty sources, branch divergence or a changed deployed version',async()=>{
+ for(const change of [{dirty:1},{branch:'feature'},{behind:true},{head:baseline},{installed:target}]){
+  const f=fixture({...change,diff:'docs/guide.md\0'});await assert.rejects(updateWorkflow(f.options));
+ }
 });

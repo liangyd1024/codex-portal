@@ -38,3 +38,13 @@ test('failed draft persistence prevents automatic reload and allows retry',()=>{
  sync.receive({version:'a'});sync.receive({version:'b'});assert.equal(reloads,0);assert.equal(errors,1);
  fail=false;sync.receive({version:'b'});assert.equal(reloads,1);
 });
+
+import {updateVersionInfo} from '../public/system-update.js';
+test('documentation-only success reports runtime current without hiding future code updates or failures',()=>{
+ const job={phase:'succeeded',documentationOnly:true,sourceVersion:'docs',targetVersion:'runtime',updatedAt:10};
+ assert.deepEqual(updateVersionInfo({version:'runtime',job,latest:{version:'docs',checkedAt:11}}),{latest:'docs',documentationOnly:true,current:true});
+ assert.equal(updateVersionInfo({version:'runtime',job,latest:{version:'new-code',checkedAt:12}}).current,false);
+ assert.equal(updateVersionInfo({version:'other',job,latest:{version:'docs',checkedAt:11}}).current,false);
+ assert.equal(updateVersionInfo({version:'runtime',job:{...job,phase:'failed'},latest:{version:'docs',checkedAt:11}}).current,false);
+ assert.equal(updateVersionInfo({version:'runtime',job,latest:{version:'old',checkedAt:1}}).latest,'docs');
+});

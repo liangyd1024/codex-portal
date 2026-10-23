@@ -186,8 +186,10 @@ test('event streams receive only their selected connection events',async t=>{
  const response=await fetch(`http://127.0.0.1:${server.address().port}/api/events?host=local`,{signal:AbortSignal.timeout(3000)});
  const reader=response.body.getReader();await reader.read();
  remote.emit('event',{method:'remote-only',params:{}});local.emit('event',{method:'local-only',params:{}});
- const chunk=new TextDecoder().decode((await reader.read()).value);
- assert.ok(chunk.includes('local-only'));assert.ok(!chunk.includes('remote-only'));await reader.cancel();
+ // SSE frames and TCP chunks have independent boundaries; initial updates can arrive later.
+ let text='';const decoder=new TextDecoder();
+ while(!text.includes('local-only')){const chunk=await reader.read();assert.equal(chunk.done,false);text+=decoder.decode(chunk.value,{stream:true});}
+ assert.ok(!text.includes('remote-only'));await reader.cancel();
 });
 
 test('model catalog returns cached host data without waiting for a stalled refresh',async t=>{
