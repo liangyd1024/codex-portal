@@ -38,6 +38,17 @@ if(new URL(location.href).searchParams.get('parityControls')==='1'){
       f.emit('turn/started',{threadId:'qa-a',turn});
       f.emit('thread/queue/changed',{threadId:'qa-a'});
     });
+    button('追加图片排队样本',()=>{
+      f.queues.set('qa-a',[...(f.queues.get('qa-a')||[]),{id:'qa-image-queue',input:[{type:'image',url:'fixture-image'},{type:'localImage',path:'/fixture/image.png'},{type:'future-part',value:'keep'}]}]);
+      f.emit('thread/queue/changed',{threadId:'qa-a'});
+    });
+    button('结束模拟运行',()=>{
+      f.threads.find(t=>t.id==='qa-a').status={type:'idle'};
+      const turn=f.turns.get('qa-a').find(t=>t.id==='qa-running-turn');if(turn)turn.status='completed';
+      f.emit('turn/completed',{threadId:'qa-a',turn:turn||{id:'qa-running-turn',status:'completed'}});
+    });
+    button('延迟下次排队删除',()=>{f.delay={path:'/api/threads/qa-a/queue-delete',ignoreAbort:true};});
+    button('释放排队删除响应',()=>{if(f.pending?.path!=='/api/threads/qa-a/queue-delete')throw Error('No pending queue deletion');f.pending.resolve();f.pending=null;});
     button('下次排队删除失败',()=>{f.fail={path:'/api/threads/qa-a/queue-delete',status:503,message:'模拟排队删除失败，请重试。'};});
     button('准备较早历史',()=>{
       f.history.set('qa-a',[{id:'qa-earlier-turn',status:'completed',items:[

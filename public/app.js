@@ -1,6 +1,6 @@
 import {renderSelectOptions,renderDiagnosticsView,publishWorkspace,createWorkspaceState} from '../src/web/views.tsx';
 import {completedGoalPlacement,renderCompletedGoal} from './goal-toolbar.js';
-import {installQueuedInputs} from './queued-inputs.js';
+import {installQueuedInputs} from '../src/web/components/QueuedInputs.tsx';
 let queuedInputs;
 import {createSendReceipts,sendReceiptLabels} from './connection-state.js';
 const sendReceipts=createSendReceipts();
