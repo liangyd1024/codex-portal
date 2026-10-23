@@ -55,6 +55,15 @@ test('Fastify matches baseline status, JSON, security headers and native call ar
  }assert.deepEqual(results[1],results[0],url+' '+(options.method||'GET'));}}
  finally{await old.close();await next.close();}
 });
+test('native process summary module is reachable with JavaScript MIME type',async()=>{
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory);
+  try{const response=await fetch(env.base+'/process-summary.js');
+   assert.equal(response.status,200);assert.match(response.headers.get('content-type'),/javascript/);
+   assert.equal(await response.text(),await readFile(path.join(root,'public/process-summary.js'),'utf8'));
+  }finally{await env.close();}
+ }
+});
 test('Fastify preserves SSE original payloads and target filtering',async()=>{
  const next=await create(createFrameworkApp);const abort=new AbortController();
  try{const response=await fetch(next.base+'/api/events?host=b',{signal:abort.signal});assert.equal(response.headers.get('content-type'),'text/event-stream; charset=utf-8');
