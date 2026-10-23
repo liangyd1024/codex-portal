@@ -21,9 +21,9 @@ function target(id,calls){return Object.assign(new EventEmitter(),{
  message:async(...args)=>{calls.push([id,'message',args]);return {ok:true};},
  respond:(...args)=>{calls.push([id,'respond',args]);return {ok:true};},
  });}
-async function create(factory){const calls=[],managers=new Map(['a','b'].map(id=>[id,target(id,calls)]));
+async function create(factory,options={}){const calls=[],managers=new Map(['a','b'].map(id=>[id,target(id,calls)]));
  const access=new MobileAccess(null),updater={status:async()=>({version:'fixture',state:'idle'}),subscribe(){return ()=>{};}};
- const app=await factory({config,managers,access,updater,buildVersion:'fixture',staticRoot:path.join(root,'public')});
+ const app=await factory({config,managers,access,updater,buildVersion:'fixture',staticRoot:path.join(root,'public'),...options});
  await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
  const {token}=await fetch(base+'/api/csrf').then(r=>r.json());calls.length=0;
  return {app,base,token,calls,access,managers,async close(){app.server.closeAllConnections();if(app.close)await app.close();else await new Promise(r=>app.server.close(r));}};
@@ -79,4 +79,28 @@ test('preview phone cookies cannot replace or authorize production phone session
  assert.equal(production.valid({headers:{cookie:previewCookie}}),false);assert.equal(preview.valid({headers:{cookie:prodCookie}}),false);
  const both={headers:{cookie:prodCookie+'; '+previewCookie}};assert.ok(production.valid(both));assert.ok(preview.valid(both));
  preview.revoke();assert.ok(production.valid(both));assert.equal(preview.valid(both),false);
+});
+
+
+test('mobile setup keeps validation, CSRF order and setup callback behavior',async()=>{
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const calls=[];
+  const env=await create(factory,{setupMobile:async mode=>{calls.push(mode);return {origins:['https://mobile.example.test:4339'],ca:'/fixture/ca.crt',key:'/fixture/server.key',cert:'/fixture/server.crt'};}});
+  try{
+   const records=[];
+   const request=async(body,auth=true)=>{const response=await fetch(env.base+'/api/access/setup',{method:'POST',headers:{'content-type':'application/json',...(auth?{'x-csrf-token':env.token}:{})},body});records.push({status:response.status,body:await response.json(),calls:[...calls]});};
+   await request('{',false);
+   await request(JSON.stringify({mode:'invalid'}));
+   await request('{}');
+   await request(JSON.stringify({mode:'tailscale'}));
+   const status=await fetch(env.base+'/api/access/status').then(r=>r.json());
+   assert.equal(status.canSetup,true);assert.deepEqual(status.origins,['https://mobile.example.test:4339']);
+   assert.deepEqual(calls,['lan','tailscale']);
+   assert.equal(records[0].status,403);assert.equal(records[1].status,400);
+   assert.equal(records[2].status,200);assert.equal(records[3].status,200);
+   outcomes.push({records,status});
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
 });
