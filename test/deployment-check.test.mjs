@@ -20,18 +20,12 @@ test('unreadable status fails closed, ordinary idle deployment is allowed',()=>{
  for(const s of [null,{}, {connection:{},controlledSessions:[]}])assert.throws(()=>assertDeploymentIdle(s,options),/无法核对/);
  assert.equal(assertDeploymentIdle(status(),{...options,deployingThreadId:undefined}),null);
 });
-test('unknown own session state is not covered by the active-turn exemption',()=>{
- const s=status([own]);s.controlledSessions[0].status={type:'unknown'};assert.throws(()=>assertDeploymentIdle(s,options),/状态待确认/);
+test('native session state does not gate a web restart',()=>{
+ for(const type of ['active','systemError','unknown','idle','notLoaded']){
+  const s=status([other]);s.controlledSessions[0].status={type};
+  assert.equal(assertDeploymentIdle(s,options),null);
+ }
 });
-test('settled error evidence permits only the verified error state, not pending requests',()=>{
- const s=status([other]);s.controlledSessions[0].status.type='systemError';
- assert.throws(()=>assertDeploymentIdle(s,options),/状态待确认/);
- const checked={...options,settledErrorThreadIds:new Set([other])};
- assert.equal(assertDeploymentIdle(s,checked),null);
- s.controlledSessions[0].status.type='active';assert.equal(assertDeploymentIdle(s,checked),null);
- s.controlledSessions[0].status.type='systemError';s.pendingRequests=[{threadId:other}];assert.throws(()=>assertDeploymentIdle(s,checked),/待处理请求/);
-});
-
 test('explicit request exception is local, exact, invocation-only and never hides extra requests',()=>{
  const s=status([other]);s.pendingRequests=[{key:'request-one',threadId:other}];s.controlledSessions[0].pendingRequests=1;
  const allowed={...options,allowedPendingRequestKeys:new Set(['request-one'])},before=structuredClone(s);
