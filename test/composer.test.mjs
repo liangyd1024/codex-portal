@@ -141,3 +141,20 @@ test('goal clear respects unsupported engines, control ownership and RPC errors'
  m.rpc.request=async()=>{throw Error('disconnected');};await assert.rejects(setGoal(m,'a',{clear:true}),/disconnected/);
  await assert.rejects(setGoal(m,'unknown',{clear:true}));
 });
+
+test('unchanged goal edits read native state without creating another goal message',async()=>{
+ for(const status of ['active','blocked','paused','complete']){
+  const {m,calls}=fixture();m.controlled.set('a',{status:{type:'idle'}});
+  const goal={objective:'核实\n结果',status,tokensUsed:123,tokenBudget:500,updatedAt:100};
+  m.rpc.request=async(method,params)=>{calls.push({method,params});return {goal};};
+  const result=await setGoal(m,'a',{objective:'  核实\n结果\n',expectedObjective:goal.objective});
+  assert.deepEqual(result,{goal});assert.deepEqual(calls,[{method:'thread/goal/get',params:{threadId:'a'}}]);
+ }
+});
+test('unchanged edit still detects stale state; internal whitespace remains a real edit',async()=>{
+ const {m,calls}=fixture();m.controlled.set('a',{status:{type:'idle'}});
+ const request=m.rpc.request;m.rpc.request=async(method,params)=>method==='thread/goal/get'?{goal:{objective:'当前目标',status:'blocked'}}:request(method,params);
+ await assert.rejects(setGoal(m,'a',{objective:'旧目标',expectedObjective:'旧目标'}),e=>e.code==='GOAL_CHANGED');assert.equal(calls.length,0);
+ await setGoal(m,'a',{objective:'当前 目标',expectedObjective:'当前目标'});
+ assert.equal(calls.length,1);assert.equal(calls[0].params.objective,'当前 目标');
+});

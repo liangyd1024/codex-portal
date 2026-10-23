@@ -131,6 +131,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
       const now=context(),objective=area.value.trim();
       if(!now.ready||now.busy||now.goalError){feedback.textContent='连接或目标状态尚未确认，草稿已保留。';return;}
       if(!objective){feedback.textContent='请填写目标内容。';area.focus();return;}
+      if(!draft.uncertain&&objective===draft.base.trim()&&now.goal?.objective===draft.base){delete selection.goalEdit;save();dialog.close();return;}
       goalUpdating=true;submit.disabled=true;reload.disabled=true;area.readOnly=true;form.setAttribute('aria-busy','true');feedback.textContent='正在保存…';render();
       let saved=false;
       try{
