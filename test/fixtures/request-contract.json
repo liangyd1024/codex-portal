@@ -1,0 +1,812 @@
+{
+  "description": "Synthetic parameter-name compatibility fixture. Nested types are omitted. Frozen for protocol migration regression tests; not an engine schema or evidence of live compatibility.",
+  "oneOf": [
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "initialize"
+          ]
+        },
+        "params": {
+          "properties": {
+            "capabilities": {},
+            "clientInfo": {}
+          },
+          "required": [
+            "clientInfo"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/start"
+          ]
+        },
+        "params": {
+          "properties": {
+            "allowProviderModelFallback": {},
+            "approvalPolicy": {},
+            "approvalsReviewer": {},
+            "baseInstructions": {},
+            "config": {},
+            "cwd": {},
+            "daybreakEnabled": {},
+            "developerInstructions": {},
+            "dynamicTools": {},
+            "environments": {},
+            "ephemeral": {},
+            "experimentalRawEvents": {},
+            "historyMode": {},
+            "mockExperimentalField": {},
+            "model": {},
+            "modelProvider": {},
+            "multiAgentMode": {},
+            "permissions": {},
+            "personality": {},
+            "projectId": {},
+            "runtimeWorkspaceRoots": {},
+            "sandbox": {},
+            "selectedCapabilityRoots": {},
+            "serviceName": {},
+            "serviceTier": {},
+            "sessionStartSource": {},
+            "threadSource": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/resume"
+          ]
+        },
+        "params": {
+          "properties": {
+            "approvalPolicy": {},
+            "approvalsReviewer": {},
+            "baseInstructions": {},
+            "config": {},
+            "cwd": {},
+            "developerInstructions": {},
+            "excludeTurns": {},
+            "history": {},
+            "initialTurnsPage": {},
+            "model": {},
+            "modelProvider": {},
+            "path": {},
+            "permissions": {},
+            "personality": {},
+            "runtimeWorkspaceRoots": {},
+            "sandbox": {},
+            "serviceTier": {},
+            "threadId": {}
+          },
+          "required": [
+            "threadId"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/name/set"
+          ]
+        },
+        "params": {
+          "properties": {
+            "name": {},
+            "threadId": {}
+          },
+          "required": [
+            "name",
+            "threadId"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/goal/get"
+          ]
+        },
+        "params": {
+          "properties": {
+            "threadId": {}
+          },
+          "required": [
+            "threadId"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/queue/list"
+          ]
+        },
+        "params": {
+          "properties": {
+            "cursor": {},
+            "limit": {},
+            "threadId": {}
+          },
+          "required": [
+            "threadId"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/backgroundTerminals/list"
+          ]
+        },
+        "params": {
+          "properties": {
+            "cursor": {},
+            "limit": {},
+            "threadId": {}
+          },
+          "required": [
+            "threadId"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/list"
+          ]
+        },
+        "params": {
+          "properties": {
+            "ancestorThreadId": {},
+            "archived": {},
+            "cursor": {},
+            "cwd": {},
+            "limit": {},
+            "modelProviders": {},
+            "originators": {},
+            "parentThreadId": {},
+            "projectId": {},
+            "searchTerm": {},
+            "sectionId": {},
+            "sortDirection": {},
+            "sortKey": {},
+            "sourceKinds": {},
+            "useStateDbOnly": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/loaded/list"
+          ]
+        },
+        "params": {
+          "properties": {
+            "cursor": {},
+            "limit": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/read"
+          ]
+        },
+        "params": {
+          "properties": {
+            "includeTurns": {},
+            "threadId": {}
+          },
+          "required": [
+            "threadId"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "turn/start"
+          ]
+        },
+        "params": {
+          "properties": {
+            "additionalContext": {},
+            "approvalPolicy": {},
+            "approvalsReviewer": {},
+            "clientUserMessageId": {},
+            "collaborationMode": {},
+            "cwd": {},
+            "cyberAccessProgram": {},
+            "disabledPluginIds": {},
+            "effort": {},
+            "environments": {},
+            "input": {},
+            "model": {},
+            "multiAgentMode": {},
+            "outputSchema": {},
+            "parentTurnId": {},
+            "permissions": {},
+            "personality": {},
+            "responsesapiClientMetadata": {},
+            "rootTurnId": {},
+            "runtimeWorkspaceRoots": {},
+            "sandboxPolicy": {},
+            "serviceTier": {},
+            "serviceTierForTurn": {},
+            "summary": {},
+            "threadId": {},
+            "toolOutput": {},
+            "turnTrigger": {}
+          },
+          "required": [
+            "input",
+            "threadId"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "turn/steer"
+          ]
+        },
+        "params": {
+          "properties": {
+            "additionalContext": {},
+            "clientUserMessageId": {},
+            "expectedTurnId": {},
+            "input": {},
+            "responsesapiClientMetadata": {},
+            "threadId": {}
+          },
+          "required": [
+            "expectedTurnId",
+            "input",
+            "threadId"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "turn/interrupt"
+          ]
+        },
+        "params": {
+          "properties": {
+            "threadId": {},
+            "turnId": {}
+          },
+          "required": [
+            "threadId",
+            "turnId"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "model/list"
+          ]
+        },
+        "params": {
+          "properties": {
+            "cursor": {},
+            "includeHidden": {},
+            "limit": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/backgroundTerminals/terminate"
+          ]
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "threadId": {},
+            "processId": {}
+          },
+          "required": [
+            "threadId",
+            "processId"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/fork"
+          ]
+        },
+        "params": {
+          "properties": {
+            "approvalPolicy": {},
+            "config": {},
+            "developerInstructions": {},
+            "ephemeral": {},
+            "excludeTurns": {},
+            "model": {},
+            "sandbox": {},
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/items/list"
+          ]
+        },
+        "params": {
+          "properties": {
+            "cursor": {},
+            "limit": {},
+            "sortDirection": {},
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "mcpServerStatus/list"
+          ]
+        },
+        "params": {
+          "properties": {
+            "detail": {},
+            "serverName": {},
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "mcpServer/tool/call"
+          ]
+        },
+        "params": {
+          "properties": {
+            "arguments": {},
+            "server": {},
+            "threadId": {},
+            "tool": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "fs/getMetadata"
+          ]
+        },
+        "params": {
+          "properties": {
+            "path": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "fs/readDirectory"
+          ]
+        },
+        "params": {
+          "properties": {
+            "path": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "fs/createDirectory"
+          ]
+        },
+        "params": {
+          "properties": {
+            "path": {},
+            "recursive": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "project/list"
+          ]
+        },
+        "params": {
+          "properties": {
+            "cursor": {},
+            "limit": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "project/create"
+          ]
+        },
+        "params": {
+          "properties": {
+            "idempotencyKey": {},
+            "name": {},
+            "roots": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "account/read"
+          ]
+        },
+        "params": {
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/archive"
+          ]
+        },
+        "params": {
+          "properties": {
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/unarchive"
+          ]
+        },
+        "params": {
+          "properties": {
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/metadata/update"
+          ]
+        },
+        "params": {
+          "properties": {
+            "projectId": {},
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/section/move"
+          ]
+        },
+        "params": {
+          "properties": {
+            "beforeThreadId": {},
+            "sectionId": {},
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/readState/update"
+          ]
+        },
+        "params": {
+          "properties": {
+            "expectedRevision": {},
+            "operation": {},
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "threadSection/create"
+          ]
+        },
+        "params": {
+          "properties": {
+            "name": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "threadSection/update"
+          ]
+        },
+        "params": {
+          "properties": {
+            "name": {},
+            "sectionId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "threadSection/delete"
+          ]
+        },
+        "params": {
+          "properties": {
+            "sectionId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/unsubscribe"
+          ]
+        },
+        "params": {
+          "properties": {
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/goal/clear"
+          ]
+        },
+        "params": {
+          "properties": {
+            "origin": {},
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/queue/add"
+          ]
+        },
+        "params": {
+          "properties": {
+            "clientUserMessageId": {},
+            "input": {},
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/queue/delete"
+          ]
+        },
+        "params": {
+          "properties": {
+            "queuedSubmissionId": {},
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/queue/start"
+          ]
+        },
+        "params": {
+          "properties": {
+            "queuedSubmissionId": {},
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/turns/list"
+          ]
+        },
+        "params": {
+          "properties": {
+            "itemsView": {},
+            "limit": {},
+            "sortDirection": {},
+            "threadId": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "collaborationMode/list"
+          ]
+        },
+        "params": {
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "skills/list"
+          ]
+        },
+        "params": {
+          "properties": {
+            "cwds": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "plugin/installed"
+          ]
+        },
+        "params": {
+          "properties": {
+            "cwds": {}
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/goal/set"
+          ]
+        },
+        "params": {
+          "properties": {
+            "objective": {},
+            "origin": {},
+            "status": {},
+            "threadId": {},
+            "tokenBudget": {}
+          },
+          "required": []
+        }
+      }
+    }
+  ]
+}
