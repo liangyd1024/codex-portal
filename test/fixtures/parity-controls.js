@@ -12,6 +12,8 @@ if(new URL(location.href).searchParams.get('parityControls')==='1'){
     button('模拟 SSE 断开',()=>f.stream?.onerror?.());
     button('模拟 SSE 恢复',()=>f.stream?.onopen?.());
     button('模拟问题',()=>f.question());
+    button('下次创建会话失败',()=>{f.fail={path:'/api/threads',status:503,message:'模拟创建失败，请重试。'};});
+    button('下次首条消息失败',()=>{f.fail={path:'/api/threads/qa-new-'+f.threads.length+'/message',status:503,message:'模拟首条消息失败，请重试。'};});
     button('模拟异步问题',async()=>{
       await import('/__fixtures/questions-browser.js');
       f.update();f.emit('turn/started',{threadId:'qa-a',turn:f.turns.get('qa-a')[0]});
