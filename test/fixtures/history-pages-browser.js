@@ -7,6 +7,14 @@
   {id:'qa-history-user-'+n,type:'userMessage',content:[{type:'text',text:'较早提问 '+n+'：保留顺序。'}]},
   {id:'qa-history-answer-'+n,type:'agentMessage',text:'较早回复 '+n+'：完整原文。'},
  ]})));
+ if(new URLSearchParams(location.search).get('historyFailure')==='1'){
+  const fetchFixture=window.fetch;let pages=0;
+  window.fetch=(url,options)=>{
+   const path=new URL(typeof url==='string'?url:url.url,location.href).pathname;
+   if(path==='/api/threads/qa-a/history'&&++pages===2)f.fail={path,status:503,message:'模拟历史分页失败，请重试。'};
+   return fetchFixture(url,options);
+  };
+ }
  let original;
  const capture=new MutationObserver(()=>{original=document.querySelector('[data-turn-id="qa-turn"]');if(original)capture.disconnect();});
  addEventListener('DOMContentLoaded',()=>{
