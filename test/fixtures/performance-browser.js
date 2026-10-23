@@ -11,6 +11,20 @@
   const summary=document.createElement('summary');summary.textContent='性能验收控制';panel.append(summary);
   const button=document.createElement('button');button.textContent='测量五次尾部更新';button.style.minHeight='44px';panel.append(button);
   const out=document.createElement('pre');out.setAttribute('aria-label','性能测量记录');out.style.whiteSpace='pre-wrap';panel.append(out);document.body.append(panel);
+  const inputSamples=[];
+  const readInput=document.createElement('button');readInput.textContent='读取输入响应记录';readInput.style.minHeight='44px';panel.append(readInput);
+  const inputOut=document.createElement('pre');inputOut.setAttribute('aria-label','输入响应记录');inputOut.style.whiteSpace='pre-wrap';panel.append(inputOut);
+  readInput.onclick=()=>{inputOut.textContent=JSON.stringify({samples:inputSamples,errors:f.errors},null,2);};
+  document.addEventListener('input',event=>{
+   if(event.target.id!=='message-input')return;
+   const started=performance.now(),calls=f.calls.length,nodes=[...document.querySelectorAll('.message-turn')];
+   const value=event.target.value,focused=document.hasFocus(),visible=document.visibilityState==='visible';
+   requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    inputSamples.push({framesMs:performance.now()-started,length:value.length,unchanged:event.target.value===value,
+     focused,visible,endFocused:document.hasFocus(),endVisible:document.visibilityState==='visible',
+     nodeCount:nodes.length,nodesPreserved:nodes.every(n=>n.isConnected),apiCalls:f.calls.length-calls});
+   }));
+  },{capture:true});
   let serial=0;
   button.onclick=async()=>{
    if(button.disabled)return;button.disabled=true;
