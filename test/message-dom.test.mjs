@@ -42,6 +42,12 @@ test('image load state and retries persist only for the same source',()=>{
  reconcileMessages(parent,tree(image('second.png')));assert.equal(parent.firstChild.dataset.source,'second.png');
 });
 
+test('file cards retain cached toggles and replace changed cards with their own lazy handlers',()=>{
+ const card=()=>{const n=new Node('SECTION');n.dataset.itemId='files';n.matches=selector=>selector==='.turn-file-changes';return n;};
+ const old=card(),parent=tree(old);reconcileMessages(parent,tree(old));assert.equal(parent.firstChild,old);
+ const fresh=card();reconcileMessages(parent,tree(fresh));assert.equal(parent.firstChild,fresh);
+});
+
 test('retained cached nodes move into new groups without rebuilding, and changed nodes bind to reconciled DOM',async t=>{
  const {RenderCache}=await import('../public/render-cache.js');
  const previous=globalThis.document;globalThis.document={createTextNode:()=>text('')};t.after(()=>{if(previous)globalThis.document=previous;else delete globalThis.document;});

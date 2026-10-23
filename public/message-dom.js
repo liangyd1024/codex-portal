@@ -40,6 +40,7 @@ function reconcileNode(old, fresh) {
   }
   // These widgets have closures bound to their own DOM. Preserve the whole widget
   // when unchanged, otherwise install its new handlers together with its nodes.
+  if (old.matches('.turn-file-changes')) return fresh;
   if (old.matches('.message-image')) {
     return fresh.matches('.message-image') && old.dataset.source === fresh.dataset.source ? old : fresh;
   }

@@ -30,6 +30,7 @@ let scrollFollow,scrollContext,turnNavigation;
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message-media.js';
 import {markdown} from './message-body.js';
 import {userMessageTime, timedTurnGroups} from './message-time.js';
+import {renderTurnFiles} from './turn-files.js';
 import {reconcileMessages} from './message-dom.js';
 import {NewChatDraft} from './new-chat.js';
 import {installAttachments} from './attachments.js';
@@ -686,6 +687,12 @@ function renderMessages() {
       for (const item of group.items) { body.append(cachedItem(item,t.id)); }
       processGroup.append(summary,body); turn.append(processGroup);
     }
+    const fileItems=(t.items||[]).filter(item=>item.type==='fileChange');
+    if(fileItems.some(item=>item.changes?.length)){
+      const cwd=currentThread()?.cwd||'';
+      const files=messageCache.render('files:'+t.id,renderSignature([cwd,uncertainHistory(),fileItems]),()=>renderTurnFiles(fileItems,{turnId:t.id,cwd,uncertain:uncertainHistory()})||el('div'));
+      turn.append(files);
+    }
     if (t.error) {
       turn.append(el('div','turn-error',messageOf(t.error)));
       const recovery=authRecoveryMessage(t.error);
@@ -724,7 +731,7 @@ function renderThread() {
   const t = currentThread(); $('welcome').hidden = Boolean(state.selectedId); $('conversation').hidden = !state.selectedId;
   $('thread-title').hidden = !state.selectedId;
   $('breadcrumb-project').hidden = Boolean(state.selectedId);
-  if (!state.selectedId) { renderSession(); renderFiles(); renderControls(); return; }
+  if (!state.selectedId) { renderSession(); renderControls(); return; }
   setText('thread-title',t ? threadName(t) : '正在读取会话…'); $('thread-title').title = $('thread-title').textContent; setText('thread-path',t?.cwd ? '目标机器 · ' + t.cwd : '');
   const own = controlled(), control = typeOf(state.detail?.controlState), busy = ['busy','occupied','active_writer','conflict'].includes(control);
   const badge = $('control-badge'); badge.className = 'control-badge' + (own ? ' controlled' : busy ? ' busy' : ''); badge.textContent = own ? '已取得控制' : busy ? '已被占用' : '查看模式';
@@ -733,7 +740,7 @@ function renderThread() {
   note.textContent = own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话由其他入口管理，当前为查看模式。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
   if (snapshotHistory()) note.textContent = (own ? '历史来自快照。实时状态由目标机器控制连接确认。' : '历史快照，运行状态需接管后确认。') + (busy ? ' ' + note.textContent : '');
   if(state.desktopMode){badge.textContent='桌面托管';note.textContent='消息由 Codex 桌面执行，沿用该会话的原生工具。';}
-  renderMessages(); renderSession(); renderFiles(); renderControls(); resizeInput();
+  renderMessages(); renderSession(); renderControls(); resizeInput();
 }
 function renderSession() {
   const queued=clear($('queued-inputs')), queue=state.detail?.queue;
@@ -748,12 +755,6 @@ function renderSession() {
     queue.data.forEach(item=>queued.append(el('p','queued-input',(item.input||[]).map(i=>i.text||`[${i.type}]`).join('\n'))));
   }
 
-}
-function renderFiles() {
-  const map = new Map(); turns().forEach(t => (t.items || []).forEach(item => { if (item.type === 'fileChange') (item.changes || []).forEach(c => map.set(c.path,c)); }));
-  const n = clear($('file-changes')); setText('file-count',map.size);
-  if (!map.size) { n.append(el('p','subtle',state.selectedId ? '当前已加载记录中暂无文件变化。' : '选择会话后显示文件变化。')); return; }
-  [...map.values()].forEach(c => { const row = el('div','file-row'); row.append(icon('file'),el('span','file-path',c.path),el('span','file-kind',kindName(c.kind))); row.title = '目标机器文件：' + c.path; n.append(row); });
 }
 function renderDiagnostics() {
   const n = clear($('diagnostic-content')), s = state.status || {}, c = s.connection || {};
@@ -1371,7 +1372,7 @@ let streamFullRender=false;
 function scheduleStreamRender(kind='all') {
   if(kind!=='text')streamFullRender=true;
   if (state.streamRender) return; state.streamRender = true;
-  setTimeout(() => { state.streamRender = false; const full=streamFullRender;streamFullRender=false;renderMessages();if(full){renderRequests();renderSession();renderFiles();renderControls();} },80);
+  setTimeout(() => { state.streamRender = false; const full=streamFullRender;streamFullRender=false;renderMessages();if(full){renderRequests();renderSession();renderControls();} },80);
 }
 let detailRefreshTimer, listRefreshTimer;
 function scheduleDetailRefresh() { if(detailRefreshTimer)return; detailRefreshTimer = setTimeout(() => { detailRefreshTimer=null; if (usable() && state.selectedId) refreshSelected().catch(e => recordError(e,'thread')); },650); }
