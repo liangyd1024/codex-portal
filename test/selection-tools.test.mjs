@@ -56,3 +56,26 @@ test('side cache presents original plan, reasoning and command streaming output'
  applySideEvent(turns,'item/completed',{turnId:'t',item:{id:'cmd',type:'commandExecution',aggregatedOutput:'完整输出'}});
  assert.equal(turns[0].items.find(i=>i.id==='cmd').aggregatedOutput,'完整输出');
 });
+test('side chat keeps the first input across partial completion and late start responses',()=>{
+ const turns=[],user={id:'user',type:'userMessage',content:[{type:'text',text:annotatedText('首次问题',[],[{text:'选文'}])}]};
+ applySideEvent(turns,'item/completed',{turnId:'t',item:user});
+ applySideEvent(turns,'item/completed',{turnId:'t',item:{id:'answer',type:'agentMessage',text:'完整原生回复'}});
+ applySideEvent(turns,'turn/completed',{turn:{id:'t',status:'completed',items:[{id:'answer',type:'agentMessage',text:'最终回复'}]}});
+ applySideEvent(turns,'turn/started',{turn:{id:'t',status:'inProgress',items:[user,{id:'answer',type:'agentMessage',text:'旧回复'}]}});
+ assert.deepEqual(turns[0].items,[user,{id:'answer',type:'agentMessage',text:'最终回复'}]);
+ assert.equal(turns[0].status,'completed');
+});
+test('side cache does not mutate native turn payload arrays as later items arrive',()=>{
+ const turns=[],payload={id:'t',items:[{id:'user',type:'userMessage',content:[]}]};
+ applySideEvent(turns,'turn/started',{turn:payload});
+ applySideEvent(turns,'item/agentMessage/delta',{turnId:'t',itemId:'answer',delta:'回复'});
+ assert.equal(payload.items.length,1);
+ assert.equal(turns[0].items.length,2);
+});
+test('side view reread retains first input after partial native completion',async()=>{
+ const {m}=fixture();await createSideChat(m,'parent',{requestId:'33333333-3333-4333-8333-333333333333'});
+ const user={id:'user',type:'userMessage',content:[{type:'text',text:'首次输入'}]};
+ m.emit('event',{method:'item/completed',params:{threadId:'side',turnId:'t',item:user}});
+ m.emit('event',{method:'turn/completed',params:{threadId:'side',turn:{id:'t',status:'completed',items:[{id:'answer',type:'agentMessage',text:'回复'}]}}});
+ assert.deepEqual((await readSideChat(m,'side')).turns[0].items[0],user);
+});

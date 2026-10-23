@@ -57,7 +57,7 @@ export function installSideChat({api,context,renderItem,notify,selectionChanged=
   const active=s.active,text=annotatedText(raw,[],parts);s.busy=true;s.error='';render();
   try{
    const d=await api('/api/threads/'+s.id+(active?'/steer':'/message'),{method:'POST',body:{text,images:pictures.items.map(i=>({url:i.url})),...options,model:s.model,effort:s.effort}});
-   if(d.turn){const observed=s.turns.find(t=>t.id===d.turn.id);if(!observed||!['completed','failed','interrupted'].includes(stateOf(observed)))applySideEvent(s.turns,'turn/started',{turn:d.turn});s.active=stateOf(s.turns.find(t=>t.id===d.turn.id))==='inProgress';}
+   if(d.turn){applySideEvent(s.turns,'turn/started',{turn:d.turn});s.active=stateOf(s.turns.find(t=>t.id===d.turn.id))==='inProgress';}
    if(!plan){if(s.draft===raw)s.draft='';attachments.acknowledge(pictures);s.selections=s.selections.filter(x=>!parts.includes(x));}
   }catch(error){s.error=error.message;s.uncertain=['OUTCOME_UNKNOWN','RPC_TIMEOUT'].includes(error.code)||!error.status;throw error;}
   finally{s.busy=false;if(s===selected){input.value=s.draft;render();}}

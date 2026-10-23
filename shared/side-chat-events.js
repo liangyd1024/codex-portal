@@ -2,7 +2,15 @@
 export function applySideEvent(turns,method,p){
  const id=p.turnId||p.turn?.id;if(!id)return;
  let turn=turns.find(t=>t.id===id);if(!turn){turn={id,items:[]};turns.push(turn);}
- if(p.turn){const items=turn.items;Object.assign(turn,p.turn);if(!p.turn.items?.length)turn.items=items;}
+ if(p.turn){
+  // Turn payloads can contain only a subset of items. A late turn/start reply
+  // must not erase user messages or roll back items already streamed by SSE.
+  const items=[...turn.items],indices=new Map(items.map((item,index)=>[item.id,index]));
+  for(const item of p.turn.items||[]){const index=indices.get(item.id);if(index===undefined){indices.set(item.id,items.length);items.push({...item});}else if(method!=='turn/started')items[index]={...item};}
+  const status=turn.status,terminal=['completed','failed','interrupted'].includes(status?.type||status);
+  Object.assign(turn,p.turn,{items});
+  if(method==='turn/started'&&terminal)turn.status=status;
+ }
  if(p.item){const index=turn.items.findIndex(i=>i.id===p.item.id);if(index<0)turn.items.push({...p.item});else turn.items[index]={...p.item};}
  if(method==='item/agentMessage/delta'||method==='item/plan/delta'){
   let item=turn.items.find(i=>i.id===p.itemId);if(!item){item={id:p.itemId,type:method.includes('/plan/')?'plan':'agentMessage',text:''};turn.items.push(item);}item.text=(item.text||'')+(p.delta||'');
