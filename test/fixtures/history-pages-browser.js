@@ -8,6 +8,40 @@
   {id:'qa-history-answer-'+n,type:'agentMessage',text:'较早回复 '+n+'：完整原文。'},
  ]})));
  const historyMode=new URLSearchParams(location.search);
+ const touchEvents=[];
+ if(historyMode.get('historyTouch')==='1')for(const type of ['pointerdown','touchstart','touchmove','touchend'])document.addEventListener(type,event=>{if(touchEvents.length<100)touchEvents.push({type,pointerType:event.pointerType||null,target:event.target.closest('button,summary')?.getAttribute('aria-label')||event.target.closest('button,summary')?.textContent||event.target.tagName});},{capture:true,passive:true});
+ const anchorRecords=[];
+ if(historyMode.get('historyAnchor')==='1'){
+  const longText='完整历史正文，用于检查前插后的可见位置。\n\n'.repeat(45);
+  f.turns.get('qa-a')[0].items.find(item=>item.type==='agentMessage').text+= '\n\n'+longText;
+  for(const turn of f.history.get('qa-a'))turn.items[1].text+='\n\n'+longText;
+  const fetchFixture=window.fetch;
+  window.fetch=(url,options)=>{
+   const request=new URL(typeof url==='string'?url:url.url,location.href);
+   if(request.pathname!=='/api/threads/qa-a/history')return fetchFixture(url,options);
+   // Release each response after user scrolling settles, then measure after DOM insertion.
+   return new Promise(resolve=>{
+    const release=document.createElement('button');release.textContent='释放当前历史页';release.style.minHeight='44px';
+    document.querySelector('[data-history-panel]').append(release);
+    release.onclick=()=>{release.remove();
+     const scroller=document.querySelector('#messages-scroller'),viewportTop=scroller.getBoundingClientRect().top;
+     const anchor=[...document.querySelectorAll('.message-turn')].find(node=>node.getBoundingClientRect().bottom>viewportTop);
+     const before={id:anchor?.dataset.turnId,offset:anchor?anchor.getBoundingClientRect().top-viewportTop:null,scrollTop:scroller.scrollTop,height:scroller.scrollHeight,text:anchor?.textContent};
+     const count=document.querySelectorAll('.message-turn').length;
+     const observer=new MutationObserver(()=>{
+      if(document.querySelectorAll('.message-turn').length<=count)return;
+      observer.disconnect();
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+       const restored=[...document.querySelectorAll('.message-turn')].find(node=>node.dataset.turnId===before.id);
+       anchorRecords.push({cursor:request.searchParams.get('cursor'),id:before.id,beforeOffset:before.offset,afterOffset:restored?restored.getBoundingClientRect().top-scroller.getBoundingClientRect().top:null,beforeScrollTop:before.scrollTop,afterScrollTop:scroller.scrollTop,addedHeight:scroller.scrollHeight-before.height,sameNode:restored===anchor,textPreserved:restored?.textContent===before.text});
+      }));
+     });
+     observer.observe(document.querySelector('#messages'),{childList:true,subtree:true});
+     resolve(fetchFixture(url,options));
+    };
+   });
+  };
+ }
  if(historyMode.get('historyFailure')==='1'||historyMode.get('historyCursorChanged')==='1'){
   const fetchFixture=window.fetch;let pages=0;
   window.fetch=(url,options)=>{
@@ -39,7 +73,7 @@
   const output=document.createElement('pre');output.setAttribute('aria-label','历史检查记录');output.style.whiteSpace='pre-wrap';panel.append(output);
   button.onclick=()=>{output.textContent=JSON.stringify({
    requests:f.calls.filter(c=>c.path.endsWith('/history')),turns:[...document.querySelectorAll('.message-turn')].map(n=>n.dataset.turnId),
-   originalNodePreserved:Boolean(original?.isConnected&&document.querySelector('[data-turn-id="qa-turn"]')===original),errors:f.errors,
+   originalNodePreserved:Boolean(original?.isConnected&&document.querySelector('[data-turn-id="qa-turn"]')===original),...(historyMode.get('historyAnchor')==='1'?{anchors:anchorRecords}:{}),...(historyMode.get('historyTouch')==='1'?{touchEvents}:{}),errors:f.errors,
   },null,2);};document.body.append(panel);
  });
 })();
