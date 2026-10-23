@@ -4,29 +4,41 @@ const running = value => ['inProgress','in_progress','running'].includes(type(va
 
 // Labels describe native items only. Never parse shell text or rewrite events.
 export function processSummary(turn, items, options = {}) {
-  let status = processGroupStatus(turn,items,options);
-  const failed = items.some(item => ['failed','declined','error'].includes(type(item.status)) ||
-    (item.type === 'commandExecution' && item.exitCode != null && item.exitCode !== 0));
-  if (failed) status = '执行未成功';
-  const labels = new Set();
-  let icon = 'terminal';
+  const categories = new Set(), integrations = new Set();
+  const active = running(turn.status);
+  const current = active && items.includes(turn.items?.at(-1));
+  const nativeStatus = processGroupStatus(turn,items,options);
+  let status = current || nativeStatus === '后台命令仍在运行' ? nativeStatus : '';
+  const onlyReasoning = items.every(item => item.type === 'reasoning');
+  const hasReasoning = items.some(item => item.type === 'reasoning' &&
+    [...(item.summary || []),...(item.content || [])].some(part => String(typeof part === 'string' ? part : part.text || '').trim()));
+  if (onlyReasoning && current) status = options.uncertain ? '状态未确认' : '正在思考';
   for (const item of items) {
-    const done = type(item.status) === 'completed' && !(item.exitCode != null && item.exitCode !== 0);
     if (item.type === 'commandExecution') {
       const actions = item.commandActions?.length ? item.commandActions : [{type:'unknown'}];
-      for (const action of actions) {
-        const names = {read:['读取文件','已读取文件'],listFiles:['浏览目录','已浏览目录'],search:['搜索文件','已搜索文件']};
-        labels.add(names[action.type]?.[done ? 1 : 0] || (done ? '运行了命令' : '运行命令'));
-      }
-    } else if (item.type === 'fileChange') labels.add(done ? '已修改文件' : '修改文件');
-    else if (item.type === 'webSearch') labels.add(done ? '已搜索网页' : '搜索网页');
-    else if (item.type === 'reasoning') {
-      if (running(turn.status) && turn.items?.at(-1) === item && !options.uncertain && !status) status = '正在思考';
-    } else if (item.type !== 'agentMessage') labels.add(item.tool || item.name || '工具调用');
+      for (const action of actions) categories.add(({read:'read',listFiles:'list',search:'search'})[action.type] || 'command');
+    } else if (item.type === 'fileChange') categories.add('edit');
+    else if (item.type === 'webSearch') categories.add('web');
+    else if (item.type === 'mcpToolCall') {
+      categories.add('integration');
+      // appName is a native display name. Tool ids and plugin ids are not names.
+      const name = item.appContext?.appName?.trim();
+      if (name) integrations.add(name);
+    } else if (!['agentMessage','reasoning'].includes(item.type)) categories.add('tool');
   }
-  if ([...labels].some(label => /文件|目录/.test(label))) icon = 'file';
-  const label = [...labels].join(' · ') || (items.some(item => item.type === 'agentMessage') ? '处理过程' : '思考过程');
-  return {label,icon,status,failed};
+  const live = current && !!status;
+  const labels = {read:live?'读取文件':'已读取文件',list:live?'浏览目录':'已浏览目录',
+    search:live?'搜索文件':'已搜索文件',edit:live?'修改文件':'已修改文件',
+    web:live?'搜索网页':'已搜索网页',command:live?'运行命令':'运行了命令',
+    integration:(live?'使用':'已使用') + (integrations.size?' '+[...integrations].join('、')+' ':'') + '集成',
+    tool:live?'调用工具':'调用了工具'};
+  // Category order is stable; result status belongs to each original detail.
+  const order = ['read','list','search','edit','web','integration','tool','command'];
+  const label = order.filter(key=>categories.has(key)).map(key=>labels[key]).join('') ||
+    (onlyReasoning ? (status || '思考摘要') : '处理过程');
+  const icon = categories.has('integration') ? 'integration' : categories.has('read') || categories.has('list') || categories.has('search') ? 'book' : categories.has('edit') ? 'file' : 'process-terminal';
+  return {label,icon,status:onlyReasoning?'':status,failed:false,
+    hidden:onlyReasoning && !hasReasoning && !current};
 }
 
 export function renderProcessSummary(description, {durationLabel,icon} = {}) {
@@ -40,6 +52,6 @@ export function renderProcessSummary(description, {durationLabel,icon} = {}) {
     status.className = 'process-status' + (description.failed ? ' error' : '');
     status.textContent = description.status; summary.append(status);
   }
-  summary.append(icon('chevron','chevron'));
+  const chevron = icon('chevron','chevron'); chevron.classList.add('process-chevron'); summary.append(chevron);
   return summary;
 }
