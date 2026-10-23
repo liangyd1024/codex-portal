@@ -23,3 +23,29 @@ test('local deployment endpoint returns fresh native state without opening a tar
  const app=createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',manager]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
  try{const r=await fetch('http://127.0.0.1:'+app.server.address().port+'/api/system/deployment-status');assert.equal(r.status,200);assert.equal((await r.json()).controlledSessions[0].status.type,'idle');}finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));}
 });
+
+function errorDetail(){return {thread:{id:'ended',status:{type:'systemError'}},turns:[{status:'failed',completedAt:123}],goal:{status:'blocked'},goalError:null,queue:{data:[],nextCursor:null},backgroundTerminals:{data:[],nextCursor:null},pendingRequests:[]};}
+function errorEntrance(detail=errorDetail(),freshType='systemError'){
+ const urls=[];let reads=0;
+ const fetchImpl=async url=>{urls.push(url);return {ok:true,status:200,json:async()=>{
+  if(url.endsWith('/api/connections'))return {data:[{id:'local',host:{alias:'本机'}}]};
+  if(url.includes('/api/threads/'))return detail;
+  return {...snapshot,controlledSessions:[{id:'ended',status:{type:++reads===1?'systemError':freshType},pendingRequests:0}]};
+ }};};
+ return {urls,fetchImpl};
+}
+test('web deployment verifies failed history and all background activity, then rereads live status',async()=>{
+ const {urls,fetchImpl}=errorEntrance();
+ await checkDeploymentEntrance({localConnectionId:'local',fetchImpl,attempts:1});
+ assert.equal(urls.filter(u=>u.includes('/api/threads/')).length,1);
+ assert.equal(urls.filter(u=>u.includes('/api/system/deployment-status')).length,2);
+ assert.deepEqual(urls.map(u=>new URL(u).pathname),['/api/connections','/api/system/deployment-status','/api/threads/ended','/api/system/deployment-status']);
+});
+test('failed deployment evidence refuses incomplete history, mismatched identity and activity',async()=>{
+ const changes=[d=>d.thread.id='other',d=>d.turns=[],d=>d.turns[0].status='inProgress',d=>delete d.turns[0].completedAt,d=>d.turns=[null],d=>d.goal.status='active',d=>d.goal.status='unknown',d=>d.goalError='unavailable',d=>d.queue=null,d=>d.queue.error='unavailable',d=>d.queue.data.push({}),d=>d.backgroundTerminals.nextCursor='more',d=>d.backgroundTerminals.data.push({}),d=>d.pendingRequests.push({})];
+ for(const change of changes){const detail=errorDetail();change(detail);const {fetchImpl}=errorEntrance(detail);await assert.rejects(checkDeploymentEntrance({localConnectionId:'local',fetchImpl,attempts:1}),/状态待确认/);}
+});
+test('new active status after failed-history checks is never exempted',async()=>{
+ const {fetchImpl}=errorEntrance(errorDetail(),'active');
+ await assert.rejects(checkDeploymentEntrance({localConnectionId:'local',fetchImpl,attempts:1}),/运行会话/);
+});

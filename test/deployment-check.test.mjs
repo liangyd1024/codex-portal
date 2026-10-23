@@ -26,3 +26,11 @@ test('unreadable status fails closed, ordinary idle deployment is allowed',()=>{
 test('unknown own session state is not covered by the active-turn exemption',()=>{
  const s=status([own]);s.controlledSessions[0].status={type:'unknown'};assert.throws(()=>assertDeploymentIdle(s,options),/状态待确认/);
 });
+test('settled error evidence permits only the verified error state, not active work or requests',()=>{
+ const s=status([other]);s.controlledSessions[0].status.type='systemError';
+ assert.throws(()=>assertDeploymentIdle(s,options),/状态待确认/);
+ const checked={...options,settledErrorThreadIds:new Set([other])};
+ assert.equal(assertDeploymentIdle(s,checked),null);
+ s.controlledSessions[0].status.type='active';assert.throws(()=>assertDeploymentIdle(s,checked),/运行会话/);
+ s.controlledSessions[0].status.type='systemError';s.pendingRequests=[{threadId:other}];assert.throws(()=>assertDeploymentIdle(s,checked),/待处理请求/);
+});
