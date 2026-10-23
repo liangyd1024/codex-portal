@@ -1,5 +1,6 @@
 // Static-only comparison entrances. No Manager, transport or engine is instantiated.
 import http from 'node:http';
+import {createParityEventHandler} from '../test/helpers/parity-event-server.mjs';
 import {readFile,writeFile,mkdir,mkdtemp} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
@@ -13,13 +14,15 @@ const baselineRoot=path.join(evidence,'baseline');
 const files=execFileSync('git',['ls-tree','-r','--name-only',baseline,'--','public','shared'],{cwd:root,encoding:'utf8'}).trim().split('\n');
 for(const file of files){const destination=path.join(baselineRoot,file);await mkdir(path.dirname(destination),{recursive:true});await writeFile(destination,execFileSync('git',['show',baseline+':'+file],{cwd:root,maxBuffer:8*1024*1024}));}
 const fixture=await readFile(path.join(root,'test/fixtures/mobile-browser.js'),'utf8')+'\n'+await readFile(path.join(root,'test/fixtures/parity-controls.js'),'utf8');
-const extras=['history-pages-browser.js','selection-browser.js','project-failure-browser.js','account-browser.js','maintenance-browser.js','diagnostics-browser.js','performance-browser.js','goal-status-browser.js','questions-browser.js','question-attention-browser.js','desktop-mentions-browser.js','web-mentions-browser.js','turn-files-browser.js','turn-navigation-browser.js'];
+const extras=['native-events-browser.js','history-pages-browser.js','selection-browser.js','project-failure-browser.js','account-browser.js','maintenance-browser.js','diagnostics-browser.js','performance-browser.js','goal-status-browser.js','questions-browser.js','question-attention-browser.js','desktop-mentions-browser.js','web-mentions-browser.js','turn-files-browser.js','turn-navigation-browser.js'];
 const servers=[];
 async function serve(directory){
+ const parityEvents=createParityEventHandler();
  const staticResponse=createStaticResponse();const index=(await readFile(path.join(directory,'public/index.html'),'utf8')).replace('</head>','<script src="/__parity_fixture.js"></script></head>');
  const server=http.createServer(async(req,res)=>{try{
   const url=new URL(req.url,'http://localhost');const p=url.pathname;
   res.setHeader('Cache-Control','no-store');
+  if(parityEvents(req,res,url))return;
   if(p.startsWith('/api/')){res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{message:'Fixture interception missing. Real APIs are unavailable.'}}));return;}
   if(p==='/__parity_fixture.js'){res.setHeader('Content-Type','text/javascript');res.end(fixture+"\nwindow.addEventListener('rcm-ready',()=>window.rcmParityReady=true);\n");return;}
   if(p.startsWith('/__fixtures/')){const name=p.slice('/__fixtures/'.length);if(!extras.includes(name)){res.writeHead(404);res.end();return;}res.setHeader('Content-Type','text/javascript');res.end(await readFile(path.join(root,'test/fixtures',name)));return;}

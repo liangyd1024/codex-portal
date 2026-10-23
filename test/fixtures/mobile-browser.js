@@ -17,6 +17,7 @@
   f.approval=()=>{f.requests=[{id:'qa-approval',key:'qa-approval',threadId:'qa-a',method:'item/commandExecution/requestApproval',params:{threadId:'qa-a',reason:'模拟审批，不会执行命令。',command:'echo fixture',availableDecisions:['accept','decline','cancel']}}];f.update();};
   f.question=()=>{f.requests=[{id:'qa-question',key:'qa-question',threadId:'qa-a',method:'item/tool/requestUserInput',params:{threadId:'qa-a',questions:[{id:'choice',question:'请选择验收方式',options:[{label:'选项一',description:'触控整行选择'},{label:'选项二'}]}]}}];f.update();};
   class Stream {constructor(){f.stream=this;setTimeout(()=>this.onopen?.(),0);}addEventListener(){}close(){}}
+  f.NativeEventSource=window.EventSource;
   window.EventSource=Stream;
   class Recognition {constructor(){f.recognition=this;}start(){this.onstart?.();}stop(){this.onend?.();}abort(){} }
   window.SpeechRecognition=Recognition;
