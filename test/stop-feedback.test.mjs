@@ -8,7 +8,7 @@ function fixture(desktop=false){
  const state={busy:new Set(),desktopMode:desktop,selectedId:'one',selectionVersion:1};
  const calls=[],feedback=createStopFeedback(),errors=[];let refreshes=0;
  const c=vm.createContext({state,newChatOpen:false,stopFeedback:feedback,stopContext:()=>String(state.desktopMode)+':'+state.selectedId,turns:()=>[{id:'turn-one',status:'inProgress'}],typeOf:s=>s?.type||s,controlled:()=>true,running:()=>true,api:async(path,options)=>calls.push({path,options}),action:async(_key,work)=>{try{await work();}catch(e){errors.push(e);}},refreshSelected:async()=>{refreshes++;},recordError:e=>errors.push(e)});
- vm.runInContext(source.slice(source.indexOf('async function interruptThread()'),source.indexOf('async function moreHistory()')),c);
+ vm.runInContext(source.slice(source.indexOf('async function interruptThread()'),source.indexOf('async function moreHistory(')),c);
  return {c,state,calls,feedback,errors,refreshes:()=>refreshes};
 }
 test('native and desktop stop requests stay pending after acknowledgement and are not duplicated',async()=>{
