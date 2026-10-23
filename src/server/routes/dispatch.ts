@@ -9,7 +9,7 @@ import {browseFolders,createFolder,openFolderProject} from '../../../lib/project
 import {retryCapacity} from '../../../lib/capacity-retry.mjs';
 import {deploymentStatus} from '../../../lib/deployment-status.mjs';
 import {WebUpdate} from '../../../lib/web-update.mjs';
-import {readAccountUsage} from '../../../lib/account-usage.mjs';
+import {createConnectionRoutes} from './connections';
 import {fileResponse} from '../../../lib/file-response.mjs';
 import {readSidebar,readSidebarActivity,sidebarAction} from '../../../lib/sidebar.mjs';
 import {composerCatalog,setGoal} from '../../../lib/composer.mjs';
@@ -33,6 +33,8 @@ export interface RouteServices {
  server:()=>import('node:http').Server;mobileConfig:()=>MobileConfig|null;setMobileConfig:(value:MobileConfig)=>void;
 }
 export function createDispatcher(context:RouteServices){
+ const connectionRoutes=new WeakMap<Manager,ReturnType<typeof createConnectionRoutes>>();
+ const routesFor=(manager:Manager)=>{let routes=connectionRoutes.get(manager);if(!routes){routes=createConnectionRoutes(manager);connectionRoutes.set(manager,routes);}return routes;};
  const {config,managers,automations,desktopSessions,desktopSession,csrf,clients,staticResponse,access,setupMobile,updater,providedManagers,buildVersion,staticRoot,extraAssets}=context;
   return async(req:IncomingMessage,res:Response,remote=false)=>{
     const server=context.server();let mobileConfig=context.mobileConfig();
@@ -79,9 +81,8 @@ export function createDispatcher(context:RouteServices){
         void updater.status().then(sendUpdate).catch(()=>{});
         res.once('close',()=>{clearInterval(heartbeat);unsubscribe?.();clients.delete(res);});return;
       }
-      if(req.method==='GET'&&p==='/api/account/usage')return json(res,200,await readAccountUsage(manager));
+      if(req.method==='GET'){const route=routesFor(manager).get('GET '+p);if(route){await route(url,undefined,res);return;}}
       if(req.method==='GET'&&p==='/api/system/deployment-status'){if(remote)throw new AppError('仅限本机部署检查。',403);return json(res,200,await deploymentStatus(manager));}
-      if(req.method==='GET'&&p==='/api/status')return json(res,200,manager.status());
       if(req.method==='GET'&&p==='/api/thread-references')return json(res,200,await manager.threads({search:url.searchParams.get('search')||'',cursor:url.searchParams.get('cursor')}));
       const desktopMatch=p.match(/^\/api\/desktop\/threads\/([0-9a-f-]{36})(?:\/(history|message|interrupt|acknowledge))?$/i);
       if(req.method==='GET'&&p==='/api/desktop/candidates')return json(res,200,await manager.passive('threads',{search:url.searchParams.get('search')||'',cursor:url.searchParams.get('cursor')}));
@@ -91,11 +92,9 @@ export function createDispatcher(context:RouteServices){
       if(req.method==='GET'&&p==='/api/automations/history')return json(res,200,await automations.get(targetKey)!.history(url.searchParams.get('cursor'),url.searchParams.get('threadId')));
       if(req.method==='GET'&&p==='/api/automations/session')return json(res,200,await automations.get(targetKey)!.detail());
       if(req.method==='GET'&&p==='/api/composer')return json(res,200,await composerCatalog(manager,url.searchParams.get('cwd'),url.searchParams.get('kind')));
-      if(req.method==='GET'&&p==='/api/models'){manager.requireConnected();return json(res,200,{data:url.searchParams.get('refresh')==='1'||!manager.models.length?await manager.refreshCatalog('models'):manager.models,nextCursor:null});}
       if(req.method==='GET'&&p==='/api/sidebar/activity')return json(res,200,await readSidebarActivity(manager,Object.fromEntries(url.searchParams)));
       if(req.method==='GET'&&p==='/api/sidebar')return json(res,200,await readSidebar(manager,Object.fromEntries(url.searchParams)));
       if(req.method==='GET'&&p==='/api/project-folders')return json(res,200,await browseFolders(manager,url.searchParams.get('path')));
-      if(req.method==='GET'&&p==='/api/projects')return json(res,200,{data:await manager.refreshCatalog('projects')});
       if(req.method==='GET'&&p==='/api/threads')return json(res,200,await manager.threads(Object.fromEntries(url.searchParams)));
       const fileMatch=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})\/items\/([A-Za-z0-9_-]{1,160})\/file$/);
       if(['GET','HEAD'].includes(req.method||'')&&fileMatch){await fileResponse(manager,req,res,fileMatch[1],fileMatch[2],url);return;}
@@ -127,15 +126,7 @@ export function createDispatcher(context:RouteServices){
         if(p==='/api/access/code'&&!remote){if(!mobileConfig?.origins?.length)throw new AppError('请先配置手机访问地址，再生成配对码。',409,'MOBILE_NOT_CONFIGURED');return json(res,200,access.createCode(data.ttlSeconds,data.sessionTtlSeconds));}
         if(p==='/api/access/revoke'&&!remote){access.revoke();for(const client of clients)if(client.mobileRequest){client.end();clients.delete(client);}return json(res,200,{ok:true});}
         if(p==='/api/access/logout'){access.logout(req);res.setHeader('Set-Cookie',access.cookie());for(const client of clients)if(client.mobileRequest&&!access.valid(client.mobileRequest)){client.end();clients.delete(client);}return json(res,200,{ok:true});}
-        if(p==='/api/connect'){
-          Promise.resolve(manager.connect()).catch(()=>{});
-          return json(res,202,manager.status());
-        }
-        if(p==='/api/notices/ack')return json(res,200,manager.acknowledgeNotice(data.key));
-        if(p==='/api/diagnostics/clear')return json(res,200,manager.clearDiagnosticHistory());
-        if(p==='/api/disconnect')return json(res,200,manager.disconnect());
-        if(p==='/api/account/reload')return json(res,200,await manager.reloadLogin(data));
-        if(p==='/api/service/release')return json(res,200,await manager.release(data));
+        const connectionRoute=routesFor(manager).get('POST '+p);if(connectionRoute){await connectionRoute(url,data,res);return;}
         if(p==='/api/threads')return json(res,201,await manager.newThread(data));
         if(match){const[,id,action]=match;const fn={'queue-add':()=>queueInput(manager,id,'add',data),'queue-steer':()=>queueInput(manager,id,'steer',data),'queue-delete':()=>queueInput(manager,id,'delete',data),'side-chat':()=>createSideChat(manager,id,data),'retry-capacity':()=>retryCapacity(manager,id,data),'question-answer':()=>manager.answerQuestions(id,data),goal:()=>setGoal(manager,id,data),takeover:()=>manager.takeover(id),handoff:()=>manager.handoff(id),message:()=>manager.message(id,data),steer:()=>manager.steer(id,data),interrupt:()=>manager.interrupt(id)}[action];if(fn)return json(res,200,await fn());}
         const approval=p.match(/^\/api\/requests\/([^/]+)\/respond$/);

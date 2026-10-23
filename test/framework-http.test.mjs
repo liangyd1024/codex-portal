@@ -201,3 +201,44 @@ test('Fastify keeps connection and thread action dispatch including native error
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+test('connection services preserve catalog cache rules, account reads and asynchronous connect acknowledgement',async()=>{
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),manager=env.managers.get('b'),records=[];
+  try{
+   for(const scenario of ['cached','forced','other-refresh','empty','offline','catalog-error','projects','projects-error','api-key','chatgpt','account-error','connect-async-error','connect-sync-error']){
+    const calls=[],nativeError=()=>Object.assign(new Error('原生读取拒绝。'),{status:409,code:'NATIVE_STATE',details:{future:['保留',3]}});
+    manager.models=scenario==='empty'?[]:[{id:'cached',future:{keep:true}}];
+    manager.requireConnected=()=>{calls.push(['requireConnected']);if(scenario==='offline')throw nativeError();};
+    manager.refreshCatalog=async kind=>{calls.push(['refreshCatalog',kind]);if(scenario.endsWith('error'))throw nativeError();return [{id:'fresh-'+kind,future:{keep:'原文'}}];};
+    manager.generation=1;manager.accountRevision=0;
+    manager.rpc={request:async(method,params,options)=>{
+     calls.push(['rpc',method,params,options]);if(scenario==='account-error')throw nativeError();
+     if(method==='account/read')return {account:scenario==='api-key'?{type:'apiKey',apiKey:'test-secret-never-public'}:{type:'chatgpt',email:'tester@example.test',token:'test-secret-never-public'}};
+     return {rateLimits:{primary:{usedPercent:25,future:{unknown:true}}}};
+    }};
+    manager.connect=()=>{calls.push(['connect']);if(scenario==='connect-sync-error')throw nativeError();return Promise.reject(nativeError());};
+    const account=['api-key','chatgpt','account-error'].includes(scenario),connect=scenario.startsWith('connect-');
+    const route=connect?'/api/connect':account?'/api/account/usage':scenario.startsWith('projects')?'/api/projects':'/api/models';
+    const refresh=scenario==='forced'||scenario==='catalog-error'?'&refresh=1':scenario==='other-refresh'?'&refresh=2':'';
+    const response=await fetch(env.base+route+'?host=b'+refresh,connect?{method:'POST',headers:{'x-csrf-token':env.token},body:'{}'}:{});
+    const data=await response.json();
+    const failure=['offline','catalog-error','projects-error','account-error','connect-sync-error'].includes(scenario);
+    assert.equal(response.status,failure?409:connect?202:200,scenario);
+    if(failure)assert.deepEqual(data,{error:{message:'原生读取拒绝。',code:'NATIVE_STATE',details:{future:['保留',3]}}});
+    if(['cached','other-refresh'].includes(scenario)){assert.equal(data.data[0].id,'cached');assert.deepEqual(calls,[['requireConnected']]);}
+    if(['forced','empty'].includes(scenario)){assert.equal(data.data[0].id,'fresh-models');assert.deepEqual(calls,[['requireConnected'],['refreshCatalog','models']]);}
+    if(scenario==='offline')assert.deepEqual(calls,[['requireConnected']]);
+    if(scenario==='projects')assert.deepEqual(calls,[['refreshCatalog','projects']]);
+    if(scenario==='api-key'){assert.deepEqual(data,{visible:false,account:{type:'apiKey'}});assert.equal(calls.filter(c=>c[0]==='rpc').length,1);}
+    if(scenario==='chatgpt'){assert.equal(calls.filter(c=>c[0]==='rpc').length,3);assert.deepEqual(data.rateLimits.primary.future,{unknown:true});}
+    assert.ok(!JSON.stringify(data).includes('test-secret-never-public'));
+    if(connect)assert.deepEqual(calls,[['connect']]);
+    records.push({scenario,status:response.status,data,calls});
+   }
+   outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
