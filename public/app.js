@@ -784,22 +784,19 @@ function renderRequests() {
   for(const r of list)if(r.params?.questions?.length)notifyTaskEvent('manager/request',r);
   if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();
   const saved = new Map([...document.querySelectorAll('.request-card')].map(card => [card.dataset.requestId, {fields:[...card.querySelectorAll('input,textarea')].map(f => ({name:f.name,value:f.value,checked:f.checked})),open:Boolean(card.querySelector('details[open]'))}]));
-  const n = clear($('pending-requests')); const inline = clear($('conversation-requests'));if(sideChat)clear(sideChat.requestsHost);
-  const requestSection=n.closest('details');requestSection.dataset.empty=String(!list.length);
-  requestSection.hidden=!list.length||requestSection.dataset.viewHidden==='true';
-  $('request-count').hidden = !list.length; setText('request-count',list.length);
-  if (!list.length) { const empty = el('div','inspector-empty'); empty.append(icon('check'),el('span','','暂无待处理请求')); n.append(empty); renderControls(); return; }
+  const inline = clear($('conversation-requests'));if(sideChat)clear(sideChat.requestsHost);
   list.forEach(r => {
+    const threadId=requestThread(r);
+    if(threadId&&threadId!==state.selectedId&&threadId!==sideChat?.id)return;
     const method = r.method || '', p = r.params || {}, question = Array.isArray(p.questions) && p.questions.length > 0;
     const knownApproval = /requestApproval|approval|requestPermissions/i.test(method) || ['approval','commandApproval','fileApproval','command','file','permissions'].includes(r.kind);
     const card = el('div','request-card'); card.dataset.requestId = requestPath(r);
     const title = question ? '需要你的回答' : /commandExecution/i.test(method) ? '命令执行审批' : /fileChange/i.test(method) ? '文件修改审批' : /requestPermissions/i.test(method) ? '权限请求' : knownApproval ? '操作审批' : '工具请求待处理';
     if(!question)card.append(el('h4','',title));
     card.dataset.asyncQuestion=String(r.kind==='asyncQuestion');card.dataset.threadId=requestThread(r)||'';
-    if (requestThread(r)&&(!question||(requestThread(r)!==state.selectedId&&requestThread(r)!==sideChat?.id))) {
+    if (requestThread(r)&&!question) {
       const target = currentThread()?.id===requestThread(r)?currentThread():state.threads.find(t => t.id === requestThread(r));
       card.append(el('p','request-origin','会话：' + (target ? threadName(target) : requestThread(r))));
-      if (requestThread(r) !== state.selectedId&&requestThread(r)!==sideChat?.id) { const open = el('button','text-button','查看此会话'); open.onclick = () => selectThread(requestThread(r)); card.append(open); }
     }
     if (p.reason) card.append(el('p','',p.reason));
     if (p.command) card.append(el('pre','',p.command));
@@ -822,7 +819,7 @@ function renderRequests() {
       card.querySelectorAll('input,textarea').forEach(f => { const found = previous.fields.find(x => x.name === f.name && (f.type !== 'radio' || x.value === f.value)); if (found) { if (f.type === 'radio') f.checked = found.checked; else f.value = found.value; } });
       if (previous.open && card.querySelector('details')) card.querySelector('details').open = true;
     }
-    if(requestThread(r)===sideChat?.id){sideChat.requestsHost.append(card);n.append(el('p','subtle','侧边聊天的请求显示在其输入框上方。'));}else if(requestThread(r) === state.selectedId) { inline.append(card); n.append(el('p','subtle','当前会话的请求显示在输入框上方。')); } else n.append(card);
+    if(sideChat?.id&&threadId===sideChat.id)sideChat.requestsHost.append(card);else inline.append(card);
   });
   renderControls();
 }
@@ -1426,7 +1423,7 @@ function handleEvent(event) {
   if (method === 'manager/error') { recordError(p.message || p.error || p,p.stage || 'remote'); if(notifyManagerError(p))toast(messageOf(p.message || p.error || p),true,11000); return; }
   if (method === 'manager/request') {
     const r = p.request || p; if (r.id != null) state.localRequests = [...state.localRequests.filter(x => requestKey(x) !== requestKey(r)),r];
-    renderRequests(); if (requests().some(r=>requestThread(r)!==state.selectedId)) { $('pending-requests').closest('details').open = true; }
+    renderRequests();
     return;
   }
   if (method === 'serverRequest/resolved' || method === 'manager/requestResolved') {
