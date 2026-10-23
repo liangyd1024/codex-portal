@@ -11,8 +11,8 @@ test('deployment reads native status rather than trusting a stale active cache o
 test('disconnected and connecting targets are never connected by a deployment read',async()=>{
  for(const state of ['disconnected','connecting','reconnecting']){const m={status:()=>({...snapshot,connection:{state}}),rpc:{request:()=>assert.fail('must not call RPC')}};assert.equal((await deploymentStatus(m)).connection.state,state);}
 });
-test('preflight retries short native settling window, keeps ongoing activity blocked and uses display names',async()=>{
- let reads=0,waits=0;const fetchImpl=async url=>({ok:true,status:200,json:async()=>url.endsWith('/api/connections')?{data:[{id:'local',host:{alias:'本机'}}]}:{...snapshot,controlledSessions:[{id:'ended',name:'部署验收会话',status:{type:++reads===1?'active':'idle'},pendingRequests:0}]}});
+test('preflight retries unknown status but permits running conversations',async()=>{
+ let reads=0,waits=0;const fetchImpl=async url=>({ok:true,status:200,json:async()=>url.endsWith('/api/connections')?{data:[{id:'local',host:{alias:'本机'}}]}:{...snapshot,controlledSessions:[{id:'ended',name:'部署验收会话',status:{type:++reads===1?'unknown':'active'},pendingRequests:0}]}});
  await checkDeploymentEntrance({localConnectionId:'local',fetchImpl,wait:async()=>{waits++;}});assert.equal(reads,2);assert.equal(waits,1);
  reads=0;await assert.rejects(checkDeploymentEntrance({localConnectionId:'local',fetchImpl,attempts:1}),/部署验收会话/);
 });
@@ -45,7 +45,13 @@ test('failed deployment evidence refuses incomplete history, mismatched identity
  const changes=[d=>d.thread.id='other',d=>d.turns=[],d=>d.turns[0].status='inProgress',d=>delete d.turns[0].completedAt,d=>d.turns=[null],d=>d.goal.status='active',d=>d.goal.status='unknown',d=>d.goalError='unavailable',d=>d.queue=null,d=>d.queue.error='unavailable',d=>d.queue.data.push({}),d=>d.backgroundTerminals.nextCursor='more',d=>d.backgroundTerminals.data.push({}),d=>d.pendingRequests.push({})];
  for(const change of changes){const detail=errorDetail();change(detail);const {fetchImpl}=errorEntrance(detail);await assert.rejects(checkDeploymentEntrance({localConnectionId:'local',fetchImpl,attempts:1}),/状态待确认/);}
 });
-test('new active status after failed-history checks is never exempted',async()=>{
+test('new active status after failed-history checks permits a web-only restart',async()=>{
  const {fetchImpl}=errorEntrance(errorDetail(),'active');
- await assert.rejects(checkDeploymentEntrance({localConnectionId:'local',fetchImpl,attempts:1}),/运行会话/);
+ await checkDeploymentEntrance({localConnectionId:'local',fetchImpl,attempts:1});
+});
+test('preflight forwards only the explicitly allowed local request key',async()=>{
+ const fetchImpl=async url=>({ok:true,status:200,json:async()=>url.endsWith('/api/connections')?{data:[{id:'local',host:{alias:'本机'}}]}:{connection:{state:'connected'},controlledSessions:[{id:'running',status:{type:'active'},pendingRequests:1}],pendingRequests:[{key:'known-request',threadId:'running'}]}});
+ await assert.rejects(checkDeploymentEntrance({localConnectionId:'local',fetchImpl,attempts:1}),/待处理请求/);
+ await checkDeploymentEntrance({localConnectionId:'local',fetchImpl,attempts:1,allowedPendingRequestKeys:new Set(['known-request'])});
+ await assert.rejects(checkDeploymentEntrance({localConnectionId:'local',fetchImpl,attempts:1,allowedPendingRequestKeys:new Set(['other-request'])}),/待处理请求/);
 });

@@ -18,7 +18,7 @@ if(job?.id===process.argv[2]&&job.phase==='queued'){
   const installed=await readUpdate(path.join(supportDir,'installed.json'));
   if(installed.commit!==job.fromVersion)throw Error('正式版本已变化，请重新检查。');
   const env={...process.env,PATH:path.dirname(process.execPath)+':'+(process.env.PATH||'/usr/bin:/bin:/usr/sbin:/sbin'),RCM_DEPLOYMENT_TOKEN:lock.token};
-  // A web click cannot claim a Codex turn's deployment exemption.
+  // Keep the update worker independent of the caller's preview environment.
   delete env.CODEX_THREAD_ID;delete env.RCM_PORT;delete env.RCM_STATE_DIR;
   const run=async(command,args,options={})=>{try{const r=await promisify(execFile)(command,args,{env,timeout:120000,maxBuffer:16*1024*1024,...options});await appendFile(path.join(supportDir,'logs/web-update.log'),r.stdout+r.stderr,{mode:0o600});return r.stdout.trim();}catch(e){await appendFile(path.join(supportDir,'logs/web-update.log'),String(e.stdout||'')+String(e.stderr||'')+String(e.message)+'\n',{mode:0o600});throw Error(command==='git'?'Git 更新失败，请检查仓库访问、网络及 master 分支状态。':args[0]===installed.sourceRoot+'/scripts/run-tests.mjs'?updateTestFailure(e):e.message);}};
   const config=loadConfig(),local=config.connections.find(h=>h.kind==='local').id;

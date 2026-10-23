@@ -4,15 +4,12 @@ import {assertDeploymentIdle} from '../lib/deployment-check.mjs';
 const own='00000000-0000-7000-8000-000000000001',other='00000000-0000-7000-8000-000000000002';
 const options={connectionId:'local',localConnectionId:'local',deployingThreadId:own};
 const status=(ids=[])=>({connection:{state:'connected'},pendingRequests:[],controlledSessions:ids.map(id=>({id,status:{type:'active'},pendingRequests:0}))});
-test('deploying conversation can restart its local web entrance without stopping the turn',()=>{
- const s=status([own]),before=structuredClone(s);assert.equal(assertDeploymentIdle(s,options),own);assert.deepEqual(s,before);
- assert.equal(assertDeploymentIdle(status(),options),null);
-});
-test('other active conversations still block and report their IDs',()=>{
- assert.throws(()=>assertDeploymentIdle(status([own,other]),options),e=>e.message.includes(other)&&!e.message.includes(own));
-});
-test('missing, invalid, different or remote caller IDs do not grant an exemption',()=>{
- for(const patch of [{deployingThreadId:undefined},{deployingThreadId:'*'},{deployingThreadId:other},{connectionId:'remote'}])assert.throws(()=>assertDeploymentIdle(status([own]),{...options,...patch}),/运行会话/);
+test('web deployment permits all running local and remote conversations without mutating state',()=>{
+ for(const connectionId of ['local','remote']){
+  const s=status([own,other]),before=structuredClone(s);
+  assert.equal(assertDeploymentIdle(s,{...options,connectionId,deployingThreadId:undefined}),null);
+  assert.deepEqual(s,before);
+ }
 });
 test('own pending requests and reconnects still block',()=>{
  const s=status([own]);s.pendingRequests.push({threadId:own});assert.throws(()=>assertDeploymentIdle(s,options),/待处理请求/);
@@ -26,11 +23,22 @@ test('unreadable status fails closed, ordinary idle deployment is allowed',()=>{
 test('unknown own session state is not covered by the active-turn exemption',()=>{
  const s=status([own]);s.controlledSessions[0].status={type:'unknown'};assert.throws(()=>assertDeploymentIdle(s,options),/状态待确认/);
 });
-test('settled error evidence permits only the verified error state, not active work or requests',()=>{
+test('settled error evidence permits only the verified error state, not pending requests',()=>{
  const s=status([other]);s.controlledSessions[0].status.type='systemError';
  assert.throws(()=>assertDeploymentIdle(s,options),/状态待确认/);
  const checked={...options,settledErrorThreadIds:new Set([other])};
  assert.equal(assertDeploymentIdle(s,checked),null);
- s.controlledSessions[0].status.type='active';assert.throws(()=>assertDeploymentIdle(s,checked),/运行会话/);
+ s.controlledSessions[0].status.type='active';assert.equal(assertDeploymentIdle(s,checked),null);
  s.controlledSessions[0].status.type='systemError';s.pendingRequests=[{threadId:other}];assert.throws(()=>assertDeploymentIdle(s,checked),/待处理请求/);
+});
+
+test('explicit request exception is local, exact, invocation-only and never hides extra requests',()=>{
+ const s=status([other]);s.pendingRequests=[{key:'request-one',threadId:other}];s.controlledSessions[0].pendingRequests=1;
+ const allowed={...options,allowedPendingRequestKeys:new Set(['request-one'])},before=structuredClone(s);
+ assert.equal(assertDeploymentIdle(s,allowed),null);assert.deepEqual(s,before);
+ assert.throws(()=>assertDeploymentIdle(s,options),/待处理请求/);
+ assert.throws(()=>assertDeploymentIdle(s,{...allowed,connectionId:'remote'}),/待处理请求/);
+ s.pendingRequests.push({key:'request-two',threadId:other});assert.throws(()=>assertDeploymentIdle(s,allowed),/待处理请求/);
+ s.pendingRequests.pop();s.controlledSessions[0].pendingRequests=2;assert.throws(()=>assertDeploymentIdle(s,allowed),/待处理请求/);
+ s.controlledSessions[0].pendingRequests=1;s.connection.state='reconnecting';assert.throws(()=>assertDeploymentIdle(s,allowed),/正在连接/);
 });

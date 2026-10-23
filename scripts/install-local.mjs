@@ -12,6 +12,9 @@ const label='local.remote-codex-manager.web',domain=`gui/${process.getuid()}`,jo
 const lifecycle=launchdService(domain,label);
 const run=(file,args,options={})=>{const r=spawnSync(file,args,{encoding:'utf8',...options});if(r.status!==0)throw Error(`${path.basename(file)} 失败：${r.stderr||r.stdout}`);return r.stdout.trim();};
 const flag=name=>{const i=process.argv.indexOf(name);return i>=0?process.argv[i+1]:null;};
+// Explicit, invocation-only exceptions authorized by the operator. Never saved.
+const values=name=>new Set(process.argv.flatMap((arg,index)=>{if(arg!==name)return [];const value=process.argv[index+1];if(!value||value.startsWith('--'))throw Error(name+' 缺少标识');return [value];}));
+const allowedPendingRequestKeys=values('--allow-pending-request');
 const ref=flag('--ref')||'HEAD',config=loadConfig();
 const lock=await deploymentLock(path.join(supportDir,'deployment.lock'),process.env.RCM_DEPLOYMENT_TOKEN);
 try {
@@ -22,11 +25,9 @@ const app=path.join(supportDir,'releases',commit),logs=path.join(supportDir,'log
 await mkdir(logs,{recursive:true,mode:0o700});await mkdir(path.dirname(job),{recursive:true});
 // Check this entrance only. Do not interrupt tasks running through another entrance.
 const existing=spawnSync('/bin/launchctl',['print',domain+'/'+label],{encoding:'utf8'}).status===0;
-const deployingThreadId=process.env.CODEX_THREAD_ID;
 const localConnectionId=config.connections.find(h=>h.kind==='local').id;
 async function checkEntrance(){
- const own=await checkDeploymentEntrance({localConnectionId,deployingThreadId,onWaiting:message=>console.log('正在重新核对：'+message)});
- if(own)console.log('当前部署会话不阻塞网页重启：'+own);
+ await checkDeploymentEntrance({localConnectionId,allowedPendingRequestKeys,onWaiting:message=>console.log('正在重新核对：'+message)});
 }
 if(existing)await checkEntrance();
 const backup=JSON.parse(run('/usr/bin/python3',[path.join(root,'scripts/data-backup.py'),'backup']));
