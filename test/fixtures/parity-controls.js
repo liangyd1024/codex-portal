@@ -12,6 +12,12 @@ if(new URL(location.href).searchParams.get('parityControls')==='1'){
     button('模拟 SSE 断开',()=>f.stream?.onerror?.());
     button('模拟 SSE 恢复',()=>f.stream?.onopen?.());
     button('模拟问题',()=>f.question());
+    button('延迟当前会话详情',()=>{
+      f.owned.add('qa-b');f.update();
+      f.delay={path:'/api/threads/qa-a',ignoreAbort:true};
+      f.emit('thread/queue/changed',{threadId:'qa-a'});
+    });
+    button('释放迟到详情',()=>{if(!f.pending)throw Error('No pending fixture response');f.pending.resolve();f.pending=null;});
     button('下次创建会话失败',()=>{f.fail={path:'/api/threads',status:503,message:'模拟创建失败，请重试。'};});
     button('下次首条消息失败',()=>{f.fail={path:'/api/threads/qa-new-'+f.threads.length+'/message',status:503,message:'模拟首条消息失败，请重试。'};});
     button('模拟异步问题',async()=>{
@@ -45,7 +51,7 @@ if(new URL(location.href).searchParams.get('parityControls')==='1'){
       const item=f.turns.get('qa-a')[0].items.find(i=>i.id==='qa-agent');item.text+=delta;
       f.emit('item/agentMessage/delta',{threadId:'qa-a',turnId:'qa-turn',itemId:'qa-agent',delta});
     });
-    button('读取模拟记录',()=>{output.textContent=JSON.stringify({writes:f.calls.filter(c=>c.method==='POST'),history:f.calls.filter(c=>c.path.endsWith('/history')),errors:f.errors},null,2);queueMicrotask(()=>{panel.open=true;});});
+    button('读取模拟记录',()=>{output.textContent=JSON.stringify({writes:f.calls.filter(c=>c.method==='POST'),history:f.calls.filter(c=>c.path.endsWith('/history')),pending:f.pending?.path||null,errors:f.errors},null,2);queueMicrotask(()=>{panel.open=true;});});
     panel.append(output);document.body.append(panel);
   });
 }

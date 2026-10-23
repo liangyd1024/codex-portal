@@ -27,7 +27,7 @@
     if(!p.startsWith('/api/'))return nativeFetch(url,options);
     const body=options.body?JSON.parse(options.body):{};f.calls.push({path:p,query:u.search,method,body});
     if(f.offline)throw new TypeError('fixture offline');
-    if(f.delay?.path===p){const d=f.delay;f.delay=null;await new Promise((resolve,reject)=>{d.resolve=resolve;f.pending=d;options.signal?.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')));});}
+    if(f.delay?.path===p){const d=f.delay;f.delay=null;await new Promise((resolve,reject)=>{d.resolve=resolve;f.pending=d;if(!d.ignoreAbort)options.signal?.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')));});}
     if(f.fail?.path===p){const error=f.fail;f.fail=null;return json({error:{message:error.message||'模拟请求失败，请重试。',code:error.code||'FIXTURE_ERROR'}},error.status||503);}
     if(p==='/api/connections')return json({machineId:'qa-machine',defaultConnection:'qa-local',data:[{id:'qa-local',host},{id:'qa-remote',host:{...host,id:'qa-remote',alias:'验收远程机器'}}]});
     if(p==='/api/composer')return json({modes:{data:[{mode:'default'},{mode:'plan'}]},skills:{data:[{skills:[{name:'测试技能',path:'/test/SKILL.md',enabled:true}]}]},plugins:{marketplaces:[{plugins:[{id:'test-plugin',name:'测试插件',enabled:true,installed:true}]}]}});
