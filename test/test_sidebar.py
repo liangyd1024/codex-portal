@@ -96,6 +96,16 @@ class SidebarTest(unittest.TestCase):
         self.add('chat')
         self.assertIsNone(passive.read_threads({})['data'][0]['projectId'])
 
+    def test_legacy_membership_prefers_longest_registered_root(self):
+        self.db.executemany('INSERT INTO project_roots VALUES (?, ?)',
+                            [('billing', '/repo'), ('other', '/repo/child')])
+        self.db.commit()
+        self.add('nested', cwd='/repo/child/src')
+        self.add('parent', cwd='/repo/src')
+        self.add('sibling', cwd='/repo-other')
+        self.assertEqual({t['id']: t['projectId'] for t in passive.read_threads({})['data']},
+                         {'nested': 'other', 'parent': 'billing', 'sibling': None})
+
     def test_legacy_saved_root_does_not_create_phantom_projects(self):
         self.db.execute("INSERT INTO project_roots VALUES ('billing', '/billing')")
         self.db.commit()

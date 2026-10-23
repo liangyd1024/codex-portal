@@ -5,6 +5,7 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {loadConfig,supportDir} from '../lib/config.mjs';
 import {launchdService} from '../lib/launchd.mjs';
+import {prepareWorkbenchCheck} from '../lib/workbench-check.mjs';
 import {deploymentLock} from '../lib/deployment-lock.mjs';
 import {checkDeploymentEntrance} from '../lib/deployment-entrance.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -16,6 +17,7 @@ const flag=name=>{const i=process.argv.indexOf(name);return i>=0?process.argv[i+
 const values=name=>new Set(process.argv.flatMap((arg,index)=>{if(arg!==name)return [];const value=process.argv[index+1];if(!value||value.startsWith('--'))throw Error(name+' 缺少标识');return [value];}));
 const allowedPendingRequestKeys=values('--allow-pending-request');
 const ref=flag('--ref')||'HEAD',config=loadConfig();
+let workbenchCheck;
 const lock=await deploymentLock(path.join(supportDir,'deployment.lock'),process.env.RCM_DEPLOYMENT_TOKEN);
 try {
 const commit=run('git',['-C',root,'rev-parse','--verify',ref+'^{commit}']);
@@ -37,6 +39,8 @@ let previous=null;try{previous=await readFile(job);}catch(e){if(e.code!=='ENOENT
 const previousFile=path.join(supportDir,'install-history',Date.now()+'.plist');
 await mkdir(path.dirname(previousFile),{recursive:true,mode:0o700});
 if(previous)await writeFile(previousFile,previous,{mode:0o600});
+// Browser readiness must be established before stopping the current website.
+workbenchCheck=await prepareWorkbenchCheck();
 if(existing){await checkEntrance();await lifecycle.stop();}
 try{
  await writeFile(job,plist,{mode:0o600});await chmod(job,0o600);
@@ -44,6 +48,8 @@ try{
  let healthy=false;
  for(let i=0;i<90;i++){try{const r=await fetch('http://127.0.0.1:4317/api/version',{signal:AbortSignal.timeout(1000)});if(r.ok&&(await r.json()).version===commit){healthy=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}
  if(!healthy)throw Error('新版本未通过健康检查。');
+ console.log('正在验证正式工作台浏览器加载…');
+ await workbenchCheck.check({version:commit,host:localConnectionId});
  await writeFile(path.join(supportDir,'installed.json'),JSON.stringify({commit,sourceRoot:root,sourceRemote:run('git',['-C',root,'remote','get-url','origin']),machineId:config.machineId,app,installedAt:new Date().toISOString(),previousPlist:previous?previousFile:null}),{mode:0o600});
  console.log(`已部署 ${commit}，本机网页：http://127.0.0.1:4317`);
 }catch(error){
@@ -53,4 +59,7 @@ try{
  throw Error('部署失败，已恢复原网页配置：'+error.message);
 }
 
-} finally {await lock.release();}
+} finally {
+ try{await workbenchCheck?.close();}catch(error){console.error('部署检查浏览器清理失败：'+error.message);}
+ await lock.release();
+}
