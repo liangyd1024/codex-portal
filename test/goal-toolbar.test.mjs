@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {goalPresentation,completedGoalPlacement} from '../public/goal-toolbar.js';
+import {goalPresentation,completedGoalPlacement,goalDuration} from '../public/goal-toolbar.js';
 test('goal controls reflect native lifecycle rather than turn completion',()=>{
  for(const status of ['paused','blocked'])assert.equal(goalPresentation({status}).action,'active');
  assert.equal(goalPresentation({status:'active'}).action,'paused');
@@ -22,4 +22,9 @@ test('completed goal leaves the composer and stays beside its original turn',()=
  for(const status of ['active','paused','blocked','usageLimited','budgetLimited'])assert.equal(completedGoalPlacement({...goal,status},[original]),null);
  assert.equal(completedGoalPlacement(goal,[original],'offline'),null);
  assert.equal(goalPresentation(goal,'offline').visible,true);
+});
+
+test('goal duration uses hours and minutes without raw seconds',()=>{
+ for(const [seconds,label] of [[0,'不足1分钟'],[59,'不足1分钟'],[60,'1分钟'],[3599,'59分钟'],[3600,'1小时'],[4531,'1小时15分钟'],[90061,'25小时1分钟']])assert.equal(goalDuration(seconds),label);
+ for(const invalid of [undefined,null,NaN,Infinity,-1])assert.equal(goalDuration(invalid),'');
 });
