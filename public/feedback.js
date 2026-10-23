@@ -1,8 +1,9 @@
-// Keep one visible notification per message or explicitly named operation.
+// Operations only notify on failure. Explicitly requested information is separate.
 export function createToasts({region,make,icon,setTimer=setTimeout,clearTimer=clearTimeout}) {
   const active=new Map();
   // Keep the legacy duration argument for callers; all floating tips expire after 3s.
-  return (message,error=false,_duration=3000,key=JSON.stringify([error,message]))=>{
+  return (message,error=false,_duration=3000,key=JSON.stringify([error,message]),{information=false}={})=>{
+    if(!error&&!information){const previous=active.get(key);if(previous){clearTimer(previous.timer);previous.node.remove();active.delete(key);}return;}
     for(const [id,entry] of active)if(!entry.node.isConnected){clearTimer(entry.timer);active.delete(id);}
     const previous=active.get(key);
     if(previous?.node.isConnected&&previous.error===error){previous.node.querySelector('p').textContent=message;previous.restart();return previous.node;}

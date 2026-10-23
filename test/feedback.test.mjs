@@ -16,10 +16,20 @@ test('duplicate alerts reuse one card, renew expiry, and can be closed',()=>{
  first.querySelector('button').onclick();assert.equal(region.children.length,0);assert.equal(timers.size,0);
  toast('失败',true);[...timers.values()][0]();assert.equal(region.children.length,0);
 });
-test('an operation replaces its old result and external removal cannot retain a stale toast',()=>{
+test('success and progress never create cards or timers, including after an error',()=>{
+ const {make,region}=dom();let timers=0;
+ const toast=createToasts({region,make,icon:()=>make('svg'),setTimer:()=>++timers,clearTimer:()=>{}});
+ for(const message of ['成功','正在归档会话…','已连接'])assert.equal(toast(message),undefined);
+ assert.equal(region.children.length,0);assert.equal(timers,0);
+ const old=toast('失败',true,0,'archive');toast('成功',false,0,'archive');
+ assert.equal(old.isConnected,false);assert.equal(region.children.length,0);assert.equal(timers,1);
+ const next=toast('再次失败',true,0,'archive');next.remove();
+ assert.notEqual(toast('再次失败',true,0,'archive'),next);assert.equal(region.children.length,1);
+});
+test('explicitly requested account information remains available without enabling operation tips',()=>{
  const {make,region}=dom();const toast=createToasts({region,make,icon:()=>make('svg'),setTimer:()=>0,clearTimer:()=>{}});
- const old=toast('失败',true,0,'takeover');const next=toast('成功',false,0,'takeover');assert.equal(old.isConnected,false);assert.equal(region.children.length,1);assert.equal(next.attrs.role,'status');
- next.remove();const retry=toast('再次接管',false,0,'takeover');assert.notEqual(retry,next);assert.equal(region.children.length,1);
+ toast('额度详情',false,3000,'account-usage',{information:true});assert.equal(region.children.length,1);
+ toast('操作成功');assert.equal(region.children.length,1);
 });
 test('confirmation defaults to cancel, Escape cancels, and explicit confirm resolves once',async t=>{
  const previous=globalThis.document,{make,region}=dom(),anchor=make('button');anchor.isConnected=true;
@@ -35,7 +45,7 @@ test('all floating tips expire after three seconds regardless of legacy duration
   const card=toast('提示 '+duration,true,duration);assert.equal(scheduled.at(-1).ms,3000);
   assert.equal(card.isConnected,true);scheduled.at(-1).fn();assert.equal(card.isConnected,false);
  }
- const card=toast('重复提示');assert.equal(toast('重复提示'),card);assert.equal(scheduled.at(-1).ms,3000);
+ const card=toast('重复提示',true);assert.equal(toast('重复提示',true),card);assert.equal(scheduled.at(-1).ms,3000);
 });
 
 

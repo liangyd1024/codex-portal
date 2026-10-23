@@ -931,7 +931,7 @@ function applyDetail(data, resetModels = false) {
   if (resetModels) renderModels(true); renderThread(); renderRequests(); if(!data.recovering)saveDetailSoon();
 }
 async function selectThread(id,options={}) {
-  if(state.busy.has('create')){toast('正在创建会话，请稍候。');return;}
+  if(state.busy.has('create'))return;
   const url=new URL(location.href);url.searchParams.delete('thread');history.replaceState(null,'',url);
   closeNewChat();
   automations?.close();state.desktopMode=Boolean(options.desktop||id===automations?.threadId);
@@ -1542,7 +1542,7 @@ function toggleInspector(open) {
 }
 function wireEvents() {
   automations=installAutomations({api,onOpen:()=>{flushDrafts();closeNewChat();state.selectionVersion++;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);queueMicrotask(renderControls);},
-    openSession:async(id,prompt)=>{await selectThread(id,{desktop:true});if(prompt&&state.selectedId===id){const previous=$('message-input').value;if(previous&&previous!==prompt){toast('管理会话已有未发送草稿，请先处理草稿，再返回定时任务继续。');$('message-input').focus();return;}$('message-input').value=prompt;state.drafts.set(id,$('message-input').value);resizeInput();renderControls();}$('message-input').focus();},
+    openSession:async(id,prompt)=>{await selectThread(id,{desktop:true});if(prompt&&state.selectedId===id){const previous=$('message-input').value;if(previous&&previous!==prompt){toast('管理会话已有未发送草稿，请先处理草稿，再返回定时任务继续。',true);$('message-input').focus();return;}$('message-input').value=prompt;state.drafts.set(id,$('message-input').value);resizeInput();renderControls();}$('message-input').focus();},
     openThread:id=>selectThread(id),notify:toast});
   const scheduleNav=el('button','automations-nav');scheduleNav.id='open-automations';scheduleNav.type='button';scheduleNav.textContent='定时任务';scheduleNav.onclick=()=>automations.open();document.querySelector('.inspector-nav').append(scheduleNav);
   const desktopEntry=el('button','text-button','通过桌面继续');desktopEntry.id='desktop-entry';desktopEntry.type='button';desktopEntry.hidden=true;desktopEntry.onclick=()=>selectThread(state.selectedId,{desktop:true});$('takeover').after(desktopEntry);
@@ -1642,7 +1642,7 @@ async function init() {
   const loadSettings=()=>{systemUpdate??=installSystemUpdate({api,flush:flushDrafts,resetCsrf:()=>{state.csrf='';}});void systemUpdate.open();};
   const loadMobile=()=>{if(mobileInstalled)return;mobileInstalled=true;installMobile(api).catch(e=>{$('mobile-access-body').textContent=messageOf(e);});};
   refreshAccountUsage=installAccountUsage({node:$('account-usage'),identityNode:$('account-identity'),api,connected,context:()=>targetHost+':'+state.status?.instanceId+':'+state.status?.connection?.connectedAt});
-  $('account-usage').addEventListener('click',()=>toast($('account-usage').title));
+  $('account-usage').addEventListener('click',()=>toast($('account-usage').title,false,3000,'account-usage',{information:true}));
   void refreshAccountUsage();
   setInterval(()=>{if(!document.hidden)void refreshAccountUsage();},15000);
   setInterval(()=>{if(document.hidden)return;renderControls();if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();},5000);

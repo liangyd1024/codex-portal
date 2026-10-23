@@ -21,7 +21,7 @@ export function installAutomations({api,onOpen,openSession,openThread,notify}){
   const feedback=node('p','subtle');feedback.setAttribute('role','status');
   const list=node('div','automation-list');
   let snapshot=null,seq=0,loading=false,threadId=null,filter='all',signature='',activeDialog=null;
-  const manage=async(prompt='')=>{try{if(!threadId){await choose(prompt);return;}await openSession(threadId,prompt);}catch(error){notify(error.message);}};
+  const manage=async(prompt='')=>{try{if(!threadId){await choose(prompt);return;}await openSession(threadId,prompt);}catch(error){notify(error.message,true);}};
   const create=button('＋ 新建任务',()=>manage('请帮我创建一个定时任务。'),'secondary-button');
   const refresh=button('刷新',()=>load(),'secondary-button');header.append(refresh);
   const toolbar=node('div','automations-toolbar');const select=node('select');select.setAttribute('aria-label','筛选任务状态');
