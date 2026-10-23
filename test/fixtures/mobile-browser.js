@@ -45,6 +45,13 @@
     if(p==='/api/automations')return json({threadId:'qa-b',observedAt:Date.now(),items:[{id:'qa-task',name:'手机验收定时任务',status:'ACTIVE',rrule:'FREQ=HOURLY;INTERVAL=1',prompt:'只用于界面验收，不会实际执行。',target_thread_id:'qa-b'},{id:'qa-paused',name:'已暂停的验收任务',status:'PAUSED',rrule:'FREQ=DAILY;BYHOUR=9',prompt:'暂停状态验收。'}],runs:[{automation_id:'qa-task',thread_id:'qa-b',created_at:Date.now(),status:'ACCEPTED'}]});
     if(p==='/api/automations/candidates')return json({data:f.threads});
     if(p==='/api/automations/binding')return json({threadId:body.threadId});
+    const desktopMatch=p.match(/^\/api\/desktop\/threads\/([^/]+)$/);
+    if(desktopMatch&&method==='GET'){
+      const id=desktopMatch[1],t=f.threads.find(t=>t.id===id);
+      if(!t)return json({error:{message:'找不到模拟会话'}},404);
+      return json({...detail(id),controlled:false,controlState:'desktop',historySource:'snapshot',
+        desktop:{available:true,canSend:!f.owned.has(id)&&t.status.type==='idle',threadReferencesSupported:true,error:null,unconfirmed:null,settings:null,receipts:{}}});
+    }
     if(p==='/api/sidebar')return json(sidebar(u));
     if(p==='/api/sidebar/activity')return json({accountScope:'qa-account',data:JSON.parse(u.searchParams.get('ids')).map(id=>({id}))});
     if(p==='/api/connect'||p==='/api/disconnect'||p==='/api/service/release'){f.connected=p==='/api/connect';f.update();return json(status());}
