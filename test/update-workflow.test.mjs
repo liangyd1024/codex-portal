@@ -109,3 +109,23 @@ test('documentation shortcut never hides dirty sources, branch divergence or a c
   const f=fixture({...change,diff:'docs/guide.md\0'});await assert.rejects(updateWorkflow(f.options));
  }
 });
+
+test('a fresh verified remote version already cached locally avoids a second network fetch',async()=>{
+ const f=fixture();f.options.remoteCheck={version:target,checkedAt:1000};f.options.now=()=>2000;
+ assert.equal(await updateWorkflow(f.options),target);
+ assert.ok(!f.calls.some(([c,a])=>c==='git'&&a.includes('fetch')));
+ assert.ok(f.calls.some(([,a])=>a[0]==='/source/scripts/run-tests.mjs'));
+ assert.equal(f.stages.find(s=>s[0]==='pulling')[2].reusedRemoteCheck,true);
+});
+test('stale, failed, future, missing or locally different remote checks always fetch normally',async()=>{
+ for(const remoteCheck of [undefined,{version:target,checkedAt:0},{version:target,checkedAt:62000},{version:target,checkedAt:60000,error:'offline'},{version:baseline,checkedAt:60000},{version:'bad',checkedAt:60000}]){
+  const f=fixture();Object.assign(f.options,{remoteCheck,now:()=>61000});
+  assert.equal(await updateWorkflow(f.options),target);assert.ok(f.calls.some(([c,a])=>c==='git'&&a.includes('fetch')));
+ }
+});
+test('fresh remote reuse still rejects source changes and missing deployed ancestors',async()=>{
+ for(const change of [{dirty:1},{branch:'feature'},{remote:'other'},{behind:true},{head:baseline},{installed:target}]){
+  const f=fixture(change);Object.assign(f.options,{remoteCheck:{version:target,checkedAt:1000},now:()=>2000});
+  await assert.rejects(updateWorkflow(f.options));assert.ok(!f.calls.some(([,a])=>a[0]==='/source/scripts/install-local.mjs'));
+ }
+});
