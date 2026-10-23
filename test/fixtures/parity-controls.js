@@ -17,13 +17,20 @@ if(new URL(location.href).searchParams.get('parityControls')==='1'){
       f.update();f.emit('turn/started',{threadId:'qa-a',turn:f.turns.get('qa-a')[0]});
     });
     button('下次异步回答失败',()=>{f.fail={path:'/api/threads/qa-a/question-answer',status:503};});
+    button('准备较早历史',()=>{
+      f.history.set('qa-a',[{id:'qa-earlier-turn',status:'completed',items:[
+        {id:'qa-earlier-user',type:'userMessage',content:[{type:'text',text:'较早提问：保留中文与标点。'}]},
+        {id:'qa-earlier-agent',type:'agentMessage',text:'较早回复：完整历史，不改原文。'}
+      ]}]);
+      f.emit('thread/queue/changed',{threadId:'qa-a'});
+    });
     button('下次回答失败',()=>{f.fail={path:'/api/requests/qa-question/respond',status:503,message:'模拟回答失败，请重试。'};});
     button('追加流式原文',()=>{
       const delta='\n\n流式验收追加：甲乙丙，保留标点。';
       const item=f.turns.get('qa-a')[0].items.find(i=>i.id==='qa-agent');item.text+=delta;
       f.emit('item/agentMessage/delta',{threadId:'qa-a',turnId:'qa-turn',itemId:'qa-agent',delta});
     });
-    button('读取模拟记录',()=>{output.textContent=JSON.stringify({writes:f.calls.filter(c=>c.method==='POST'),errors:f.errors},null,2);queueMicrotask(()=>{panel.open=true;});});
+    button('读取模拟记录',()=>{output.textContent=JSON.stringify({writes:f.calls.filter(c=>c.method==='POST'),history:f.calls.filter(c=>c.path.endsWith('/history')),errors:f.errors},null,2);queueMicrotask(()=>{panel.open=true;});});
     panel.append(output);document.body.append(panel);
   });
 }
