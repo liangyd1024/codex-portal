@@ -23,7 +23,7 @@ async function serve(directory){
   if(p.startsWith('/api/')){res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{message:'Fixture interception missing. Real APIs are unavailable.'}}));return;}
   if(p==='/__parity_fixture.js'){res.setHeader('Content-Type','text/javascript');res.end(fixture+"\nwindow.addEventListener('rcm-ready',()=>window.rcmParityReady=true);\n");return;}
   if(p.startsWith('/__fixtures/')){const name=p.slice('/__fixtures/'.length);if(!extras.includes(name)){res.writeHead(404);res.end();return;}res.setHeader('Content-Type','text/javascript');res.end(await readFile(path.join(root,'test/fixtures',name)));return;}
-  if(p==='/'||p==='/index.html'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(index);return;}
+  if(p==='/'||p==='/index.html'){const scenario=url.searchParams.get('scenario');if(scenario&&!extras.includes(scenario)){res.writeHead(400);res.end('Unknown fixture scenario');return;}res.setHeader('Content-Type','text/html; charset=utf-8');res.end(scenario?index.replace('</head>','<script src="/__fixtures/'+scenario+'"></script></head>'):index);return;}
   const relative=p.startsWith('/shared/')?p.slice(1):'public'+p;
   const file=path.resolve(directory,relative);if(!file.startsWith(directory+path.sep)){res.writeHead(404);res.end();return;}
   await staticResponse(req,res,file);

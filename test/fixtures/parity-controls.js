@@ -38,6 +38,7 @@ if(new URL(location.href).searchParams.get('parityControls')==='1'){
     });
     button('下次回答失败',()=>{f.fail={path:'/api/requests/qa-question/respond',status:503,message:'模拟回答失败，请重试。'};});
     button('追加流式原文',()=>{
+      if(f.streamText){f.streamText();return;}
       const delta='\n\n流式验收追加：甲乙丙，保留标点。';
       const item=f.turns.get('qa-a')[0].items.find(i=>i.id==='qa-agent');item.text+=delta;
       f.emit('item/agentMessage/delta',{threadId:'qa-a',turnId:'qa-turn',itemId:'qa-agent',delta});
