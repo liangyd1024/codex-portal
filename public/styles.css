@@ -561,5 +561,6 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .process-group>summary>.icon{flex-shrink:0}
 .process-label{min-width:0}
 .process-status{font-size:13px;flex-shrink:0}
-.process-group>summary>.chevron{margin-left:2px}
+.process-group>summary>.process-chevron{margin-left:2px;opacity:0}
+.process-group>summary:hover>.process-chevron,.process-group>summary:focus-visible>.process-chevron,.process-group[open]>summary>.process-chevron{opacity:1}
 @media(max-width:700px){.process-group>summary{min-height:44px;flex-wrap:wrap}}

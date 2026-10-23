@@ -694,6 +694,7 @@ function renderMessages() {
       processGroup.dataset.itemId = 'process-' + t.id + '-' + group.key;
       if (group.durationLabel) processGroup.classList.add('has-duration');
       const description = processSummary(t,group.items,{uncertain:uncertainHistory(),background:backgroundActivity(state.detail,{controlled:controlled(),connected:usable()})});
+      if (description.hidden && !group.durationLabel) continue;
       const summary = renderProcessSummary(description,{durationLabel:group.durationLabel,icon});
       const body = el('div','activity-items');
       for (const item of group.items) { body.append(cachedItem(item,t.id)); }
