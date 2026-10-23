@@ -79,3 +79,15 @@ test('side view reread retains first input after partial native completion',asyn
  m.emit('event',{method:'turn/completed',params:{threadId:'side',turn:{id:'t',status:'completed',items:[{id:'answer',type:'agentMessage',text:'回复'}]}}});
  assert.deepEqual((await readSideChat(m,'side')).turns[0].items[0],user);
 });
+test('consecutive native side turns retain each input when completion carries only the answer',()=>{
+ const turns=[];
+ for(let round=1;round<=2;round++){
+  const id='turn-'+round,user={id:'user-'+round,type:'userMessage',content:[{type:'text',text:'第 '+round+' 条问题'}]};
+  applySideEvent(turns,'turn/started',{turn:{id,status:'inProgress',items:[]}});
+  applySideEvent(turns,'item/started',{turnId:id,item:user});
+  applySideEvent(turns,'item/completed',{turnId:id,item:user});
+  applySideEvent(turns,'turn/completed',{turn:{id,status:'completed',items:[{id:'answer-'+round,type:'agentMessage',text:'收到'}]}});
+  assert.deepEqual(turns.map(t=>t.items.filter(i=>i.type==='userMessage').length),Array(round).fill(1));
+  assert.equal(turns.at(-1).items[0].content[0].text,'第 '+round+' 条问题');
+ }
+});
