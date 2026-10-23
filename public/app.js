@@ -25,7 +25,8 @@ import {asyncQuestions,QuestionDrafts} from './questions.js';
 import {questionForm} from './question-form.js';
 import {fileLink,closeFileViewer} from './message-files.js';
 import {notifyManagerError, recoveryMessage, selectedRecoveryMessage} from './recovery-state.js';
-import {activitySource,conversationActivity,renderConversationActivity,processGroupStatus} from './activity.js';
+import {processSummary,renderProcessSummary} from './process-summary.js';
+import {activitySource,conversationActivity,renderConversationActivity} from './activity.js';
 import {installTurnNavigation} from './turn-navigation.js';
 let scrollFollow,scrollContext,turnNavigation;
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message-media.js';
@@ -687,14 +688,9 @@ function renderMessages() {
       if (group.type === 'message') { turn.append(cachedItem(group.item,t.id)); continue; }
       const processGroup = el('details','activity-group process-group');
       processGroup.dataset.itemId = 'process-' + t.id + '-' + group.key;
-      const summary = el('summary');
-      if (group.durationLabel) {
-        processGroup.classList.add('has-duration');
-        summary.append(el('span','',group.durationLabel),icon('chevron','chevron'));
-        summary.title = '展开或收起过程';
-      } else summary.append(icon('chevron','chevron'),el('span','','查看过程'));
-      const processStatus = processGroupStatus(t,group.items,{uncertain:uncertainHistory(),background:backgroundActivity(state.detail,{controlled:controlled(),connected:usable()})});
-      if (processStatus) summary.append(el('span','process-status',processStatus));
+      if (group.durationLabel) processGroup.classList.add('has-duration');
+      const description = processSummary(t,group.items,{uncertain:uncertainHistory(),background:backgroundActivity(state.detail,{controlled:controlled(),connected:usable()})});
+      const summary = renderProcessSummary(description,{durationLabel:group.durationLabel,icon});
       const body = el('div','activity-items');
       for (const item of group.items) { body.append(cachedItem(item,t.id)); }
       processGroup.append(summary,body); turn.append(processGroup);
