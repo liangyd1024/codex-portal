@@ -2,6 +2,7 @@
 (() => {
  const f=window.rcmFixture,client=crypto.randomUUID(),events=[];
  const base='/__parity_events',query='?client='+client;
+ for(const type of ['offline','online'])addEventListener(type,()=>events.push({type,readyState:f.stream?.readyState}));
  window.EventSource=class extends f.NativeEventSource {
   constructor(){super(base+query);f.stream=this;
    for(const type of ['open','error'])this.addEventListener(type,()=>events.push({type,readyState:this.readyState}));
@@ -16,7 +17,7 @@
    button.onclick=async()=>{button.disabled=true;try{
     const response=await fetch(base+'/'+action+query,{method:action==='status'?'GET':'POST'});
     if(!response.ok)throw Error('Fixture control failed: '+response.status);
-    out.textContent=JSON.stringify({server:await response.json(),events,errors:f.errors},null,2);
+    out.textContent=JSON.stringify({server:await response.json(),readyState:f.stream?.readyState,events,errors:f.errors},null,2);
    }catch(error){out.textContent=JSON.stringify({error:error.message});}finally{button.disabled=false;}};
    panel.append(button);
   }
