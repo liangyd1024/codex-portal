@@ -290,3 +290,76 @@ test('thread routes preserve query rules, helper validation and native queue for
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+
+test('file client cancellation releases pending opens and active streams without harming later requests',{timeout:10000},async()=>{
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),records=[];
+  try{
+   for(const phase of ['opening','streaming','range']){
+    let opened,cleaned,cancellations=0,signal,body,pushed=false;
+    const started=new Promise(resolve=>{opened=resolve;}),cleanup=new Promise(resolve=>{cleaned=resolve;});
+    const calls=[];
+    env.managers.get('b').openFile=async(thread,item,options,context)=>{
+     signal=context.signal;calls.push({thread,item,options});opened();
+     if(phase==='opening')await new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true}));
+     body=new Readable({read(){if(!pushed){pushed=true;this.push(Buffer.from('fixture-part'));}}});
+     return {meta:{status:phase==='range'?206:200,size:1048576,length:phase==='range'?524288:1048576,start:0,end:524287,name:'fixture.txt',mime:'text/plain',kind:'text',etag:'"fixture"'},body,cancel(){cancellations++;body.destroy();cleaned();}};
+    };
+    const controller=new AbortController();
+    const pending=fetch(env.base+'/api/threads/qa-thread/items/qa-item/file?host=b',{signal:controller.signal,headers:phase==='range'?{range:'bytes=0-524287'}:{}});
+    // Attach a rejection observer before aborting a request that has no headers yet.
+    const result=pending.then(response=>({response}),error=>({error}));
+    await started;
+    let received='';
+    if(phase==='opening'){
+     controller.abort();assert.equal((await result).error.name,'AbortError');
+    }else{
+     const {response}=await result;assert.equal(response.status,phase==='range'?206:200);
+     const reader=response.body.getReader();received=new TextDecoder().decode((await reader.read()).value);
+     assert.equal(received,'fixture-part');controller.abort();
+     await assert.rejects(reader.read(),{name:'AbortError'});
+    }
+    await cleanup;await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(signal.aborted,true);assert.equal(body.destroyed,true);
+    assert.equal(cancellations,phase==='opening'?2:1);
+    const next=await fetch(env.base+'/api/status?host=b');assert.equal(next.status,200);
+    assert.deepEqual((await next.json()).unknownNativeField,{keep:['all',1]});
+    records.push({phase,received,cancellations,aborted:signal.aborted,destroyed:body.destroyed,calls});
+   }
+   outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
+
+
+test('closing one SSE client preserves other clients and never disconnects the target',{timeout:10000},async()=>{
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),first=new AbortController(),second=new AbortController();
+  const manager=env.managers.get('b');let disconnects=0;manager.disconnect=()=>{disconnects++;};
+  try{
+   const initialListeners=manager.listenerCount('event');
+   const responseA=await fetch(env.base+'/api/events?host=b',{signal:first.signal});
+   const readUntil=async(reader,marker)=>{const decoder=new TextDecoder();let text='';while(!text.includes(marker)){const part=await reader.read();assert.equal(part.done,false);text+=decoder.decode(part.value,{stream:true});}return text;};
+   const readerA=responseA.body.getReader();const initialA=await readUntil(readerA,'event: system/update\ndata: {"version":"fixture","state":"idle"}\n\n');
+   const responseB=await fetch(env.base+'/api/events?host=b',{signal:second.signal});
+   const readerB=responseB.body.getReader();const initialB=await readUntil(readerB,'event: system/update\ndata: {"version":"fixture","state":"idle"}\n\n');
+   assert.equal(initialA,initialB);
+   first.abort();await assert.rejects(readerA.read(),{name:'AbortError'});
+   const event={method:'native/unknown',params:{threadId:'qa-thread',verbatim:'中文原文\n第二行',future:{keep:[1,2]}}};
+   env.managers.get('a').emit('event',{method:'other-target-must-not-leak',params:{}});
+   manager.emit('event',event);
+   const chunk=await readUntil(readerB,JSON.stringify(event)+'\n\n');
+   assert.ok(chunk.includes(JSON.stringify(event)));assert.ok(!chunk.includes('other-target-must-not-leak'));
+   assert.equal(disconnects,0);assert.equal(manager.listenerCount('event'),initialListeners);
+   second.abort();await assert.rejects(readerB.read(),{name:'AbortError'});
+   const status=await fetch(env.base+'/api/status?host=b').then(response=>response.json());
+   assert.equal(status.connection.state,'connected');assert.equal(disconnects,0);
+   outcomes.push({initial:initialB,chunk,listeners:manager.listenerCount('event'),disconnects,state:status.connection.state});
+  }finally{first.abort();second.abort();await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
