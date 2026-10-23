@@ -8,8 +8,10 @@ export function questionReplies(item) {
   try{const parsed=JSON.parse(match[1]),values=Array.isArray(parsed)?parsed:[parsed];return values.filter(v=>typeof v?.questionItemId==='string'&&typeof v.question==='string'&&typeof v.answer==='string');}catch{return [];}
 }
 export function asyncQuestions(turns,threadId) {
+  const active=(turns||[]).filter(t=>t.status==='inProgress');
+  if(!active.length)return [];
   const answered=new Set((turns||[]).flatMap(t=>(t.items||[]).flatMap(questionReplies)).map(r=>r.questionItemId));
-  return (turns||[]).filter(t=>['inProgress','completed'].includes(t.status)).flatMap(turn=>(turn.items||[]).flatMap(item=>{
+  return active.flatMap(turn=>(turn.items||[]).flatMap(item=>{
     if(item.type!=='agentMessage'||typeof item.id!=='string'||!Array.isArray(item.questions))return [];
     const questions=item.questions.flatMap((q,index)=>{
       const id=JSON.stringify(['request_user_input_async',item.id,index]);
@@ -39,7 +41,7 @@ export class PendingQuestions {
   update(method,p) {
     const before=new Map(this.entries),id=p.threadId||p.thread?.id;
     if(method==='turn/completed')this.remember(this.finished,JSON.stringify([id,p.turn?.id]));
-    if(method==='thread/closed'||(method==='turn/completed'&&p.turn?.status!=='completed'))for(const [key,r] of this.entries)if(r.threadId===id&&(method==='thread/closed'||r.params.turnId===p.turn?.id))this.entries.delete(key);
+    if(method==='thread/closed'||method==='turn/completed')for(const [key,r] of this.entries)if(r.threadId===id&&(method==='thread/closed'||r.params.turnId===p.turn?.id))this.entries.delete(key);
     if(['item/started','item/completed'].includes(method)&&id&&p.turnId&&p.item){
       for(const reply of questionReplies(p.item))this.remember(this.answered,JSON.stringify([id,reply.questionItemId]));
       for(const reply of questionReplies(p.item))for(const [key,r] of this.entries)if(r.threadId===id){
