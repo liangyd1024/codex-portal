@@ -48,3 +48,18 @@ test('goal attachments still wait for their own native user message',async()=>{
  assert.equal(r.view('a',[])[0].status,'accepted');
  assert.deepEqual(r.view('a',[{id:'t',items:[{id:'image-message',type:'userMessage',content:input}]}]),[]);
 });
+
+test('side chat receipt survives partial native turns and disappears on the matching input',async()=>{
+ const {applySideEvent}=await import('../shared/side-chat-events.js');
+ const r=createSendReceipts(),side={},other={},turns=[];
+ const input=[{type:'text',text:'# Selected text:\n\n选文\n\n## My request:\n\n继续解释'}];
+ const pending=r.begin(side,input,turns);
+ assert.equal(r.view(side,turns)[0].status,'sending');assert.deepEqual(turns,[]);
+ applySideEvent(turns,'turn/started',{turn:{id:'side-turn',status:'inProgress',items:[]}});
+ r.accept(pending,{turnId:'side-turn'});
+ assert.equal(r.view(side,turns)[0].status,'accepted');assert.deepEqual(r.view(other,turns),[]);
+ applySideEvent(turns,'item/completed',{turnId:'side-turn',item:{id:'side-input',type:'userMessage',content:input}});
+ assert.deepEqual(r.view(side,turns),[]);
+ applySideEvent(turns,'turn/completed',{turn:{id:'side-turn',status:'completed',items:[{id:'answer',type:'agentMessage',text:'原生回复'}]}});
+ assert.deepEqual(r.view(side,turns),[]);assert.deepEqual(turns[0].items.find(i=>i.type==='userMessage').content,input);
+});

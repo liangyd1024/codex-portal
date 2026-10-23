@@ -20,11 +20,12 @@ export function turnPreview(turn,{uncertain=false}={}) {
   return {id:turn.id,question:clip(input.text|| (input.images?.length?'图片消息':question?'用户消息':'继续执行'),180),answer:clip(answer?.text,1000),status:uncertain&&running?'状态待确认':running?'正在执行':({failed:'执行失败',interrupted:'已中断',completed:'已完成'}[status]||'状态待确认'),running:running&&!uncertain,time:turn.startedAt||turn.createdAt};
 }
 // Read one page at a time. A changed context or cancellation stops further requests.
-export async function loadAllEarlier({context,loadEarlier,isCurrent,onProgress=()=>{},yieldPage=()=>new Promise(resolve=>setTimeout(resolve,0))}) {
+export async function loadAllEarlier({context,loadEarlier,isCurrent,onProgress=()=>{},yieldPage=()=>new Promise(resolve=>setTimeout(resolve,0)),waitForPage=()=>new Promise(resolve=>setTimeout(resolve,25))}) {
   const seen=new Set();
   while(isCurrent()&&context().hasEarlier){
     const {cursor,loading}=context();
-    if(loading||seen.has(cursor))return false;
+    if(loading){await waitForPage();continue;}
+    if(seen.has(cursor))return false;
     seen.add(cursor);
     if(!await loadEarlier())return false;
     if(!isCurrent())return false;
@@ -40,12 +41,11 @@ export function turnCountLabel({turns=[],hasEarlier},count=navigationIndex(turns
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
 export function installTurnNavigation({scroller,content,entryHost,context,follow,loadEarlier}) {
   const rail=el('nav','turn-navigation');rail.setAttribute('aria-label','对话轮次');
-  const ticks=el('div','turn-navigation-ticks'),older=el('button','turn-navigation-older','↑');older.type='button';older.setAttribute('aria-label','加载全部轮次');const count=el('div','turn-navigation-count');rail.append(count,older,ticks);document.body.append(rail);
+  const ticks=el('div','turn-navigation-ticks'),older=el('button','turn-navigation-older','↑');older.type='button';older.setAttribute('aria-label','加载全部轮次');const count=el('button','turn-navigation-count');count.type='button';count.setAttribute('aria-label','加载并显示全部轮次');rail.append(count,older,ticks);document.body.append(rail);
   const preview=el('div','turn-preview');preview.hidden=true;preview.id='turn-preview';document.body.append(preview);
   const entry=el('button','turn-navigation-entry','轮次');entry.type='button';entry.setAttribute('aria-haspopup','dialog');entryHost.append(entry);
   const dialog=el('dialog','turn-directory');dialog.setAttribute('aria-label','对话轮次');
   const header=el('div','turn-directory-header'),title=el('h2','','对话轮次'),close=el('button','','关闭'),list=el('div','turn-directory-list'),more=el('button','turn-directory-more','加载更早轮次'),feedback=el('p','turn-directory-feedback');feedback.setAttribute('role','status');close.type=more.type='button';header.append(title,close);dialog.append(header,list,feedback,more);document.body.append(dialog);
-  const notice=el('div','turn-navigation-notice'),noticeText=el('span'),noticeAction=el('button');noticeText.setAttribute('role','status');noticeAction.type='button';notice.append(noticeText,noticeAction);rail.append(notice);notice.hidden=true;
   let key=null,rows=[],signature='',hovered=null,hideTimer,frame,currentId,loading=false,loadVersion=0,loadMessage='';
   let owners=new Map();
   const buttons=new Map(),positions=new Map();let restore=null,directoryTarget=null;
@@ -77,30 +77,30 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
     for(const row of rows){const button=el('button','turn-directory-row');button.type='button';button.dataset.turnTarget=row.id;button.setAttribute('aria-label','跳转到：'+row.question);button.append(card(row));button.onclick=()=>navigate(row.id);if(row.id===currentId)button.setAttribute('aria-current','location');list.append(button);}
     list.scrollTop=top;if(anchor){const node=list.querySelector('[data-turn-target="'+CSS.escape(anchor.id)+'"]');if(node)list.scrollTop+=node.getBoundingClientRect().top-list.getBoundingClientRect().top-anchor.offset;}if(focused)list.querySelector('[data-turn-target="'+CSS.escape(focused)+'"]')?.focus({preventScroll:true});
   }
-  function report(message){loadMessage=message;feedback.textContent=message;noticeText.textContent=message;syncLoad();}
+  function report(message){loadMessage=message;feedback.textContent=message;syncLoad();}
   async function earlier(){
-    if(loading||!context().hasEarlier)return;
+    if(loading)return;
+    if(!context().hasEarlier){context().renderHistory?.();return;}
     const version=++loadVersion,started=key,isCurrent=()=>started===key&&version===loadVersion;
     loading=true;follow.pause({sticky:true});
-    const progress=()=>report('正在加载全部轮次 · 已加载 '+navigationIndex(context().turns).inputs.length+' 轮');
+    const progress=()=>{update();report('正在加载全部轮次 · 已加载 '+navigationIndex(context().turns).inputs.length+' 轮');};
     progress();
     try{
-      const loaded=await loadAllEarlier({context,loadEarlier,isCurrent,onProgress:progress});
+      const loaded=await loadAllEarlier({context,loadEarlier:()=>loadEarlier({deferRender:true}),isCurrent,onProgress:progress});
       if(isCurrent())report(loaded?'':'加载未完成，请重试。');
     }catch{if(isCurrent())report('加载失败，请重试。');}
-    finally{if(isCurrent()){loading=false;syncLoad();update();}}
+    finally{if(isCurrent()){loading=false;context().renderHistory?.();syncLoad();update();}}
   }
   function syncLoad(){
-    const c=context();if(!c.hasEarlier&&!loading){loadMessage='';feedback.textContent='';noticeText.textContent='';}older.hidden=more.hidden=!c.hasEarlier;older.disabled=loading||c.loading;more.disabled=!loading&&c.loading;
+    const c=context();if(!c.hasEarlier&&!loading){loadMessage='';feedback.textContent='';}older.hidden=more.hidden=!c.hasEarlier;older.disabled=loading||c.loading;more.disabled=!loading&&c.loading;
     older.title=loading?'正在加载全部轮次…':'加载全部轮次';
     more.textContent=loading?'取消加载':loadMessage?'继续加载全部轮次':'加载全部轮次';
-    rail.setAttribute('aria-busy',String(loading));notice.hidden=!loadMessage||dialog.open;
-    noticeAction.textContent=loading?'取消':'重试';noticeAction.disabled=!loading&&c.loading;
-    noticeAction.setAttribute('aria-label',loading?'取消加载全部轮次':'重试加载全部轮次');
+    count.title=loading?'正在加载全部轮次，点击取消':loadMessage||'加载并显示全部轮次';
+    count.setAttribute('aria-label',loading?'取消加载全部轮次':loadMessage?'重试加载全部轮次':'加载并显示全部轮次');
+    rail.setAttribute('aria-busy',String(loading));
   }
-  function cancel(){loadVersion++;loading=false;report('已取消继续加载。');}
-  noticeAction.onclick=()=>loading?cancel():earlier();
-  older.onclick=earlier;more.onclick=()=>loading?cancel():earlier();
+  function cancel(){loadVersion++;loading=false;context().renderHistory?.();report('已取消继续加载。');}
+  count.onclick=()=>loading?cancel():earlier();older.onclick=earlier;more.onclick=()=>loading?cancel():earlier();
   function navigate(id){jump(id);void earlier();}
   entry.onclick=()=>{hide();renderList();dialog.showModal();const active=list.querySelector('[aria-current]');if(active)list.scrollTop=active.offsetTop-list.offsetTop-Math.max(0,(list.clientHeight-active.offsetHeight)/2);close.focus();void earlier();syncLoad();};close.onclick=()=>dialog.close();
   dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
@@ -121,7 +121,7 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
   }
   function schedule(){if(!frame)frame=requestAnimationFrame(measure);}
   function switchContext(next){
-    if(next===key)return;key=next;restore=positions.get(next)||null;signature='';hide();if(dialog.open)dialog.close();loadVersion++;loading=false;loadMessage='';feedback.textContent='';noticeText.textContent='';notice.hidden=true;
+    if(next===key)return;key=next;restore=positions.get(next)||null;signature='';hide();if(dialog.open)dialog.close();loadVersion++;loading=false;loadMessage='';feedback.textContent='';
   }
   function update(){
     const c=context(),index=navigationIndex(c.turns);owners=index.owners;

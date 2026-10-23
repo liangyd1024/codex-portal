@@ -67,16 +67,27 @@ test('running follow-ups bypass stale goal intent and never call goal/set',async
  }
 });
 test('confirmed existing goal clears only stale intent, not uncertain receipts or another selection',()=>{
- for(const status of ['active','paused','blocked']){
+ for(const status of ['active','paused','blocked','budgetLimited','usageLimited','complete']){
   const selection={goalPending:true,mode:'default',skills:['skill']},another={goalPending:true};let saves=0;
   reconcileGoalSelection(selection,{goal:{objective:'原目标',status}},()=>saves++);
   assert.equal(selection.goalPending,false);assert.deepEqual(selection.skills,['skill']);assert.equal(saves,1);
   reconcileGoalSelection(selection,{goal:{status}},()=>saves++);assert.equal(saves,1);assert.equal(another.goalPending,true);
  }
- for(const detail of [{},{goal:null},{goal:{status:'complete'}},{goal:{status:'active'},goalError:'offline'}]){
+ for(const detail of [{},{goal:null},{goal:{status:'active'},goalError:'offline'}]){
   const selection={goalPending:true};reconcileGoalSelection(selection,detail);assert.equal(selection.goalPending,true);
  }
  const uncertain={goalPending:true,goalUncertain:'原目标'};
  reconcileGoalSelection(uncertain,{goal:{objective:'原目标',status:'active'}});
  assert.equal(uncertain.goalPending,true);assert.equal(uncertain.goalUncertain,'原目标');
 });
+
+ test('input follow-ups never replace an existing goal in any state',async()=>{
+  for(const status of ['active','paused','blocked','budgetLimited','usageLimited','complete']){
+   const goal={objective:'保持原目标',status},selection={goalPending:true},calls=[];
+   assert.doesNotThrow(()=>validateGoalDraft(selection,'',false,goal));
+   assert.equal(await prepareGoalSubmission({...options(selection,async(...args)=>calls.push(args)),goal,text:'补充内容'}),false);
+   await sendAfterGoal({goalStarted:false,id:'test',active:false,payload:{text:'补充内容'},api:async(...args)=>calls.push(args)});
+   assert.deepEqual(calls,[['/api/threads/test/message',{method:'POST',body:{text:'补充内容'}}]]);
+   assert.equal(goal.objective,'保持原目标');
+  }
+ });

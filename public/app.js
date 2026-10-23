@@ -1328,7 +1328,7 @@ async function interruptThread() {
     if(current())await refreshSelected();
   });
 }
-async function moreHistory() {
+async function moreHistory({deferRender=false}={}) {
   if (!state.historyCursor || !state.selectedId || !state.detail || state.loadingDetail || state.busy.has('history')) return;
   const id = state.selectedId, version = state.selectionVersion;
   $('messages-scroller').setAttribute('aria-busy','true');
@@ -1338,7 +1338,7 @@ async function moreHistory() {
     catch(error){if(error.code==='HISTORY_CURSOR_CHANGED')throw new Error('历史记录已更新。请刷新会话后再向上滚动。');throw error;}
     if (id !== state.selectedId || version !== state.selectionVersion) return;
     const old = new Map(turns().map(t => [t.id,t])); const all = [...[...(d.data || [])].reverse(),...turns()]; const seen = new Set(); state.detail.turns = all.filter(t => !seen.has(t.id) && seen.add(t.id)).map(t => old.get(t.id) || t);
-    state.historyCursor = d.nextCursor || null; state.loadedOlderHistory = true; if (d.historySource === 'snapshot') state.detail.historySource = 'snapshot'; renderThread();return true;
+    state.historyCursor = d.nextCursor || null; state.loadedOlderHistory = true; if (d.historySource === 'snapshot') state.detail.historySource = 'snapshot'; if(!deferRender)renderThread();return true;
   }); } finally { $('messages-scroller').setAttribute('aria-busy','false'); }
 }
 let inputSizeKey;
@@ -1632,7 +1632,7 @@ function wireEvents() {
   $('project-list').hidden = !readLayout('projects',true);
   $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
   mobileUI = installMobileUI({closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:mobile=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
-  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,reveal:id=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
+  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:id=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {

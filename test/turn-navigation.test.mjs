@@ -39,10 +39,9 @@ test('cancel or context switch while a page is pending stops the next page and p
  const pending=loadAllEarlier(x.options);x.stop();finish(true);
  assert.equal(await pending,false);assert.equal(calls,1);assert.equal(progress,0);
 });
-test('busy history and non-advancing cursors do not produce duplicate requests',async()=>{
+test('non-advancing cursors do not produce duplicate requests',async()=>{
  const x=expansion();let calls=0;x.options.loadEarlier=async()=>{calls++;return true;};
- x.state.loading=true;assert.equal(await loadAllEarlier(x.options),false);assert.equal(calls,0);
- x.state.loading=false;assert.equal(await loadAllEarlier(x.options),false);assert.equal(calls,1);
+ assert.equal(await loadAllEarlier(x.options),false);assert.equal(calls,1);
 });
 
 test('navigation counts explicit inputs, never native execution totals',()=>{
@@ -63,4 +62,23 @@ test('continuations have no tick and reading them retains the preceding input an
  assert.equal(owners.get('goal-auto'),'goal');assert.equal(owners.get('image'),'image');
  assert.equal(turnPreview(inputs[0]).question,'继续执行');
  assert.equal(JSON.stringify(turns),before);
+});
+
+test('navigation waits for an existing history page, then drains all remaining pages',async()=>{
+ const x=expansion();let waits=0,calls=0;
+ x.state.loading=true;
+ x.options.waitForPage=async()=>{waits++;x.state.cursor='after-existing';x.state.loading=false;};
+ x.options.loadEarlier=async()=>{assert.equal(x.state.loading,false);calls++;x.state.cursor='page-'+calls;x.state.hasEarlier=calls<3;return true;};
+ assert.equal(await loadAllEarlier(x.options),true);assert.equal(waits,1);assert.equal(calls,3);
+});
+test('context switch during existing page wait prevents a subsequent request',async()=>{
+ const x=expansion();x.state.loading=true;let calls=0;
+ x.options.waitForPage=async()=>x.stop();x.options.loadEarlier=async()=>{calls++;return true;};
+ assert.equal(await loadAllEarlier(x.options),false);assert.equal(calls,0);
+});
+test('a pending page that exhausts history needs no extra request',async()=>{
+ const x=expansion();x.state.loading=true;let calls=0;
+ x.options.waitForPage=async()=>{x.state.loading=false;x.state.hasEarlier=false;};
+ x.options.loadEarlier=async()=>{calls++;return true;};
+ assert.equal(await loadAllEarlier(x.options),true);assert.equal(calls,0);
 });

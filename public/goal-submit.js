@@ -1,18 +1,18 @@
 // Only submission intent/uncertain receipts live here; the native goal stays authoritative.
 export function reconcileGoalSelection(selection,{goal,goalError}={},save=()=>{}) {
-  if(!selection.goalPending||selection.goalUncertain||goalError||!goal||!['active','paused','blocked'].includes(goal.status))return;
+  if(!selection.goalPending||selection.goalUncertain||goalError||!goal)return;
   selection.goalPending=false;save();
 }
 
-export function validateGoalDraft(selection,text,active=false) {
-  if(active||!selection.goalPending)return;
+export function validateGoalDraft(selection,text,active=false,goal=null) {
+  if(active||goal||!selection.goalPending)return;
   if(!text.trim())throw Error('请在输入框中填写目标，图片可作为附件。');
   if(text.trim().length>10000)throw Error('目标不能超过 10000 个字符，请缩短输入内容。');
 }
-export async function prepareGoalSubmission({selection,text,id,active,api,save}) {
+export async function prepareGoalSubmission({selection,text,id,active,goal,api,save}) {
   // A running turn accepts follow-up input, never a new goal from the composer.
   // Leave uncertain goal receipts intact; steering is not proof of goal creation.
-  if(active)return false;
+  if(active||goal)return false;
   validateGoalDraft(selection,text);
   if(!selection.goalPending)return false;
   const objective=text.trim(),route='/api/threads/'+encodeURIComponent(id);

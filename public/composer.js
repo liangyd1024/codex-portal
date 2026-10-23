@@ -97,7 +97,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
     const c=context();
     if(c.ephemeral){notify('临时聊天不支持目标模式，请在主聊天设置目标。',true);return;}
     if(c.goalError){notify('目标暂未读取，请刷新后重试。',true);return;}
-    if(c.goal&&c.goal.status!=='complete'&&!choice().goalPending){editGoal(goalButton);return;}
+    if(c.goal){editGoal(goalButton);return;}
     const next=!choice().goalPending;
     choice().goalPending=next;
     if(next){choice().mode='default';delete choice().goalUncertain;}
@@ -164,8 +164,8 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
     mode.title=choice().mode==='plan'?'退出计划模式':'计划：先制定方案';
     mode.setAttribute('aria-pressed',String(choice().mode==='plan'));
     planBadge.hidden=choice().mode!=='plan';
-    const currentGoal=c.goal&&c.goal.status!=='complete';
-    goalBadge.hidden=!choice().goalPending;
+    const currentGoal=Boolean(c.goal);
+    goalBadge.hidden=!choice().goalPending||currentGoal;
     goalBadge.textContent='目标 ×';
     goalBadge.title='发送时将输入内容设为目标，点击取消';
     goalBadge.setAttribute('aria-label','取消本次目标设置');
@@ -174,12 +174,12 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
     // Attachments can accompany a native turn/steer while the current turn runs.
     for(const control of bar.querySelectorAll('button,select'))control.disabled=!c.ready||c.busy||goalUpdating||(control!==images&&control!==goalBadge&&!(control===goalButton&&c.goal)&&control.dataset.tool!=='skill-picker'&&control.dataset.tool!=='plugin-picker'&&c.active);
     goalButton.disabled=goalButton.disabled||Boolean(c.ephemeral);
-    goalButton.textContent=currentGoal&&!choice().goalPending?'编辑目标':'目标';goalButton.title=c.ephemeral?'临时聊天不支持目标模式，请在主聊天使用。':currentGoal?'编辑当前目标内容':'用下一条输入设置目标';goalButton.setAttribute('aria-pressed',String(Boolean(choice().goalPending)));
+    goalButton.textContent=currentGoal?'编辑目标':'目标';goalButton.title=c.ephemeral?'临时聊天不支持目标模式，请在主聊天使用。':currentGoal?'编辑当前目标内容':'用下一条输入设置目标';goalButton.setAttribute('aria-pressed',String(Boolean(choice().goalPending&&!currentGoal)));
     summary.setAttribute('aria-disabled',String(!c.ready||c.busy));if(!c.ready||c.busy)tools.open=false;
     status.textContent=[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ');status.hidden=!status.textContent;
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
-  return {render,dismiss:()=>{suggestions.close();tools.open=false;if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending),validateSend:(text,active)=>validateGoalDraft(choice(),text,active),prepareSend:async(id,text,active)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,api,save}):false;render();return started;},moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();return {mode,skills:[...skills],plugins:[...plugins],threads:[...threads],access:WEB_ACCESS};},isLoading:()=>loading};
+  return {render,dismiss:()=>{suggestions.close();tools.open=false;if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending&&!context().goal),validateSend:(text,active)=>validateGoalDraft(choice(),text,active,context().goal),prepareSend:async(id,text,active)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,goal:context().id===id?context().goal:null,api,save}):false;render();return started;},moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();return {mode,skills:[...skills],plugins:[...plugins],threads:[...threads],access:WEB_ACCESS};},isLoading:()=>loading};
 }
 
 // Match the desktop's completed native plan item, never infer plans from prose.

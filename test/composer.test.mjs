@@ -37,7 +37,7 @@ test('skills and plugins are resolved against target catalogs, not arbitrary bro
 test('goal uses explicit user origin and rejects busy threads and invalid budgets',async()=>{
   const {m,calls}=fixture();m.controlled.set('a',{status:{type:'idle'}});
   await setGoal(m,'a',{objective:'目标',tokenBudget:2000});
-  assert.deepEqual(calls[0].params,{threadId:'a',objective:'目标',tokenBudget:2000,origin:'user'});
+  assert.deepEqual(calls.find(c=>c.method==='thread/goal/set').params,{threadId:'a',objective:'目标',tokenBudget:2000,origin:'user'});
   await assert.rejects(setGoal(m,'a',{objective:'x',tokenBudget:-1}));
   m.activeTurns.set('a','turn');await assert.rejects(setGoal(m,'a',{status:'active'}),e=>e.code==='THREAD_BUSY');
 });
@@ -166,4 +166,19 @@ test('editing paused or blocked goals resumes through the native goal request on
   await setGoal(m,'a',{objective:'调整后的目标',expectedObjective:'原目标'});
   assert.deepEqual(calls,[{method:'thread/goal/set',params:{threadId:'a',origin:'user',objective:'调整后的目标',status:'active'}}]);
  }
+});
+
+test('creation path cannot overwrite an existing goal, including completed or limited goals',async()=>{
+ for(const status of ['active','paused','blocked','budgetLimited','usageLimited','complete']){
+  const {m,calls}=fixture();m.controlled.set('a',{status:{type:'idle'}});
+  m.rpc.request=async(method,params)=>{calls.push({method,params});return {goal:{objective:'保持原目标',status}};};
+  await assert.rejects(setGoal(m,'a',{objective:'补充内容',status:'active'}),e=>e.code==='GOAL_EXISTS');
+  assert.deepEqual(calls,[{method:'thread/goal/get',params:{threadId:'a'}}]);
+ }
+});
+test('goal creation read failure never falls through to a write',async()=>{
+ const {m,calls}=fixture();m.controlled.set('a',{status:{type:'idle'}});
+ m.rpc.request=async method=>{calls.push(method);throw Error('offline');};
+ await assert.rejects(setGoal(m,'a',{objective:'补充内容'}),/offline/);
+ assert.deepEqual(calls,['thread/goal/get']);
 });
