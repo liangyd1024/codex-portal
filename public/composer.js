@@ -148,11 +148,11 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
         }
         if(saved){delete selection.goalEdit;save();if(same())dialog.close();if(context().id===id)await refresh();}
       }catch(error){if(same()){reload.hidden=false;feedback.textContent=(saved?'目标已保存，刷新失败：':'保存未确认：')+error.message;}}
-      finally{goalUpdating=false;if(same()){submit.disabled=false;reload.disabled=false;area.readOnly=false;form.setAttribute('aria-busy','false');}render();}
+      finally{goalUpdating=false;if(same()){submit.disabled=false;reload.disabled=false;area.readOnly=false;form.setAttribute('aria-busy','false');}render();if(saved&&context().id===id&&dialogVersion===version&&!dialog.open)opener?.focus();}
     };
     area.focus();
   }
-  const goalToolbar=installGoalToolbar({input,context,api,refresh});
+  const goalToolbar=installGoalToolbar({input,context:()=>({...context(),busy:context().busy||goalUpdating}),api,refresh,edit:editGoal});
   const suggestions=installSkillSuggestions({input,api,context,select:(entry,range,kind)=>insertReference(entry,kind,range)});
   const planCompletion=installPlanCompletion({host,context,input,notify,send:implementPlan,resetMode:()=>{choice().mode='default';save();}});
   function render(){
