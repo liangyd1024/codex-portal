@@ -12,3 +12,5 @@ config.local.json
 backups/
 restore-staging/
 browser-export*.json
+
+.framework-build/

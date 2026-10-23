@@ -11,10 +11,28 @@
     "restore": "python3 scripts/data-backup.py restore",
     "restore:apply": "python3 scripts/restore-apply.py apply",
     "install": "node scripts/install-local.mjs",
-    "maintenance": "python3 scripts/restore-apply.py"
+    "maintenance": "python3 scripts/restore-apply.py",
+    "start:preview": "node scripts/start-preview.mjs",
+    "build": "node scripts/build-framework.mjs",
+    "typecheck": "node scripts/typecheck.mjs"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "dependencies": {
+    "fastify": "5.12.7",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zustand": "5.0.16"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.15",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "typescript": "6.0.2",
+    "vite": "8.3.5",
+    "parse5": "8.0.1"
+  }
 }

@@ -247,3 +247,9 @@ python3 -m unittest discover -s test -p 'test_*.py'
 项目验证范围和历史结果见 [验证文档](docs/README.md)。公开记录中的环境信息均使用通用标识，不提供个人部署入口或备份位置。
 
 测试入口 `npm test` 与网页更新共用 `scripts/run-tests.mjs`。网页更新直接使用服务的 Node 路径，不依赖后台 PATH 中存在 npm。Node 测试的保留目录等诊断信息使用 `t.diagnostic()`，避免旧 Node 测试运行器混合解析中文 stdout 时的序列化缺陷；不要以跳过测试或失败自动重跑代替修复。
+
+### 框架迁移分支的独立验收
+
+`refactor/framework-migration` 使用独立工作树和 4327 / 4338 / 4339 入口。
+本分支不安装或更新正式服务。工程初始化必须禁用安装生命周期脚本。
+实现范围、运行步骤、基准变化和未验证项见[框架迁移记录](docs/framework-migration.md)。

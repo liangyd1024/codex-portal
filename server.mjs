@@ -30,7 +30,7 @@ import {NativeAutomations} from './lib/native-automations.mjs';
 
 const ROOT=path.dirname(fileURLToPath(import.meta.url));
 let BUILD_VERSION='development';try{BUILD_VERSION=(await readFile(path.join(ROOT,'VERSION'),'utf8')).trim();}catch{}
-export function createApp({mobileConfig=null,setupMobile=null,access=new MobileAccess(null),config=loadConfig(),stateDir=process.env.RCM_STATE_DIR||path.join(homedir(),'.codex/remote-codex-manager'),managers:providedManagers,updater=new WebUpdate({supportDir,root:ROOT,version:BUILD_VERSION})}={}) {
+export function createApp({serverFactory=handler=>http.createServer(handler),proxyFactory=handler=>http.createServer(handler),secureFactory=(options,handler)=>https.createServer(options,handler),staticRoot=path.join(ROOT,'public'),extraAssets={},buildVersion=BUILD_VERSION,mobileConfig=null,setupMobile=null,access=new MobileAccess(null),config=loadConfig(),stateDir=process.env.RCM_STATE_DIR||path.join(homedir(),'.codex/remote-codex-manager'),managers:providedManagers,updater=new WebUpdate({supportDir,root:ROOT,version:BUILD_VERSION})}={}) {
  const managers=providedManagers||new Map(config.connections.map(host=>[host.id,new Manager({titleStore:path.join(stateDir,`web-titles-${host.id}.json`),host:publicHost(host),...(host.kind==='local'?createLocalTransport(host):createSshTransport(host))})]));
  const manager=managers.get(config.defaultConnection);
  const automations=new Map([...managers].map(([id,m])=>[id,new NativeAutomations(m)]));
@@ -71,7 +71,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       if(remote&&!access.valid(req)){
         if(req.method==='GET'&&['/','/index.html','/login.js','/styles.css','/mobile-ui.css'].includes(p)){
           const file=p==='/login.js'?'login.js':p==='/styles.css'?'styles.css':p==='/mobile-ui.css'?'mobile-ui.css':'login.html';
-          res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(await readFile(path.join(ROOT,'public',file)));
+          res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(await readFile(path.join(staticRoot,file)));
         }
         throw new AppError('请先使用本机生成的配对码登录。',401,'PAIRING_REQUIRED');
       }
@@ -81,7 +81,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       if(p==='/api/access/qr'&&!remote&&req.method==='GET'&&mobileConfig){const name=url.searchParams.get('kind')==='tailscale'?'tailscale.png':'lan.png';res.writeHead(200,{'Content-Type':'image/png'});return res.end(await readFile(path.join(path.dirname(mobileConfig.ca),name)));}
       if(req.method==='GET'&&p==='/api/connections')return json(res,200,{machineId:config.machineId,defaultConnection:config.defaultConnection,data:[...managers].map(([id,m])=>({id,host:publicHost(m.host),connection:m.connection}))});
       if(req.method==='GET'&&p==='/api/system/update'){if(url.searchParams.get('check')==='1')void updater.checkLatest?.().catch(()=>{});return json(res,200,await updater.status());}
-      if(req.method==='GET'&&p==='/api/version')return json(res,200,{version:BUILD_VERSION,machineId:config.machineId});
+      if(req.method==='GET'&&p==='/api/version')return json(res,200,{version:buildVersion,machineId:config.machineId});
       const targetKey=url.searchParams.get('host')||config.defaultConnection;
       const manager=managers.get(targetKey);
       if(!manager)throw new AppError('未知连接。',404,'UNKNOWN_HOST');
@@ -161,59 +161,21 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       }
       if(p.startsWith('/api/'))return json(res,404,{error:{message:'找不到此接口。',code:'NOT_FOUND'}});
       if(req.method!=='GET'&&req.method!=='HEAD')throw new AppError('不支持此请求方法。',405);
-      const file={'/turn-files.js':'turn-files.js','/turn-files.css':'turn-files.css','/goal-toolbar.js':'goal-toolbar.js','/queued-inputs.js':'queued-inputs.js','/composer-clipboard.js':'composer-clipboard.js','/response-annotations.js':'response-annotations.js','/selection-tools.css':'selection-tools.css','/side-chat.js':'side-chat.js','/shared/side-chat-events.js':'../shared/side-chat-events.js','/turn-navigation.js':'turn-navigation.js','/turn-navigation.css':'turn-navigation.css','/shared/account-state.js':'../shared/account-state.js','/shared/questions.js':'../shared/questions.js','/shared/connection-state.js':'../shared/connection-state.js','/render-cache.js':'render-cache.js','/feedback.js':'feedback.js','/feedback.css':'feedback.css','/capacity-retry.js':'capacity-retry.js','/system-update.js':'system-update.js','/account-usage.js':'account-usage.js','/login.js':'login.js','/bootstrap.js':'bootstrap.js','/manifest.webmanifest':'manifest.webmanifest','/notification-platform.js':'notification-platform.js','/notification-worker.js':'notification-worker.js','/notification-delivery.js':'notification-delivery.js','/automations.js':'automations.js','/automations.css':'automations.css','/questions.js':'questions.js','/question-form.js':'question-form.js','/message-files.js':'message-files.js','/recovery-state.js':'recovery-state.js','/activity.js':'activity.js','/project-picker.js':'project-picker.js','/project-picker.css':'project-picker.css','/message-media.js':'message-media.js','/message-time.js':'message-time.js','/message-body.js':'message-body.js','/message-dom.js':'message-dom.js','/new-chat.js':'new-chat.js','/new-chat.css':'new-chat.css','/inline-mentions.js':'inline-mentions.js','/skill-suggestions.js':'skill-suggestions.js','/attachments.js':'attachments.js','/goal-submit.js':'goal-submit.js','/composer.js':'composer.js','/composer.css':'composer.css','/':'index.html','/index.html':'index.html','/app.js':'app.js','/mobile-ui.js':'mobile-ui.js','/mobile-ui.css':'mobile-ui.css','/input-state.js':'input-state.js','/thread-sync.js':'thread-sync.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
+      const file=extraAssets[p]||{'/turn-files.js':'turn-files.js','/turn-files.css':'turn-files.css','/goal-toolbar.js':'goal-toolbar.js','/queued-inputs.js':'queued-inputs.js','/composer-clipboard.js':'composer-clipboard.js','/response-annotations.js':'response-annotations.js','/selection-tools.css':'selection-tools.css','/side-chat.js':'side-chat.js','/shared/side-chat-events.js':'../shared/side-chat-events.js','/turn-navigation.js':'turn-navigation.js','/turn-navigation.css':'turn-navigation.css','/shared/account-state.js':'../shared/account-state.js','/shared/questions.js':'../shared/questions.js','/shared/connection-state.js':'../shared/connection-state.js','/render-cache.js':'render-cache.js','/feedback.js':'feedback.js','/feedback.css':'feedback.css','/capacity-retry.js':'capacity-retry.js','/system-update.js':'system-update.js','/account-usage.js':'account-usage.js','/login.js':'login.js','/bootstrap.js':'bootstrap.js','/manifest.webmanifest':'manifest.webmanifest','/notification-platform.js':'notification-platform.js','/notification-worker.js':'notification-worker.js','/notification-delivery.js':'notification-delivery.js','/automations.js':'automations.js','/automations.css':'automations.css','/questions.js':'questions.js','/question-form.js':'question-form.js','/message-files.js':'message-files.js','/recovery-state.js':'recovery-state.js','/activity.js':'activity.js','/project-picker.js':'project-picker.js','/project-picker.css':'project-picker.css','/message-media.js':'message-media.js','/message-time.js':'message-time.js','/message-body.js':'message-body.js','/message-dom.js':'message-dom.js','/new-chat.js':'new-chat.js','/new-chat.css':'new-chat.css','/inline-mentions.js':'inline-mentions.js','/skill-suggestions.js':'skill-suggestions.js','/attachments.js':'attachments.js','/goal-submit.js':'goal-submit.js','/composer.js':'composer.js','/composer.css':'composer.css','/':'index.html','/index.html':'index.html','/app.js':'app.js','/mobile-ui.js':'mobile-ui.js','/mobile-ui.css':'mobile-ui.css','/input-state.js':'input-state.js','/thread-sync.js':'thread-sync.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
       if(!file){res.writeHead(404);res.end('Not found');return;}
-      await staticResponse(req,res,path.join(ROOT,'public',file));
+      await staticResponse(req,res,path.join(staticRoot,file));
     }catch(error){if(res.headersSent){res.destroy();return;}json(res,error.status||502,{error:{message:error.message,code:error.code||'REMOTE_ERROR',...(error.details?{details:error.details}:{})}});}
   };
-  const server=http.createServer((req,res)=>handler(req,res));
-  const proxyServer=http.createServer((req,res)=>handler(req,res,true));
-  const createSecureServer=options=>https.createServer(options,(req,res)=>handler(req,res,true));
+  const server=serverFactory((req,res)=>handler(req,res));
+  const proxyServer=proxyFactory((req,res)=>handler(req,res,true));
+  const createSecureServer=options=>secureFactory(options,(req,res)=>handler(req,res,true));
   server.on('listening',()=>{for(const m of managers.values())Promise.resolve(m.restoreConnection?.()).catch(()=>{});});
   server.on('close',()=>{for(const [key,m] of managers){m.off('event',broadcasts.get(key));m.disconnect({preserveIntent:true});}for(const client of clients)client.end();});
   return {server,manager,managers,proxyServer,createSecureServer,setMobileConfig:value=>{mobileConfig=value;}};
 }
 
+// Keep the JavaScript launcher for existing tooling. This branch only starts the isolated preview.
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
-  const configPath=path.join(homedir(),'Library/Application Support/RemoteCodexManager/mobile/config.json');
-  let mobileConfig=null;try{if(process.env.RCM_MOBILE!=='0')mobileConfig=JSON.parse(await readFile(configPath,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
-  const access=new MobileAccess(path.join(homedir(),'Library/Application Support/RemoteCodexManager/mobile/sessions.json'));
-  let setupPending;
-  const setupMobile=process.env.RCM_MOBILE==='0'?null:(mode='lan')=>{if(setupPending)throw new AppError('手机入口正在配置，请稍后重新检查。',409);return setupPending=(async()=>{
-    await promisify(execFile)(process.execPath,[path.join(ROOT,'scripts/setup-mobile.mjs'),...(mode==='tailscale'?['--tailscale']:[])],{timeout:90000});
-    const next=JSON.parse(await readFile(configPath,'utf8'));
-    if(!mobileConfig){await startMobile(next);mobileConfig=next;}else{mobileConfig.origins=next.origins;}
-    return mobileConfig;
-  })().finally(()=>{setupPending=null;});};
-  const {server,manager,managers,proxyServer,createSecureServer,setMobileConfig}=createApp({mobileConfig:null,access,setupMobile});
-  async function startMobile(initial){
-    const mobileConfig=initial;
-    const tls=createSecureServer({key:await readFile(mobileConfig.key),cert:await readFile(mobileConfig.cert)});
-    const listen=(endpoint,port,host)=>new Promise((resolve,reject)=>{endpoint.once('error',reject);endpoint.listen(port,host,()=>{endpoint.off('error',reject);resolve();});});
-    try{await listen(proxyServer,4318,'127.0.0.1');await listen(tls,4319,mobileConfig.lanIP);}catch(error){if(proxyServer.listening)await new Promise(resolve=>proxyServer.close(resolve));throw error;}
-    for(const endpoint of [proxyServer,tls])endpoint.on('error',error=>console.error('手机入口：'+error.message));
-    let renewing=false,lastRenewal=Date.now();
-    const refreshTLS=async()=>{
-      if(renewing)return;
-      const ips=Object.values(networkInterfaces()).flat().filter(Boolean).filter(n=>n.family==='IPv4'&&!n.internal).map(n=>n.address);
-      if(!ips.length||tls.listening&&ips.includes(mobileConfig.lanIP)&&Date.now()-lastRenewal<86400000)return;
-      renewing=true;
-      try{
-        await promisify(execFile)(process.execPath,[path.join(ROOT,'scripts/setup-mobile.mjs')],{timeout:90000});
-        const next=JSON.parse(await readFile(configPath,'utf8'));
-        const credentials={key:await readFile(next.key),cert:await readFile(next.cert)};
-        if(next.lanIP!==mobileConfig.lanIP||!tls.listening){
-          if(tls.listening){tls.closeAllConnections();await new Promise(resolve=>tls.close(resolve));}
-          Object.assign(mobileConfig,next);tls.setSecureContext(credentials);tls.listen(4319,next.lanIP);
-        }else{Object.assign(mobileConfig,next);tls.setSecureContext(credentials);}
-        lastRenewal=Date.now();
-      }catch(error){console.error('手机证书更新失败：'+error.message);}finally{renewing=false;}
-    };
-    setInterval(refreshTLS,30000).unref();
-  }
-  if(mobileConfig){try{await startMobile(mobileConfig);setMobileConfig(mobileConfig);}catch(error){console.error('手机入口启动失败：'+error.message);mobileConfig=null;}}
-  const port=Number(process.env.RCM_PORT||4317);
-  server.listen(port,'127.0.0.1',()=>console.log(`Remote Codex Manager: http://127.0.0.1:${server.address().port}`));
-  server.on('error',error=>{console.error(error.message);process.exitCode=1;});
-  for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{for(const m of managers.values())m.disconnect({preserveIntent:true});server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),3000).unref();});
+  if(process.env.RCM_PORT&&process.env.RCM_PORT!=='4327')throw Error('框架迁移分支仅供 4327 验收，不可部署正式服务。');
+  await import('./scripts/start-preview.mjs');
 }

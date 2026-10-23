@@ -1,3 +1,4 @@
+import {renderSelectOptions,renderDiagnosticsView,publishWorkspace,createWorkspaceState} from '../src/web/views.tsx';
 import {completedGoalPlacement,renderCompletedGoal} from './goal-toolbar.js';
 import {installQueuedInputs} from './queued-inputs.js';
 let queuedInputs;
@@ -105,13 +106,13 @@ function applyStatus(status){
 }
 
 const $ = id => document.getElementById(id);
-const state = {
+const state = createWorkspaceState({
   desktopMode:Boolean(savedView().desktopMode), status: null, models: [], projects: [], threads: [], selectedId: savedView().selectedId || null, detail: null,
   sidebar:null, sidebarArchived:false, selectedArchived:false, projectId: savedView().projectId || null, search: '', threadCursor: null, historyCursor: null, loadedOlderHistory: false,
   model: '', effort: '', csrf: '', transport: false, busy: new Set(), loadingThreads: false, loadingModels: false, loadingProjects: false, threadListSource: null,
   runtimeNotices: new Map(), loadingDetail: false, errors: [], localRequests: [], drafts: new DraftStore({storage:()=>sessionStorage,host:targetHost,onError:()=>toast('浏览器无法保存草稿，请先复制重要内容。',true)}), selectionVersion: 0,
   listVersion: 0, detailVersion: 0, threadPageError: false, historyError: '', eventSource: null, lastSync: null, refreshScope: '', refreshMessage: '', refreshing: false, streamRender: false, requestSignature: '',
-};
+});
 const questionDrafts=new QuestionDrafts(sessionStorage,targetHost,()=>toast('问题草稿暂未保存，请先复制回答。',true));
 const newDraftId='local:new-chat-draft';
 const newDraft=new NewChatDraft(sessionStorage,'rcm.new-chat.'+targetHost);
@@ -361,6 +362,7 @@ function renderConnectionBanner() {
   else banner.hidden = true;
 }
 function renderControls() {
+  publishWorkspace(state);
   annotations?.render();sideChat?.sync();queuedInputs?.render();
   queueMicrotask(()=>turnNavigation?.update());
   capacityRetry?.tick();
@@ -492,15 +494,13 @@ function effortsFor(id) {
 }
 function defaultEffort(id) { const m = modelFor(id), opts = effortsFor(id); return opts.some(e => e.value === m?.defaultReasoningEffort) ? m.defaultReasoningEffort : opts[0]?.value || ''; }
 function fillModels(select, selected) {
-  clear(select); if (!state.models.length) { const o = el('option','',state.loadingModels ? '正在读取模型…' : '等待模型目录'); o.value = ''; select.append(o); return; }
-  state.models.forEach(m => { const o = el('option','',m.displayName || modelId(m)); o.value = modelId(m); o.title = m.description || ''; select.append(o); });
-  select.value = state.models.some(m => modelId(m) === selected) ? selected : modelId(state.models.find(m => m.isDefault) || state.models[0]);
+  const options=state.models.length?state.models.map(m=>({value:modelId(m),label:m.displayName||modelId(m),title:m.description||''})):[{value:'',label:state.loadingModels?'正在读取模型…':'等待模型目录'}];
+  const value=state.models.some(m=>modelId(m)===selected)?selected:state.models.length?modelId(state.models.find(m=>m.isDefault)||state.models[0]):'';
+  renderSelectOptions(select,options,value);
 }
 function fillEfforts(select, model, effort) {
-  clear(select); const opts = effortsFor(model);
-  if (!opts.length) { const o = el('option','','无可用档位'); o.value = ''; select.append(o); return; }
-  opts.forEach(e => { const o = el('option','',e.label); o.value = e.value; o.title = e.description; select.append(o); });
-  select.value = opts.some(e => e.value === effort) ? effort : defaultEffort(model);
+  const opts=effortsFor(model);
+  renderSelectOptions(select,opts.length?opts.map(e=>({value:e.value,label:e.label,title:e.description})):[{value:'',label:'无可用档位'}],opts.some(e=>e.value===effort)?effort:defaultEffort(model));
 }
 function renderModels(preferThread = false) {
   const t = currentThread();
@@ -756,16 +756,15 @@ function renderThread() {
   renderMessages(); renderControls(); resizeInput();
 }
 function renderDiagnostics() {
-  const n = clear($('diagnostic-content')), s = state.status || {}, c = s.connection || {};
-  if(state.selectedId)n.append(el('p','session-id','会话 ID · '+state.selectedId));
-  if(s.recoveryFailures?.length){const d=el('div','diagnostic-entry');d.append(el('time','','历史会话恢复'),el('p','',recoveryMessage(s.recoveryFailures)));for(const failure of s.recoveryFailures)d.append(el('p','',failure.threadId+'：'+failure.message));n.append(d);}
-  if (c.stage) { const d = el('div','diagnostic-entry'); d.append(el('time','','当前阶段'),el('p','',stages[c.stage] || c.stage)); n.append(d); }
-  if (s.service?.pid) { const d = el('div','diagnostic-entry'); d.append(el('time','','目标机器服务'),el('p','','PID ' + s.service.pid + (s.service.running ? ' · 运行中' : ' · 未运行'))); n.append(d); }
-  if(s.service?.protocolValidation){const v=s.service.protocolValidation,d=el('div','diagnostic-entry');d.append(el('time','','协议兼容性'),el('p','',`${v.version} · 已核验 ${v.methods} 项接口${v.cached?' · 使用已核验缓存':''}`));Object.entries(v.features||{}).filter(([,feature])=>!feature.supported).forEach(([,feature])=>d.append(el('p','',feature.reason)));n.append(d);}
-  if(s.service?.installedVersion&&s.service.installedVersion!==s.service.version){const d=el('div','diagnostic-entry');d.append(el('time','','引擎更新'),el('p','',`已安装 ${s.service.installedVersion}，当前运行 ${s.service.version}。任务结束后释放并重新连接，即可使用新引擎。`));n.append(d);}
-  const all = [...(s.errors || []),...state.errors].sort((a,b) => (timestamp(b.time)?.getTime() || 0) - (timestamp(a.time)?.getTime() || 0)).slice(0,10);
-  all.forEach(e => { const d = el('div','diagnostic-entry error'); d.append(el('time','',dateTime(e.time) + (e.stage ? ' · ' + (stages[e.stage] || e.stage) : '')),el('p','',e.message || messageOf(e))); n.append(d); });
-  if (!n.childNodes.length) n.append(el('p','subtle','暂无错误记录。连接后显示服务状态。'));
+  const s=state.status||{},c=s.connection||{},entries=[];
+  if(s.recoveryFailures?.length){entries.push({title:'历史会话恢复',messages:[recoveryMessage(s.recoveryFailures),...s.recoveryFailures.map(f=>f.threadId+'：'+f.message)]});}
+  if(c.stage)entries.push({title:'当前阶段',messages:[stages[c.stage]||c.stage]});
+  if(s.service?.pid)entries.push({title:'目标机器服务',messages:['PID '+s.service.pid+(s.service.running?' · 运行中':' · 未运行')]});
+  if(s.service?.protocolValidation){const v=s.service.protocolValidation;entries.push({title:'协议兼容性',messages:[`${v.version} · 已核验 ${v.methods} 项接口${v.cached?' · 使用已核验缓存':''}`,...Object.values(v.features||{}).filter(f=>!f.supported).map(f=>f.reason)]});}
+  if(s.service?.installedVersion&&s.service.installedVersion!==s.service.version)entries.push({title:'引擎更新',messages:[`已安装 ${s.service.installedVersion}，当前运行 ${s.service.version}。任务结束后释放并重新连接，即可使用新引擎。`]});
+  const all=[...(s.errors||[]),...state.errors].sort((a,b)=>(timestamp(b.time)?.getTime()||0)-(timestamp(a.time)?.getTime()||0)).slice(0,10);
+  for(const e of all)entries.push({title:dateTime(e.time)+(e.stage?' · '+(stages[e.stage]||e.stage):''),messages:[e.message||messageOf(e)],error:true});
+  renderDiagnosticsView({selectedId:state.selectedId,entries});
 }
 function renderRequests() {
   const list = requests().filter(r=>!questionDrafts.get(r).sent), signature = JSON.stringify([state.selectedId,sideChat?.id,list]);
