@@ -8,12 +8,13 @@ import {compactLayout,touchInput,installScrollFollow} from './mobile-ui.js';
 import {installAttachments} from './attachments.js';
 import {installComposer,implementationText} from './composer.js';
 import {timedTurnGroups} from './message-time.js';
+import {createSendReceipts,sendReceiptLabels} from './connection-state.js';
 
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
 const icon=name=>{const n=document.createElementNS('http://www.w3.org/2000/svg','svg');n.classList.add('icon');const use=document.createElementNS(n.namespaceURI,'use');use.setAttribute('href','#i-'+name);n.append(use);return n;};
 const stateOf=t=>t?.status?.type||t?.status;
 export function installSideChat({api,context,renderItem,notify,selectionChanged=()=>{},requestsChanged=()=>{}}){
- const chats=new Map(),cache=new RenderCache();let selected=null,frame=null,renderedId=null,controlsKey=null,fragmentsKey=null,attachments,composer;
+ const chats=new Map(),cache=new RenderCache(),sendReceipts=createSendReceipts();let selected=null,frame=null,renderedId=null,controlsKey=null,fragmentsKey=null,attachments,composer;
  const button=(name,fn,cls='secondary-button')=>{const b=el('button',cls,name);b.type='button';b.onclick=fn;return b;};
  const panel=el('aside','side-chat-panel');panel.hidden=true;panel.setAttribute('aria-label','侧边聊天');
  const header=el('header'),title=el('strong','','侧边聊天'),description=el('small','','临时聊天');description.title='刷新网页后无法继续；目标模式和定时任务请在主聊天使用。';
@@ -54,12 +55,15 @@ export function installSideChat({api,context,renderItem,notify,selectionChanged=
   const raw=override??input.value,parts=plan?[]:s.selections.slice(),pictures=plan?{items:[]}:attachments.capture();if(!raw.trim()&&!parts.length&&!pictures.items.length)return;
   const options=plan?{mode:'default',access:'full'}:composer.options();
   if(s.active&&options.threads?.length){notify('请在当前轮次结束后发送会话引用，草稿已保留。',true);return;}
-  const active=s.active,text=annotatedText(raw,[],parts);s.busy=true;s.error='';render();
+  const active=s.active,text=annotatedText(raw,[],parts);
+  const content=[...(text?[{type:'text',text}]:[]),...pictures.items.map(i=>({type:'image',url:i.url}))];
+  const receipt=sendReceipts.begin(s,content,s.turns);s.busy=true;s.error='';render();
   try{
    const d=await api('/api/threads/'+s.id+(active?'/steer':'/message'),{method:'POST',body:{text,images:pictures.items.map(i=>({url:i.url})),...options,model:s.model,effort:s.effort}});
+   sendReceipts.accept(receipt,d);
    if(d.turn){applySideEvent(s.turns,'turn/started',{turn:d.turn});s.active=stateOf(s.turns.find(t=>t.id===d.turn.id))==='inProgress';}
    if(!plan){if(s.draft===raw)s.draft='';attachments.acknowledge(pictures);s.selections=s.selections.filter(x=>!parts.includes(x));}
-  }catch(error){s.error=error.message;s.uncertain=['OUTCOME_UNKNOWN','RPC_TIMEOUT'].includes(error.code)||!error.status;throw error;}
+  }catch(error){sendReceipts.fail(receipt,error);s.error=error.message;s.uncertain=receipt.status==='unknown'||error.code==='RPC_TIMEOUT';throw error;}
   finally{s.busy=false;if(s===selected){input.value=s.draft;render();}}
  }
  function renderControls(){
@@ -72,10 +76,11 @@ export function installSideChat({api,context,renderItem,notify,selectionChanged=
  function render(){
   selectionChanged();const s=selected;if(!s)return;
   renderControls();const key=JSON.stringify([s.id,s.selections.map(p=>p.text)]);if(key!==fragmentsKey){fragmentsKey=key;fragments.hidden=!s.selections.length;label.textContent=s.selections.length+' 个已选文本片段';quotes.replaceChildren();s.selections.forEach((p,i)=>{const q=el('blockquote','',''+(i+1)+'. '+p.text);q.append(button('移除',()=>{s.selections.splice(i,1);render();}));quotes.append(q);});}
-  if(renderedId!==s){cache.clear();renderedId=s;follow.reset();}const next=document.createDocumentFragment();if(!s.turns.length){const empty=el('div','side-chat-empty');empty.append(icon('chat'),el('strong','','围绕选文继续聊'),el('p','','与主聊天分开讨论，保留当前上下文。'));next.append(empty);}
+  if(renderedId!==s){cache.clear();renderedId=s;follow.reset();}const receipts=sendReceipts.view(s,s.turns),next=document.createDocumentFragment();if(!s.turns.length&&!receipts.length){const empty=el('div','side-chat-empty');empty.append(icon('chat'),el('strong','','围绕选文继续聊'),el('p','','与主聊天分开讨论，保留当前上下文。'));next.append(empty);}
   const opened=new Set([...output.querySelectorAll('details[open][data-item-id]')].map(n=>n.dataset.itemId));
   const itemNode=(item,turn)=>cache.render(turn.id+':'+item.id,JSON.stringify(item),()=>{const node=renderItem(item,{threadId:s.id,side:true,refresh:()=>{cache.clear();render();}});node.dataset.messageId=item.id;return node;});
   for(const turn of s.turns){const node=el('section','message-turn');node.dataset.turnId=turn.id;for(const group of timedTurnGroups(turn)){if(group.type==='duration'){node.append(el('div','turn-duration',group.label));}else if(group.type==='message')node.append(itemNode(group.item,turn));else{const process=el('details','activity-group process-group');process.dataset.itemId='side-process-'+turn.id+'-'+group.key;process.open=opened.has(process.dataset.itemId);const label=el('summary');label.append(icon('chevron'),el('span','',group.durationLabel||'查看过程'));const body=el('div','activity-items');group.items.forEach(item=>body.append(itemNode(item,turn)));process.append(label,body);node.append(process);}}if(turn.error)node.append(el('div','turn-error',turn.error.message||String(turn.error)));next.append(node);}
+  for(const receipt of receipts){const node=cache.render('receipt:'+receipt.id,receipt.status,()=>{const node=renderItem({id:receipt.id,type:'userMessage',content:receipt.content},{threadId:s.id,side:true});node.dataset.sendReceipt=receipt.id;const status=el('div','user-message-time',sendReceiptLabels[receipt.status]);status.setAttribute('role','status');node.append(status);return node;});next.append(node);}
   reconcileMessages(output,next);cache.bind(output);follow.schedule();resize();
  }
  async function refresh(){const s=selected;if(!s||s.refreshing)return;if(!s.id){await create(s);return;}s.refreshing=true;try{s.updatedTurns=new Set();const data=await api('/api/threads/'+s.id+'/side-chat-view');const updated=s.updatedTurns;s.turns=[...data.turns.filter(t=>!updated.has(t.id)),...s.turns.filter(t=>updated.has(t.id))];if(!updated.size)s.active=data.thread.status?.type==='active';s.error=s.uncertain?'上次发送结果未确认，请核对回复后再继续。':'';}catch(e){s.error=e.message;if(e.code==='SIDE_CHAT_EXPIRED')s.expired=true;}finally{s.refreshing=false;s.updatedTurns=null;}if(s===selected)render();}
