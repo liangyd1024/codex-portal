@@ -76,9 +76,10 @@ test('automatic latest checks coalesce across entries, cache failures and never 
   time+=60001;await writeUpdate(u.file,{phase:'testing',pid:process.pid,startedAt:time});await u.checkLatest();assert.equal(calls,4);
  }finally{off();}
 });
-test('independent entries observe atomic background update writes through one shared watcher',async()=>{
+test('independent entries observe atomic background update writes through one shared watcher',async t=>{
  const dir=await mkdtemp(path.join(tmpdir(),'rcm-update-watch-'));
  const u=new WebUpdate({supportDir:dir,root:dir,version:baseline});
+ let publishCalls=0;const publish=u.publish.bind(u);u.publish=()=>{publishCalls++;return publish();};
  let a,b;const first=new Promise(resolve=>{a=resolve;}),second=new Promise(resolve=>{b=resolve;});
  const off1=u.subscribe(data=>{if(data.job)a(data);}),off2=u.subscribe(data=>{if(data.job)b(data);});let deadline;
  try{
@@ -86,6 +87,10 @@ test('independent entries observe atomic background update writes through one sh
   const timeout=new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('No update event')),4000);});
   const results=await Promise.race([Promise.all([first,second]),timeout]);
   assert.equal(results[0].job.targetVersion,target);assert.deepEqual(results[0],results[1]);
+ }catch(error){
+  let fileState;try{const data=JSON.parse(await readFile(u.file,'utf8'));fileState={phase:data.phase,targetMatches:data.targetVersion===target};}catch(readError){fileState={readError:readError.code||readError.name};}
+  t.diagnostic(JSON.stringify({publishCalls,listeners:u.listeners.size,publishing:Boolean(u.publishing),fileState}));
+  throw error;
  }finally{clearTimeout(deadline);off1();off2();}
 });
 
