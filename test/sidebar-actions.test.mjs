@@ -143,7 +143,7 @@ test('archive reads native history without opening passive history or taking own
  m.passive=async(action,p)=>{if(action==='history')assert.fail('must not open the passive history database');return passive(action,p);};
  m.rpc.request=async(method,p)=>{if(method==='thread/turns/list'){calls.push([method,p]);return {data:[{status:'completed'}]};}return rpc(method,p);};
  await sidebarAction(m,input('archive'));
- assert.deepEqual(calls.find(([name])=>name==='thread/turns/list'),['thread/turns/list',{threadId:'t',limit:5}]);
+ assert.deepEqual(calls.find(([name])=>name==='thread/turns/list'),['thread/turns/list',{threadId:'t',limit:5,sortDirection:'desc',itemsView:'summary'}]);
  assert.equal(calls.filter(([name])=>name==='thread/archive').length,1);
  assert.ok(!calls.some(([name])=>/resume|interrupt|start$/.test(name)));
 });
@@ -160,6 +160,67 @@ test('archive refuses unavailable native history without attempting a write',asy
  const {m,input,calls}=fixture();m.service.protocolValidation.unsupportedMethods.push('thread/turns/list');
  await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='FEATURE_UNAVAILABLE');
  assert.ok(!calls.some(([name])=>['thread/turns/list','thread/archive','desktop-notify'].includes(name)));
+});
+
+function failedThreadFixture(turns=[{id:'failed-turn',status:'failed',completedAt:123}]){
+ const f=fixture(),request=f.m.rpc.request;
+ f.m.rpc.request=async(method,p)=>{
+  if(method==='thread/read'){f.calls.push([method,p]);return {thread:{status:{type:'systemError'}}};}
+  if(method==='thread/turns/list'){f.calls.push([method,p]);return {data:turns};}
+  return request(method,p);
+ };
+ return f;
+}
+test('native systemError archives terminal history once without resuming or retrying execution',async()=>{
+ const {m,input,calls}=failedThreadFixture([{status:'failed'},{status:'interrupted'},{status:'completed'}]);
+ await sidebarAction(m,input('archive'));
+ assert.equal(calls.filter(([name])=>name==='thread/archive').length,1);
+ assert.equal(calls.filter(([name])=>name==='thread/read').length,1);
+ assert.equal(calls.filter(([name])=>name==='thread/turns/list').length,1);
+ assert.ok(!calls.some(([name])=>/resume|interrupt|start$/.test(name)));
+ assert.equal(calls.at(-1)[0],'desktop-notify');
+});
+test('systemError without terminal history fails closed and records status-only diagnostics',async()=>{
+ for(const turns of [[],[{id:'x',status:'unknown',text:'private content'}],[null]]){
+  const {m,input,calls}=failedThreadFixture(turns),records=[];m.record=(...args)=>records.push(args);
+  await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='STATUS_UNKNOWN'&&e.details.threadStatus==='systemError'&&e.message.includes('连接诊断'));
+  assert.equal(records.length,1);assert.equal(records[0][2].diagnosticOnly,true);
+  assert.ok(!records[0][0].message.includes('private content'));
+  assert.ok(!calls.some(([name])=>name==='thread/archive'||name==='desktop-notify'));
+ }
+});
+test('failed thread still refuses running turns, background work, queues, goals and pending requests',async()=>{
+ for(const busy of ['turn','background','queue','goal','request','question']){
+  const {m,input,calls}=failedThreadFixture(busy==='turn'?[{status:'inProgress'}]:undefined),request=m.rpc.request;
+  m.rpc.request=async(method,p)=>{
+   if(method==='thread/backgroundTerminals/list'&&busy==='background')return {data:[{}]};
+   if(method==='thread/queue/list'&&busy==='queue')return {data:[{}]};
+   if(method==='thread/goal/get'&&busy==='goal')return {goal:{status:'active'}};
+   return request(method,p);
+  };
+  if(busy==='request')m.requests=new Map([['r',{threadId:'t'}]]);
+  if(busy==='question')m.pendingQuestions={entries:new Map([['q',{threadId:'t'}]])};
+  await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='THREAD_BUSY');
+  assert.ok(!calls.some(([name])=>name==='thread/archive'));
+ }
+});
+test('archive rechecks connection, account and activity after asynchronous checks',async()=>{
+ for(const change of ['connection','account','turn','request']){
+  const {m,input,calls}=failedThreadFixture(),request=m.rpc.request;
+  m.rpc.request=async(method,p)=>{
+   const result=await request(method,p);
+   if(method==='thread/queue/list'){
+    if(change==='connection')m.generation=1;
+    if(change==='account')m.accountRevision=1;
+    if(change==='turn')m.activeTurns.set('t','new-turn');
+    if(change==='request')m.requests=new Map([['r',{threadId:'t'}]]);
+   }
+   return result;
+  };
+  await assert.rejects(sidebarAction(m,input('archive')),e=>['CONNECTION_CHANGED','THREAD_BUSY'].includes(e.code));
+  assert.ok(!calls.some(([name])=>name==='thread/archive'||name==='desktop-notify'));
+  assert.equal(m.sidebarMutation,false);
+ }
 });
 
 function queuedUI(api,changed=async()=>{}){
