@@ -104,11 +104,11 @@
 .composer-goal textarea{font-family:var(--font-ui);font-size:16px;line-height:1.625;border:1px solid var(--line,#ddd);border-radius:8px;color:inherit;background:transparent}.goal-edit-actions{display:flex;justify-content:flex-end;gap:8px}.goal-edit-actions button{min-height:44px}.goal-edit-actions button[type=submit]{background:#000;color:#fff}.composer-goal [role=status]:empty{display:none}
 
 /* Native goal controls stay next to the composer, without an expand action. */
-.goal-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;max-width:var(--conversation-width);margin:0 auto 8px;padding:4px 8px 4px 14px;border:1px solid var(--line,#ddd);border-radius:16px;background:var(--panel,#fff);color:var(--ink,#242825);box-sizing:border-box}
+.goal-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;max-width:var(--conversation-width);margin:0 auto 8px;padding:4px 8px 4px 14px;border:1px solid var(--control-border-color);border-radius:var(--panel-radius);background:var(--control-background);color:var(--control-foreground);box-sizing:border-box}
 .goal-toolbar[hidden],.goal-toolbar button[hidden]{display:none}
-.goal-toolbar>.icon{width:20px;height:20px;color:#888;flex-shrink:0}
+.goal-toolbar>.icon{width:20px;height:20px;color:var(--control-foreground);flex-shrink:0}
 .goal-toolbar-info{display:flex;align-items:baseline;gap:8px;flex:1;min-width:0;flex-wrap:wrap}.goal-toolbar strong{font-size:16px;font-weight:550}.goal-toolbar-usage{font-size:14px;color:#888;overflow-wrap:anywhere}
-.goal-toolbar button{width:44px;height:44px;display:grid;place-items:center;flex-shrink:0;border:0;border-radius:8px;background:transparent;color:#777}
+.goal-toolbar button{width:44px;height:44px;display:grid;place-items:center;flex-shrink:0;border:0;border-radius:var(--control-radius);background:transparent;color:var(--control-foreground)}
 .goal-toolbar button .icon{width:20px;height:20px}.goal-toolbar button:hover:not(:disabled){background:var(--soft,#f5f5f5)}.goal-toolbar .goal-clear:hover:not(:disabled){color:#a53f3f}.goal-toolbar button:disabled{opacity:.4;cursor:not-allowed}.goal-toolbar button:focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:2px}
 .goal-toolbar-feedback{flex-basis:100%;font-size:14px;color:#a53f3f;overflow-wrap:anywhere}.goal-toolbar-feedback:empty{display:none}
 
@@ -116,3 +116,10 @@
 .composer #interrupt[aria-busy="true"]{width:auto;padding:0 10px;gap:6px;border-radius:8px}
 .composer #interrupt[aria-busy="true"] span{display:inline;font-size:14px;white-space:nowrap}
 .composer #interrupt[aria-busy="true"] .icon{width:16px;height:16px}
+
+/* Composer and its sibling goal bar share system interaction tokens. */
+.composer{border-color:var(--control-border-color);border-radius:var(--panel-radius);background:var(--control-background)}
+.composer #guide-message{min-width:44px;min-height:36px;padding:6px 10px;border:1px solid var(--control-border-color);border-radius:var(--control-radius);background:var(--control-background);color:var(--control-foreground);font:inherit;font-size:14px;line-height:1.5;white-space:nowrap}
+.composer #guide-message:hover:not(:disabled){background:var(--control-hover-background)}
+.composer #guide-message:disabled{color:#888;border-color:#aaa;opacity:.55}
+@media(max-width:700px){.composer #guide-message{min-height:44px}}

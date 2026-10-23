@@ -550,3 +550,6 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .conversation>.composer-region>.conversation-requests:has(.question-form){max-height:50dvh}
 .mobile-layout .conversation>.composer-region:has(.question-form){max-height:85%}
 .mobile-layout .composer-region>.conversation-requests:has(.question-form){max-height:calc(var(--visual-height,100dvh) * .55)}
+
+/* Shared interaction tokens: keep separate from structural divider colors. */
+:root{--control-border-color:#000;--control-background:#fff;--control-foreground:#000;--control-hover-background:#f5f5f5;--control-radius:8px;--panel-radius:18px}
