@@ -80,7 +80,7 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
       if(p==='/api/access/ca'&&!remote&&req.method==='GET'&&mobileConfig){res.writeHead(200,{'Content-Type':'application/x-x509-ca-cert','Content-Disposition':'attachment; filename="Codex-Local-CA.crt"'});return res.end(await readFile(mobileConfig.ca));}
       if(p==='/api/access/qr'&&!remote&&req.method==='GET'&&mobileConfig){const name=url.searchParams.get('kind')==='tailscale'?'tailscale.png':'lan.png';res.writeHead(200,{'Content-Type':'image/png'});return res.end(await readFile(path.join(path.dirname(mobileConfig.ca),name)));}
       if(req.method==='GET'&&p==='/api/connections')return json(res,200,{machineId:config.machineId,defaultConnection:config.defaultConnection,data:[...managers].map(([id,m])=>({id,host:publicHost(m.host),connection:m.connection}))});
-      if(req.method==='GET'&&p==='/api/system/update')return json(res,200,await updater.status());
+      if(req.method==='GET'&&p==='/api/system/update'){if(url.searchParams.get('check')==='1')void updater.checkLatest?.().catch(()=>{});return json(res,200,await updater.status());}
       if(req.method==='GET'&&p==='/api/version')return json(res,200,{version:BUILD_VERSION,machineId:config.machineId});
       const targetKey=url.searchParams.get('host')||config.defaultConnection;
       const manager=managers.get(targetKey);
@@ -92,7 +92,10 @@ export function createApp({mobileConfig=null,setupMobile=null,access=new MobileA
         for(const request of manager.status().pendingRequests||[])res.write(`data: ${JSON.stringify({method:'manager/request',params:request})}\n\n`);
         const heartbeat=setInterval(()=>{if(remote&&!access.valid(req)){res.end();clients.delete(res);}else res.write(': ping\n\n');},15000);
         res.mobileRequest=remote?req:null;
-        req.on('close',()=>{clearInterval(heartbeat);clients.delete(res);});return;
+        const sendUpdate=data=>{if(res.destroyed||res.writableEnded)return;if(res.writableLength>8*1024*1024){res.destroy();return;}res.write(`event: system/update\ndata: ${JSON.stringify(data)}\n\n`);};
+        const unsubscribe=updater.subscribe?.(sendUpdate);
+        void updater.status().then(sendUpdate).catch(()=>{});
+        res.once('close',()=>{clearInterval(heartbeat);unsubscribe?.();clients.delete(res);});return;
       }
       if(req.method==='GET'&&p==='/api/account/usage')return json(res,200,await readAccountUsage(manager));
       if(req.method==='GET'&&p==='/api/system/deployment-status'){if(remote)throw new AppError('仅限本机部署检查。',403);return json(res,200,await deploymentStatus(manager));}

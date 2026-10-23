@@ -57,3 +57,33 @@ test('a terminal worker still releasing its lock cannot be stopped by the next u
 test('matching production version fetches and compares but never tests, checks targets or redeploys',async()=>{
  const f=fixture({target:baseline,busy:true});assert.equal(await updateWorkflow(f.options),baseline);assert.ok(f.calls.some(([c,a])=>c==='git'&&a.includes('fetch')));assert.ok(!f.calls.some(([c])=>c==='npm'||c===process.execPath));assert.equal(f.stages.at(-1)[2].targetVersion,baseline);
 });
+test('automatic latest checks coalesce across entries, cache failures and never fetch or deploy',async()=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'rcm-latest-')),root=path.join(dir,'release');
+ await writeFile(path.join(dir,'installed.json'),JSON.stringify({app:root,commit:baseline,sourceRoot:'/source',sourceRemote:'git@example:repo'}));
+ let calls=0,time=100000,fail=false;const events=[];
+ const u=new WebUpdate({supportDir:dir,root,version:baseline,now:()=>time,run:async(command,args)=>{
+  calls++;assert.equal(command,'git');assert.ok(['remote','ls-remote'].includes(args[2]));
+  if(args[2]==='remote')return {stdout:'git@example:repo\n'};
+  if(fail)throw Error('offline');return {stdout:target+'\trefs/heads/master\n'};
+ }});
+ if(process.platform!=='darwin')return;
+ const off=u.subscribe(data=>events.push(data));
+ try{
+  await Promise.all([u.checkLatest(),u.checkLatest(),u.checkLatest()]);assert.equal(calls,2);assert.equal(events.at(-1).latest.version,target);
+  await u.checkLatest();assert.equal(calls,2);
+  time+=60001;fail=true;await u.checkLatest();await u.checkLatest();assert.equal(calls,4);assert.match((await u.status()).latest.error,/无法检查/);
+  time+=60001;await writeUpdate(u.file,{phase:'testing',pid:process.pid,startedAt:time});await u.checkLatest();assert.equal(calls,4);
+ }finally{off();}
+});
+test('independent entries observe atomic background update writes through one shared watcher',async()=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'rcm-update-watch-'));
+ const u=new WebUpdate({supportDir:dir,root:dir,version:baseline});
+ let a,b;const first=new Promise(resolve=>{a=resolve;}),second=new Promise(resolve=>{b=resolve;});
+ const off1=u.subscribe(data=>{if(data.job)a(data);}),off2=u.subscribe(data=>{if(data.job)b(data);});let deadline;
+ try{
+  await writeUpdate(u.file,{phase:'succeeded',targetVersion:target});
+  const timeout=new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('No update event')),4000);});
+  const results=await Promise.race([Promise.all([first,second]),timeout]);
+  assert.equal(results[0].job.targetVersion,target);assert.deepEqual(results[0],results[1]);
+ }finally{clearTimeout(deadline);off1();off2();}
+});

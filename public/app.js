@@ -14,7 +14,7 @@ import {configureProjectBrowser} from './project-picker.js';
 let projectFolders;
 import {installCapacityRetry} from './capacity-retry.js';
 let capacityRetry;
-import {installSystemUpdate} from './system-update.js';
+import {installSystemUpdate,createVersionSync} from './system-update.js';
 import {installAccountUsage} from './account-usage.js';
 let refreshAccountUsage;
 import {sendAfterGoal} from './goal-submit.js';
@@ -1376,6 +1376,14 @@ function scheduleStreamRender(kind='all') {
 let detailRefreshTimer, listRefreshTimer;
 function scheduleDetailRefresh() { if(detailRefreshTimer)return; detailRefreshTimer = setTimeout(() => { detailRefreshTimer=null; if (usable() && state.selectedId) refreshSelected().catch(e => recordError(e,'thread')); },650); }
 function scheduleListRefresh() { clearTimeout(listRefreshTimer); listRefreshTimer = setTimeout(() => { if (usable()) loadThreads(false,false,true); },1000); }
+const webVersionSync=createVersionSync({flush:()=>{flushDrafts();if(state.drafts.warned)throw Error("Draft persistence failed");},reload:()=>location.reload(),onError:()=>toast('草稿保存失败，请保留当前页面。',true)});
+function receiveWebUpdate(data){
+ webVersionSync.receive(data);
+ window.dispatchEvent(new CustomEvent('rcm:system-update',{detail:data}));
+}
+document.addEventListener('compositionstart',webVersionSync.compositionStart);
+document.addEventListener('compositionend',webVersionSync.compositionEnd);
+
 function handleEvent(event) {
   let data; try { data = JSON.parse(event.data); } catch { return; }
   const method = data.method || event.type, p = data.params || {};
@@ -1460,6 +1468,7 @@ function setupEvents() {
     const restored = !state.transport; state.transport = true; renderStatus();
     if (restored) resumeWorkspace().catch(e => { recordError(e,'sync'); renderStatus(); });
   };
+  es.addEventListener('system/update',event=>{if(state.eventSource===es)receiveWebUpdate(JSON.parse(event.data));});
   es.onmessage = handleEvent;
   ['manager/status','manager/error','manager/request','manager/requestResolved'].forEach(name => es.addEventListener(name,handleEvent));
   es.onerror = () => { state.transport = false; renderStatus(); };
@@ -1629,8 +1638,8 @@ function wireEvents() {
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {
-  let settingsInstalled=false,mobileInstalled=false;
-  const loadSettings=()=>{if(settingsInstalled)return;settingsInstalled=true;installSystemUpdate({api,flush:flushDrafts,resetCsrf:()=>{state.csrf='';}});};
+  let systemUpdate=null,mobileInstalled=false;
+  const loadSettings=()=>{systemUpdate??=installSystemUpdate({api,flush:flushDrafts,resetCsrf:()=>{state.csrf='';}});void systemUpdate.open();};
   const loadMobile=()=>{if(mobileInstalled)return;mobileInstalled=true;installMobile(api).catch(e=>{$('mobile-access-body').textContent=messageOf(e);});};
   refreshAccountUsage=installAccountUsage({node:$('account-usage'),identityNode:$('account-identity'),api,connected,context:()=>targetHost+':'+state.status?.instanceId+':'+state.status?.connection?.connectedAt});
   $('account-usage').addEventListener('click',()=>toast($('account-usage').title));
