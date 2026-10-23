@@ -30,8 +30,6 @@ async function checkEntrance(){
  await checkDeploymentEntrance({localConnectionId,allowedPendingRequestKeys,onWaiting:message=>console.log('正在重新核对：'+message)});
 }
 if(existing)await checkEntrance();
-const backup=JSON.parse(run('/usr/bin/python3',[path.join(root,'scripts/data-backup.py'),'backup']));
-console.log('部署前加密备份：'+backup.archive);
 try{await stat(app);if((await readFile(path.join(app,'VERSION'),'utf8')).trim()!==commit)throw Error('已有版本目录不完整，请手动检查：'+app);}catch(error){if(error.code!=='ENOENT')throw error;await mkdir(app,{recursive:true,mode:0o700});const archive=spawnSync('git',['-C',root,'archive',commit],{maxBuffer:64*1024*1024});if(archive.status!==0)throw Error('无法导出版本');run('/usr/bin/tar',['-xf','-','-C',app],{input:archive.stdout});await writeFile(path.join(app,'VERSION'),commit+'\n',{mode:0o600});}
 const escape=v=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const plist=`<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array><string>${escape(process.execPath)}</string><string>${escape(path.join(app,'server.mjs'))}</string></array><key>WorkingDirectory</key><string>${escape(app)}</string><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>ProcessType</key><string>Interactive</string><key>Umask</key><integer>63</integer><key>StandardOutPath</key><string>${escape(path.join(logs,'web.stdout.log'))}</string><key>StandardErrorPath</key><string>${escape(path.join(logs,'web.stderr.log'))}</string></dict></plist>`;
@@ -46,7 +44,7 @@ try{
  let healthy=false;
  for(let i=0;i<90;i++){try{const r=await fetch('http://127.0.0.1:4317/api/version',{signal:AbortSignal.timeout(1000)});if(r.ok&&(await r.json()).version===commit){healthy=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}
  if(!healthy)throw Error('新版本未通过健康检查。');
- await writeFile(path.join(supportDir,'installed.json'),JSON.stringify({commit,sourceRoot:root,sourceRemote:run('git',['-C',root,'remote','get-url','origin']),machineId:config.machineId,app,installedAt:new Date().toISOString(),backup:backup.archive,previousPlist:previous?previousFile:null}),{mode:0o600});
+ await writeFile(path.join(supportDir,'installed.json'),JSON.stringify({commit,sourceRoot:root,sourceRemote:run('git',['-C',root,'remote','get-url','origin']),machineId:config.machineId,app,installedAt:new Date().toISOString(),previousPlist:previous?previousFile:null}),{mode:0o600});
  console.log(`已部署 ${commit}，本机网页：http://127.0.0.1:4317`);
 }catch(error){
  await lifecycle.stop();
