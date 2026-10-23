@@ -109,11 +109,11 @@ test('running skill selection rejects stale paths and connection changes before 
  }
 });
 
-test('editing an existing running goal preserves its native status and budget',async()=>{
+test('editing a running goal follows native active status without replacing its budget',async()=>{
  const {m,calls}=fixture();m.controlled.set('a',{status:{type:'active'}});m.activeTurns.set('a','turn');
  const request=m.rpc.request;m.rpc.request=async(method,params)=>method==='thread/goal/get'?{goal:{objective:'原目标',status:'active',tokenBudget:500}}:request(method,params);
  await setGoal(m,'a',{objective:' 新目标 ',expectedObjective:'原目标'});
- assert.deepEqual(calls,[{method:'thread/goal/set',params:{threadId:'a',origin:'user',objective:'新目标'}}]);
+ assert.deepEqual(calls,[{method:'thread/goal/set',params:{threadId:'a',origin:'user',objective:'新目标',status:'active'}}]);
  await assert.rejects(setGoal(m,'a',{objective:'旧修改',expectedObjective:'过期目标'}),e=>e.code==='GOAL_CHANGED');
  await assert.rejects(setGoal(m,'a',{objective:'新目标',expectedObjective:'原目标',status:'active'}),/参数无效/);
  assert.equal(calls.length,1);
@@ -157,4 +157,13 @@ test('unchanged edit still detects stale state; internal whitespace remains a re
  await assert.rejects(setGoal(m,'a',{objective:'旧目标',expectedObjective:'旧目标'}),e=>e.code==='GOAL_CHANGED');assert.equal(calls.length,0);
  await setGoal(m,'a',{objective:'当前 目标',expectedObjective:'当前目标'});
  assert.equal(calls.length,1);assert.equal(calls[0].params.objective,'当前 目标');
+});
+
+test('editing paused or blocked goals resumes through the native goal request only',async()=>{
+ for(const status of ['paused','blocked','budgetLimited','usageLimited']){
+  const {m,calls}=fixture();m.controlled.set('a',{status:{type:'idle'}});
+  const request=m.rpc.request;m.rpc.request=async(method,params)=>method==='thread/goal/get'?{goal:{objective:'原目标',status,tokenBudget:500}}:request(method,params);
+  await setGoal(m,'a',{objective:'调整后的目标',expectedObjective:'原目标'});
+  assert.deepEqual(calls,[{method:'thread/goal/set',params:{threadId:'a',origin:'user',objective:'调整后的目标',status:'active'}}]);
+ }
 });
