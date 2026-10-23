@@ -16,6 +16,7 @@ function setup({titleStore=null,read,write,send,goal}={}) {
     if(method==='account/read')return {account:{type:'chatgpt'}};
     if(method==='thread/start')return {thread:{id:'t',cwd:'/project',status:{type:'idle'}}};
     if(method==='turn/start')return send?send():{turn:{id:'turn',status:'completed'}};
+    if(method==='thread/goal/get')return {goal:null};
     if(method==='thread/goal/set')return goal?goal():{goal:{objective:params.objective,status:'active'}};
     if(method==='thread/read')return read?read():{thread:{id:'t',name:null}};
     if(method==='thread/name/set')return write?write():{};
