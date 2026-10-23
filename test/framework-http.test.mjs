@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
+import {Readable} from 'node:stream';
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import path from 'node:path';
@@ -110,6 +111,93 @@ test('mobile setup keeps validation, CSRF order and setup callback behavior',asy
    assert.equal(records[2].status,200);assert.equal(records[3].status,200);
    outcomes.push({records,status});
   }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
+
+test('Fastify preserves file bytes, range and HEAD semantics with transfer cleanup',async()=>{
+ const outcomes=[];
+ const requests=[
+  ['?mode=content',{}],['?mode=download',{}],['?mode=text',{}],['?mode=meta',{}],
+  ['?mode=content',{method:'HEAD'}],
+  ['?reference=opaque%2Fref',{headers:{range:'bytes=2-5','if-range':'"fixture"'}}],
+  ['',{headers:{range:'bytes=99-'}}],['?mode=invalid',{}],
+ ];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),records=[];
+  try{
+   for(const [query,init] of requests){
+    const calls=[];let cancellations=0;
+    env.managers.get('b').openFile=async(thread,item,options)=>{
+     calls.push({thread,item,options});
+     const content=Buffer.from('0123456789'),partial=options.range==='bytes=2-5',invalid=options.range==='bytes=99-';
+     return {meta:invalid?{error:'请求范围无效。',status:416,size:10}:{
+      status:partial?206:200,size:10,length:partial?4:10,start:partial?2:0,end:partial?5:9,
+      name:'验收文件 (1).txt',mime:'text/plain; charset=utf-8',etag:'"fixture"',kind:'text',
+     },body:Readable.from([partial?content.subarray(2,6):content]),cancel(){cancellations++;}};
+    };
+    const response=await fetch(env.base+'/api/threads/qa-thread/items/qa-item/file'+(query?query+'&host=b':'?host=b'),init);
+    const bytes=Buffer.from(await response.arrayBuffer()).toString('hex');
+    // Allow the server's pipeline finally block to run after the client receives EOF.
+    await new Promise(resolve=>setImmediate(resolve));
+    records.push({status:response.status,bytes,calls,cancellations,headers:Object.fromEntries([
+     'content-type','content-length','content-disposition','content-range','accept-ranges','etag','cache-control','content-security-policy',
+    ].map(key=>[key,response.headers.get(key)]))});
+   }
+   assert.deepEqual(records.map(r=>r.status),[200,200,200,200,200,206,416,400]);
+   assert.equal(records[0].bytes,Buffer.from('0123456789').toString('hex'));
+   assert.equal(records[4].bytes,'');assert.equal(records[5].bytes,Buffer.from('2345').toString('hex'));
+   assert.equal(records[5].headers['content-range'],'bytes 2-5/10');
+   assert.equal(records[6].headers['content-range'],'bytes */10');
+   assert.equal(records[5].calls[0].options.reference,'opaque/ref');
+   assert.equal(records[5].calls[0].options.ifRange,'"fixture"');
+   assert.equal(records[4].calls[0].options.head,true);
+   assert.ok(records.slice(0,7).every(r=>r.cancellations>=1));assert.equal(records[7].calls.length,0);
+   outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
+
+test('Fastify keeps connection and thread action dispatch including native error details',async()=>{
+ const routes=[
+  ['/api/connect','connect',[]],['/api/disconnect','disconnect',[]],
+  ['/api/account/reload','reloadLogin'],['/api/service/release','release'],
+  ['/api/notices/ack','acknowledgeNotice',['notice-key']],['/api/diagnostics/clear','clearDiagnosticHistory',[]],
+  ['/api/threads/qa-thread/takeover','takeover',['qa-thread']],
+  ['/api/threads/qa-thread/handoff','handoff',['qa-thread']],
+  ['/api/threads/qa-thread/interrupt','interrupt',['qa-thread']],
+  ['/api/threads/qa-thread/steer','steer'],['/api/threads/qa-thread/question-answer','answerQuestions'],
+ ];
+ const payload={key:'notice-key',text:'中文原文\n第二行',future:{keep:[1,{unknown:true}]}};
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),records=[];
+  try{
+   for(const [route,method,explicitArgs] of routes){
+    const args=explicitArgs??(route.startsWith('/api/threads/')?['qa-thread',payload]:[payload]);
+    for(const failure of [false,true]){
+     // connect intentionally acknowledges immediately while its asynchronous failure is handled.
+     if(failure&&method==='connect')continue;
+     const calls=[];
+     env.managers.get('b')[method]=(...values)=>{
+      calls.push(values);
+      if(failure)throw Object.assign(new Error('原生拒绝：保持原文。'),{status:409,code:'NATIVE_BUSY',details:{future:['原文',7]}});
+      return {ok:true,unknown:{verbatim:'保留'}};
+     };
+     const response=await fetch(env.base+route+'?host=b',{method:'POST',headers:{'x-csrf-token':env.token},body:JSON.stringify(payload)});
+     const data=await response.json();
+     assert.deepEqual(calls,[args],route);
+     assert.equal(response.status,failure?409:method==='connect'?202:200,route);
+     if(failure)assert.deepEqual(data,{error:{message:'原生拒绝：保持原文。',code:'NATIVE_BUSY',details:{future:['原文',7]}}});
+     records.push({route,failure,status:response.status,data,calls});
+    }
+   }
+   outcomes.push(records);
+  }finally{
+   // Teardown is separate from the intentionally failing disconnect route case.
+   env.managers.get('b').disconnect=()=>{};await env.close();
+  }
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
