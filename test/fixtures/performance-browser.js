@@ -1,0 +1,46 @@
+// Optional benchmark UI for the isolated static comparison server only.
+(() => {
+ const f=window.rcmFixture;
+ const rows=Array.from({length:200},(_,i)=>({id:'perf-'+i,status:'completed',items:[
+  {id:'perf-user-'+i,type:'userMessage',content:[{type:'text',text:'性能样本 '+i}]},
+  {id:'perf-answer-'+i,type:'agentMessage',text:'## 样本 '+i+'\n\n'+'固定中文段落与标点。'.repeat(100)+'\n\n```text\nfixed code\n```'}
+ ]}));
+ f.turns.set('qa-a',rows);
+ addEventListener('DOMContentLoaded',()=>{
+  const panel=document.createElement('details');panel.style.cssText='position:fixed;top:56px;right:4px;z-index:100000;background:white;border:1px solid black;max-height:65vh;overflow:auto;max-width:330px';
+  const summary=document.createElement('summary');summary.textContent='性能验收控制';panel.append(summary);
+  const button=document.createElement('button');button.textContent='测量五次尾部更新';button.style.minHeight='44px';panel.append(button);
+  const out=document.createElement('pre');out.setAttribute('aria-label','性能测量记录');out.style.whiteSpace='pre-wrap';panel.append(out);document.body.append(panel);
+  let serial=0;
+  button.onclick=async()=>{
+   if(button.disabled)return;button.disabled=true;
+   const results=[],nodes=[...document.querySelectorAll('.message-turn')];
+   try{
+    if(nodes.length!==200)throw Error('历史尚未完整显示：'+nodes.length);
+    for(let i=0;i<5;i++){
+     if(!document.hasFocus()||document.visibilityState!=='visible')throw Error('页面必须保持前台焦点');
+     const result=await new Promise((resolve,reject)=>{
+      const token=' 流式计量'+(++serial)+'。',calls=f.calls.length;
+      const tail=document.querySelector('[data-turn-id="perf-199"]');
+      let started,observed=false;
+      const timeout=setTimeout(()=>{observer.disconnect();reject(Error('测量超时'));},10000);
+      const observer=new MutationObserver(()=>{
+       if(observed||!tail?.textContent.includes(token))return;observed=true;observer.disconnect();
+       const domMs=performance.now()-started;
+       requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        clearTimeout(timeout);resolve({domMs,framesMs:performance.now()-started,apiCalls:f.calls.length-calls,focused:document.hasFocus(),visible:document.visibilityState==='visible'});
+       }));
+      });
+      observer.observe(document.getElementById('messages'),{subtree:true,childList:true,characterData:true});
+      requestAnimationFrame(()=>{
+       started=performance.now();rows.at(-1).items.at(-1).text+=token;
+       f.emit('item/agentMessage/delta',{threadId:'qa-a',turnId:'perf-199',itemId:'perf-answer-199',delta:token});
+      });
+     });results.push(result);
+    }
+    out.textContent=JSON.stringify({samples:results,nodeCount:nodes.length,nodesPreserved:nodes.every(n=>n.isConnected),errors:f.errors},null,2);
+   }catch(error){out.textContent=JSON.stringify({error:error.message,samples:results});}
+   finally{button.disabled=false;}
+  };
+ });
+})();
