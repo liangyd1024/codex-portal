@@ -1,7 +1,7 @@
 const labels={active:'进行中的目标',paused:'已暂停的目标',blocked:'已阻塞的目标',budgetLimited:'目标预算已用尽',usageLimited:'目标用量受限',complete:'已完成的目标'};
 export function goalPresentation(goal,error){
  const status=goal?.status;
- return {visible:Boolean(goal||error),label:error?'目标待确认':labels[status]||'目标待确认',action:!error?(status==='active'?'paused':['paused','blocked'].includes(status)?'active':null):null};
+ return {visible:Boolean(error||(goal&&status!=='complete')),label:error?'目标待确认':labels[status]||'目标待确认',action:!error?(status==='active'?'paused':['paused','blocked'].includes(status)?'active':null):null};
 }
 const shapes={goal:'<circle cx="11" cy="13" r="8"/><circle cx="11" cy="13" r="4"/><path d="m11 13 9-9m-5 0h5v5"/>',clear:'<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7m4-7v7"/>',paused:'<circle cx="12" cy="12" r="9"/><path d="M10 8v8m4-8v8"/>',active:'<circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4Z"/>'};
 function icon(kind){return '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">'+shapes[kind]+'</svg>';}
@@ -33,4 +33,24 @@ export function installGoalToolbar({input,context,api,refresh}){
  }
  clear.onclick=()=>mutate(true);toggle.onclick=()=>mutate(false);
  return {render};
+}
+
+// Completion is native goal metadata, never an invented assistant message.
+export function completedGoalPlacement(goal,turns,error){
+ if(error||goal?.status!=='complete')return null;
+ let matching=null;
+ if(Number.isFinite(goal.updatedAt))for(const turn of turns){
+  if(Number.isFinite(turn.startedAt)&&turn.startedAt<=goal.updatedAt&&(!matching||turn.startedAt>matching.startedAt))matching=turn;
+ }
+ return {goal,turnId:matching?.id||null};
+}
+export function renderCompletedGoal(goal){
+ const row=document.createElement('details');row.className='goal-completion';row.setAttribute('aria-label','目标完成记录');
+ row.dataset.itemId='goal-completion-'+goal.createdAt+'-'+goal.updatedAt;
+ const summary=document.createElement('summary');summary.textContent='✓ 目标已完成';
+ const objective=document.createElement('p');objective.className='goal-completion-objective';objective.textContent=goal.objective||'';
+ const meta=document.createElement('p');meta.className='goal-completion-meta';
+ const stamp=Number.isFinite(goal.updatedAt)?new Date(goal.updatedAt*1000):null;
+ meta.textContent=[stamp&&!Number.isNaN(stamp.getTime())?stamp.toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'',Number.isFinite(goal.tokensUsed)?goal.tokensUsed.toLocaleString()+' tokens':'',Number.isFinite(goal.timeUsedSeconds)?Math.floor(goal.timeUsedSeconds)+'秒':''].filter(Boolean).join(' · ');
+ row.append(summary,objective,meta);return row;
 }

@@ -123,3 +123,8 @@
 .composer #guide-message:hover:not(:disabled){background:var(--control-hover-background)}
 .composer #guide-message:disabled{color:#888;border-color:#aaa;opacity:.55}
 @media(max-width:700px){.composer #guide-message{min-height:44px}}
+
+/* Completed goals belong to the transcript as metadata, not composer controls. */
+.goal-completion{margin:12px 0 20px;color:var(--muted,#666);font:14px/1.625 var(--font-ui);max-width:100%}
+.goal-completion summary{cursor:pointer;min-height:44px;display:flex;align-items:center;width:fit-content;border-radius:var(--control-radius,8px);padding:4px 0;color:var(--control-foreground,#000)}
+.goal-completion summary:focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:3px}.goal-completion p{margin:4px 0;overflow-wrap:anywhere}.goal-completion-objective{white-space:pre-wrap}.goal-completion-meta{font-size:14px}

@@ -1,3 +1,4 @@
+import {completedGoalPlacement,renderCompletedGoal} from './goal-toolbar.js';
 import {installQueuedInputs} from './queued-inputs.js';
 let queuedInputs;
 import {createSendReceipts,sendReceiptLabels} from './connection-state.js';
@@ -640,8 +641,9 @@ function renderMessages() {
   $('messages').setAttribute('aria-busy',String(state.loadingDetail||progressiveTurns.pending));
   progressiveTurns.enqueue();
   const receipts=sendReceipts.view(context,turns());
+  const completion=completedGoalPlacement(state.detail?.goal,turns(),state.detail?.goalError||uncertainHistory());
   const nearBottom = scrollFollow?.following ?? true;
-  const shape=JSON.stringify([receipts.map(r=>[r.id,r.status]),state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,backgroundActivity(state.detail,{controlled:controlled(),connected:usable()}),[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],visibleTurns],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
+  const shape=JSON.stringify([completion,receipts.map(r=>[r.id,r.status]),state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,backgroundActivity(state.detail,{controlled:controlled(),connected:usable()}),[...(state.runtimeNotices.get(state.selectedId)?.values()||[])],visibleTurns],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
   if(shape===lastMessageShape){
     for(const turn of visibleTurns)for(const item of turn.items||[]){
       if(item.type!=='commandExecution')continue;
@@ -671,6 +673,7 @@ function renderMessages() {
   if(state.detail?.recovering)n.append(el('div','history-notice','已恢复本机保存的输出，正在同步最新内容…')); 
   for (const notice of state.runtimeNotices.get(state.selectedId)?.values() || []) n.append(renderExtensionNotice(notice));
   if (!turns().length) { const empty = el('div','empty-history'); empty.append(icon('chat'),el('p','','此会话暂无消息。'),el('p','',state.desktopMode ? '通过桌面继续此会话。' : controlled() ? '输入要求，开始目标机器工作。' : '接管后，可以在此会话开始工作。')); n.append(empty); }
+  if(completion&&!completion.turnId)n.append(renderCompletedGoal(completion.goal));
   visibleTurns.forEach(t => {
     const cachedTurn=messageCache.render('turn:'+t.id,renderSignature([renderContext,t]),()=>{
     const turn = el('section','message-turn'); turn.dataset.turnId = t.id;
@@ -710,6 +713,7 @@ function renderMessages() {
     return turn;
     });
     n.append(cachedTurn);
+    if(completion?.turnId===t.id)n.append(renderCompletedGoal(completion.goal));
   });
   for(const receipt of receipts){
     const node=renderItem({id:receipt.id,type:'userMessage',content:receipt.content});
