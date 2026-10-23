@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {turnPreview,loadAllEarlier,turnCountLabel} from '../public/turn-navigation.js';
+import {turnPreview,loadAllEarlier,turnCountLabel,navigationIndex} from '../public/turn-navigation.js';
 test('preview uses the first user input and final answer without splitting steer messages or tools',()=>{
  const turn={id:'native-turn',status:'completed',items:[{type:'userMessage',content:[{type:'text',text:'原始问题'}]},{type:'commandExecution',aggregatedOutput:'private tool output'},{type:'agentMessage',phase:'commentary',text:'过程'},{type:'userMessage',content:[{type:'text',text:'补充'}]},{type:'agentMessage',phase:'final_answer',text:'| 字段 | 值 |\n|---|---|\n| A | B |'}]};
  const before=JSON.stringify(turn),p=turnPreview(turn);assert.equal(p.id,'native-turn');assert.equal(p.question,'原始问题');assert.match(p.answer,/字段/);assert.equal(JSON.stringify(turn),before);
@@ -45,9 +45,22 @@ test('busy history and non-advancing cursors do not produce duplicate requests',
  x.state.loading=false;assert.equal(await loadAllEarlier(x.options),false);assert.equal(calls,1);
 });
 
-test('total is independent of loaded pages and unavailable totals are not guessed',()=>{
- assert.equal(turnCountLabel({totalTurns:231,turns:[{},{}],hasEarlier:true}),'共 231 轮');
- assert.equal(turnCountLabel({turns:[{},{}],hasEarlier:true}),'总数未知');
- assert.equal(turnCountLabel({turns:[{},{}],hasEarlier:false}),'共 2 轮');
+test('navigation counts explicit inputs, never native execution totals',()=>{
+ const turns=[{id:'input',items:[{type:'userMessage'}]},{id:'auto',items:[]}];
+ assert.equal(turnCountLabel({totalTurns:231,turns,hasEarlier:true}),'已加载 1 轮');
+ assert.equal(turnCountLabel({turns,hasEarlier:false}),'共 1 轮');
  assert.equal(turnCountLabel({totalTurns:0,turns:[],hasEarlier:false}),'共 0 轮');
+});
+test('continuations have no tick and reading them retains the preceding input anchor',()=>{
+ const turns=[{id:'older-auto'}, {id:'question',items:[{type:'userMessage',content:[{type:'text',text:'继续执行'}]}]},
+  {id:'auto',items:[{type:'agentMessage',text:'原始回复'}]}, {id:'empty',items:[]},
+  {id:'goal',items:[{type:'goalMessage',objective:'明确设置的目标'}]}, {id:'goal-auto'},
+  {id:'image',items:[{type:'userMessage',content:[{type:'image',url:'test'}]}]}];
+ const before=JSON.stringify(turns),{inputs,owners}=navigationIndex(turns);
+ assert.deepEqual(inputs.map(t=>t.id),['question','goal','image']);
+ assert.equal(owners.get('older-auto'),undefined);
+ assert.equal(owners.get('auto'),'question');assert.equal(owners.get('empty'),'question');
+ assert.equal(owners.get('goal-auto'),'goal');assert.equal(owners.get('image'),'image');
+ assert.equal(turnPreview(inputs[0]).question,'继续执行');
+ assert.equal(JSON.stringify(turns),before);
 });

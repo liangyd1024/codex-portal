@@ -78,7 +78,7 @@ export function processGroupStatus(turn, items, {background={state:'idle'}, unce
   const pending=items.some(item=>['inProgress','in_progress','running'].includes(status(item.status)));
   if(!pending)return '';
   if(uncertain)return '状态未确认';
-  if(['completed','failed','interrupted'].includes(status(turn.status))){
+  if(['completed','failed','interrupted','declined','systemError'].includes(status(turn.status))){
     if(background.terminals?.some(terminal=>terminal.itemId && items.some(item=>item.id===terminal.itemId)))return '后台命令仍在运行';
     return background.state==='unknown'?'状态未确认':'';
   }

@@ -1,5 +1,5 @@
 import {installGoalToolbar} from './goal-toolbar.js';
-import {validateGoalDraft,prepareGoalSubmission} from './goal-submit.js';
+import {validateGoalDraft,prepareGoalSubmission,reconcileGoalSelection} from './goal-submit.js';
 import {installSkillSuggestions} from './skill-suggestions.js';
 import {installInlineMentions,mentionRanges} from './inline-mentions.js';
 export const WEB_ACCESS='full';
@@ -159,6 +159,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
     planCompletion.render();goalToolbar.render();
     const c=context();if(selected!==JSON.stringify([c.id,c.cwd])){selected=JSON.stringify([c.id,c.cwd]);suggestions.close();if(dialog.open)dialog.close();}
     if(!c.ready||c.busy)suggestions.close();
+    reconcileGoalSelection(choice(),c,save);
     syncReferences();mirror.render();
     mode.title=choice().mode==='plan'?'退出计划模式':'计划：先制定方案';
     mode.setAttribute('aria-pressed',String(choice().mode==='plan'));

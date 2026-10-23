@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {prepareGoalSubmission,validateGoalDraft,sendAfterGoal} from '../public/goal-submit.js';
+import {prepareGoalSubmission,validateGoalDraft,sendAfterGoal,reconcileGoalSelection} from '../public/goal-submit.js';
 const options=(selection,api)=>({selection,id:'test',text:'  目标内容  ',active:false,api,save:()=>{}});
 test('goal is set from message without budget only once, including after message failure',async()=>{
  const selection={goalPending:true},calls=[];const api=async(...args)=>{calls.push(args);return {};};
@@ -9,8 +9,8 @@ test('goal is set from message without budget only once, including after message
  assert.equal(selection.goalPending,false);
  await prepareGoalSubmission(options(selection,api));assert.equal(calls.length,1);
 });
-test('blank/image-only, oversized and busy goal submissions are rejected before mutation',async()=>{
- for(const [text,active] of [['',false],['x'.repeat(10001),false],['目标',true]]){
+test('blank/image-only and oversized new goals are rejected before mutation',async()=>{
+ for(const [text,active] of [['',false],['x'.repeat(10001),false]]){
   let calls=0;await assert.rejects(prepareGoalSubmission({...options({goalPending:true},async()=>calls++),text,active}));assert.equal(calls,0);
  }
  assert.doesNotThrow(()=>validateGoalDraft({},'',true));
@@ -51,4 +51,32 @@ test('goal attachments use native steering when running and preserve errors for 
 test('steering preserves selected references but drops next-turn model and permission settings',async()=>{
  let call;await sendAfterGoal({id:'running',active:true,payload:{text:'$skill',images:[],skills:['/skill'],plugins:['plugin'],mode:'plan',model:'other',access:'full'},api:async(...args)=>{call=args;}});
  assert.equal(call[0],'/api/threads/running/steer');assert.deepEqual(call[1].body,{text:'$skill',images:[],skills:['/skill'],plugins:['plugin']});
+});
+
+test('running follow-ups bypass stale goal intent and never call goal/set',async()=>{
+ for(const uncertain of [undefined,'原目标']){
+  const selection={goalPending:true,...(uncertain?{goalUncertain:uncertain}:{})},calls=[];
+  const api=async(...args)=>{calls.push(args);return {};};
+  assert.doesNotThrow(()=>validateGoalDraft(selection,'',true));
+  assert.doesNotThrow(()=>validateGoalDraft(selection,'x'.repeat(10001),true));
+  const goalStarted=await prepareGoalSubmission({...options(selection,api),active:true,text:'补充信息'});
+  assert.equal(goalStarted,false);assert.equal(calls.length,0);
+  await sendAfterGoal({goalStarted,id:'test',payload:{text:'补充信息',images:[]},active:true,api});
+  assert.equal(calls.length,1);assert.equal(calls[0][0],'/api/threads/test/steer');
+  assert.equal(selection.goalUncertain,uncertain);
+ }
+});
+test('confirmed existing goal clears only stale intent, not uncertain receipts or another selection',()=>{
+ for(const status of ['active','paused','blocked']){
+  const selection={goalPending:true,mode:'default',skills:['skill']},another={goalPending:true};let saves=0;
+  reconcileGoalSelection(selection,{goal:{objective:'原目标',status}},()=>saves++);
+  assert.equal(selection.goalPending,false);assert.deepEqual(selection.skills,['skill']);assert.equal(saves,1);
+  reconcileGoalSelection(selection,{goal:{status}},()=>saves++);assert.equal(saves,1);assert.equal(another.goalPending,true);
+ }
+ for(const detail of [{},{goal:null},{goal:{status:'complete'}},{goal:{status:'active'},goalError:'offline'}]){
+  const selection={goalPending:true};reconcileGoalSelection(selection,detail);assert.equal(selection.goalPending,true);
+ }
+ const uncertain={goalPending:true,goalUncertain:'原目标'};
+ reconcileGoalSelection(uncertain,{goal:{objective:'原目标',status:'active'}});
+ assert.equal(uncertain.goalPending,true);assert.equal(uncertain.goalUncertain,'原目标');
 });
