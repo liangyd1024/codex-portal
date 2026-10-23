@@ -88,3 +88,16 @@ test('recovered completion events are distinguished from live native completions
  await m.recoverNotices(rpc,'chat',100);assert.equal(events.some(e=>e.method==='turn/completed'),false);
  m.onNotification({method:'turn/completed',params:event('new','completed')});assert.equal(events.at(-1).replayed,undefined);
 });
+
+// Retained from the older suite: typed IDs and reconnect identity are distinct contracts.
+test('approval and question keys preserve typed IDs, tool identity and host isolation',()=>{
+ const request={id:7,kind:'question',params:{threadId:'chat'}};
+ const notice=(r,host='one')=>taskNotice('manager/request',r,{host,known:true});
+ assert.equal(notice(request).label,'需要你回答');
+ assert.equal(notice(request).urgent,true);
+ assert.notEqual(notice(request).key,notice({...request,id:'7'}).key);
+ assert.notEqual(notice(request).key,notice(request,'two').key);
+ const tool={...request,method:'item/tool/requestUserInput',params:{...request.params,turnId:'turn',itemId:'tool'}};
+ assert.equal(notice(tool).key,notice({...tool,id:99}).key);
+ assert.notEqual(notice(tool).key,notice({...tool,params:{...tool.params,itemId:'other'}}).key);
+});
