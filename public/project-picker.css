@@ -1,12 +1,12 @@
 .new-project-picker{display:none}
 #project-picker-trigger{display:block;max-width:100%;margin:0 auto 20px;min-height:44px;padding:8px 14px;border-radius:10px;background:var(--soft);font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mobile-layout #project-picker-dialog{top:auto;bottom:max(0px,calc(100dvh - var(--visual-top,0px) - var(--visual-height,100dvh)));transform:none;width:100%;max-width:100%;max-height:min(70dvh,calc(var(--visual-height,100dvh) - 12px));margin:0;padding:16px 16px max(16px,env(safe-area-inset-bottom));border:1px solid var(--line);border-radius:20px 20px 0 0;background:#fff;color:var(--ink);overflow:hidden;box-shadow:0 -8px 32px #0002}
+.mobile-layout #project-picker-dialog{top:auto;bottom:max(0px,calc(100dvh - var(--visual-top,0px) - var(--visual-height,100dvh)));transform:none;width:100%;max-width:100%;max-height:min(70dvh,calc(var(--visual-height,100dvh) - 12px));margin:0;padding:16px 16px max(16px,env(safe-area-inset-bottom));border:1px solid var(--control-border-color);border-radius:20px 20px 0 0;background:var(--control-background);color:var(--ink);overflow:hidden;box-shadow:0 -8px 32px #0002}
 #project-picker-dialog[open]{display:flex;flex-direction:column;gap:12px}
 #project-picker-dialog::backdrop{background:#0005}
 #project-picker-dialog header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 #project-picker-dialog h2{font-size:18px;margin:0;font-weight:600}
 #project-picker-dialog header button{font-size:26px;width:44px;height:44px}
-#project-picker-search{flex-shrink:0;width:100%;min-height:44px;padding:10px 12px;font-size:16px;border:1px solid var(--line);border-radius:10px;background:var(--soft);color:var(--ink)}
+#project-picker-search{flex-shrink:0;width:100%;min-height:44px;padding:10px 12px;font-size:16px;border:1px solid var(--control-border-color);border-radius:10px;background:var(--control-background);color:var(--ink)}
 #project-picker-list{min-height:0;overflow-y:auto;overscroll-behavior:contain}
 .project-picker-option{position:relative;display:block;width:100%;min-height:48px;padding:12px 40px 12px 12px;text-align:left;border-radius:10px;background:transparent;font-size:16px;line-height:1.5;overflow-wrap:anywhere}
 .project-picker-option[aria-pressed="true"]{background:var(--green-light);color:var(--green)}
@@ -15,14 +15,14 @@
 #project-picker-empty{text-align:center;color:var(--muted);padding:20px 0;margin:0}
 
 /* Desktop uses a bounded searchable chooser; the compact bottom sheet stays unchanged. */
-#project-picker-dialog{width:440px;max-width:calc(100vw - 32px);max-height: min(560px,calc(100dvh - 48px));padding:16px;border:1px solid var(--line);border-radius:16px;overflow:hidden;color:var(--ink)}
+#project-picker-dialog{width:440px;max-width:calc(100vw - 32px);max-height: min(560px,calc(100dvh - 48px));padding:16px;border:1px solid var(--control-border-color);border-radius:16px;overflow:hidden;color:var(--ink);background:var(--control-background)}
 #project-picker-trigger:hover:not(:disabled){background:var(--green-light)}
 #project-picker-trigger:disabled{opacity:.55;cursor:default}
 #project-picker-dialog :focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:-2px}
 .project-picker-option:hover:not(:disabled){background:var(--soft)}
 
-#project-picker-browse{flex-shrink:0;min-height:44px;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
-#project-folders-dialog{position:fixed;inset:0;margin:auto;transform:none;width:560px;max-width:calc(100vw - 24px);max-height:calc(var(--visual-height,100dvh) - 32px);padding:16px;border:1px solid var(--line);border-radius:16px;background:white;color:var(--ink);overflow:auto}
+#project-picker-browse{flex-shrink:0;min-height:44px;text-align:left;padding:10px 12px;border:1px solid var(--control-border-color);border-radius:10px;background:var(--control-background)}
+#project-folders-dialog{position:fixed;inset:0;margin:auto;transform:none;width:560px;max-width:calc(100vw - 24px);max-height:calc(var(--visual-height,100dvh) - 32px);padding:16px;border:1px solid var(--control-border-color);border-radius:16px;background:var(--control-background);color:var(--ink);overflow:auto}
 #project-folders-dialog[open]{display:flex;flex-direction:column;gap:12px}
 #project-folders-dialog::backdrop{background:#0005}
 #project-folders-dialog header,#project-folders-dialog nav,.folder-location,#project-folders-dialog footer{display:flex;align-items:center;gap:8px;flex-shrink:0}
@@ -30,7 +30,7 @@
 #project-folders-dialog button{min-height:44px;min-width:44px;padding:8px 12px;border-radius:8px;background:var(--soft)}
 #project-folders-dialog :focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:-2px}
 #project-folders-dialog nav{flex-wrap:wrap}.folder-location input{min-width:0;flex:1}
-#project-folders-dialog input:not([type=checkbox]){font:inherit;font-size:16px;min-height:44px;padding:8px;border:1px solid var(--line);border-radius:8px}
+#project-folders-dialog input:not([type=checkbox]){font:inherit;font-size:16px;min-height:44px;padding:8px;border:1px solid var(--control-border-color);border-radius:8px;background:var(--control-background)}
 .folder-create{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.folder-create label{grid-column:1 / -1}.folder-create input{min-width:0}
 .folder-hidden{display:flex;align-items:center;gap:8px;min-height:44px;font-size:14px}.folder-hidden input{width:20px;height:20px}
 .folder-list{min-height:80px;max-height:260px;overflow:auto;overscroll-behavior:contain}.folder-list button{display:block;width:100%;text-align:left;overflow-wrap:anywhere;background:transparent!important}.folder-list button:hover{background:var(--soft)!important}

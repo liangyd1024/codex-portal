@@ -31,7 +31,7 @@
 .mobile-layout #mobile-more{display:block;position:relative}
 .mobile-layout #mobile-more>summary{display:grid;place-items:center;list-style:none;font-size:24px}
 .mobile-layout #mobile-more>summary::-webkit-details-marker{display:none}
-.mobile-layout .mobile-more-panel{position:fixed;z-index:45;top:var(--menu-top,64px);right:max(8px,env(safe-area-inset-right));width:min(300px,calc(100vw - 16px));max-height:var(--menu-height,70dvh);overflow:auto;overscroll-behavior:contain;padding:8px;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 8px 30px #0002}
+.mobile-layout .mobile-more-panel{position:fixed;z-index:45;top:var(--menu-top,64px);right:max(8px,env(safe-area-inset-right));width:min(300px,calc(100vw - 16px));max-height:var(--menu-height,70dvh);overflow:auto;overscroll-behavior:contain;padding:8px;border:1px solid var(--control-border-color);border-radius:12px;background:var(--control-background);box-shadow:0 8px 30px #0002}
 .mobile-layout .mobile-more-panel>:is(button,label){width:100%;display:flex;align-items:center;justify-content:flex-start;font-size:15px;gap:12px;padding:10px 12px;text-align:left;border-radius:8px;margin-bottom:8px}
 .mobile-layout .mobile-control-label{display:inline}
 .mobile-layout #refresh-all{width:100%!important;height:auto!important}
