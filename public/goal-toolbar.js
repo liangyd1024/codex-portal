@@ -1,3 +1,10 @@
+export function goalDuration(seconds){
+ if(!Number.isFinite(seconds)||seconds<0)return '';
+ const minutes=Math.floor(seconds/60);
+ if(!minutes)return '不足1分钟';
+ const hours=Math.floor(minutes/60),remainder=minutes%60;
+ return (hours?hours+'小时':'')+(remainder?remainder+'分钟':'');
+}
 const labels={active:'进行中的目标',paused:'已暂停的目标',blocked:'已阻塞的目标',budgetLimited:'目标预算已用尽',usageLimited:'目标用量受限',complete:'已完成的目标'};
 export function goalPresentation(goal,error){
  const status=goal?.status;
@@ -15,7 +22,7 @@ export function installGoalToolbar({input,context,api,refresh}){
   const c=context(),view=goalPresentation(c.goal,c.goalError);
   bar.hidden=c.draft||c.ephemeral||!view.visible;
   bar.setAttribute('aria-busy',String(pending));label.textContent=view.label;label.title=c.goal?.objective||'';
-  usage.textContent=[Number.isFinite(c.goal?.tokensUsed)?c.goal.tokensUsed.toLocaleString()+' tokens':'',Number.isFinite(c.goal?.timeUsedSeconds)?Math.floor(c.goal.timeUsedSeconds)+'秒':''].filter(Boolean).join(' · ');
+  usage.textContent=goalDuration(c.goal?.timeUsedSeconds);
   clear.disabled=pending||!c.ready||c.busy||Boolean(c.goalError)||!c.goal;
   toggle.hidden=!view.action;toggle.disabled=clear.disabled||(view.action==='active'&&c.active);
   const name=view.action==='paused'?'暂停目标':'继续目标';toggle.title=name;toggle.setAttribute('aria-label',name);if(toggle.dataset.action!==view.action){toggle.dataset.action=view.action||'';toggle.innerHTML=icon(view.action||'active');}
@@ -51,6 +58,6 @@ export function renderCompletedGoal(goal){
  const objective=document.createElement('p');objective.className='goal-completion-objective';objective.textContent=goal.objective||'';
  const meta=document.createElement('p');meta.className='goal-completion-meta';
  const stamp=Number.isFinite(goal.updatedAt)?new Date(goal.updatedAt*1000):null;
- meta.textContent=[stamp&&!Number.isNaN(stamp.getTime())?stamp.toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'',Number.isFinite(goal.tokensUsed)?goal.tokensUsed.toLocaleString()+' tokens':'',Number.isFinite(goal.timeUsedSeconds)?Math.floor(goal.timeUsedSeconds)+'秒':''].filter(Boolean).join(' · ');
+ meta.textContent=[stamp&&!Number.isNaN(stamp.getTime())?stamp.toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'',goalDuration(goal.timeUsedSeconds)].filter(Boolean).join(' · ');
  row.append(summary,objective,meta);return row;
 }
