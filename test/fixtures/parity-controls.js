@@ -12,6 +12,11 @@ if(new URL(location.href).searchParams.get('parityControls')==='1'){
     button('模拟 SSE 断开',()=>f.stream?.onerror?.());
     button('模拟 SSE 恢复',()=>f.stream?.onopen?.());
     button('模拟问题',()=>f.question());
+    button('模拟异步问题',async()=>{
+      await import('/__fixtures/questions-browser.js');
+      f.update();f.emit('turn/started',{threadId:'qa-a',turn:f.turns.get('qa-a')[0]});
+    });
+    button('下次异步回答失败',()=>{f.fail={path:'/api/threads/qa-a/question-answer',status:503};});
     button('下次回答失败',()=>{f.fail={path:'/api/requests/qa-question/respond',status:503,message:'模拟回答失败，请重试。'};});
     button('追加流式原文',()=>{
       const delta='\n\n流式验收追加：甲乙丙，保留标点。';
