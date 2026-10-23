@@ -19,6 +19,8 @@ if(new URL(location.href).searchParams.get('parityControls')==='1'){
     });
     button('释放迟到详情',()=>{if(!f.pending)throw Error('No pending fixture response');f.pending.resolve();f.pending=null;});
     button('下次创建会话失败',()=>{f.fail={path:'/api/threads',status:503,message:'模拟创建失败，请重试。'};});
+    button('延迟下次创建会话',()=>{f.delay={path:'/api/threads'};});
+    button('释放创建响应',()=>{if(f.pending?.path!=='/api/threads')throw Error('No pending fixture creation');f.pending.resolve();f.pending=null;});
     button('下次首条消息失败',()=>{f.fail={path:'/api/threads/qa-new-'+f.threads.length+'/message',status:503,message:'模拟首条消息失败，请重试。'};});
     button('模拟异步问题',async()=>{
       await import('/__fixtures/questions-browser.js');
