@@ -215,3 +215,23 @@ test('large JSON uses negotiated gzip and preserves exact Unicode bytes',async t
  const packed=await get('gzip, deflate');assert.equal(packed.headers['content-encoding'],'gzip');assert.deepEqual(JSON.parse(gunzipSync(packed.bytes)),expected);assert.ok(packed.bytes.length<20000);
  const raw=await get('gzip;q=0');assert.equal(raw.headers['content-encoding'],undefined);assert.deepEqual(JSON.parse(raw.bytes),expected);
 });
+
+
+test('browser module graph is served as JavaScript without missing imports', async t => {
+  const {request} = await fixture(t);
+  const pending = ['/bootstrap.js'], visited = new Set();
+  while (pending.length) {
+    const url = pending.pop();
+    if (visited.has(url)) continue;
+    visited.add(url);
+    const response = await request(url);
+    assert.equal(response.status,200,`module ${url} must be reachable`);
+    assert.match(response.headers['content-type'],/javascript/,`module ${url} must have JavaScript MIME type`);
+    const imports = response.text.matchAll(/(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)["']([^"']+)["']/g);
+    for (const [,specifier] of imports) {
+      if (specifier.startsWith('.')) pending.push(new URL(specifier,'http://localhost'+url).pathname);
+    }
+  }
+  assert.ok(visited.has('/app.js'));
+  assert.ok(visited.has('/process-summary.js'));
+});
