@@ -11,6 +11,11 @@ export function createVersionSync({flush,reload,onError,schedule=setTimeout}){
  };
  return {receive,compositionStart(){composing=true;},compositionEnd(){composing=false;if(pending)schedule(()=>{if(pending)receive(pending);},0);}};
 }
+export function updateVersionInfo(data){
+ const job=data.job,latest=data.latest?.checkedAt>=(job?.updatedAt||0)?data.latest.version:job?.sourceVersion||job?.targetVersion||data.latest?.version;
+ const documentationOnly=job?.phase==='succeeded'&&job.documentationOnly===true&&job.targetVersion===data.version&&job.sourceVersion===latest;
+ return {latest,documentationOnly,current:latest===data.version||documentationOnly};
+}
 export function installSystemUpdate({api,flush,resetCsrf}){
  const area=document.getElementById('system-update-body');
  const description=document.createElement('p');description.className='subtle';description.textContent='更新当前网页服务，连接会短暂断开并自动恢复。';
@@ -29,8 +34,8 @@ export function installSystemUpdate({api,flush,resetCsrf}){
   status.textContent=data.job?.phase==='failed'?'上次更新未完成：'+data.job.message:data.job?.message||data.reason||'更新入口已就绪。';
 
   const short=value=>value?value.slice(0,8):'尚未检查';
-  const latest=data.latest?.checkedAt>=(data.job?.updatedAt||0)?data.latest.version:data.job?.targetVersion||data.latest?.version;
-  versions.textContent='当前版本 '+short(data.version)+'\n'+(latest===data.version?'已是最新版本':latest?'可更新版本 '+short(latest):data.latest?.error?'尚未检查到新版本':'正在检查新版本…');
+  const {latest,documentationOnly,current}=updateVersionInfo(data);
+  versions.textContent='当前版本 '+short(data.version)+'\n'+(current?(documentationOnly?'网页已是最新版本（仅文档更新）':'已是最新版本'):latest?'可更新版本 '+short(latest):data.latest?.error?'尚未检查到新版本':'正在检查新版本…');
   if(data.latest?.error)versions.textContent+='\n'+data.latest.error;
   if(!data.available&&!latest)versions.textContent='当前版本 '+short(data.version);
   versions.title='当前：'+(data.version||'未知')+'\n远端：'+(latest||'尚未检查');
