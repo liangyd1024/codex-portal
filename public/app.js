@@ -744,7 +744,7 @@ function renderThread() {
   const t = currentThread(); $('welcome').hidden = Boolean(state.selectedId); $('conversation').hidden = !state.selectedId;
   $('thread-title').hidden = !state.selectedId;
   $('breadcrumb-project').hidden = Boolean(state.selectedId);
-  if (!state.selectedId) { renderSession(); renderControls(); return; }
+  if (!state.selectedId) { renderControls(); return; }
   setText('thread-title',t ? threadName(t) : '正在读取会话…'); $('thread-title').title = $('thread-title').textContent; setText('thread-path',t?.cwd ? '目标机器 · ' + t.cwd : '');
   const own = controlled(), control = typeOf(state.detail?.controlState), busy = ['busy','occupied','active_writer','conflict'].includes(control);
   const badge = $('control-badge'); badge.className = 'control-badge' + (own ? ' controlled' : busy ? ' busy' : ''); badge.textContent = own ? '已取得控制' : busy ? '已被占用' : '查看模式';
@@ -753,21 +753,7 @@ function renderThread() {
   note.textContent = own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话由其他入口管理，当前为查看模式。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
   if (snapshotHistory()) note.textContent = (own ? '历史来自快照。实时状态由目标机器控制连接确认。' : '历史快照，运行状态需接管后确认。') + (busy ? ' ' + note.textContent : '');
   if(state.desktopMode){badge.textContent='桌面托管';note.textContent='消息由 Codex 桌面执行，沿用该会话的原生工具。';}
-  renderMessages(); renderSession(); renderControls(); resizeInput();
-}
-function renderSession() {
-  const queued=clear($('queued-inputs')), queue=state.detail?.queue;
-  const queueSection=queued.closest('details');
-  queueSection.dataset.empty=String(!(queue?.data?.length||queue?.error||queue?.nextCursor));
-  queueSection.hidden=queueSection.dataset.empty==='true'||queueSection.dataset.viewHidden==='true';
-  if(!queue)queued.append(el('p','subtle','接管会话后核对排队输入。'));
-  else if(queue.error)queued.append(el('p','turn-error','排队输入未确认：'+queue.error));
-  else if(!queue.data?.length)queued.append(el('p','subtle','没有排队输入。'));
-  else {
-    queued.append(el('p','subtle',`${queue.data.length}${queue.nextCursor?' 条以上':' 条'}输入等待执行。`));
-    queue.data.forEach(item=>queued.append(el('p','queued-input',(item.input||[]).map(i=>i.text||`[${i.type}]`).join('\n'))));
-  }
-
+  renderMessages(); renderControls(); resizeInput();
 }
 function renderDiagnostics() {
   const n = clear($('diagnostic-content')), s = state.status || {}, c = s.connection || {};
@@ -1382,7 +1368,7 @@ let streamFullRender=false;
 function scheduleStreamRender(kind='all') {
   if(kind!=='text')streamFullRender=true;
   if (state.streamRender) return; state.streamRender = true;
-  setTimeout(() => { state.streamRender = false; const full=streamFullRender;streamFullRender=false;renderMessages();if(full){renderRequests();renderSession();renderControls();} },80);
+  setTimeout(() => { state.streamRender = false; const full=streamFullRender;streamFullRender=false;renderMessages();if(full){renderRequests();renderControls();} },80);
 }
 let detailRefreshTimer, listRefreshTimer;
 function scheduleDetailRefresh() { if(detailRefreshTimer)return; detailRefreshTimer = setTimeout(() => { detailRefreshTimer=null; if (usable() && state.selectedId) refreshSelected().catch(e => recordError(e,'thread')); },650); }
@@ -1550,6 +1536,7 @@ function toggleInspector(open) {
   const shell = $('app-shell'); const show = open ?? shell.classList.contains('inspector-hidden');
   shell.classList.toggle('inspector-hidden', !show); $('toggle-inspector').setAttribute('aria-expanded',String(show));
   if (show && compactLayout()) toggleSidebar(false, false);
+  if (show) $('inspector').querySelector('.inspector-nav button[aria-pressed="true"]')?.click();
 }
 function wireEvents() {
   automations=installAutomations({api,onOpen:()=>{flushDrafts();closeNewChat();state.selectionVersion++;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);queueMicrotask(renderControls);},
@@ -1670,18 +1657,18 @@ async function init() {
   const navigation=el('nav','inspector-nav');navigation.setAttribute('aria-label','工作区详情分类');
   inspector.querySelector('.inspector-heading').after(navigation);
   const groups=[...inspector.querySelectorAll(':scope > details')];
-  const category=group=>group.id==='mobile-access'?'mobile':group.id==='system-update'||group.id==='browser-backup'||group.classList.contains('connection-section')||group.id==='diagnostics'||group.querySelector('#task-notifications')?'settings':'session';
+  const category=group=>group.id==='mobile-access'?'mobile':'settings';
   groups.forEach(group=>{group.open=group.id!=='diagnostics'&&group.id!=='browser-backup'&&!group.classList.contains('connection-section');});
-  const views=[['session','会话'],['mobile','手机访问'],['settings','设置']];
+  const views=[['settings','设置'],['mobile','手机访问']];
   function showInspectorView(view){
-    if(view==='settings')loadSettings();
+    if(view==='settings'&&!$('app-shell').classList.contains('inspector-hidden'))loadSettings();
     if(view==='mobile')loadMobile();
     groups.forEach(group=>{group.dataset.viewHidden=String(category(group)!==view);group.hidden=group.dataset.viewHidden==='true'||group.dataset.empty==='true';});
     navigation.querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.view===view)));
     inspector.scrollTop = 0;
   }
   for(const [view,title] of views){const button=el('button','',title);button.type='button';button.dataset.view=view;button.onclick=()=>showInspectorView(view);navigation.append(button);}
-  showInspectorView('session');
+  showInspectorView('settings');
   wireEvents(); renderStatus(); renderThread(); renderThreads(); setupEvents();
   window.dispatchEvent(new Event('rcm-ready'));
   notificationNavigationReady=true;
