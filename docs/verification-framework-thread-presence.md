@@ -219,3 +219,9 @@
 - Accept-Encoding 覆盖 identity、gzip、gzip;q=0、明确拒绝 gzip 同时允许星号、仅 br、星号和大小写变体。查询参数不改变文件内容；编码文件名、目录穿越形式、源码路径、package.json 和未知资源均保持 404，响应正文一致。非支持方法为 405；异源请求即使带 If-None-Match=* 仍为 403，非法 Host 的 HEAD 仍为 403 且无正文。
 - 所有样本的状态码、内容字节和关键响应头逐项一致，原生适配调用均为零。该组证明应用静态分发及缓存行为，不代替真实代理缓存、移动浏览器缓存恢复或性能测量。
 - 专项通过后完整 npm test 通过 695 项 Node、72 项 Python、类型检查及新目录构建；git diff --check 通过。仅增加测试和记录，没有产品代码修改，没有重启正式或独立预览服务。
+
+## 静态资源路由模块迁移
+
+- 正式基准仍为 `cef457d`。将静态白名单、资源响应及未配对手机登录页响应迁入 static 路由；复用原 static-response 缓存和压缩实现。总分发器保留 Host／Origin、手机鉴权、目标选择、API 404、方法处理顺序和公共异常出口。没有前端、CSS、文件白名单或原生数据改动。
+- 原有 23 项 HTTP 对照通过。补充未配对手机资源差分：首页及 index.html 返回登录页；login.js、styles.css、mobile-ui.css 原文字节一致，始终 no-store，不因 gzip 或 If-None-Match=* 返回压缩或 304。未配对 HEAD 与应用脚本／共享模块保持 401，缺 Origin 的 POST 和异源 GET 为 403。各路径不调用 Manager。
+- 补充测试后完整 npm test 通过 696 项 Node、72 项 Python、类型检查及新目录构建；git diff --check 通过。该结果覆盖服务端资源边界，不扩大为完整浏览器或性能验收。独立预览更新版本另行记录。

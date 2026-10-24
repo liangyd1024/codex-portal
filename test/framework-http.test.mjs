@@ -845,3 +845,26 @@ test('static responses preserve wire compression, validators and allowlist bound
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+test('unpaired mobile static routes expose only login assets without conditional caching',async()=>{
+ const {request}=await import('node:http');const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory,{mobileConfig:{origins:['https://phone.test'],ca:'/fixture/unused'}}),records=[];
+  await new Promise(resolve=>env.app.proxyServer.listen(0,'127.0.0.1',resolve));
+  const send=(url,method='GET',origin)=>new Promise((resolve,reject)=>{
+   const req=request({hostname:'127.0.0.1',port:env.app.proxyServer.address().port,path:url,method,headers:{host:'phone.test','accept-encoding':'gzip','if-none-match':'*',...(origin?{origin}:{})}},res=>{
+    const chunks=[];res.on('data',c=>chunks.push(c));res.on('end',()=>resolve({status:res.statusCode,bytes:Buffer.concat(chunks),headers:Object.fromEntries(['content-type','cache-control','content-encoding','etag'].map(k=>[k,res.headers[k]??null]))}));res.on('error',reject);
+   });req.on('error',reject);req.end();
+  });
+  try{
+   for(const [url,file] of [['/','login.html'],['/index.html','login.html'],['/login.js','login.js'],['/styles.css','styles.css'],['/mobile-ui.css','mobile-ui.css']]){
+    const r=await send(url);assert.equal(r.status,200);assert.deepEqual(r.bytes,await readFile(path.join(root,'public',file)));assert.equal(r.headers['cache-control'],'no-store');assert.equal(r.headers['content-encoding'],null);assert.equal(r.headers.etag,null);records.push(r);
+   }
+   for(const [url,method,status,origin] of [['/','HEAD',401],['/app.js','GET',401],['/framework.js','GET',401],['/shared/questions.js','GET',401],['/styles.css','POST',403],['/styles.css','GET',403,'https://evil.test']]){
+    const r=await send(url,method,origin);assert.equal(r.status,status);if(method==='HEAD')assert.equal(r.bytes.length,0);records.push(r);
+   }
+   assert.deepEqual(env.calls,[]);outcomes.push(records);
+  }finally{env.app.proxyServer.closeAllConnections();await new Promise(resolve=>env.app.proxyServer.close(resolve));await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});

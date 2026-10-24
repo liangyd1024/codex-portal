@@ -1,6 +1,6 @@
 import type {IncomingMessage} from 'node:http';
 import type {AddressInfo} from 'node:net';
-import type {Response,MobileConfig,Host} from '../types';
+import type {Response,MobileConfig} from '../types';
 import type {ApplicationOptions} from '../types';
 import {createThreadRoutes,matchThreadRoute} from './threads';
 import {createStaticResponse} from '../../../lib/http/static-response.mjs';
@@ -11,13 +11,11 @@ import {createConnectionRoutes} from './connections';
 import {createWorkspaceRoutes} from './workspace';
 import {createDesktopRoutes,matchDesktopRoute} from './desktop';
 import {createMediaRoutes} from './media';
-import http from 'node:http';
 import {json,body} from '../protocol';
 import {MobileAccess} from '../../../lib/mobile-access.mjs';
 import {createAccessRoutes} from './access';
 import {matchRequestRoute,respondRequest} from './requests';
-import path from 'node:path';
-import {readFile} from 'node:fs/promises';
+import {createStaticRoutes} from './static';
 import {timingSafeEqual} from 'node:crypto';
 import {Manager,AppError} from '../../../lib/manager.mjs';
 import {NativeAutomations} from '../../../lib/native-automations.mjs';
@@ -31,6 +29,7 @@ export interface RouteServices {
  server:()=>import('node:http').Server;mobileConfig:()=>MobileConfig|null;setMobileConfig:(value:MobileConfig)=>void;
 }
 export function createDispatcher(context:RouteServices){
+ const staticRoutes=createStaticRoutes(context);
  const accessRoutes=createAccessRoutes(context);
  const systemRoutes=createSystemRoutes(context);
  const openEvents=createEventRoute(context);
@@ -45,7 +44,7 @@ export function createDispatcher(context:RouteServices){
  const threadRoutesFor=(manager:Manager)=>{let routes=threadRoutes.get(manager);if(!routes){routes=createThreadRoutes(manager);threadRoutes.set(manager,routes);}return routes;};
  const connectionRoutes=new WeakMap<Manager,ReturnType<typeof createConnectionRoutes>>();
  const routesFor=(manager:Manager)=>{let routes=connectionRoutes.get(manager);if(!routes){routes=createConnectionRoutes(manager);connectionRoutes.set(manager,routes);}return routes;};
- const {config,managers,automations,desktopSessions,csrf,staticResponse,access,staticRoot,extraAssets}=context;
+ const {config,managers,automations,desktopSessions,csrf,access}=context;
   return async(req:IncomingMessage,res:Response,remote=false)=>{
     const server=context.server();const mobileConfig=context.mobileConfig();
     res.allowGzip=String(req.headers['accept-encoding']||'').split(',').some(part=>/^gzip(?:\s*;|\s*$)/i.test(part.trim())&&!/;\s*q=0(?:\.0*)?(?:\s*;|\s*$)/i.test(part));
@@ -60,10 +59,7 @@ export function createDispatcher(context:RouteServices){
       const url=new URL(req.url!,origin);const p=url.pathname;
       if(p==='/api/access/login'&&remote&&req.method==='POST'){await accessRoutes.login(req,res);return;}
       if(remote&&!access.valid(req)){
-        if(req.method==='GET'&&['/','/index.html','/login.js','/styles.css','/mobile-ui.css'].includes(p)){
-          const file=p==='/login.js'?'login.js':p==='/styles.css'?'styles.css':p==='/mobile-ui.css'?'mobile-ui.css':'login.html';
-          res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(await readFile(path.join(staticRoot,file)));
-        }
+        if(req.method==='GET'&&staticRoutes.isLoginAsset(p)){await staticRoutes.login(p,res);return;}
         throw new AppError('请先使用本机生成的配对码登录。',401,'PAIRING_REQUIRED');
       }
       if(remote&&access.expires(req)===null)res.setHeader('Set-Cookie',access.cookie(access.token(req)));
@@ -103,10 +99,7 @@ export function createDispatcher(context:RouteServices){
         if(approval)return respondRequest(manager,approval,data,res);
       }
       if(p.startsWith('/api/'))return json(res,404,{error:{message:'找不到此接口。',code:'NOT_FOUND'}});
-      if(req.method!=='GET'&&req.method!=='HEAD')throw new AppError('不支持此请求方法。',405);
-      const file=extraAssets[p]||{'/process-summary.js':'process-summary.js','/turn-files.js':'turn-files.js','/turn-files.css':'turn-files.css','/goal-toolbar.js':'goal-toolbar.js','/queued-inputs.js':'queued-inputs.js','/composer-clipboard.js':'composer-clipboard.js','/response-annotations.js':'response-annotations.js','/selection-tools.css':'selection-tools.css','/side-chat.js':'side-chat.js','/shared/side-chat-events.js':'../shared/side-chat-events.js','/turn-navigation.js':'turn-navigation.js','/turn-navigation.css':'turn-navigation.css','/shared/account-state.js':'../shared/account-state.js','/shared/questions.js':'../shared/questions.js','/shared/connection-state.js':'../shared/connection-state.js','/render-cache.js':'render-cache.js','/feedback.js':'feedback.js','/feedback.css':'feedback.css','/capacity-retry.js':'capacity-retry.js','/system-update.js':'system-update.js','/account-usage.js':'account-usage.js','/login.js':'login.js','/bootstrap.js':'bootstrap.js','/manifest.webmanifest':'manifest.webmanifest','/notification-platform.js':'notification-platform.js','/notification-worker.js':'notification-worker.js','/notification-delivery.js':'notification-delivery.js','/automations.js':'automations.js','/automations.css':'automations.css','/questions.js':'questions.js','/question-form.js':'question-form.js','/message-files.js':'message-files.js','/recovery-state.js':'recovery-state.js','/activity.js':'activity.js','/project-picker.js':'project-picker.js','/project-picker.css':'project-picker.css','/message-media.js':'message-media.js','/message-time.js':'message-time.js','/message-body.js':'message-body.js','/message-dom.js':'message-dom.js','/new-chat.js':'new-chat.js','/new-chat.css':'new-chat.css','/inline-mentions.js':'inline-mentions.js','/skill-suggestions.js':'skill-suggestions.js','/attachments.js':'attachments.js','/goal-submit.js':'goal-submit.js','/composer.js':'composer.js','/composer.css':'composer.css','/':'index.html','/index.html':'index.html','/app.js':'app.js','/mobile-ui.js':'mobile-ui.js','/mobile-ui.css':'mobile-ui.css','/input-state.js':'input-state.js','/thread-sync.js':'thread-sync.js','/thread-handoff.js':'thread-handoff.js','/handoff.css':'handoff.css','/sidebar.js':'sidebar.js','/sidebar.css':'sidebar.css','/browser-backup.js':'browser-backup.js','/connection-state.js':'connection-state.js','/output-window.js':'output-window.js','/detail-cache.js':'detail-cache.js','/styles.css':'styles.css','/voice.js':'voice.js','/mobile.js':'mobile.js'}[p];
-      if(!file){res.writeHead(404);res.end('Not found');return;}
-      await staticResponse(req,res,path.join(staticRoot,file));
+      await staticRoutes.read(req,res,p);
     }catch(caught){const error=caught as {status?:number;message?:string;code?:string;details?:unknown};if(res.headersSent){res.destroy();return;}json(res,error.status||502,{error:{message:error.message,code:error.code||'REMOTE_ERROR',...(error.details?{details:error.details}:{})}});}
   };
 }
