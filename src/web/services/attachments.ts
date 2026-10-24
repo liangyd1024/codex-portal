@@ -7,8 +7,8 @@ type Notify=(message:string,error?:boolean)=>void;
 interface Context {id:string;ready:boolean;busy:boolean}
 export interface AttachmentView {id:string;busy:boolean;items:AttachmentItem[]}
 export interface AttachmentButtonControl {store:StoreApi<{disabled:boolean}>;open:()=>void;setDisabled:(disabled:boolean)=>void}
-export interface AttachmentViewOptions {openFiles:()=>void;list:HTMLElement;preview:HTMLDialogElement;remove:(id:string,key:string)=>void}
-type ViewInstaller=(options:AttachmentViewOptions)=>{images:AttachmentButtonControl;render:(view:AttachmentView)=>void};
+export interface AttachmentViewOptions {form:HTMLFormElement;prefix:string;addFiles:(files:File[])=>Promise<void>;remove:(id:string,key:string)=>void}
+type ViewInstaller=(options:AttachmentViewOptions)=>{list:HTMLElement;preview:HTMLDialogElement;images:AttachmentButtonControl;render:(view:AttachmentView)=>void};
 interface Options {host:string;context:()=>Context;changed:()=>void;notify:Notify;form?:HTMLFormElement;input?:HTMLTextAreaElement;prefix?:string}
 
 export class AttachmentDrafts {
@@ -32,17 +32,12 @@ async function prepare(file:File):Promise<string>{
 }
 export function installAttachments({host,context,changed,notify,form=document.getElementById('message-form') as HTMLFormElement,input=document.getElementById('message-input') as HTMLTextAreaElement,prefix=''}:Options){
   const store=new AttachmentDrafts(sessionStorage,'rcm.images.'+host,notify);
-  const file=document.createElement('input');file.type='file';file.accept='image/*';file.multiple=true;file.hidden=true;file.id=prefix+'image-files';
-  const list=document.createElement('div');list.className='attachment-list';list.setAttribute('aria-label','待发送图片');list.hidden=true;
-  form.prepend(list);form.append(file);
-  const preview=document.createElement('dialog');preview.className='composer-dialog image-preview';document.body.append(preview);
-  preview.addEventListener('click',e=>{if(e.target===preview)preview.close();});
-  const view=installAttachmentView({list,preview,openFiles:()=>file.click(),remove:(id,key)=>{store.remove(id,key);changed();}});
+  const view=installAttachmentView({form,prefix,addFiles:add,remove:(id,key)=>{store.remove(id,key);changed();}});
+  const {list,preview}=view;
   let selected:string|undefined,clipboard:{sync:()=>void}|undefined;
-  function render(){clipboard?.sync();const c=context();if(selected!==c.id){selected=c.id;if(preview.open)preview.close();}view.images.setDisabled(!c.ready||c.busy);const items=store.get(c.id);list.hidden=!items.length;view.render({id:c.id,busy:Boolean(c.busy),items});}
+  function render(){clipboard?.sync();const c=context();if(selected!==c.id){selected=c.id;if(preview.open)preview.close();}view.images.setDisabled(!c.ready||c.busy);const items=store.get(c.id);view.render({id:c.id,busy:Boolean(c.busy),items});}
 
   async function add(files:Iterable<File>){const c=context();if(!c.ready||c.busy)return;const id=c.id;for(const f of files){if(store.get(id).length>=4){notify('每条消息最多添加 4 张图片。',true);break;}const item:AttachmentItem={id:crypto.randomUUID(),name:f.name||'粘贴图片'};store.add(id,item);changed();try{const url=await prepare(f);if(store.get(id).includes(item)){item.url=url;store.save();}}catch(e){store.remove(id,item.id);notify((e as Error).message,true);}finally{changed();}}}
-  file.onchange=()=>{const files=[...file.files!];file.value='';void add(files);};
   clipboard=installComposerClipboard({input,list,context,items:()=>store.get(context().id),replace:(items:AttachmentItem[])=>{store.items.set(context().id,items);store.save();changed();},addFiles:add,notify});
   return {images:view.images,render,moveDraft:(from:string,to:string)=>{store.items.set(to,store.get(from));store.items.delete(from);store.save();},has:()=>store.get(context().id).some(i=>i.url),pending:()=>store.get(context().id).some(i=>!i.url),capture:()=>store.capture(context().id),acknowledge:(s:CapturedAttachments)=>store.acknowledge(s)};
 }
