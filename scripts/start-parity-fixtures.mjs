@@ -23,6 +23,9 @@ async function serve(directory){
  const server=http.createServer(async(req,res)=>{try{
   const url=new URL(req.url,'http://localhost');const p=url.pathname;
   res.setHeader('Cache-Control','no-store');
+  res.setHeader('Content-Security-Policy',p==='/mermaid-frame.html'
+   ? "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'self'; base-uri 'none'; form-action 'none'; sandbox allow-scripts"
+   : "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
   if(parityEvents(req,res,url))return;
   if(p.startsWith('/api/')){res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{message:'Fixture interception missing. Real APIs are unavailable.'}}));return;}
   if(p==='/__parity_fixture.js'){res.setHeader('Content-Type','text/javascript');res.end(fixture+"\nwindow.addEventListener('rcm-ready',()=>window.rcmParityReady=true);\n");return;}
