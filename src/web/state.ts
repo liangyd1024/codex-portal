@@ -3,7 +3,7 @@ import type { DiagnosticsView, WorkspaceIdentity, WorkspaceProjection } from '..
 
 export const workspaceStore = createStore<WorkspaceProjection>(() => ({
   selectedId: null, desktopMode: false, transport: false, revision: 0,
-  diagnostics: { selectedId: null, entries: [] },
+  diagnostics: { selectedId: null, entries: [] }, diagnosticsReady:false,
 }));
 
 /** Existing command/draft logic retains its object identity. React subscribes to
@@ -16,7 +16,7 @@ export function publishWorkspace(state: WorkspaceIdentity): void {
 }
 export function publishDiagnostics(diagnostics: DiagnosticsView): void {
   const previous = workspaceStore.getState().diagnostics;
-  if (JSON.stringify(previous) !== JSON.stringify(diagnostics)) workspaceStore.setState({diagnostics});
+  if (!workspaceStore.getState().diagnosticsReady || JSON.stringify(previous) !== JSON.stringify(diagnostics)) workspaceStore.setState({diagnostics,diagnosticsReady:true});
 }
 
 /** One state authority. Native payloads, draft stores, Maps and Sets retain identity.

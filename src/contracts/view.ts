@@ -7,4 +7,5 @@ export interface WorkspaceIdentity { selectedId: string | null; desktopMode: boo
 export interface WorkspaceProjection extends WorkspaceIdentity {
   revision: number;
   diagnostics: DiagnosticsView;
+  diagnosticsReady: boolean;
 }
