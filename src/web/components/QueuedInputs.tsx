@@ -36,7 +36,7 @@ export function installQueuedInputs({host,context,api,refresh,onError}:QueueOpti
  const list=document.createElement('div');list.className='composer-queue';list.setAttribute('aria-label','排队消息');list.hidden=true;host.prepend(list);
  const store=createStore<QueueView>(()=>({signature:'',items:[],context:context(),busy:new Set()}));
  const root=createRoot(list);
- let signature='',serial=0;const busy=new Set<string>(),versions=new WeakMap<QueueItem,number>();
+ let mounted=false,signature='',serial=0;const busy=new Set<string>(),versions=new WeakMap<QueueItem,number>();
  const version=(item:QueueItem)=>{if(!versions.has(item))versions.set(item,++serial);return versions.get(item);};
  async function act(item:QueueItem,action:QueueAction){
   const c=context(),key=contextKey(c)+':'+item.id;if(busy.has(key))return;busy.add(key);render();
@@ -48,7 +48,7 @@ export function installQueuedInputs({host,context,api,refresh,onError}:QueueOpti
   const c=context(),items=c.visible?(c.queue?.data||[]):[];
   const next=JSON.stringify([contextKey(c),items.map(version),c.ready,c.running,c.supported,[...busy]]);
   if(next===signature)return;signature=next;list.hidden=!items.length;
-  flushSync(()=>{store.setState({signature:next,items,context:c,busy:new Set(busy)});root.render(<QueueRows store={store} act={act}/>);});
+  flushSync(()=>{store.setState({signature:next,items,context:c,busy:new Set(busy)});if(!mounted){root.render(<QueueRows store={store} act={act}/>);mounted=true;}});
  }
  return {render};
 }
