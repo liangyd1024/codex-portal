@@ -7,6 +7,7 @@
   const out=document.createElement('pre');out.setAttribute('aria-label','侧聊验收记录');out.style.whiteSpace='pre-wrap';
   const button=(text,run)=>{const b=document.createElement('button');b.textContent=text;b.style.minHeight='44px';b.onclick=run;panel.append(b);};
   button('选中样本正文',()=>{panel.open=false;const p=document.querySelector('article[aria-label="Codex 回复"] p');const r=document.createRange();r.selectNodeContents(p);const s=getSelection();s.removeAllRanges();s.addRange(r);document.dispatchEvent(new Event('selectionchange'));});
+  button('下次重建失败',()=>{f.fail={path:'/api/threads/qa-a/side-chat',status:503,message:'模拟重建失败'};panel.open=false;});
   button('模拟侧聊到期',()=>{panel.open=false;f.emit('side-chat/expired',{threadId:'qa-side-'+f.sideSerial});});
   button('读取侧聊记录',()=>{out.textContent=JSON.stringify({creates:f.calls.filter(c=>c.path.endsWith('/side-chat')),views:f.calls.filter(c=>c.path==='/api/thread-view').map(c=>c.body.sideThreadId),errors:f.errors},null,2);});
   panel.append(out);document.body.append(panel);
