@@ -15,6 +15,7 @@
  const touchEvents=[];
  if(historyMode.get('historyTouch')==='1')for(const type of ['pointerdown','touchstart','touchmove','touchend'])document.addEventListener(type,event=>{if(touchEvents.length<100)touchEvents.push({type,pointerType:event.pointerType||null,target:event.target.closest('button,summary')?.getAttribute('aria-label')||event.target.closest('button,summary')?.textContent||event.target.tagName});},{capture:true,passive:true});
  const anchorRecords=[],delayRecords=[];
+ let touchActive=false;addEventListener('touchstart',()=>{touchActive=true;},{passive:true});addEventListener('touchend',()=>{touchActive=false;},{passive:true});
  const recordDelay=phase=>delayRecords.push({phase,turns:[...document.querySelectorAll(".message-turn")].map(n=>n.dataset.turnId),requests:f.calls.map(c=>({path:c.path,query:c.query,method:c.method}))});
  if(historyMode.get('historyAnchor')==='1'){
   const longText='完整历史正文，用于检查前插后的可见位置。\n\n'.repeat(45);
@@ -24,26 +25,33 @@
   window.fetch=(url,options)=>{
    const request=new URL(typeof url==='string'?url:url.url,location.href);
    if(request.pathname!=='/api/threads/qa-a/history')return fetchFixture(url,options);
-   // Release each response after user scrolling settles, then measure after DOM insertion.
+   // Release manually after scrolling, or on the next touchmove in overlap mode.
    return new Promise(resolve=>{
     const release=document.createElement('button');release.textContent='释放当前历史页';release.style.minHeight='44px';
     document.querySelector('[data-history-panel]').append(release);
-    release.onclick=()=>{release.remove();
+    let released=false;
+    const releasePage=()=>{if(released)return;released=true;release.remove();
      const scroller=document.querySelector('#messages-scroller'),viewportTop=scroller.getBoundingClientRect().top;
      const anchor=[...document.querySelectorAll('.message-turn')].find(node=>node.getBoundingClientRect().bottom>viewportTop);
-     const before={id:anchor?.dataset.turnId,offset:anchor?anchor.getBoundingClientRect().top-viewportTop:null,scrollTop:scroller.scrollTop,height:scroller.scrollHeight,text:anchor?.textContent};
+     const before={touchActive,id:anchor?.dataset.turnId,offset:anchor?anchor.getBoundingClientRect().top-viewportTop:null,scrollTop:scroller.scrollTop,height:scroller.scrollHeight,text:anchor?.textContent};
      const count=document.querySelectorAll('.message-turn').length;
      const observer=new MutationObserver(()=>{
       if(document.querySelectorAll('.message-turn').length<=count)return;
       observer.disconnect();
       requestAnimationFrame(()=>requestAnimationFrame(()=>{
        const restored=[...document.querySelectorAll('.message-turn')].find(node=>node.dataset.turnId===before.id);
-       anchorRecords.push({cursor:request.searchParams.get('cursor'),id:before.id,beforeOffset:before.offset,afterOffset:restored?restored.getBoundingClientRect().top-scroller.getBoundingClientRect().top:null,beforeScrollTop:before.scrollTop,afterScrollTop:scroller.scrollTop,addedHeight:scroller.scrollHeight-before.height,sameNode:restored===anchor,textPreserved:restored?.textContent===before.text});
+       anchorRecords.push({...(historyMode.get('historyDuringTouch')==='1'?{releasedDuringTouch:before.touchActive,measuredDuringTouch:touchActive}:{}),cursor:request.searchParams.get('cursor'),id:before.id,beforeOffset:before.offset,afterOffset:restored?restored.getBoundingClientRect().top-scroller.getBoundingClientRect().top:null,beforeScrollTop:before.scrollTop,afterScrollTop:scroller.scrollTop,addedHeight:scroller.scrollHeight-before.height,sameNode:restored===anchor,textPreserved:restored?.textContent===before.text});
       }));
      });
      observer.observe(document.querySelector('#messages'),{childList:true,subtree:true});
      resolve(fetchFixture(url,options));
     };
+    release.onclick=releasePage;
+    if(historyMode.get('historyDuringTouch')==='1'){
+     release.textContent='下一次正文滑动释放历史页';
+     const onMove=event=>{if(!event.target.closest('#messages-scroller'))return;document.removeEventListener('touchmove',onMove);releasePage();};
+     document.addEventListener('touchmove',onMove,{passive:true});
+    }
    });
   };
  }
