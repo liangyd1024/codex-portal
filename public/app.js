@@ -484,7 +484,7 @@ function controlReason(id, text) {
   if (!note) { note = el('p',compact ? 'sr-only' : 'control-reason'); note.id = 'reason-' + id; button.after(note); button.setAttribute('aria-describedby',note.id); }
   if (note.textContent !== text) note.textContent = text;
   note.hidden = hidden;
-  if (compact) button.title = hidden ? '' : text;
+  if (compact) button.title = hidden ? '新建会话（⌘/Ctrl+N）' : text;
 }
 const sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadName,relativeTime,api,toast,
   needsAnswer,

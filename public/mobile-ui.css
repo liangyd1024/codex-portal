@@ -53,9 +53,10 @@
 .mobile-layout .sidebar-heading .machine-card{min-width:0;flex:1}
 .mobile-layout #connection-select{width:100%;max-width:none;padding:8px 0}
 .mobile-layout .sidebar kbd{display:none}
-.mobile-layout .sidebar>.new-thread{min-height:48px!important;font-size:16px;padding:10px 8px;margin-bottom:8px}
+.mobile-layout .sidebar .sidebar-search-row .search-box input{font-size:16px}
 .mobile-layout .sidebar .search-box{height:48px;min-height:48px;margin:0 0 8px;padding:0 8px;gap:8px}
 .mobile-layout .sidebar .search-box input{height:44px}
+.mobile-layout .sidebar .sidebar-search-row .search-box{height:44px;min-height:44px;margin:0}
 .mobile-layout .sidebar .section-heading{min-height:44px;margin:0 0 8px}
 .mobile-layout .sidebar .sidebar-tools{margin-bottom:8px}
 .mobile-layout .sidebar-group-heading,.mobile-layout .project-heading{margin-bottom:8px}
