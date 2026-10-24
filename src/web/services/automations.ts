@@ -21,19 +21,16 @@ export function scheduleLabel(rule:unknown){
 export function installAutomations({api,onOpen,openSession,openThread,notify}:Options){
   const page=node('section','automations-page');page.id='automations-page';page.hidden=true;
   document.querySelector<HTMLElement>('.main-panel')!.insertBefore(page,document.querySelector('.workspace-footer'));
-  const header=node('div','automations-heading');header.append(node('h1','','定时任务'));
-  const search=node('input','automations-search');search.type='search';search.placeholder='搜索任务';search.setAttribute('aria-label','搜索定时任务');
+  const header=node('div','automations-heading');
   const feedback=node('p','subtle');feedback.setAttribute('role','status');
   const list=node('div','automation-list');
   const listView=automationViews!.list({list,showTask});
   let snapshot:AutomationSnapshot|null=null,seq=0,loading=false,threadId:string|null=null,filter='all',signature='',activeDialog:HTMLDialogElement|null=null;
   const manage=async(prompt='')=>{try{if(!threadId){await choose(prompt);return;}await openSession(threadId,prompt);}catch(error){notify((error as Error).message,true);}};
-  const create=button('＋ 新建任务',()=>manage('请帮我创建一个定时任务。'),'secondary-button');
-  const refresh=button('刷新',()=>load(),'secondary-button');header.append(refresh);
-  const toolbar=node('div','automations-toolbar');const select=node('select');select.setAttribute('aria-label','筛选任务状态');
-  for(const [value,label] of [['all','全部任务'],['ACTIVE','即将执行'],['PAUSED','已暂停']])select.add(new Option(label,value));
-  select.onchange=()=>{filter=select.value;render();};search.oninput=render;
-  toolbar.append(create,search,select);page.append(header,toolbar,feedback,list);
+  const toolbar=node('div','automations-toolbar');
+  const controls=automationViews!.controls({header,toolbar,feedback,onCreate:()=>manage('请帮我创建一个定时任务。'),onRefresh:load,onSearch:render,onFilter:value=>{filter=value;render();}});
+  const {search,createButton:create}=controls;
+  page.append(header,toolbar,feedback,list);
   function showTask(task:AutomationTask,mode:TaskMode='view'){
     activeDialog?.close();
     const trigger=(document.activeElement?.closest('.automation-row')?.querySelector('.automation-name')||document.activeElement) as HTMLElement|null;
@@ -48,10 +45,10 @@ export function installAutomations({api,onOpen,openSession,openThread,notify}:Op
     listView.render(snapshot?matchingTasks(snapshot.items,filter,search.value).map(task=>taskRow(task,time,scheduleLabel)):null);
   }
   async function load(){
-    if(loading)return;loading=true;const version=++seq;refresh.disabled=true;feedback.textContent='正在同步原生定时任务…';
-    try{const data=await api<AutomationSnapshot>('/api/automations');if(version!==seq)return;snapshot=data;threadId=data.threadId;const next=JSON.stringify([data.items,data.runs]);if(signature!==next){render();signature=next;}feedback.textContent=data.pendingNativeRefresh?'部分任务等待桌面同步，请在桌面打开定时任务后刷新。':data.truncated?'当前显示最近 500 个任务。':'与目标机器 Codex 共用任务 · '+time(data.observedAt)+' 同步';}
-    catch(error){if(version===seq)feedback.textContent='同步失败：'+(error as Error).message+' 已有列表保留。';}
-    finally{loading=false;refresh.disabled=false;}
+    if(loading)return;loading=true;const version=++seq;controls.setState({loading:true,feedback:'正在同步原生定时任务…'});
+    try{const data=await api<AutomationSnapshot>('/api/automations');if(version!==seq)return;snapshot=data;threadId=data.threadId;const next=JSON.stringify([data.items,data.runs]);if(signature!==next){render();signature=next;}controls.setState({feedback:data.pendingNativeRefresh?'部分任务等待桌面同步，请在桌面打开定时任务后刷新。':data.truncated?'当前显示最近 500 个任务。':'与目标机器 Codex 共用任务 · '+time(data.observedAt)+' 同步'});}
+    catch(error){if(version===seq)controls.setState({feedback:'同步失败：'+(error as Error).message+' 已有列表保留。'});}
+    finally{loading=false;controls.setState({loading:false});}
   }
   async function choose(prompt=''){
     const trigger=document.activeElement as HTMLElement|null;

@@ -18,7 +18,10 @@ export type TaskPresentation=ReturnType<typeof taskPresentation>;
 
 export interface AutomationListOptions {list:HTMLElement;showTask:(task:AutomationTask,mode?:TaskMode)=>void}
 export interface AutomationDialogOptions {dialog:HTMLDialogElement;view:TaskPresentation;edit:()=>void;manage:()=>void;openThread:(id:string)=>void}
+export interface AutomationControlsState {loading:boolean;feedback:string}
+export interface AutomationControlsOptions {header:HTMLElement;toolbar:HTMLElement;feedback:HTMLElement;onCreate:()=>unknown;onRefresh:()=>unknown;onSearch:()=>void;onFilter:(value:string)=>void}
 export interface AutomationViewsRenderer {
+ controls:(options:AutomationControlsOptions)=>{search:HTMLInputElement;createButton:HTMLButtonElement;setState:(state:Partial<AutomationControlsState>)=>void};
  list:(options:AutomationListOptions)=>{render:(rows:TaskRow[]|null)=>void};
  task:(options:AutomationDialogOptions)=>{closeButton:HTMLButtonElement;dispose:()=>void};
 }
