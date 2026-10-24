@@ -15,6 +15,7 @@ import http from 'node:http';
 import {json,body} from '../protocol';
 import {MobileAccess} from '../../../lib/mobile-access.mjs';
 import {createAccessRoutes} from './access';
+import {matchRequestRoute,respondRequest} from './requests';
 import path from 'node:path';
 import {readFile} from 'node:fs/promises';
 import {timingSafeEqual} from 'node:crypto';
@@ -98,8 +99,8 @@ export function createDispatcher(context:RouteServices){
         const connectionRoute=routesFor(manager).get('POST '+p);if(connectionRoute){await connectionRoute(url,data,res);return;}
         if(p==='/api/thread-view'){await threadView(req,res,manager,targetKey,remote,data);return;}
         const threadRoute=threadRoutesFor(manager).write(p,match);if(threadRoute){await threadRoute(req,res,url,data);return;}
-        const approval=p.match(/^\/api\/requests\/([^/]+)\/respond$/);
-        if(approval)return json(res,200,manager.respond(decodeURIComponent(approval[1]),data));
+        const approval=matchRequestRoute(p);
+        if(approval)return respondRequest(manager,approval,data,res);
       }
       if(p.startsWith('/api/'))return json(res,404,{error:{message:'找不到此接口。',code:'NOT_FOUND'}});
       if(req.method!=='GET'&&req.method!=='HEAD')throw new AppError('不支持此请求方法。',405);

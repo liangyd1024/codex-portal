@@ -761,3 +761,41 @@ test('event route preserves initial pending frames and deferred update ordering 
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+test('request responses preserve decoded keys, raw answers and authentication precedence',async()=>{
+ const outcomes=[];
+ const payload={answers:{'问题':{answers:['  原始回答\n下一行  ']}},future:{keep:[null,1,'完整原文']}};
+ const cases=[
+  {path:'/api/requests/request%3A1%2F%E9%97%AE%E9%A2%98/respond?host=b',data:payload,status:200,called:true},
+  {path:'/api/requests/stale/respond?host=b',data:{decision:'cancel'},status:409,called:true},
+  {path:'/api/requests/%ZZ/respond?host=b',data:{},status:502},
+  {path:'/api/requests/request/respond?host=b',raw:'{',status:400},
+  {path:'/api/requests/%ZZ/respond?host=b',raw:'{',csrf:false,status:403},
+  {path:'/api/requests/request/respond?host=unknown',raw:'{',csrf:false,status:404},
+  {path:'/api/requests/request/respond?host=unknown',raw:'{',csrf:false,origin:'https://untrusted.test',status:403},
+  {path:'/api/requests/request/respond?host=b',method:'GET',status:404},
+  {path:'/api/requests/request/respond/?host=b',data:{},status:404},
+  {path:'/api/requests/request/respond?host=b',data:null,status:200,called:true},
+ ];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),records=[];
+  try{
+   env.managers.get('b').respond=(key,data)=>{
+    env.calls.push(['b','respond',key,data]);
+    if(key==='stale')throw Object.assign(new Error('请求已结束或连接已变化。请刷新会话。'),{status:409,code:'STALE_REQUEST',details:{future:true}});
+    return {resolved:true,unknownNativeField:{preserve:'完整\n原文'}};
+   };
+   for(const item of cases){
+    env.calls.length=0;
+    const response=await fetch(env.base+item.path,{method:item.method||'POST',headers:{...(item.csrf===false?{}:{'x-csrf-token':env.token}),...(item.origin?{origin:item.origin}:{})},...(item.method==='GET'?{}:{body:item.raw??JSON.stringify(item.data)})});
+    assert.equal(response.status,item.status,item.path);
+    assert.equal(env.calls.length,item.called?1:0,item.path);
+    records.push({status:response.status,body:await response.json(),calls:structuredClone(env.calls)});
+   }
+   assert.deepEqual(records[0].calls,[['b','respond','request:1/问题',payload]]);
+   assert.deepEqual(records[9].calls,[['b','respond','request',null]]);
+   outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
