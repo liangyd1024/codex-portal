@@ -1,3 +1,5 @@
+import {configurePlanCompletion} from '../../public/composer.js';
+import {installReactPlanCompletion} from './components/PlanCompletion';
 import {installReactGoalEditor} from './components/GoalEditor';
 import {configureGoalToolbar,configureGoalEditor} from '../../public/goal-toolbar.js';
 import {installReactGoalToolbar} from './components/GoalToolbar';
@@ -19,5 +21,6 @@ hydrateRoot(shell,<Application/>,{onRecoverableError(error){hydrationFailure=err
 await ready;
 configureGoalToolbar(installReactGoalToolbar);
 configureGoalEditor(installReactGoalEditor);
+configurePlanCompletion(installReactPlanCompletion);
 // Commands remain event-driven; mounting components never sends native commands.
 await import('../../public/app.js');

@@ -146,45 +146,9 @@ export function completedPlan(turns=[]) {
 }
 export function implementationText(plan){return 'PLEASE IMPLEMENT THIS PLAN:\n'+plan.text;}
 
-export function installPlanCompletion({host,context,resetMode,send,notify,input=document.getElementById('message-input')}) {
-  const key='rcm.planCompletion.'+host;
-  let saved;try{saved=JSON.parse(sessionStorage.getItem(key)||'{}');}catch{}
-  const records=saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:{};
-  const save=()=>{try{sessionStorage.setItem(key,JSON.stringify(records));}catch{notify('计划选项状态未保存，刷新后请核对会话。',true);}};
-  const card=document.createElement('section');card.className='plan-completion';card.hidden=true;card.setAttribute('aria-label','执行计划');
-  const heading=document.createElement('strong');heading.textContent='执行此计划？';
-  const actions=document.createElement('div');actions.className='plan-completion-actions';
-  const yes=document.createElement('button');yes.type='button';yes.textContent='是，执行此计划';
-  const no=document.createElement('button');no.type='button';no.textContent='暂不执行';
-  const review=document.createElement('button');review.type='button';review.textContent='已核对未执行，重新选择';
-  const status=document.createElement('p');status.setAttribute('role','status');
-  actions.append(yes,no,review);card.append(heading,actions,status);
-  input.closest('form').before(card);
-  let current=null,pending=null;
-  const record=(id,plan)=>records[id]?.turnId===plan.turnId?records[id]:null;
-  function render(){
-    const c=context(),plan=c.draft||c.desktop?null:completedPlan(c.turns);
-    current=plan?{id:c.id,plan}:null;
-    // This is only a UI preference; execution always uses native turn/start.
-    if(plan&&!record(c.id,plan)){records[c.id]={turnId:plan.turnId,state:'open'};resetMode();save();}
-    const r=plan&&record(c.id,plan);
-    card.hidden=!r||r.state==='dismissed'||r.state==='sent'||c.active;
-    const sending=pending===c.id,uncertain=r?.state==='uncertain'&&!sending;
-    card.setAttribute('aria-busy',String(sending));
-    yes.disabled=!c.ready||c.busy||sending||uncertain;no.disabled=sending;
-    yes.hidden=uncertain;review.hidden=!uncertain;review.disabled=sending||!c.ready||c.busy;
-    status.textContent=sending?'正在提交…':uncertain?'执行结果未确认，请先核对会话记录，避免重复执行。':r?.error||(!c.ready?'连接恢复后可执行，草稿已保留。':'');status.hidden=!status.textContent;
-  }
-  function dismiss(){if(!current||pending===current.id)return;records[current.id].state='dismissed';save();render();input.focus();}
-  no.onclick=dismiss;
-  card.addEventListener('keydown',event=>{if(event.key==='Escape'&&!event.isComposing){event.preventDefault();event.stopPropagation();dismiss();}});
-  review.onclick=()=>{if(!current||review.disabled)return;records[current.id].state='open';delete records[current.id].error;save();render();yes.focus();};
-  yes.onclick=async()=>{
-    if(!current||yes.disabled)return;
-    const {id,plan}=current,r=record(id,plan);resetMode();pending=id;r.state='uncertain';delete r.error;save();render();
-    try{await send(id,plan);r.state='sent';}
-    catch(error){const rejected=error.status>=400&&error.status<500&&!['OUTCOME_UNKNOWN','RPC_TIMEOUT'].includes(error.code);r.state=rejected?'open':'uncertain';r.error=error.message;notify(error.message,true);}
-    finally{pending=null;save();render();if(context().id===id&&r.state==='sent')input.focus();}
-  };
-  return {render};
+let planCompletionInstaller;
+export function configurePlanCompletion(installer){planCompletionInstaller=installer;}
+export function installPlanCompletion(options){
+  if(!planCompletionInstaller)throw new Error('计划执行卡片尚未初始化。');
+  return planCompletionInstaller(options);
 }
