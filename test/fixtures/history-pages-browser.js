@@ -8,6 +8,10 @@
   {id:'qa-history-answer-'+n,type:'agentMessage',text:'较早回复 '+n+'：完整原文。'},
  ]})));
  const historyMode=new URLSearchParams(location.search);
+ let cursorUnavailable=historyMode.get('historyCursorPermanent')==='1';
+ if(historyMode.get('historyNoInput')==='1'){
+  for(const turn of [f.turns.get('qa-a')[0],f.history.get('qa-a')[0]])turn.items=turn.items.filter(item=>item.type!=='userMessage');
+ }
  const touchEvents=[];
  if(historyMode.get('historyTouch')==='1')for(const type of ['pointerdown','touchstart','touchmove','touchend'])document.addEventListener(type,event=>{if(touchEvents.length<100)touchEvents.push({type,pointerType:event.pointerType||null,target:event.target.closest('button,summary')?.getAttribute('aria-label')||event.target.closest('button,summary')?.textContent||event.target.tagName});},{capture:true,passive:true});
  const anchorRecords=[],delayRecords=[];
@@ -43,11 +47,11 @@
    });
   };
  }
- if(historyMode.get('historyFailure')==='1'||historyMode.get('historyCursorChanged')==='1'){
+ if(historyMode.get('historyFailure')==='1'||historyMode.get('historyCursorChanged')==='1'||cursorUnavailable){
   const fetchFixture=window.fetch;let pages=0;
   window.fetch=(url,options)=>{
    const path=new URL(typeof url==='string'?url:url.url,location.href).pathname;
-   if(path==='/api/threads/qa-a/history'&&++pages===2)f.fail=historyMode.get('historyCursorChanged')==='1'?{path,status:409,code:'HISTORY_CURSOR_CHANGED',message:'Synthetic cursor expired'}:{path,status:503,message:'模拟历史分页失败，请重试。'};
+   if(path==='/api/threads/qa-a/history'&&(++pages===2||cursorUnavailable&&pages>2))f.fail=(historyMode.get('historyCursorChanged')==='1'||cursorUnavailable)?{path,status:409,code:'HISTORY_CURSOR_CHANGED',message:'Synthetic cursor expired'}:{path,status:503,message:'模拟历史分页失败，请重试。'};
    return fetchFixture(url,options);
   };
  }
@@ -79,6 +83,10 @@
   if(historyMode.get('historyDelay')==='1'){
    const refresh=document.createElement('button');refresh.textContent='触发样本详情刷新';refresh.style.minHeight='44px';
    refresh.onclick=()=>{recordDelay('before-detail-refresh');f.emit('thread/queue/changed',{threadId:'qa-a'});setTimeout(()=>recordDelay('after-detail-refresh'),1200);};panel.append(refresh);
+  }
+  if(historyMode.get('historyCursorPermanent')==='1'){
+   const recover=document.createElement('button');recover.textContent='恢复样本历史游标';recover.style.minHeight='44px';
+   recover.onclick=()=>{cursorUnavailable=false;recover.disabled=true;};panel.append(recover);
   }
   document.body.append(panel);
  });
