@@ -57,8 +57,10 @@
     <aside class="sidebar" id="sidebar" aria-label="机器和会话">
       <div class="sidebar-heading"><div class="brand"><span class="brand-mark"><svg class="icon"><use href="#i-mark"/></svg></span><div><strong>Codex</strong><span>工作台</span></div><button type="button" id="account-usage" class="account-usage" hidden></button><button class="icon-button mobile-only" id="close-sidebar" aria-label="关闭侧栏"><svg class="icon"><use href="#i-close"/></svg></button></div>
       <div class="machine-card"><div class="machine-icon"><svg class="icon"><use href="#i-monitor"/></svg></div><div class="machine-copy"><strong id="host-name" hidden>目标机器</strong><select id="connection-select" aria-label="选择连接"></select><span id="host-address">目标机器</span></div><span class="connection-dot" id="machine-dot"></span></div></div>
-      <button class="new-thread" id="new-thread" disabled><svg class="icon"><use href="#i-plus"/></svg><span>新建会话</span><kbd>⌘ N</kbd></button>
-      <label class="search-box"><svg class="icon"><use href="#i-search"/></svg><input id="thread-search" type="search" placeholder="搜索目标机器会话" aria-label="搜索目标机器会话" autocomplete="off"><kbd>⌘ K</kbd></label>
+      <div class="sidebar-search-row">
+        <label class="search-box"><svg class="icon"><use href="#i-search"/></svg><input id="thread-search" type="search" placeholder="搜索会话" aria-label="搜索目标机器会话" autocomplete="off"><kbd>⌘ K</kbd></label>
+        <button class="new-thread" id="new-thread" aria-label="新建会话" title="新建会话（⌘/Ctrl+N）" disabled><svg class="icon"><use href="#i-plus"/></svg></button>
+      </div>
       <div class="sidebar-sections" id="sidebar-sections"><div class="nav-section" id="projects-section"><div class="section-heading"><button class="project-disclosure" id="toggle-projects" aria-expanded="true" aria-controls="project-list"><svg class="icon"><use href="#i-chevron"/></svg><span id="projects-heading">项目</span></button><button class="icon-button" id="refresh-projects" title="刷新项目" aria-label="刷新项目"><svg class="icon"><use href="#i-refresh"/></svg></button></div><p class="control-overview" id="control-overview">尚未接管会话</p><nav id="project-list" class="project-list" aria-label="项目与会话"><div id="thread-list" class="thread-list project-tree"></div><button type="button" class="load-more" id="more-threads" hidden>正在加载会话…</button></nav></div>
       </div><div class="sidebar-resizer" id="sidebar-resizer" role="separator" tabindex="0" aria-label="调整侧栏宽度" aria-orientation="vertical" aria-controls="sidebar"></div>
     </aside>
