@@ -870,6 +870,11 @@ test('static responses preserve wire compression, validators and allowlist bound
     const r=await record('/styles.css','GET',{'accept-encoding':encoding});
     assert.deepEqual(r.headers['content-encoding']==='gzip'?gunzipSync(r.bytes):r.bytes,css);
    }
+   for(const url of ['/mermaid-frame.html','/mermaid-frame.js','/mermaid-view.js','/vendor/mermaid-12.2.0.js']){
+    const response=await record(url);assert.equal(response.status,200);
+    if(url.endsWith('.html'))assert.match(response.headers['content-security-policy'],/sandbox allow-scripts/);
+   }
+   assert.equal((await record('/vendor/README.md')).status,404);
    const query=await record('/styles.css?cache=unchanged');assert.deepEqual(query.bytes,css);
    for(const url of ['/styles%2Ecss','/../server.mjs','/%2e%2e/server.mjs','/package.json','/src/server/application.ts','/unknown.css']){
     const r=await record(url);assert.equal(r.status,404,url);assert.equal(r.bytes.toString(),'Not found');

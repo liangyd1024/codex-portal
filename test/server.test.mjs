@@ -241,6 +241,15 @@ test('built browser module graph is served as JavaScript without missing imports
 
   t.after(()=>app.close());
   const request=async url=>{const r=await fetch('http://127.0.0.1:'+app.server.address().port+url);return {status:r.status,headers:Object.fromEntries(r.headers),text:await r.text()};};
+  const frame=await request('/mermaid-frame.html');
+  assert.equal(frame.status,200);
+  assert.match(frame.headers['content-security-policy'],/sandbox allow-scripts/);
+  assert.doesNotMatch(frame.headers['content-security-policy'],/allow-same-origin/);
+  for(const asset of ['/mermaid-frame.js','/vendor/mermaid-12.2.0.js']){
+    const r=await request(asset);assert.equal(r.status,200);assert.match(r.headers['content-type'],/javascript/);
+  }
+  assert.equal((await request('/vendor/README.md')).status,404);
+  assert.equal((await request('/vendor/mermaid-LICENSE.txt')).status,404);
   const pending = ['/bootstrap.js'], visited = new Set();
   while (pending.length) {
     const url = pending.pop();
