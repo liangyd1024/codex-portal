@@ -1,3 +1,4 @@
+import {createUpdateScheduler} from '../src/web/services/update-scheduler';
 import {createHistoryPagination} from '../src/web/services/history-pagination';
 import {createNotificationDelivery} from '../src/web/services/notification-delivery';
 import {createNotificationPreference} from '../src/web/services/notification-preference';
@@ -1193,15 +1194,12 @@ function ensureTurn(id) {
   return t;
 }
 function upsertItem(turnId,item) { const t = ensureTurn(turnId); if (!t) return; if (item.type === 'userMessage') t.items = t.items.filter(old => !old.localAccepted || userContentKey(old.content) !== userContentKey(item.content)); const i = t.items.findIndex(x => x.id === item.id); if (i >= 0) t.items[i] = mergeLiveTurns([{id:turnId,items:[t.items[i]]}],[{id:turnId,items:[item]}])[0].items[0]; else t.items.push(item); }
-let streamFullRender=false;
-function scheduleStreamRender(kind='all') {
-  if(kind!=='text')streamFullRender=true;
-  if (state.streamRender) return; state.streamRender = true;
-  setTimeout(() => { state.streamRender = false; const full=streamFullRender;streamFullRender=false;renderMessages();if(full){renderRequests();renderControls();} },80);
-}
-let detailRefreshTimer, listRefreshTimer;
-function scheduleDetailRefresh() { if(detailRefreshTimer)return; detailRefreshTimer = setTimeout(() => { detailRefreshTimer=null; if (usable() && state.selectedId) refreshSelected().catch(e => recordError(e,'thread')); },650); }
-function scheduleListRefresh() { clearTimeout(listRefreshTimer); listRefreshTimer = setTimeout(() => { if (usable()) loadThreads(false,false,true); },1000); }
+const updateScheduler=createUpdateScheduler({state,defer:(run,delay)=>window.setTimeout(run,delay),cancel:timer=>window.clearTimeout(timer),usable,
+  renderMessages:()=>renderMessages(),renderRequests:()=>renderRequests(),renderControls:()=>renderControls(),
+  refreshSelected:()=>refreshSelected(),refreshList:()=>loadThreads(false,false,true),report:error=>recordError(error,'thread')});
+function scheduleStreamRender(kind='all') { updateScheduler.stream(kind); }
+function scheduleDetailRefresh() { updateScheduler.detail(); }
+function scheduleListRefresh() { updateScheduler.list(); }
 const webVersionSync=createVersionSync({flush:()=>{flushDrafts();if(state.drafts.warned)throw Error("Draft persistence failed");},reload:()=>location.reload(),onError:()=>toast('草稿保存失败，请保留当前页面。',true)});
 function receiveWebUpdate(data){
  webVersionSync.receive(data);
