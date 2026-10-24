@@ -1,3 +1,4 @@
+import {createLocalOriginMatcher} from '../local-origin';
 import type {IncomingMessage} from 'node:http';
 import type {AddressInfo} from 'node:net';
 import type {Response,MobileConfig} from '../types';
@@ -29,6 +30,7 @@ export interface RouteServices {
  server:()=>import('node:http').Server;mobileConfig:()=>MobileConfig|null;setMobileConfig:(value:MobileConfig)=>void;
 }
 export function createDispatcher(context:RouteServices){
+ const localOrigin=createLocalOriginMatcher();
  const staticRoutes=createStaticRoutes(context);
  const accessRoutes=createAccessRoutes(context);
  const systemRoutes=createSystemRoutes(context);
@@ -53,7 +55,7 @@ export function createDispatcher(context:RouteServices){
     try {
       // Host and origin checks protect the local control API against DNS rebinding and drive-by sites.
       const port=(server.address() as AddressInfo|null)?.port;
-      const origin=remote ? mobileConfig?.origins.find(value=>new URL(value).host===req.headers.host) : [`http://127.0.0.1:${port}`,`http://localhost:${port}`].find(value=>new URL(value).host===req.headers.host);
+      const origin=remote ? mobileConfig?.origins.find(value=>new URL(value).host===req.headers.host) : localOrigin(port,req.headers.host);
       if(!origin)throw new AppError('访问地址未获授权。',403,'FORBIDDEN');
       if((req.headers.origin&&req.headers.origin!==origin)||(remote&&req.method==='POST'&&req.headers.origin!==origin))throw new AppError('不允许跨站访问。',403,'FORBIDDEN');
       const url=new URL(req.url!,origin);const p=url.pathname;
