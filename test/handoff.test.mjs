@@ -61,6 +61,7 @@ test('all blockers reject before unsubscribe and preserve the original subscript
     running:({m})=>m.activeTurns.set('a','a-turn'),
     sending:({m})=>m.startingTurns.add('a'),
     approval:({m})=>m.requests.set('approval',{threadId:'a'}),
+    asyncQuestion:({m})=>m.pendingQuestions.entries.set('question',{threadId:'a'}),
     mutation:({m})=>m.threadMutations.set('a',1),
     active:({rpc})=>rpc.overrides['thread/read']=()=>({thread:{status:{type:'active'}}}),
     goal:({rpc})=>rpc.overrides['thread/goal/get']=()=>({goal:{status:'active'}}),
