@@ -248,6 +248,9 @@ test('built browser module graph is served as JavaScript without missing imports
   for(const asset of ['/mermaid-frame.js','/vendor/mermaid-12.2.0.js']){
     const r=await request(asset);assert.equal(r.status,200);assert.match(r.headers['content-type'],/javascript/);
   }
+  // Files retained on disk after a formal route rollback must not become public.
+  assert.equal((await request('/turn-file-viewer.js')).status,404);
+  assert.equal((await request('/login.html')).status,404);
   assert.equal((await request('/vendor/README.md')).status,404);
   assert.equal((await request('/vendor/mermaid-LICENSE.txt')).status,404);
   const pending = ['/bootstrap.js'], visited = new Set();

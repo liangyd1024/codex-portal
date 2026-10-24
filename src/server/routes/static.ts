@@ -19,7 +19,10 @@ export function createStaticRoutes({staticRoot,extraAssets,staticResponse}:Pick<
   async read(req:IncomingMessage,res:Response,pathname:string){
    if(req.method!=='GET'&&req.method!=='HEAD')throw new AppError('不支持此请求方法。',405);
    if(pathname==='/mermaid-frame.html')res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'self'; base-uri 'none'; form-action 'none'; sandbox allow-scripts");
-   const file=extraAssets[pathname]||assets[pathname];
+   // Only generated bundle paths extend the baseline's explicit public routes.
+   // Copying a legacy file into the build must not republish a withdrawn route.
+   const generated=pathname==='/framework.js'||pathname.startsWith('/chunks/')||pathname.startsWith('/assets/');
+   const file=assets[pathname]||(generated?extraAssets[pathname]:undefined);
    if(!file){res.writeHead(404);res.end('Not found');return;}
    await staticResponse(req,res,path.join(staticRoot,file));
   },
