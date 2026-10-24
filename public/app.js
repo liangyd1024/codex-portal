@@ -1,5 +1,6 @@
 import {createApiClient} from '../src/web/services/api.ts';
 import {createSidebarLoader} from '../src/web/services/sidebar-loader.ts';
+import {createCatalogReaders} from '../src/web/services/catalogs.ts';
 import {installDeferredTool} from './deferred-tool.js';
 import {renderSelectOptions,renderDiagnosticsView,publishWorkspace,createWorkspaceState} from '../src/web/views.tsx';
 import {completedGoalPlacement,renderCompletedGoal} from './goal-toolbar.js';
@@ -807,28 +808,10 @@ function renderRequests() {
 }
 
 async function loadStatus() { applyStatus(await api('/api/status')); renderStatus(); renderRequests(); return state.status; }
-let modelLoadPromise, projectLoadPromise, workspaceRefreshPromise, accountViewVersion=0;
-async function loadModels(force = false) {
-  if (modelLoadPromise) return modelLoadPromise;
-  const version=accountViewVersion;
-  state.loadingModels = true; renderModels();
-  modelLoadPromise = (async () => {
-    const all = []; let cursor = null;
-    do { const data = await api('/api/models' + (force ? '?refresh=1' : '') + (cursor ? (force ? '&' : '?') + 'cursor=' + encodeURIComponent(cursor) : '')); all.push(...(data.data || [])); cursor = data.nextCursor; } while (cursor);
-    if(version!==accountViewVersion)return;
-    const seen = new Set(); state.models = all.filter(m => { const id = modelId(m); if (!id || m.hidden || seen.has(id)) return false; seen.add(id); return true; });
-  })();
-  try { await modelLoadPromise; }
-  finally { modelLoadPromise = null; state.loadingModels = false; renderModels(); }
-}
-async function loadProjects() {
-  if (projectLoadPromise) return projectLoadPromise;
-  const version=accountViewVersion;
-  state.loadingProjects = true; renderProjects();
-  projectLoadPromise = (async () => { const d = await api('/api/projects'); if(version!==accountViewVersion)return; state.projects = d.data || []; if (state.projectId && !state.projects.some(p => p.id === state.projectId)) state.projectId = null; })();
-  try { await projectLoadPromise; }
-  finally { projectLoadPromise = null; state.loadingProjects = false; renderProjects(); }
-}
+let workspaceRefreshPromise, accountViewVersion=0;
+const catalogs=createCatalogReaders({state,version:()=>accountViewVersion,modelId,
+  readModels:path=>api(path),readProjects:()=>api('/api/projects'),renderModels,renderProjects});
+const {loadModels,loadProjects}=catalogs;
 const createdThreads = new Map();
 let threadSearch = '';
 const loadThreads = createSidebarLoader({
@@ -994,7 +977,7 @@ async function refreshWorkspace(forceModels = false, statusReady = false) {
 }
 let autoRefreshTimer = null;
 async function refreshCatalogs() {
-  if (document.hidden || !usable() || state.refreshing || modelLoadPromise || projectLoadPromise) return;
+  if (document.hidden || !usable() || state.refreshing || catalogs.pendingModels() || catalogs.pendingProjects()) return;
   await showRefresh('项目和模型列表', async () => {
     const results = await Promise.allSettled([loadProjects(),loadModels(true)]);
     const labels = ['项目列表','模型列表'];
@@ -1383,7 +1366,7 @@ function handleEvent(event) {
     renderThreads();renderProjects();renderModels();
     void refreshAccountUsage?.(true);
     // Drain old reads before reloading; their version guards discard late data.
-    void Promise.allSettled([modelLoadPromise,projectLoadPromise,loadThreads.pending()]).then(()=>{
+    void Promise.allSettled([catalogs.pendingModels(),catalogs.pendingProjects(),loadThreads.pending()]).then(()=>{
       if(version!==accountViewVersion||!connected())return;
       return Promise.allSettled([loadModels(true),loadProjects(),loadThreads(false,true)]).then(results=>{for(const result of results)if(result.status==='rejected')recordError(result.reason,'账号切换刷新');});
     });
