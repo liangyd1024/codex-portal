@@ -1,6 +1,14 @@
 // Optional benchmark UI for the isolated static comparison server only.
 (() => {
  const f=window.rcmFixture;
+ let phaseSample=null;
+ const phaseEnabled=new URLSearchParams(location.search).get('perfPhases')==='1';
+ if(phaseEnabled){
+  const observe=(object,key,label)=>{const original=object[key];object[key]=function(...args){if(!phaseSample)return Reflect.apply(original,this,args);const bucket=phaseSample[label]??={calls:0,ms:0},start=performance.now();bucket.calls++;try{return Reflect.apply(original,this,args);}finally{bucket.ms+=performance.now()-start;}};};
+  observe(JSON,'parse','jsonParse');observe(JSON,'stringify','jsonStringify');
+  observe(Element.prototype,'getBoundingClientRect','rect');observe(Element.prototype,'querySelectorAll','queryAll');
+  observe(Node.prototype,'cloneNode','clone');
+ }
  const rows=Array.from({length:200},(_,i)=>({id:'perf-'+i,status:'completed',items:[
   {id:'perf-user-'+i,type:'userMessage',content:[{type:'text',text:'性能样本 '+i}]},
   {id:'perf-answer-'+i,type:'agentMessage',text:'## 样本 '+i+'\n\n'+'固定中文段落与标点。'.repeat(100)+'\n\n```text\nfixed code\n```'}
@@ -37,7 +45,7 @@
     for(let i=0;i<5;i++){
      if(!document.hasFocus()||document.visibilityState!=='visible')throw Error('页面必须保持前台焦点');
      const result=await new Promise((resolve,reject)=>{
-      const token=' 流式计量'+(++serial)+'。',calls=f.calls.length;
+      const token=' 流式计量'+(++serial)+'。',calls=f.calls.length;phaseSample=phaseEnabled?{}:null;
       const tail=document.querySelector('[data-turn-id="perf-199"]');
       let started,observed=false;
       const timeout=setTimeout(()=>{observer.disconnect();reject(Error('测量超时'));},10000);
@@ -45,7 +53,7 @@
        if(observed||!tail?.textContent.includes(token))return;observed=true;observer.disconnect();
        const domMs=performance.now()-started;
        requestAnimationFrame(()=>requestAnimationFrame(()=>{
-        clearTimeout(timeout);resolve({started,domAt:started+domMs,domMs,framesMs:performance.now()-started,apiCalls:f.calls.length-calls,focused:document.hasFocus(),visible:document.visibilityState==='visible'});
+        clearTimeout(timeout);const phases=phaseSample;phaseSample=null;resolve({phases,started,domAt:started+domMs,domMs,framesMs:performance.now()-started,apiCalls:f.calls.length-calls,focused:document.hasFocus(),visible:document.visibilityState==='visible'});
        }));
       });
       observer.observe(document.getElementById('messages'),{subtree:true,childList:true,characterData:true});
@@ -57,7 +65,7 @@
     }
     out.textContent=JSON.stringify({longFrameSupported,longFrames:longFrames.filter(e=>e.start>=measurementStart),samples:results,nodeCount:nodes.length,nodesPreserved:nodes.every(n=>n.isConnected),errors:f.errors},null,2);
    }catch(error){out.textContent=JSON.stringify({error:error.message,samples:results});}
-   finally{button.disabled=false;}
+   finally{phaseSample=null;button.disabled=false;}
   };
  });
 })();
