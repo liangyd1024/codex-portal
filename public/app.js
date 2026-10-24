@@ -1,3 +1,4 @@
+import {publishConnectionSelect,installConnectionSelectAction} from '../src/web/components/ConnectionSelect';
 import {publishProjectPicker,installProjectPickerActions} from '../src/web/components/ProjectPicker';
 import {publishNewChatControls,installNewChatActions} from '../src/web/components/NewChatControls';
 import {createThreadFromDraft as createThreadSubmit} from '../src/web/services/thread-create';
@@ -377,7 +378,7 @@ function renderControls() {
   handoffControls.render({id:newChatOpen||state.desktopMode?null:state.selectedId,context:targetHost+':'+state.selectedId+':'+state.selectionVersion,running:active,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId)),handoff,connected:ready,
     supported:state.status?.service?.protocolValidation?.features?.handoff?.supported===true,busy:handing,archived:state.selectedArchived,conflict:state.detail?.controlState==='conflict'});
   const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
-  $('connection-select').disabled=creating;
+  publishConnectionSelect({disabled:creating});
   $('new-thread').disabled = !!state.status?.loginRecovery || !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels;
   publishConnectionSettings({connectDisabled:state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release')});
   $('welcome-connect').disabled = connectionPending() || state.busy.has('connect') || state.busy.has('disconnect') || (connected() && (!ready || !state.models.length||!featureReady('create')));
@@ -1345,8 +1346,8 @@ async function init() {
 if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
 await init();
 
-$('connection-select').value=targetHost;
-$('connection-select').onchange=()=>{if(state.busy.has('create'))return;rememberHost($('connection-select').value);if(inputId())state.drafts.set(inputId(),$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',$('connection-select').value);url.searchParams.delete('thread');location.assign(url);};
+publishConnectionSelect({value:targetHost});
+installConnectionSelectAction(value=>{if(state.busy.has('create'))return;rememberHost(value);if(inputId())state.drafts.set(inputId(),$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',value);url.searchParams.delete('thread');location.assign(url);});
 
 const clearRecovery=el('button','text-button','清除日志缓存并重新加载');
 clearRecovery.type='button';
