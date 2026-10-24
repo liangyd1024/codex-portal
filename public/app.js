@@ -1,3 +1,4 @@
+import {createNotificationDelivery} from '../src/web/services/notification-delivery';
 import {createNotificationPreference} from '../src/web/services/notification-preference';
 import {createTaskNotifications} from '../src/web/services/task-notifications';
 import {createAutoRefresh} from '../src/web/services/auto-refresh';
@@ -910,14 +911,16 @@ const autoRefreshController=createAutoRefresh({hidden:()=>document.hidden,usable
   checked:enabled=>{$('auto-refresh').checked=enabled;},host:()=>targetHost,
   save:(key,value)=>localStorage.setItem(key,value),recordError:(...args)=>recordError(...args)});
 const setAutoRefresh=autoRefreshController.setEnabled;
-let notificationRegistration;
+const notificationDelivery=createNotificationDelivery({host:()=>targetHost,worker:()=>notificationSupport().worker,
+  prepareWorker:()=>prepareNotificationWorker(),submitWorker:submitWorkerNotification,
+  createNative:(title,options)=>new Notification(title,options),submitNative:submitNotification,
+  diagnostic:notificationDiagnostic,publish:publishNotificationView,focus:()=>window.focus(),open:openNotificationThread});
 const notificationPreferences=createNotificationPreference({host:()=>targetHost,support:()=>notificationSupport(),
   permission:()=>Notification.permission,requestPermission:()=>Notification.requestPermission(),
-  prepareWorker:async()=>{notificationRegistration=await prepareNotificationWorker();},
+  prepareWorker:notificationDelivery.prepare,
   read:key=>localStorage.getItem(key),save:(key,value)=>localStorage.setItem(key,value),
   publish:publishNotificationView,recordError});
 const setTaskNotifications=notificationPreferences.setEnabled;
-const liveNotifications = new Set();
 function notificationDiagnostic(message) {
   appendNotificationDiagnostic(dateTime(new Date()) + ' · ' + message);
 }
@@ -929,26 +932,7 @@ function openNotificationThread({host,threadId}) {
   }
   selectThread(threadId);
 }
-async function sendTaskNotification(title, body, tag, threadId, host=targetHost) {
-  if(notificationSupport().worker){
-    try {
-      notificationRegistration ||= await prepareNotificationWorker();
-      return await submitWorkerNotification(notificationRegistration,title,{body,tag,data:{host,threadId}},{submitted:()=>notificationDiagnostic(title+'：已提交给系统；是否弹出取决于系统通知设置'),failed:message=>notificationDiagnostic(title+'：'+message)});
-    } catch(error){notificationDiagnostic(title+'：'+error.message);return false;}
-  }
-  notificationDiagnostic(title + '：正在提交给浏览器');
-  let notification;
-  return submitNotification(()=>{
-    notification = new Notification(title,{body,tag});
-    liveNotifications.add(notification);
-    notification.onclose = () => { liveNotifications.delete(notification); notificationDiagnostic(title + '：通知已关闭'); };
-    notification.onclick = () => { window.focus(); notification.close(); if(threadId)openNotificationThread({host,threadId}); };
-    return notification;
-  },{
-    shown:()=>notificationDiagnostic(title + '：浏览器报告已显示；若系统未弹出，请检查系统的浏览器通知开关'),
-    failed:message=>{liveNotifications.delete(notification);notificationDiagnostic(title + '：' + message);publishNotificationView({status:message+'。请检查浏览器和系统的通知设置。'});},
-  });
-}
+const sendTaskNotification=notificationDelivery.send;
 const notifyTaskEvent=createTaskNotifications({enabled:()=>notificationPreferences.enabled(),
   permitted:()=>('Notification' in window)&&Notification.permission==='granted',host:()=>targetHost,
   thread:id=>state.threads.find(t=>t.id===id)||(state.selectedId===id?currentThread():null),
