@@ -701,3 +701,63 @@ test('access certificate, QR selection and pairing expiry validation remain byte
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+test('system routes preserve target selection, update validation and check failure semantics',async()=>{
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const calls=[],updater={
+   status:async()=>{calls.push('status');return {state:'idle',future:{raw:'完整'}};},
+   checkLatest:async()=>{calls.push('check');throw Error('模拟检查失败');},
+   start:async()=>{calls.push('start');return {phase:'queued',unknown:1};},subscribe:()=>()=>{},
+  };
+  const env=await create(factory,{updater}),records=[];
+  try{
+   const scenarios=[
+    ['/api/version?host=unknown'],['/api/connections?host=unknown'],['/api/system/update?host=unknown'],
+    ['/api/system/update?check=1&check=0'],['/api/system/update?check=0&check=1'],
+    ['/api/system/deployment-status?host=b'],['/api/system/deployment-status?host=unknown'],
+    ['/api/system/update','{}',true],['/api/system/update','{"version":"arbitrary"}',true],
+    ['/api/system/update','[]',true],['/api/system/update','null',true],['/api/system/update','{',true],
+    ['/api/system/update','{',false],['/api/system/update?host=unknown','{}',true],
+   ];
+   for(const [url,body,auth] of scenarios){
+    calls.length=0;const response=await fetch(env.base+url,{...(body===undefined?{}:{method:'POST',body,headers:auth?{'x-csrf-token':env.token}:{}})});
+    records.push({status:response.status,body:await response.json(),calls:[...calls]});
+   }
+   assert.deepEqual(records.map(r=>r.status),[200,200,200,200,200,200,404,202,400,202,502,400,403,404]);
+   assert.deepEqual(records[3].calls,['check','status']);assert.deepEqual(records[4].calls,['status']);
+   assert.deepEqual(records[7].calls,['start']);assert.deepEqual(records[9].calls,['start']);
+   for(const index of [6,8,10,11,12,13])assert.deepEqual(records[index].calls,[]);
+   outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
+
+test('event route preserves initial pending frames and deferred update ordering with unsubscribe',{timeout:10000},async()=>{
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  let releaseUpdate,notify,unsubscribed,subscriptions=0,unsubscriptions=0,statusReads=0;
+  const closed=new Promise(resolve=>{unsubscribed=resolve;});
+  const updater={status:()=>new Promise(resolve=>{releaseUpdate=resolve;}),subscribe(fn){subscriptions++;notify=fn;return ()=>{unsubscriptions++;unsubscribed();};}};
+  const env=await create(factory,{updater}),abort=new AbortController();
+  try{
+   env.managers.get('b').status=()=>{statusReads++;return {connection:{state:'connected'},pendingRequests:[{id:'question-1',unknown:{text:'中文\n原文'}},{id:'question-2',future:[1,2]}]};};
+   const r=await fetch(env.base+'/api/events?host=b',{signal:abort.signal});const reader=r.body.getReader(),decoder=new TextDecoder();let text='';
+   const readThrough=async marker=>{while(!text.includes(marker)){const part=await reader.read();assert.equal(part.done,false);text+=decoder.decode(part.value,{stream:true});}};
+   await readThrough('"id":"question-2","future":[1,2]}}\n\n');
+   assert.equal(text.includes('event: system/update'),false);assert.equal(statusReads,2);
+   releaseUpdate({phase:'idle',unknown:{text:'初始更新'}});await readThrough('初始更新');
+   notify({phase:'checking',future:'后续'});env.managers.get('a').emit('event',{method:'must-not-leak'});
+   env.managers.get('b').emit('event',{method:'native/complete',params:{verbatim:'原文\n完整',unknown:{keep:true}}});
+   await readThrough('"unknown":{"keep":true}}}\n\n');
+   const frames=text.split('\n\n').filter(Boolean);assert.equal(frames.length,6);assert.equal(text.includes('must-not-leak'),false);
+   assert.match(frames[0],/^data: .*manager\/status/);assert.match(frames[1],/manager\/request/);assert.match(frames[2],/manager\/request/);
+   assert.match(frames[3],/^event: system\/update/);assert.match(frames[4],/^event: system\/update/);assert.match(frames[5],/native\/complete/);
+   abort.abort();await closed;notify({phase:'late-after-close'});
+   outcomes.push({frames,statusReads,subscriptions,unsubscriptions,headers:Object.fromEntries(['content-type','cache-control','connection','x-accel-buffering'].map(k=>[k,r.headers.get(k)]))});
+   assert.equal(subscriptions,1);assert.equal(unsubscriptions,1);
+  }finally{abort.abort();await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});

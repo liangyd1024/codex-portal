@@ -4,7 +4,8 @@ import type {Response,MobileConfig,Host} from '../types';
 import type {ApplicationOptions} from '../types';
 import {createThreadRoutes,matchThreadRoute} from './threads';
 import {createStaticResponse} from '../../../lib/http/static-response.mjs';
-import {deploymentStatus} from '../../../lib/deployment-status.mjs';
+import {createSystemRoutes} from './system';
+import {createEventRoute} from './events';
 import {WebUpdate} from '../../../lib/web-update.mjs';
 import {createConnectionRoutes} from './connections';
 import {createWorkspaceRoutes} from './workspace';
@@ -17,7 +18,6 @@ import {createAccessRoutes} from './access';
 import path from 'node:path';
 import {readFile} from 'node:fs/promises';
 import {timingSafeEqual} from 'node:crypto';
-import {publicHost} from '../../../lib/config.mjs';
 import {Manager,AppError} from '../../../lib/manager.mjs';
 import {NativeAutomations} from '../../../lib/native-automations.mjs';
 
@@ -31,6 +31,8 @@ export interface RouteServices {
 }
 export function createDispatcher(context:RouteServices){
  const accessRoutes=createAccessRoutes(context);
+ const systemRoutes=createSystemRoutes(context);
+ const openEvents=createEventRoute(context);
  const workspaceRoutes=new WeakMap<Manager,ReturnType<typeof createWorkspaceRoutes>>();
  const workspaceRoutesFor=(manager:Manager)=>{let routes=workspaceRoutes.get(manager);if(!routes){routes=createWorkspaceRoutes(manager);workspaceRoutes.set(manager,routes);}return routes;};
  const desktopRoutes=new Map<string,ReturnType<typeof createDesktopRoutes>>();
@@ -41,7 +43,7 @@ export function createDispatcher(context:RouteServices){
  const threadRoutesFor=(manager:Manager)=>{let routes=threadRoutes.get(manager);if(!routes){routes=createThreadRoutes(manager);threadRoutes.set(manager,routes);}return routes;};
  const connectionRoutes=new WeakMap<Manager,ReturnType<typeof createConnectionRoutes>>();
  const routesFor=(manager:Manager)=>{let routes=connectionRoutes.get(manager);if(!routes){routes=createConnectionRoutes(manager);connectionRoutes.set(manager,routes);}return routes;};
- const {config,managers,automations,desktopSessions,csrf,clients,staticResponse,access,updater,providedManagers,buildVersion,staticRoot,extraAssets}=context;
+ const {config,managers,automations,desktopSessions,csrf,staticResponse,access,staticRoot,extraAssets}=context;
   return async(req:IncomingMessage,res:Response,remote=false)=>{
     const server=context.server();const mobileConfig=context.mobileConfig();
     res.allowGzip=String(req.headers['accept-encoding']||'').split(',').some(part=>/^gzip(?:\s*;|\s*$)/i.test(part.trim())&&!/;\s*q=0(?:\.0*)?(?:\s*;|\s*$)/i.test(part));
@@ -64,26 +66,16 @@ export function createDispatcher(context:RouteServices){
       }
       if(remote&&access.expires(req)===null)res.setHeader('Set-Cookie',access.cookie(access.token(req)));
       if(req.method==='GET'){const route=accessRoutes.read(p,remote,mobileConfig);if(route){await route(req,res,url);return;}}
-      if(req.method==='GET'&&p==='/api/connections')return json(res,200,{machineId:config.machineId,defaultConnection:config.defaultConnection,data:[...managers].map(([id,m])=>({id,host:publicHost(m.host),connection:m.connection}))});
-      if(req.method==='GET'&&p==='/api/system/update'){if(url.searchParams.get('check')==='1')void updater.checkLatest?.().catch(()=>{});return json(res,200,await updater.status());}
-      if(req.method==='GET'&&p==='/api/version')return json(res,200,{version:buildVersion,machineId:config.machineId});
+      if(req.method==='GET'){const route=systemRoutes.read(p);if(route){await route(url,res);return;}}
       const targetKey=url.searchParams.get('host')||config.defaultConnection;
       const manager=managers.get(targetKey);
       if(!manager)throw new AppError('未知连接。',404,'UNKNOWN_HOST');
       if(req.method==='GET'&&p==='/api/csrf')return json(res,200,{token:csrf});
       if(req.method==='GET'&&p==='/api/events'){
-        res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-store','Connection':'keep-alive','X-Accel-Buffering':'no'});
-        res.write(`data: ${JSON.stringify({method:'manager/status',params:manager.status()})}\n\n`);res.targetKey=targetKey;clients.add(res);
-        for(const request of manager.status().pendingRequests||[])res.write(`data: ${JSON.stringify({method:'manager/request',params:request})}\n\n`);
-        const heartbeat=setInterval(()=>{if(remote&&!access.valid(req)){res.end();clients.delete(res);}else res.write(': ping\n\n');},15000);
-        res.mobileRequest=remote?req:null;
-        const sendUpdate=(data:unknown)=>{if(res.destroyed||res.writableEnded)return;if(res.writableLength>8*1024*1024){res.destroy();return;}res.write(`event: system/update\ndata: ${JSON.stringify(data)}\n\n`);};
-        const unsubscribe=updater.subscribe?.(sendUpdate);
-        void updater.status().then(sendUpdate).catch(()=>{});
-        res.once('close',()=>{clearInterval(heartbeat);unsubscribe?.();clients.delete(res);});return;
+        openEvents(req,res,manager,targetKey,remote);return;
       }
       if(req.method==='GET'){const route=routesFor(manager).get('GET '+p);if(route){await route(url,undefined,res);return;}}
-      if(req.method==='GET'&&p==='/api/system/deployment-status'){if(remote)throw new AppError('仅限本机部署检查。',403);return json(res,200,await deploymentStatus(manager));}
+      if(req.method==='GET'&&p==='/api/system/deployment-status'){await systemRoutes.deployment(manager,remote,res);return;}
       const desktopMatch=matchDesktopRoute(p);
       if(req.method==='GET'){const route=desktopRoutesFor(targetKey,manager).read(p,desktopMatch);if(route){await route(url,undefined,res);return;}}
       if(req.method==='GET'){const route=workspaceRoutesFor(manager).get('GET '+p);if(route){await route(url,undefined,res);return;}}
@@ -94,7 +86,7 @@ export function createDispatcher(context:RouteServices){
         const token=req.headers['x-csrf-token']||'';
         if(typeof token!=='string'||Buffer.byteLength(token)!==Buffer.byteLength(csrf)||!timingSafeEqual(Buffer.from(token),Buffer.from(csrf)))throw new AppError('本机会话已变化。请刷新页面。',403,'CSRF');
         const data=await body(req,/^\/api\/threads\/[A-Za-z0-9_-]+\/(message|steer|queue-add)$/.test(p)?6*1024*1024:1024*1024);
-        if(p==='/api/system/update'){if((server.address() as AddressInfo|null)?.port!==4317&&!providedManagers)throw new AppError('开发预览不能更新正式服务。',409);if(Object.keys(data).length)throw new AppError('更新接口不接受仓库、版本或会话参数。');return json(res,202,await updater.start());}
+        if(p==='/api/system/update'){await systemRoutes.update(data,(server.address() as AddressInfo|null)?.port,res);return;}
         if(p==='/api/project-folders'||p==='/api/projects/open'){await workspaceRoutesFor(manager).get('POST '+p)!(url,data,res);return;}
         const desktopRoute=desktopRoutesFor(targetKey,manager).desktopWrite(desktopMatch);if(desktopRoute){await desktopRoute(url,data,res);return;}
         if(match&&desktopSessions.get(targetKey+':'+match[1])?.pending)throw new AppError('桌面发送仍在确认中，请稍后重试。',409,'SEND_PENDING');
