@@ -990,3 +990,37 @@ test('lazy history and deferred detail endpoints preserve parameters, raw fields
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+test('router boundaries preserve raw paths, uncommon methods and security precedence',async()=>{
+ const {request}=await import('node:http');
+ const scenarios=[
+  ...['OPTIONS','TRACE','DELETE','PATCH','PROPFIND','SEARCH','PURGE','REPORT'].map(method=>({path:'/api/status',method,status:404})),
+  ...['/api/status/','//api/status','/api/STATUS','/api/%','/api/%zz','/api/%00'].map(path=>({path,method:'GET',status:404})),
+  {path:'/api/status?x=%',method:'GET',status:200},
+  {path:'http://invalid.test/api/status',method:'GET',status:200},
+  {path:'*',method:'GET',status:404},
+ ];
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),records=[];
+  try{
+   for(const scenario of scenarios)for(const guard of ['valid','host','origin']){
+    const response=await new Promise((resolve,reject)=>{
+     const req=request(env.base,{path:scenario.path,method:scenario.method,headers:{connection:'close',
+      ...(guard==='host'?{host:'untrusted.test'}:guard==='origin'?{origin:'https://untrusted.test'}:{})}},res=>{
+      const chunks=[];res.on('data',chunk=>chunks.push(chunk));res.on('error',reject);
+      res.on('end',()=>resolve({status:res.statusCode,body:Buffer.concat(chunks).toString('utf8'),
+       headers:Object.fromEntries(['content-type','cache-control','content-security-policy','x-content-type-options','referrer-policy'].map(key=>[key,res.headers[key]??null]))}));
+     });
+     req.on('error',reject);req.setTimeout(3000,()=>req.destroy(new Error('router boundary request timed out')));req.end();
+    });
+    assert.equal(response.status,guard==='valid'?scenario.status:403,JSON.stringify({scenario,guard}));
+    if(guard!=='valid')assert.equal(JSON.parse(response.body).error.code,'FORBIDDEN');
+    assert.equal(response.headers['x-content-type-options'],'nosniff');
+    records.push({scenario,guard,...response});
+   }
+   assert.deepEqual(env.calls,[]);outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
