@@ -1,3 +1,4 @@
+import {publishModelSelect,installModelSelectActions} from '../src/web/components/ModelSelect';
 import {createMessageInput} from '../src/web/services/message-input';
 import {createUpdateScheduler} from '../src/web/services/update-scheduler';
 import {createHistoryPagination} from '../src/web/services/history-pagination';
@@ -377,8 +378,8 @@ function renderControls() {
     releaseLabel:state.busy.has('release') ? '正在检查并释放…' : '停止目标服务（影响所有入口）'});
   $('refresh-projects').disabled = !ready || state.refreshing; $('refresh-all').disabled = state.refreshing || state.busy.has('refresh');
   $('thread-search').disabled = !connected();
-  $('model-select').disabled = !ready || !state.models.length || state.loadingModels;
-  $('effort-select').disabled = !ready || !state.model || !effortsFor(state.model).length || state.loadingModels;
+  publishModelSelect('model-select',{disabled:!ready || !state.models.length || state.loadingModels});
+  publishModelSelect('effort-select',{disabled:!ready || !state.model || !effortsFor(state.model).length || state.loadingModels});
   const input = $('message-input'); input.disabled = !ready || !own || posting || handing;
   const followUp=followUpAction({active,touch:touchInput()});
   input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? (followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…') : '发送消息…';
@@ -1364,8 +1365,10 @@ function wireEvents() {
   let searchTimer; $('thread-search').oninput = e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.search = e.target.value.trim(); loadThreads(); },300); };
   const guide=el('button','text-button','引导');guide.id='guide-message';guide.type='button';guide.title='引导当前任务（⌘/Ctrl+Enter）';guide.hidden=true;guide.onclick=()=>sendMessage(undefined,true);$('interrupt').before(guide);
   messageInput.bind($('message-form')); $('interrupt').onclick = interruptThread;
-  $('model-select').onchange = e => { state.model = e.target.value; state.effort = defaultEffort(state.model); fillEfforts($('effort-select'),state.model,state.effort); settings.open=false;settings.querySelector('summary').focus();renderControls(); };
-  $('effort-select').onchange = e => { state.effort = e.target.value;settings.open=false;settings.querySelector('summary').focus();renderControls(); };
+  installModelSelectActions({
+    'model-select':value=>{state.model=value;state.effort=defaultEffort(state.model);fillEfforts($('effort-select'),state.model,state.effort);settings.open=false;settings.querySelector('summary').focus();renderControls();},
+    'effort-select':value=>{state.effort=value;settings.open=false;settings.querySelector('summary').focus();renderControls();},
+  });
   $('new-retry-create').onclick=()=>{newDraft.complete();$('new-chat-error').hidden=true;renderControls();$('message-input').focus();};
   $('close-new-chat').onclick=()=>{if(!state.busy.has('create'))closeNewChat();};
 
