@@ -5,7 +5,7 @@ import {createSidebarLoader} from '../src/web/services/sidebar-loader.ts';
 import {createCatalogReaders} from '../src/web/services/catalogs.ts';
 import {createSelectedRefresh} from '../src/web/services/selected-refresh.ts';
 import {installDeferredTool} from './deferred-tool.js';
-import {renderSelectOptions,renderDiagnosticsView,publishWorkspace,createWorkspaceState} from '../src/web/views.tsx';
+import {renderSelectOptions,renderDiagnosticsView,renderRefreshStatusView,publishWorkspace,createWorkspaceState} from '../src/web/views.tsx';
 import {completedGoalPlacement,renderCompletedGoal} from './goal-toolbar.js';
 import {installQueuedInputs} from '../src/web/components/QueuedInputs.tsx';
 let queuedInputs;
@@ -260,13 +260,8 @@ function relativeTime(value) {
 }
 let refreshNoticeTimer = null;
 function renderRefresh() {
-  const n = $('refresh-status');
-  n.hidden = !state.refreshMessage;
-  n.classList.toggle('error', !state.refreshing && state.refreshMessage.includes('失败'));
-  n.setAttribute('aria-busy', String(state.refreshing));
-  setText('refresh-message', state.refreshMessage);
-  setText('refresh-time', state.lastSync ? state.refreshScope + '最后更新：' + dateTime(state.lastSync) + '（北京时间）' : '尚未成功刷新');
-  setText('refresh-compact', state.refreshing ? '刷新中…' : state.refreshMessage.includes('失败') ? '刷新失败' : state.refreshMessage);
+  renderRefreshStatusView({refreshing:state.refreshing,message:state.refreshMessage,
+    time:state.lastSync ? state.refreshScope + '最后更新：' + dateTime(state.lastSync) + '（北京时间）' : '尚未成功刷新'});
   for (const id of ['refresh-all','refresh-projects']) {
     $(id).classList.toggle('refreshing', state.refreshing);
     $(id).setAttribute('aria-busy', String(state.refreshing));

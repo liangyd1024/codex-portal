@@ -1,3 +1,4 @@
+import {publishRefreshStatus, type RefreshStatusView} from './components/RefreshStatus';
 import { flushSync } from 'react-dom';
 import type { SelectOption } from '../contracts/view';
 import { publishSelectOptions } from './components/SelectOptions';
@@ -13,3 +14,7 @@ export function renderDiagnosticsView(view: Parameters<typeof publishDiagnostics
   flushSync(() => publishDiagnostics(view));
 }
 export function frameworkSnapshot() { return workspaceStore.getState(); }
+
+export function renderRefreshStatusView(view: RefreshStatusView): void {
+  flushSync(() => publishRefreshStatus(view));
+}
