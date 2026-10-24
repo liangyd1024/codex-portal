@@ -44,6 +44,8 @@
 .mobile-layout .app-shell.sidebar-open .sidebar{visibility:visible;transform:translateX(0)}
 .mobile-layout .app-shell.sidebar-hidden .sidebar{display:flex}
 .mobile-layout .sidebar-resizer{display:none}
+/* Keep the drawer stationary while its list scrolls vertically. */
+.mobile-layout .sidebar-sections #project-list{overflow-x:hidden;overflow-y:auto;overscroll-behavior:none;touch-action:pan-y pinch-zoom;padding-inline:3px}
 .mobile-layout .app-shell:is(.sidebar-open,:not(.inspector-hidden)) .sidebar-backdrop{display:block;position:fixed;inset:0;background:#0004;z-index:49;backdrop-filter:blur(2px)}
 .mobile-layout .sidebar-heading{padding-right:52px;gap:8px;min-height:48px;margin:0 0 8px}
 .mobile-layout .sidebar-heading #close-sidebar{top:0;right:0}
