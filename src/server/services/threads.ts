@@ -14,6 +14,7 @@ export function createThreadService(manager:Manager) {
   sideChat:(id:string)=>readSideChat(manager,id),
   create:(data:NativePayload)=>manager.newThread(data),
   actions:{
+   'queue-update':(id:string,data:NativePayload)=>queueInput(manager,id,'update',data),
    'queue-add':(id:string,data:NativePayload)=>queueInput(manager,id,'add',data),
    'queue-steer':(id:string,data:NativePayload)=>queueInput(manager,id,'steer',data),
    'queue-delete':(id:string,data:NativePayload)=>queueInput(manager,id,'delete',data),

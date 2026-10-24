@@ -255,7 +255,7 @@ test('thread routes preserve query rules, helper validation and native queue for
    requireLogin(){},requireWritable(){},assertControl(id){env.calls.push(['control',id]);},
    requireCapability(name){env.calls.push(['capability',name]);},
    withMutation:async(fn,id)=>{env.calls.push(['mutation',id]);return fn();},
-   rpc:{connected:true,request:async(method,params,options)=>{env.calls.push(['rpc',method,params,options??null]);return method==='thread/read'?{thread:{status:{type:'idle'}}}:{raw:'原文\n\n',future:{preserved:true}};}},
+   rpc:{connected:true,request:async(method,params,options)=>{env.calls.push(['rpc',method,params,options??null]);return method==='thread/read'?{thread:{status:{type:'idle'}}}:method==='thread/queue/list'?{data:[{id:'queue-1',input:[{type:'text',text:'before'},{type:'future',value:42}]}]}:{raw:'原文\n\n',future:{preserved:true}};}},
   });
   const requests=[
    ['/api/thread-references?search=first&search=last&cursor=one&cursor=two',undefined,200],
@@ -274,6 +274,8 @@ test('thread routes preserve query rules, helper validation and native queue for
    ['/api/threads/id/message',undefined,404],
    ['/api/threads/invalid.id',undefined,404],
    ['/api/threads/'+ 'x'.repeat(161),undefined,404],
+   ['/api/threads/id/queue-update',{queuedSubmissionId:'queue-1',text:'after',expectedText:'before'},200],
+   ['/api/threads/id/queue-update',{queuedSubmissionId:'queue-1',text:'after',expectedText:'stale'},409],
   ];
   try{
    const records=[];
@@ -288,6 +290,8 @@ test('thread routes preserve query rules, helper validation and native queue for
    assert.deepEqual(records[8].calls.filter(c=>c[0]==='rpc'),[['rpc','thread/queue/delete',{threadId:'id',queuedSubmissionId:'queue-1'},null]]);
    assert.deepEqual(records[9].calls.filter(c=>c[0]==='rpc'),[['rpc','thread/read',{threadId:'id',includeTurns:false},null],['rpc','thread/queue/start',{threadId:'id',queuedSubmissionId:'queue-2'},null]]);
    assert.deepEqual(records[10].calls.filter(c=>c[0]==='rpc'),[['rpc','thread/goal/clear',{threadId:'id',origin:'user'},{timeoutMs:10000}]]);
+   assert.deepEqual(records[16].calls.filter(c=>c[0]==='rpc'),[['rpc','thread/queue/list',{threadId:'id',limit:100},null],['rpc','thread/queue/update',{threadId:'id',queuedSubmissionId:'queue-1',input:[{type:'text',text:'after'},{type:'future',value:42}]},null]]);
+   assert.equal(records[17].body.error.code,'QUEUE_CHANGED');
    outcomes.push(records);
   }finally{await env.close();}
  }

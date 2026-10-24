@@ -1,54 +1,86 @@
-import {Fragment} from 'react';
+import {Fragment,useLayoutEffect,useRef} from 'react';
 import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
-import {createStore, useStore, type StoreApi} from 'zustand';
-
+import {createStore,useStore,type StoreApi} from 'zustand';
 interface QueuePart {type:string;text?:string;[key:string]:unknown}
 interface QueueItem {id:string;input?:QueuePart[];[key:string]:unknown}
-interface QueueContext {
- host:string;id:string|null;queue?:{data?:QueueItem[]};
- visible:boolean;ready:boolean;running:boolean;supported:boolean;
-}
+interface QueueContext {host:string;id:string|null;queue?:{data?:QueueItem[]};visible:boolean;ready:boolean;running:boolean;supported:boolean;editable:boolean}
 interface QueueOptions {
  host:HTMLElement;context:()=>QueueContext;
- api:(path:string,options:{method:'POST';body:{queuedSubmissionId:string}})=>Promise<unknown>;
+ api:(path:string,options:{method:'POST';body:{queuedSubmissionId:string;text?:string;expectedText?:string}})=>Promise<unknown>;
  refresh:()=>Promise<unknown>;onError:(error:unknown)=>void;
 }
 type QueueAction='steer'|'delete';
 interface QueueView {signature:string;items:QueueItem[];context:QueueContext;busy:Set<string>}
 const contextKey=(context:QueueContext)=>JSON.stringify([context.host,context.id]);
-function QueueRows({store,act}:{store:StoreApi<QueueView>;act:(item:QueueItem,action:QueueAction)=>Promise<void>}) {
+const content=(item:QueueItem)=>(item.input||[]).filter(part=>part.type==='text').map(part=>part.text).join('\n');
+const message=(error:unknown)=>(error as {message:string}).message;
+function Icon({kind}:{kind:'edit'|'clear'}){return <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><path d={kind==='edit'?'M5 4v10a4 4 0 0 0 4 4h10m-4-4 4 4-4 4':'M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7m4-7v7'}/></svg>;}
+function QueueRows({store,act,edit}:{store:StoreApi<QueueView>;act:(item:QueueItem,action:QueueAction)=>Promise<void>;edit:(item:QueueItem)=>void}) {
  const view=useStore(store),c=view.context;
- // The baseline replaces rows on each changed signature, including focus behavior.
  return <Fragment key={view.signature}>{view.items.map((item,index)=>{
-  const text=(item.input||[]).filter(part=>part.type==='text').map(part=>part.text).join('\n')||'图片或引用消息';
-  const imageCount=(item.input||[]).filter(part=>['image','localImage'].includes(part.type)).length;
-  const disabled=!c.ready||!c.supported||view.busy.has(contextKey(c)+':'+item.id);
-  return <div className="composer-queue-row" key={index}>
-   <span className="subtle">↳</span>
-   <div className="composer-queue-text">{text}{imageCount>0&&<span className="subtle">{' · '+imageCount+' 张图片'}</span>}</div>
-   <button className="text-button" type="button" disabled={disabled} onClick={()=>void act(item,'steer')}>{c.running?'引导':'立即发送'}</button>
-   <button className="icon-button" type="button" aria-label="删除排队消息" disabled={disabled} onClick={()=>void act(item,'delete')}>×</button>
+  const text=content(item)||'图片或引用消息',pending=view.busy.has(contextKey(c)+':'+item.id),disabled=!c.ready||!c.supported||pending;
+  return <div className="composer-queue-row goal-toolbar" aria-busy={pending} key={index}>
+   <button className="goal-edit queue-edit" type="button" data-id={item.id} title={text} aria-label={'编辑排队消息：'+text} disabled={!c.ready||!c.editable||pending} onClick={()=>edit(item)}><Icon kind="edit"/><span className="composer-queue-text">{text}</span></button>
+   <button className="goal-clear" type="button" title="删除排队消息" aria-label="删除排队消息" disabled={disabled} onClick={()=>void act(item,'delete')}><Icon kind="clear"/></button>
+   <button className="queue-guide" type="button" title={c.running?'引导当前任务':'立即发送'} aria-label={c.running?'引导当前任务':'立即发送'} disabled={disabled} onClick={()=>void act(item,'steer')}>{c.running?'引导':'发送'}</button>
   </div>;
  })}</Fragment>;
 }
+interface Editor {text:string;revision:number;feedback:string;disabled:boolean;busy?:boolean;input:(text:string)=>void;submit:()=>void;reload:()=>void;cancel:()=>void;composition:(value:boolean)=>void}
+function QueueEditor({store}:{store:StoreApi<Editor>}){
+ const v=useStore(store),area=useRef<HTMLTextAreaElement>(null),composing=useRef(false);
+ useLayoutEffect(()=>{if(area.current)area.current.value=v.text;},[v.revision]);
+ return <><h2>编辑排队消息</h2><form className="composer-goal" aria-busy={v.busy} onSubmit={e=>{e.preventDefault();v.submit();}} onKeyDown={e=>{if(e.key==='Enter'&&(composing.current||e.nativeEvent.isComposing||e.keyCode===229))e.stopPropagation();}}>
+ <label>消息内容<textarea ref={area} rows={7} maxLength={100000} readOnly={v.disabled} onInput={e=>v.input(e.currentTarget.value)} onCompositionStart={()=>{composing.current=true;v.composition(true);}} onCompositionEnd={()=>{composing.current=false;v.composition(false);}}/></label>
+ <p role="status">{v.feedback}</p><div className="goal-edit-actions"><button type="button" disabled={v.disabled} onClick={v.reload}>重新读取消息</button><button type="button" onClick={v.cancel}>取消</button><button type="submit" disabled={v.disabled}>保存</button></div>
+ </form></>;
+}
 export function installQueuedInputs({host,context,api,refresh,onError}:QueueOptions) {
- const list=document.createElement('div');list.className='composer-queue';list.setAttribute('aria-label','排队消息');list.hidden=true;host.prepend(list);
- const store=createStore<QueueView>(()=>({signature:'',items:[],context:context(),busy:new Set()}));
- const root=createRoot(list);
- let mounted=false,signature='',serial=0;const busy=new Set<string>(),versions=new WeakMap<QueueItem,number>();
+ const list=document.createElement('div');list.className='composer-queue';list.setAttribute('aria-label','排队消息');list.hidden=true;host.querySelector('form.composer')!.before(list);
+ const dialog=document.createElement('dialog');dialog.className='composer-dialog queue-edit-dialog';dialog.setAttribute('aria-label','编辑排队消息');document.body.append(dialog);
+ const store=createStore<QueueView>(()=>({signature:'',items:[],context:context(),busy:new Set()})),root=createRoot(list),editorRoot=createRoot(dialog);
+ let mounted=false,signature='',serial=0,editing:{scope:string;id:string}|null=null,editorSerial=0;
+ const busy=new Set<string>(),versions=new WeakMap<QueueItem,number>(),drafts=new Map<string,{base:string;text:string}>();
  const version=(item:QueueItem)=>{if(!versions.has(item))versions.set(item,++serial);return versions.get(item);};
+ const itemKey=(c:QueueContext,item:QueueItem)=>contextKey(c)+':'+item.id;
+ dialog.addEventListener('close',()=>{const previous=editing;editing=null;if(previous&&contextKey(context())===previous.scope)list.querySelectorAll<HTMLButtonElement>('.queue-edit').forEach(b=>{if(b.dataset.id===previous.id)b.focus();});});
  async function act(item:QueueItem,action:QueueAction){
-  const c=context(),key=contextKey(c)+':'+item.id;if(busy.has(key))return;busy.add(key);render();
-  try{await api('/api/threads/'+encodeURIComponent(String(c.id))+'/queue-'+action,{method:'POST',body:{queuedSubmissionId:item.id}});}
-  catch(error){onError(error);}
+  const c=context(),key=itemKey(c,item);if(busy.has(key)||!c.ready||!c.supported)return;busy.add(key);render();
+  try{await api('/api/threads/'+encodeURIComponent(String(c.id))+'/queue-'+action,{method:'POST',body:{queuedSubmissionId:item.id}});drafts.delete(key);}
+  catch(error){if(contextKey(context())===contextKey(c))onError(error);}
   finally{busy.delete(key);if(contextKey(context())===contextKey(c)){await refresh().catch(onError);signature='';render();}}
  }
+ function edit(item:QueueItem){
+  const c=context(),key=itemKey(c,item);if(!c.ready||!c.editable||busy.has(key))return;
+  const draft=drafts.get(key)||{base:content(item),text:content(item)};drafts.set(key,draft);
+  const session={scope:contextKey(c),id:item.id};editing=session;
+  const same=()=>editing===session&&contextKey(context())===contextKey(c)&&dialog.open;
+  let composing=false,reloading=false;
+  const editor=createStore<Editor>(()=>({text:draft.text,revision:0,feedback:'',disabled:false,input:text=>{draft.text=text;},composition:value=>{composing=value;},cancel:()=>dialog.close(),reload:()=>void reload(),submit:()=>void submit()}));
+  const update=(value:Partial<Editor>)=>flushSync(()=>editor.setState(value));
+  async function reload(){
+   if(busy.has(key)||reloading)return;reloading=true;update({disabled:true});
+   try{await refresh();if(!same())return;const latest=context().queue?.data?.find(q=>q.id===item.id);if(!latest)throw Error('消息已离开队列，草稿已保留。');draft.base=content(latest);draft.text=draft.base;update({text:draft.text,revision:editor.getState().revision+1,feedback:'已读取当前消息。'});}
+   catch(error){if(same())update({feedback:message(error)});}
+   finally{reloading=false;if(same())update({disabled:false});}
+  }
+  async function submit(){
+   if(composing||reloading||!same()||busy.has(key))return;
+   const now=context();if(!now.ready||!now.editable){update({feedback:'连接尚未恢复，草稿已保留。'});return;}
+   if(draft.text===draft.base){drafts.delete(key);dialog.close();return;}
+   busy.add(key);update({disabled:true,feedback:'正在保存…',busy:true});render();
+   try{await api('/api/threads/'+encodeURIComponent(String(c.id))+'/queue-update',{method:'POST',body:{queuedSubmissionId:item.id,text:draft.text,expectedText:draft.base}});drafts.delete(key);if(same())dialog.close();if(contextKey(context())===contextKey(c))await refresh();}
+   catch(error){if(same())update({feedback:message(error)});}
+   finally{busy.delete(key);if(same())update({disabled:false,busy:false});signature='';render();}
+  }
+  flushSync(()=>editorRoot.render(<QueueEditor key={++editorSerial} store={editor}/>));dialog.showModal();dialog.querySelector('textarea')!.focus();
+ }
  function render(){
-  const c=context(),items=c.visible?(c.queue?.data||[]):[];
-  const next=JSON.stringify([contextKey(c),items.map(version),c.ready,c.running,c.supported,[...busy]]);
+  const c=context();if(editing&&(!c.visible||editing.scope!==contextKey(c)))dialog.close();
+  const items=c.visible?(c.queue?.data||[]):[],next=JSON.stringify([contextKey(c),items.map(version),c.ready,c.running,c.supported,c.editable,[...busy]]);
   if(next===signature)return;signature=next;list.hidden=!items.length;
-  flushSync(()=>{store.setState({signature:next,items,context:c,busy:new Set(busy)});if(!mounted){root.render(<QueueRows store={store} act={act}/>);mounted=true;}});
+  flushSync(()=>{store.setState({signature:next,items,context:c,busy:new Set(busy)});if(!mounted){root.render(<QueueRows store={store} act={act} edit={edit}/>);mounted=true;}});
  }
  return {render};
 }

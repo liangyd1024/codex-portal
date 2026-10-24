@@ -4,14 +4,14 @@ function check(code){const result=spawnSync('/usr/bin/python3',['-c',`import run
 test('contract validation accepts compatible releases without a version allowlist',()=>check(`assert m['validate_request_schema'](schema)['status']=='validated'`));
 test('removed optional methods and parameters disable only their dependent operations',()=>check(`
 import copy
-for method,field in [('thread/queue/list',None),('turn/start','effort')]:
+for method,field in [('thread/queue/list',None),('thread/queue/update',None),('turn/start','effort')]:
  changed=copy.deepcopy(schema)
  entry=next(e for e in changed['oneOf'] if method in e['properties']['method']['enum'])
  if field: m['dereference'](changed,entry['properties']['params'])['properties'].pop(field)
  else: changed['oneOf'].remove(entry)
  result=m['validate_request_schema'](changed)
  assert result['status']=='limited' and method in result['unsupportedMethods']
- feature='queue' if method=='thread/queue/list' else 'message'
+ feature={'thread/queue/list':'queue','thread/queue/update':'queueEdit','turn/start':'message'}[method]
  assert not result['features'][feature]['supported']
  assert result['features']['takeover']['supported']
 `));

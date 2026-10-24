@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 12
+PROTOCOL_POLICY = 13
 REQUEST_FIELDS = {
     'thread/fork': {'threadId','ephemeral','excludeTurns','developerInstructions','approvalPolicy','sandbox','model','config'},
     'thread/items/list': {'threadId','limit','sortDirection','cursor'},
@@ -39,6 +39,7 @@ REQUEST_FIELDS = {
     'thread/backgroundTerminals/list': {'threadId', 'limit'},
     'thread/backgroundTerminals/terminate': {'threadId','processId'},
     'thread/queue/list': {'threadId', 'limit', 'cursor'},
+    'thread/queue/update': {'threadId', 'queuedSubmissionId', 'input'},
     'thread/queue/add': {'threadId', 'input', 'clientUserMessageId'},
     'thread/queue/delete': {'threadId', 'queuedSubmissionId'},
     'thread/queue/start': {'threadId', 'queuedSubmissionId'},
@@ -67,6 +68,7 @@ FEATURE_METHODS = {
     'steer': ['turn/steer'],
     'stop': ['turn/interrupt','thread/backgroundTerminals/list','thread/backgroundTerminals/terminate'],
     'queue': ['thread/queue/list'],
+    'queueEdit': ['thread/queue/list','thread/queue/update'],
     'queueWrite': ['thread/queue/list','thread/queue/add','thread/queue/delete','thread/queue/start','turn/steer'],
     'release': ['thread/loaded/list', 'thread/read', 'thread/goal/get', 'thread/backgroundTerminals/list', 'thread/queue/list'],
     'handoff': ['thread/unsubscribe', 'thread/loaded/list', 'thread/read', 'thread/goal/get', 'thread/backgroundTerminals/list', 'thread/queue/list'],

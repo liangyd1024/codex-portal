@@ -131,7 +131,7 @@ export function createApp({serverFactory=handler=>http.createServer(handler),pro
         if(!['image/png','image/jpeg','image/webp','image/gif'].includes(result.mime))throw new AppError('不支持此图片格式。');
         res.writeHead(200,{'Content-Type':result.mime,'Content-Length':content.length,'Cache-Control':'private, max-age=300',...(url.searchParams.get('download')==='1'?{'Content-Disposition':`attachment; filename="${image[2]}.${result.extension}"`}:{})});res.end(content);return;
       }
-      const match=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(side-chat|side-chat-view|turn-directory|history|takeover|handoff|message|steer|queue-add|queue-steer|queue-delete|interrupt|goal|question-answer|retry-capacity))?$/);
+      const match=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(side-chat|side-chat-view|turn-directory|history|takeover|handoff|message|steer|queue-add|queue-steer|queue-delete|queue-update|interrupt|goal|question-answer|retry-capacity))?$/);
       if(req.method==='GET'&&match){const[,id,action]=match;if(action==='side-chat-view')return json(res,200,await readSideChat(manager,id));if(action==='turn-directory')return json(res,200,await manager.turnDirectory(id));if(action==='history')return json(res,200,await manager.history(id,url.searchParams.get('cursor'),false,{},false,null,url.searchParams.get('lazyTools')==='1'));if(!action)return json(res,200,await manager.detail(id,JSON.parse(req.headers['x-output-versions']||'{}'),url.searchParams.get('preview')==='1',url.searchParams.get('outputEncoding'),url.searchParams.get('fast')==='1',url.searchParams.get('lazyTools')==='1'));}
       if(req.method==='POST'){
         const token=req.headers['x-csrf-token']||'';
@@ -171,7 +171,7 @@ export function createApp({serverFactory=handler=>http.createServer(handler),pro
         if(p==='/api/account/reload')return json(res,200,await manager.reloadLogin(data));
         if(p==='/api/service/release')return json(res,200,await manager.release(data));
         if(p==='/api/threads')return json(res,201,await manager.newThread(data));
-        if(match){const[,id,action]=match;const fn={'queue-add':()=>queueInput(manager,id,'add',data),'queue-steer':()=>queueInput(manager,id,'steer',data),'queue-delete':()=>queueInput(manager,id,'delete',data),'side-chat':()=>createSideChat(manager,id,data),'retry-capacity':()=>retryCapacity(manager,id,data),'question-answer':()=>manager.answerQuestions(id,data),goal:()=>setGoal(manager,id,data),takeover:()=>manager.takeover(id),handoff:()=>manager.handoff(id),message:()=>manager.message(id,data),steer:()=>manager.steer(id,data),interrupt:()=>manager.interrupt(id)}[action];if(fn)return json(res,200,await fn());}
+        if(match){const[,id,action]=match;const fn={'queue-update':()=>queueInput(manager,id,'update',data),'queue-add':()=>queueInput(manager,id,'add',data),'queue-steer':()=>queueInput(manager,id,'steer',data),'queue-delete':()=>queueInput(manager,id,'delete',data),'side-chat':()=>createSideChat(manager,id,data),'retry-capacity':()=>retryCapacity(manager,id,data),'question-answer':()=>manager.answerQuestions(id,data),goal:()=>setGoal(manager,id,data),takeover:()=>manager.takeover(id),handoff:()=>manager.handoff(id),message:()=>manager.message(id,data),steer:()=>manager.steer(id,data),interrupt:()=>manager.interrupt(id)}[action];if(fn)return json(res,200,await fn());}
         const approval=p.match(/^\/api\/requests\/([^/]+)\/respond$/);
         if(approval)return json(res,200,manager.respond(decodeURIComponent(approval[1]),data));
       }

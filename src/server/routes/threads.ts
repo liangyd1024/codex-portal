@@ -4,7 +4,7 @@ import type {Response} from '../types';
 import {body,json} from '../protocol';
 import {createThreadService} from '../services/threads';
 
-export const matchThreadRoute=(path:string)=>path.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(side-chat|side-chat-view|turn-directory|history|takeover|handoff|message|steer|queue-add|queue-steer|queue-delete|interrupt|goal|question-answer|retry-capacity))?$/);
+export const matchThreadRoute=(path:string)=>path.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(side-chat|side-chat-view|turn-directory|history|takeover|handoff|message|steer|queue-add|queue-steer|queue-delete|queue-update|interrupt|goal|question-answer|retry-capacity))?$/);
 type Match=ReturnType<typeof matchThreadRoute>;
 type Route=(req:IncomingMessage,res:Response,url:URL,data:Awaited<ReturnType<typeof body>>)=>void|Promise<void>;
 export function createThreadRoutes(manager:Manager) {
