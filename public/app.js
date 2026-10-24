@@ -1,3 +1,4 @@
+import {publishNewChatControls,installNewChatActions} from '../src/web/components/NewChatControls';
 import {createThreadFromDraft as createThreadSubmit} from '../src/web/services/thread-create';
 import {createMessageSend} from '../src/web/services/message-send';
 import {createPlanSubmit} from '../src/web/services/plan-submit';
@@ -423,8 +424,8 @@ function renderControls() {
     buttonView.send.label=creating?'正在创建会话':'发送并开始会话';
     input.disabled=!ready||posting;input.placeholder='描述你想完成的任务…';
     availability.textContent=reason;availability.hidden=!reason;
-    $('new-retry-create').hidden=newDraft.phase!=='uncertain';
-    $('new-cwd').disabled=!ready||creating||newDraft.phase==='uncertain';$('close-new-chat').disabled=creating;
+    publishNewChatControls({retryHidden:newDraft.phase!=='uncertain',closeDisabled:creating});
+    $('new-cwd').disabled=!ready||creating||newDraft.phase==='uncertain';
     buttonView.stop.hidden=true;$('takeover').hidden=true;
     $('thread-title').hidden=false;setText('thread-title','新会话');
   }
@@ -1048,12 +1049,12 @@ function openNewDialog(projectRoot) {
   void reportThreadView().catch(e=>recordError(e,'thread'));
   $('new-composer-slot').append(document.querySelector('.composer-region'));
   $('message-input').value=state.drafts.get(newDraftId)||'';
-  $('new-chat-error').hidden=true;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);
+  publishNewChatControls({errorHidden:true});toggleInspector(false);if(compactLayout())toggleSidebar(false,false);
   renderModels();renderControls();resizeInput();mobileUI?.syncDrawers();$('message-input').focus();
 }
 const createThreadFromDraft=createThreadSubmit({state,draft:newDraft,draftId:newDraftId,access:WEB_ACCESS,createdThreads,
   input:()=>$('message-input'),hasAttachments:()=>attachments.has(),attachmentsPending:()=>attachments.pending(),validate:(...args)=>composer.validateSend(...args),toast,
-  hideError:()=>{$('new-chat-error').hidden=true;},showError:error=>{$('new-chat-error').textContent=messageOf(error);$('new-chat-error').hidden=false;},recordError,action,
+  hideError:()=>{publishNewChatControls({errorHidden:true});},showError:error=>{publishNewChatControls({error:messageOf(error),errorHidden:false});},recordError,action,
   post:body=>api('/api/threads',{method:'POST',body}),moveAttachments:(...args)=>attachments.moveDraft(...args),moveComposer:(...args)=>composer.moveDraft(...args),close:closeNewChat,
   expandProject:id=>sidebar.expandProject(id),clearSearch:()=>{$('thread-search').value='';},saveView,applyDetail,renderThreads,
   send:()=>sendMessage(),loadThreads:()=>loadThreads(),loadStatus:()=>loadStatus()});
@@ -1280,8 +1281,8 @@ function wireEvents() {
     'model-select':value=>{state.model=value;state.effort=defaultEffort(state.model);fillEfforts($('effort-select'),state.model,state.effort);settings.open=false;settings.querySelector('summary').focus();renderControls();},
     'effort-select':value=>{state.effort=value;settings.open=false;settings.querySelector('summary').focus();renderControls();},
   });
-  $('new-retry-create').onclick=()=>{newDraft.complete();$('new-chat-error').hidden=true;renderControls();$('message-input').focus();};
-  $('close-new-chat').onclick=()=>{if(!state.busy.has('create'))closeNewChat();};
+  installNewChatActions({retry:()=>{newDraft.complete();publishNewChatControls({errorHidden:true});renderControls();$('message-input').focus();},
+    close:()=>{if(!state.busy.has('create'))closeNewChat();}});
 
   $('toggle-inspector').onclick = () => toggleInspector(); $('close-inspector').onclick = () => toggleInspector(false);
   $('open-sidebar').onclick = () => toggleSidebar();
