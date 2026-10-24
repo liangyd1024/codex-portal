@@ -3,7 +3,8 @@
  const f=window.rcmFixture,mode=new URL(location.href).searchParams.get('mobileCase')||'empty';
  if(mode==='configured')f.origins=['https://192.0.2.1:4319'];
  if(mode==='phone')f.local=false;
- let copyFails=false,previousCode=null;const copies=[];
+ let copyFails=false,previousCode=null;const copies=[],inputs=[];
+ for(const type of ['touchstart','pointerdown'])document.addEventListener(type,e=>{if(e.target.closest('#mobile-access-body,#toggle-inspector,.inspector-tabs'))inputs.push({type:e.type,pointerType:e.pointerType||null,trusted:e.isTrusted});},{capture:true,passive:true});
  Object.defineProperty(navigator,'clipboard',{configurable:true,value:{async writeText(text){copies.push(text);if(copyFails)throw Error('fixture clipboard failure');}}});
  const previous=window.fetch;
  window.fetch=async(url,options={})=>{
@@ -14,7 +15,7 @@
   else if(data.expires!==null)data.expires=1893456000000;
   return new Response(JSON.stringify(data),{headers:{'content-type':'application/json'}});
  };
- addEventListener('DOMContentLoaded',()=>{
+ addEventListener('rcm-ready',()=>{
   const panel=document.createElement('details');panel.setAttribute('aria-label','手机设置验收控制');panel.style.cssText='position:fixed;top:110px;right:4px;z-index:100001;max-height:40vh;overflow:auto;background:white;color:black;border:1px solid black;padding:4px;font:14px sans-serif';
   const summary=document.createElement('summary');summary.textContent='手机设置验收控制';panel.append(summary);
   const output=document.createElement('pre');output.setAttribute('aria-label','手机设置验收记录');output.style.cssText='white-space:pre-wrap;max-width:280px';
@@ -24,7 +25,7 @@
   button('延迟配对码响应',()=>{f.delay={path:'/api/access/code',ignoreAbort:true};});
   button('释放配对码响应',()=>{if(f.pending?.path!=='/api/access/code')throw Error('No delayed code');f.pending.resolve();f.pending=null;});
   button('记住当前配对码节点',()=>{previousCode=document.querySelector('.pair-code');});
-  button('读取手机验收记录',()=>{output.textContent=JSON.stringify({codeNodeReplaced:previousCode?previousCode!==document.querySelector('.pair-code'):null,calls:f.calls.filter(c=>c.path.startsWith('/api/access/')),copies,errors:f.errors},null,2);});
-  panel.append(output);document.body.append(panel);
+  button('读取手机验收记录',()=>{output.textContent=JSON.stringify({inputs,codeNodeReplaced:previousCode?previousCode!==document.querySelector('.pair-code'):null,calls:f.calls.filter(c=>c.path.startsWith('/api/access/')),copies,errors:f.errors},null,2);});
+  panel.append(output);(document.querySelector('#inspector')||document.body).append(panel);
  });
 })();
