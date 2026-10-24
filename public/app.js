@@ -1,3 +1,4 @@
+import {publishSendActions,installSendActions} from '../src/web/components/SendActions';
 import {publishModelSelect,installModelSelectActions} from '../src/web/components/ModelSelect';
 import {createMessageInput} from '../src/web/services/message-input';
 import {createUpdateScheduler} from '../src/web/services/update-scheduler';
@@ -385,12 +386,13 @@ function renderControls() {
   input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? (followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…') : '发送消息…';
   const hasModel = Boolean(modelFor(state.model));
   const hasEffort = effortsFor(state.model).some(e => e.value === state.effort);
-  $('send-message').disabled = !!state.status?.loginRecovery || !ready || !own || !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') || posting || attachments?.pending() || (!input.value.trim()&&!attachments?.has()&&!annotations?.has()) || (!active && (!hasModel || !hasEffort));
-  $('send-message').setAttribute('aria-label',active ? (followUp==='queue'?'排队发送':'引导当前任务') : '发送消息');
-  const guide=$('guide-message');if(guide){guide.hidden=!active||touchInput()||state.desktopMode;guide.disabled=!ready||!own||posting||attachments?.pending()||!featureReady('steer')||(!input.value.trim()&&!attachments?.has()&&!annotations?.has());}
+  const buttonView={send:{},guide:{},stop:{}};
+  buttonView.send.disabled = !!state.status?.loginRecovery || !ready || !own || !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') || posting || attachments?.pending() || (!input.value.trim()&&!attachments?.has()&&!annotations?.has()) || (!active && (!hasModel || !hasEffort));
+  buttonView.send.label=active ? (followUp==='queue'?'排队发送':'引导当前任务') : '发送消息';
+  buttonView.guide.hidden=!active||touchInput()||state.desktopMode;buttonView.guide.disabled=!ready||!own||posting||attachments?.pending()||!featureReady('steer')||(!input.value.trim()&&!attachments?.has()&&!annotations?.has());
   $('message-form').setAttribute('aria-busy',String(posting));
-  $('send-message').title = posting ? '正在发送…' : active ? (followUp==='queue'?'排队发送':'引导当前任务') : '发送消息';
-  $('interrupt').hidden = !active&&background.state!=='running'&&!stopping; $('interrupt').disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt') || stopping;
+  buttonView.send.title = posting ? '正在发送…' : active ? (followUp==='queue'?'排队发送':'引导当前任务') : '发送消息';
+  buttonView.stop.hidden = !active&&background.state!=='running'&&!stopping; buttonView.stop.disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt') || stopping;
   $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || handing || !state.selectedId;
   $('takeover').querySelector('span').textContent = switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话';
   const availability = $('composer-availability');
@@ -400,10 +402,10 @@ function renderControls() {
   controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
   controlReason('takeover',!ready ? '连接恢复后可接管。' : switching ? '正在接管，请稍候。' : handing ? '交还状态正在确认，请稍候。' : '当前引擎暂不支持接管。');
   publishConnectionSettings({releaseReason:!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。'});
-  $('interrupt').querySelector('span').textContent=stopLabel;
-  $('interrupt').title=stopping?'停止请求已发出，等待目标确认。':active?'停止当前轮次':'停止后台命令';
-  $('interrupt').setAttribute('aria-label',stopping?stopLabel:$('interrupt').title);
-  $('interrupt').setAttribute('aria-busy',String(stopping));
+  buttonView.stop.text=stopLabel;
+  buttonView.stop.title=stopping?'停止请求已发出，等待目标确认。':active?'停止当前轮次':'停止后台命令';
+  buttonView.stop.label=stopping?stopLabel:buttonView.stop.title;
+  buttonView.stop.busy=String(stopping);
   const indicator=$('running-indicator'),nextIndicator=el('div');
   renderConversationActivity(nextIndicator,newChatOpen?null:conversationActivity(currentThread(),{
     connected:ready,controlled:controlled(),active,background,needsAnswer:needsAnswer(state.selectedId),
@@ -412,13 +414,13 @@ function renderControls() {
   reconcileMessages(indicator,nextIndicator);
   if(newChatOpen){
     const reason=!ready?'连接恢复后可发送，草稿已保留。':newDraft.phase==='uncertain'?'创建结果未确认，请刷新侧栏核对，避免重复创建。':!newDraft.cwd?'选择一个项目后开始。':creating?'正在创建会话…':'';
-    $('send-message').disabled ||= !featureReady('create')||!newDraft.cwd||newDraft.phase!=='editing';
-    $('send-message').setAttribute('aria-label',creating?'正在创建会话':'发送并开始会话');
+    buttonView.send.disabled ||= !featureReady('create')||!newDraft.cwd||newDraft.phase!=='editing';
+    buttonView.send.label=creating?'正在创建会话':'发送并开始会话';
     input.disabled=!ready||posting;input.placeholder='描述你想完成的任务…';
     availability.textContent=reason;availability.hidden=!reason;
     $('new-retry-create').hidden=newDraft.phase!=='uncertain';
     $('new-cwd').disabled=!ready||creating||newDraft.phase==='uncertain';$('close-new-chat').disabled=creating;
-    $('interrupt').hidden=true;$('takeover').hidden=true;
+    buttonView.stop.hidden=true;$('takeover').hidden=true;
     $('thread-title').hidden=false;setText('thread-title','新会话');
   }
   projectFolders?.sync();
@@ -446,14 +448,15 @@ function renderControls() {
     const desktop=state.detail?.desktop,online=state.transport&&desktop?.available,unconfirmed=desktop?.unconfirmed||desktopSends[state.selectedId]?.messageId;
     input.disabled=posting;input.placeholder=active?'任务执行中，可先输入下一条要求…':'发送消息，输入 @ 引用会话…';
     $('takeover').hidden=true;
-    $('send-message').disabled=!online||!desktop?.canSend||!!unconfirmed||posting||(!input.value.trim()&&!annotations?.has());
-    $('send-message').title='发送到桌面会话';$('send-message').setAttribute('aria-label','发送到桌面会话');
-    $('interrupt').hidden=!active&&!stopping;$('interrupt').disabled=!online||state.busy.has('interrupt')||stopping;
+    buttonView.send.disabled=!online||!desktop?.canSend||!!unconfirmed||posting||(!input.value.trim()&&!annotations?.has());
+    buttonView.send.title='发送到桌面会话';buttonView.send.label='发送到桌面会话';
+    buttonView.stop.hidden=!active&&!stopping;buttonView.stop.disabled=!online||state.busy.has('interrupt')||stopping;
     const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     availability.textContent=reason;availability.hidden=!reason;
     $('desktop-review').hidden=!unconfirmed;$('desktop-review').disabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
     setText('composer-hint','使用桌面会话的模型与设置。发送成功仅代表会话已接收，任务结果以原始回复为准。');
   }
+  publishSendActions(buttonView);
   if(automations?.opened){$('thread-title').hidden=false;setText('thread-title','定时任务');}
 }
 function controlReason(id, text) {
@@ -1363,8 +1366,8 @@ function wireEvents() {
   historyScroller.addEventListener('wheel',event => { if (event.deltaY < 0) loadEarlierNearTop(); },{passive:true});
   historyScroller.addEventListener('keydown',event => { if (['ArrowUp','PageUp','Home'].includes(event.key)) loadEarlierNearTop(); });
   let searchTimer; $('thread-search').oninput = e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.search = e.target.value.trim(); loadThreads(); },300); };
-  const guide=el('button','text-button','引导');guide.id='guide-message';guide.type='button';guide.title='引导当前任务（⌘/Ctrl+Enter）';guide.hidden=true;guide.onclick=()=>sendMessage(undefined,true);$('interrupt').before(guide);
-  messageInput.bind($('message-form')); $('interrupt').onclick = interruptThread;
+  installSendActions({guide:()=>sendMessage(undefined,true),stop:interruptThread});
+  messageInput.bind($('message-form'));
   installModelSelectActions({
     'model-select':value=>{state.model=value;state.effort=defaultEffort(state.model);fillEfforts($('effort-select'),state.model,state.effort);settings.open=false;settings.querySelector('summary').focus();renderControls();},
     'effort-select':value=>{state.effort=value;settings.open=false;settings.querySelector('summary').focus();renderControls();},

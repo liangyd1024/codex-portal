@@ -1218,3 +1218,15 @@
 - 为区分上述响应条件，另在隔离浏览器包装创建响应，使其返回请求所选模型与档位，并同步模拟会话。补取 28 个阶段样本、14 对，深比较一致；四个创建样本均只有一次创建和一次消息请求，两次请求的模型／档位均为所选值。原会话恢复仍遵循该会话自身目录值。
 - 两组均保留原文、参数和节点身份，未归一化请求。测试草稿已清空，无未处理页面错误或横向溢出。操作使用 click/selectOption/fill，不代表实体手机原生选择面板；所有创建与发送均为隔离虚构数据。
 - 仓库外证据：`rcm-model-controls-move-results.json`（含超时前记录）、`rcm-model-controls-move-stable-last-results.json`、`rcm-model-controls-move-combined-results.json`、`rcm-model-controls-move-selected-results.json`。本轮只更新文档，最近完整回归保持 777 Node／72 Python；整体迁移与全量验收仍未完成。
+
+## 发送、引导和停止按钮 React 迁移
+
+正式基准 `525347a`。SendActions 组件管理三个按钮及图标、文案、显隐、禁用、可访问属性和引导／停止事件。控制器按原规则计算最终视图，覆盖普通会话、新建页和桌面接续模式后一次发布；表单提交与执行语义不变，未改 CSS。候选资源 `7bd825c9`。
+
+- 原有四项模型可用性测试此前检查旧按钮 DOM 写入，现改为检查渲染输出状态，保留运行中补充要求、缺少模型／档位、断线、能力限制及目录恢复的原意。最终完整回归 777 Node／72 Python、类型检查和构建通过。
+- ego-lite 桌面 1480×747、DPR 2；iPhone 12 模式 390×844、DPR 3、触控开启。普通发送、失败重试、运行中引导、停止中、停止失败及成功共 40 个样本／20 对；状态、文案、草稿、请求、节点身份及稳定后的字体、颜色、边框、尺寸一致。停止中再次 click 未增加请求。
+- 初次颜色采样落在过渡动画内，两版出现瞬时 RGB 差异；保持原动画，等待计算样式和几何连续稳定后重测，20 对完整深比较一致。未用关闭动画掩盖差异。
+- 新建失败／结果未知／重载保护另完成 24 个样本／12 对，文字和图片保留、按钮禁用和确认重试符合基准；手机关键按钮用命中检查后的触控事件。
+- 桌面接续模式在两种视口补验可用、不可用、恢复、发送中、拒绝后恢复，共 20 个样本／10 对。按样本独立生成的 messageId 归一化后，其余状态与请求深比较一致。该部分用 click，不等于实体手机桌面客户端操作。
+- 本轮静态 master 两次未完成模块初始化。记录中 app.js 为 200，而多个依赖 responseStatus=0、transferSize=0；直接 import 报动态模块获取失败。静态服务进程存活，HTTP app.js 返回 200。页面重载恢复后各流程通过；开启 Network 记录后的再加载未见 loadingFailed。故障原因仍未确定，不归因于新按钮组件，也不记为已修复。
+- 浏览器操作全为隔离虚构会话，没有停止任何真实任务。原始证据在仓库外：`rcm-send-buttons-stable-results.json`、`rcm-send-actions-create-recovered-results.json`、`rcm-send-buttons-desktop-mode-results.json`；加载失败另存 `rcm-send-buttons-baseline-load-failure.json` 和网络事件记录。
