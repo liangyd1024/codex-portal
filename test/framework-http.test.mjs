@@ -512,3 +512,107 @@ test('desktop pending and unknown outcomes block both entries until explicitly a
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+test('workspace routes preserve folder, project and composer request semantics',async()=>{
+ const outcomes=[],key='00000000-0000-0000-0000-000000000021';
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),records=[];let existing=false,timeout=false;
+  try{
+   for(const [host,manager] of env.managers){
+    manager.host.home='/fixture/home';manager.generation=1;
+    manager.service={protocolValidation:{features:{projectFolders:{supported:true}}}};
+    manager.requireWritable=()=>{};manager.withMutation=async work=>work();
+    manager.publish=(...args)=>env.calls.push([host,'publish',...args]);
+    manager.rpc={connected:true,request:async(method,params,options)=>{
+     env.calls.push([host,method,params,options]);
+     if(method==='fs/getMetadata')return {isDirectory:true};
+     if(method==='fs/readDirectory')return {entries:[{fileName:'子目录',isDirectory:true},{fileName:'file',isDirectory:false},{fileName:'..',isDirectory:true},{fileName:'bad/name',isDirectory:true}]};
+     if(method==='fs/createDirectory'){if(timeout)throw Object.assign(Error('fixture timeout'),{code:'RPC_TIMEOUT'});return {ok:true};}
+     if(method==='project/list')return {data:existing?[{id:'fixture-project',name:'Fixture',roots:[{path:'/fixture/project'}],unknown:7}]:[],nextCursor:null};
+     if(method==='project/create')return {project:{id:'fixture-project',name:params.name,roots:params.roots,unknown:7}};
+     return {data:[{name:'中文目录',unknown:{keep:true}}],future:[method]};
+    }};
+   }
+   const request=async(path,data,auth=true)=>{
+    env.calls.length=0;const r=await fetch(env.base+path,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data),headers:auth?{'x-csrf-token':env.token}:{}})});
+    const record={status:r.status,body:await r.json(),calls:structuredClone(env.calls)};records.push(record);return record;
+   };
+   await request('/api/project-folders?host=b');
+   await request('/api/project-folders?host=b&path=%2Ffixture%2F..%2Fproject%2F&path=%2Fignored');
+   await request('/api/project-folders?host=b&path=relative');
+   await request('/api/project-folders?host=b',{parent:'/fixture',name:'中文目录',future:1});
+   await request('/api/project-folders?host=b',{parent:'/fixture',name:'../bad'});
+   timeout=true;await request('/api/project-folders?host=b',{parent:'/fixture',name:'uncertain'});timeout=false;
+   await request('/api/project-folders?host=b',{parent:'/fixture',name:'blocked'},false);
+   await request('/api/projects/open?host=b',{path:'/fixture/project',idempotencyKey:key,unknown:{keep:true}});
+   existing=true;await request('/api/projects/open?host=b',{path:'/fixture/project',idempotencyKey:key});
+   await request('/api/projects/open?host=b',{path:'/fixture/project',idempotencyKey:'bad'});
+   await request('/api/composer?host=b&cwd=%2Ffixture%2Fproject&kind=skills&kind=modes');
+   await request('/api/composer?host=b&cwd=%2Ffixture%2Fproject&kind=skills');
+   await request('/api/composer?host=b&cwd=%2Ffixture%2Fproject');
+   await request('/api/composer?host=b&cwd=%2Ffixture%2Fproject&kind=invalid');
+   await request('/api/composer?host=b');
+   env.managers.get('b').service.protocolValidation.features.projectFolders.supported=false;
+   await request('/api/project-folders?host=b');
+   assert.deepEqual(records.map(r=>r.status),[200,200,400,200,400,502,403,200,200,400,200,200,200,400,400,409]);
+   assert.equal(records[0].body.path,'/fixture/home');assert.deepEqual(records[0].body.entries,[{name:'子目录',path:'/fixture/home/子目录'}]);
+   assert.equal(records[1].body.path,'/project');
+   assert.equal(records[5].body.error.code,'OUTCOME_UNKNOWN');
+   assert.equal(records[7].body.existing,false);assert.equal(records[8].body.existing,true);
+   assert.equal(records[10].calls[0][1],'skills/list');assert.equal(records[11].calls.length,0);
+   assert.deepEqual(records[12].calls.map(c=>c[1]),['collaborationMode/list','plugin/installed']);
+   assert.ok(records.flatMap(r=>r.calls).every(c=>c[0]==='b'));
+   assert.equal(env.managers.get('b').projectFolderMutation,false);
+   outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
+
+test('sidebar routes preserve repeated queries, account revision guards and action failures',async()=>{
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),records=[];let changeAccount=false;
+  try{
+   for(const [host,manager] of env.managers){
+    manager.generation=1;manager.accountRevision=0;manager.subscriptions=new Map();manager.autoTitles=new Map();
+    manager.service={protocolValidation:{policy:4,unsupportedMethods:[]}};
+    manager.requireWritable=()=>{};manager.withMutation=async work=>work();manager.saveTitles=()=>{};
+    manager.publish=(...args)=>env.calls.push([host,'publish',...args]);
+    manager.rpc={connected:true,request:async(method,params,options)=>{env.calls.push([host,'rpc',method,params,options]);return method==='account/read'?{workspaceRouting:{chatgptAccountId:'fixture-account'}}:{ok:true,unknown:'原文'};}};
+    manager.passive=async(action,params)=>{
+     env.calls.push([host,'passive',action,params]);if(changeAccount)manager.accountRevision++;
+     if(action==='sidebarActivity')return {data:{'qa-thread':{state:'idle',unknown:'保留'}},future:9};
+     return {data:[{id:'qa-thread',revision:10,name:'旧名称'}],sections:[],accountScope:'fixture-scope',accountLayoutAvailable:true,preferences:{},unknown:{keep:true}};
+    };
+   }
+   const request=async(path,data,auth=true)=>{
+    env.calls.length=0;const r=await fetch(env.base+path,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data),headers:auth?{'x-csrf-token':env.token}:{}})});
+    const record={status:r.status,body:await r.json(),calls:structuredClone(env.calls)};records.push(record);return record;
+   };
+   await request('/api/sidebar?host=b&search=first&search=last&activity=deferred&future=raw');
+   await request('/api/sidebar/activity?host=b&ids=%5B%22ignored%22%5D&ids=%5B%22qa-thread%22%5D');
+   await request('/api/sidebar/activity?host=b&ids=invalid');
+   await request('/api/sidebar/activity?host=b&ids=%5B%22bad%2Fid%22%5D');
+   const rename={action:'rename',id:'qa-thread',name:' 中文名称 ',accountScope:'fixture-scope',expectedRevision:10,unknown:{keep:true}};
+   await request('/api/sidebar/actions?host=b',rename);
+   await request('/api/sidebar/actions?host=b',{...rename,expectedRevision:9});
+   await request('/api/sidebar/actions?host=b',{...rename,accountScope:'stale'});
+   await request('/api/sidebar/actions?host=b',{...rename,action:'read'});
+   await request('/api/sidebar/actions?host=b',{action:'unknown'});
+   await request('/api/sidebar/actions?host=b',rename,false);
+   changeAccount=true;await request('/api/sidebar?host=b');changeAccount=false;
+   assert.deepEqual(records.map(r=>r.status),[200,200,400,400,200,409,409,409,400,403,409]);
+   assert.equal(records[10].body.error.code,'ACCOUNT_CHANGED');
+   assert.equal(records[0].calls.find(c=>c[1]==='passive')[3].search,'last');
+   assert.equal(records[0].calls.find(c=>c[1]==='passive')[3].includeActivity,false);
+   assert.deepEqual(records[1].calls.find(c=>c[1]==='passive')[3].threadIds,['qa-thread']);
+   assert.deepEqual(records[4].calls.find(c=>c[2]==='thread/name/set')[3],{threadId:'qa-thread',name:'中文名称'});
+   assert.deepEqual([records[5],records[6],records[7]].map(r=>r.body.error.code),['SIDEBAR_CHANGED','ACCOUNT_CHANGED','FEATURE_UNAVAILABLE']);
+   for(const index of [2,3,8,9])assert.equal(records[index].calls.length,0);
+   assert.equal(env.managers.get('b').sidebarMutation,false);
+   outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});

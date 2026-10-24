@@ -4,14 +4,12 @@ import type {Response,MobileConfig,Host} from '../types';
 import type {ApplicationOptions} from '../types';
 import {createThreadRoutes,matchThreadRoute} from './threads';
 import {createStaticResponse} from '../../../lib/http/static-response.mjs';
-import {browseFolders,createFolder,openFolderProject} from '../../../lib/project-folders.mjs';
 import {deploymentStatus} from '../../../lib/deployment-status.mjs';
 import {WebUpdate} from '../../../lib/web-update.mjs';
 import {createConnectionRoutes} from './connections';
+import {createWorkspaceRoutes} from './workspace';
 import {createDesktopRoutes,matchDesktopRoute} from './desktop';
 import {createMediaRoutes} from './media';
-import {readSidebar,readSidebarActivity,sidebarAction} from '../../../lib/sidebar.mjs';
-import {composerCatalog} from '../../../lib/composer.mjs';
 import http from 'node:http';
 import {json,body} from '../protocol';
 import {MobileAccess} from '../../../lib/mobile-access.mjs';
@@ -32,6 +30,8 @@ export interface RouteServices {
  server:()=>import('node:http').Server;mobileConfig:()=>MobileConfig|null;setMobileConfig:(value:MobileConfig)=>void;
 }
 export function createDispatcher(context:RouteServices){
+ const workspaceRoutes=new WeakMap<Manager,ReturnType<typeof createWorkspaceRoutes>>();
+ const workspaceRoutesFor=(manager:Manager)=>{let routes=workspaceRoutes.get(manager);if(!routes){routes=createWorkspaceRoutes(manager);workspaceRoutes.set(manager,routes);}return routes;};
  const desktopRoutes=new Map<string,ReturnType<typeof createDesktopRoutes>>();
  const desktopRoutesFor=(host:string,manager:Manager)=>{let routes=desktopRoutes.get(host);if(!routes){routes=createDesktopRoutes(manager,context.automations.get(host)!,id=>context.desktopSession(host,id));desktopRoutes.set(host,routes);}return routes;};
  const mediaRoutes=new WeakMap<Manager,ReturnType<typeof createMediaRoutes>>();
@@ -90,10 +90,7 @@ export function createDispatcher(context:RouteServices){
       if(req.method==='GET'&&p==='/api/system/deployment-status'){if(remote)throw new AppError('仅限本机部署检查。',403);return json(res,200,await deploymentStatus(manager));}
       const desktopMatch=matchDesktopRoute(p);
       if(req.method==='GET'){const route=desktopRoutesFor(targetKey,manager).read(p,desktopMatch);if(route){await route(url,undefined,res);return;}}
-      if(req.method==='GET'&&p==='/api/composer')return json(res,200,await composerCatalog(manager,url.searchParams.get('cwd'),url.searchParams.get('kind')));
-      if(req.method==='GET'&&p==='/api/sidebar/activity')return json(res,200,await readSidebarActivity(manager,Object.fromEntries(url.searchParams)));
-      if(req.method==='GET'&&p==='/api/sidebar')return json(res,200,await readSidebar(manager,Object.fromEntries(url.searchParams)));
-      if(req.method==='GET'&&p==='/api/project-folders')return json(res,200,await browseFolders(manager,url.searchParams.get('path')));
+      if(req.method==='GET'){const route=workspaceRoutesFor(manager).get('GET '+p);if(route){await route(url,undefined,res);return;}}
       const mediaRoute=mediaRoutesFor(manager).read(req.method,p);if(mediaRoute){await mediaRoute(req,res,url);return;}
       const match=matchThreadRoute(p);
       if(req.method==='GET'){const route=threadRoutesFor(manager).read(p,match);if(route){await route(req,res,url,undefined);return;}}
@@ -102,13 +99,12 @@ export function createDispatcher(context:RouteServices){
         if(typeof token!=='string'||Buffer.byteLength(token)!==Buffer.byteLength(csrf)||!timingSafeEqual(Buffer.from(token),Buffer.from(csrf)))throw new AppError('本机会话已变化。请刷新页面。',403,'CSRF');
         const data=await body(req,/^\/api\/threads\/[A-Za-z0-9_-]+\/(message|steer|queue-add)$/.test(p)?6*1024*1024:1024*1024);
         if(p==='/api/system/update'){if((server.address() as AddressInfo|null)?.port!==4317&&!providedManagers)throw new AppError('开发预览不能更新正式服务。',409);if(Object.keys(data).length)throw new AppError('更新接口不接受仓库、版本或会话参数。');return json(res,202,await updater.start());}
-        if(p==='/api/project-folders')return json(res,200,await createFolder(manager,data));
-        if(p==='/api/projects/open')return json(res,200,await openFolderProject(manager,data));
+        if(p==='/api/project-folders'||p==='/api/projects/open'){await workspaceRoutesFor(manager).get('POST '+p)!(url,data,res);return;}
         const desktopRoute=desktopRoutesFor(targetKey,manager).desktopWrite(desktopMatch);if(desktopRoute){await desktopRoute(url,data,res);return;}
         if(match&&desktopSessions.get(targetKey+':'+match[1])?.pending)throw new AppError('桌面发送仍在确认中，请稍后重试。',409,'SEND_PENDING');
         const automationRoute=desktopRoutesFor(targetKey,manager).automationWrite(p);if(automationRoute){await automationRoute(url,data,res);return;}
         if(match&&match[1]===automations.get(targetKey)!.state.threadId&&match[2])throw new AppError('此管理会话由桌面执行，请从定时任务入口继续。',409,'DESKTOP_MANAGED');
-        if(p==='/api/sidebar/actions')return json(res,200,await sidebarAction(manager,data));
+        if(p==='/api/sidebar/actions'){await workspaceRoutesFor(manager).get('POST '+p)!(url,data,res);return;}
         if(p==='/api/access/setup'&&!remote){if(!setupMobile)throw new AppError('此入口不支持配置手机访问。请在本机正式服务中操作。',409);if(data.mode!==undefined&&!['lan','tailscale'].includes(data.mode))throw new AppError('未知手机访问方式。');mobileConfig=await setupMobile(data.mode||'lan');context.setMobileConfig(mobileConfig);return json(res,200,{ok:true});}
         if(p==='/api/access/code'&&!remote){if(!mobileConfig?.origins?.length)throw new AppError('请先配置手机访问地址，再生成配对码。',409,'MOBILE_NOT_CONFIGURED');return json(res,200,access.createCode(data.ttlSeconds,data.sessionTtlSeconds));}
         if(p==='/api/access/revoke'&&!remote){access.revoke();for(const client of clients)if(client.mobileRequest){client.end();clients.delete(client);}return json(res,200,{ok:true});}
