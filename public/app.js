@@ -1,3 +1,4 @@
+import {createAutoRefresh} from '../src/web/services/auto-refresh';
 import {createDetailRecovery} from '../src/web/services/detail-recovery';
 import {createLayoutController} from '../src/web/services/layout';
 import {connectionBanner} from '../src/web/services/connection-banner';
@@ -901,24 +902,12 @@ const workspaceRefresh=createWorkspaceRefresh({showRefresh:(...args)=>showRefres
   loadStatus:()=>loadStatus(),connected:()=>connected(),loadModels:force=>loadModels(force),
   loadProjects:()=>loadProjects(),loadThreads:(...args)=>loadThreads(...args),
   refreshSelected:()=>refreshSelected(),refreshAccountUsage:()=>refreshAccountUsage?.(true)});
-let autoRefreshTimer = null;
-async function refreshCatalogs() {
-  if (document.hidden || !usable() || state.refreshing || catalogs.pendingModels() || catalogs.pendingProjects()) return;
-  await showRefresh('项目和模型列表', async () => {
-    const results = await Promise.allSettled([loadProjects(),loadModels(true)]);
-    const labels = ['项目列表','模型列表'];
-    const failures = results.flatMap((r,i) => r.status === 'rejected' ? [labels[i] + '：' + (r.reason?.message || String(r.reason))] : []);
-    if (failures.length) throw new Error(failures.join('；'));
-  });
-}
-function setAutoRefresh(enabled) {
-  clearInterval(autoRefreshTimer); autoRefreshTimer = null;
-  $('auto-refresh').checked = enabled;
-  try { localStorage.setItem('rcm.autoRefresh.' + targetHost, String(enabled)); } catch {}
-  if (enabled) autoRefreshTimer = setInterval(() => {
-    refreshCatalogs().catch(error => recordError(error,'refresh'));
-  },30000);
-}
+const autoRefreshController=createAutoRefresh({hidden:()=>document.hidden,usable:()=>usable(),
+  refreshing:()=>state.refreshing,pendingModels:()=>catalogs.pendingModels(),pendingProjects:()=>catalogs.pendingProjects(),
+  showRefresh:(...args)=>showRefresh(...args),loadProjects:()=>loadProjects(),loadModels:force=>loadModels(force),
+  checked:enabled=>{$('auto-refresh').checked=enabled;},host:()=>targetHost,
+  save:(key,value)=>localStorage.setItem(key,value),recordError:(...args)=>recordError(...args)});
+const setAutoRefresh=autoRefreshController.setEnabled;
 let taskNotificationsEnabled = false;
 
 function renderTaskNotifications() {
@@ -1409,7 +1398,7 @@ function wireEvents() {
   try { autoRefresh = localStorage.getItem('rcm.autoRefresh.' + targetHost) === 'true'; } catch {}
   setAutoRefresh(autoRefresh);
   $('auto-refresh').onchange = event => setAutoRefresh(event.target.checked);
-  window.addEventListener('pagehide', () => { flushDrafts(); clearInterval(autoRefreshTimer); autoRefreshTimer = null; });
+  window.addEventListener('pagehide', () => { flushDrafts(); autoRefreshController.stop(); });
   window.addEventListener('pageshow', event => { if (event.persisted) setAutoRefresh($('auto-refresh').checked); });
   document.addEventListener('visibilitychange',() => { if (document.hidden) flushDrafts(); });
   installThreadSync({window,document,
