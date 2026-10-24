@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {createSendReceipts} from '../public/connection-state.js';
 import {applySideEvent} from '../shared/side-chat-events.js';
+import {messageInput} from '../lib/message-input.mjs';
 import {annotatedText} from '../public/response-annotations.js';
 const source=readFileSync(new URL('../public/side-chat.js',import.meta.url),'utf8');
 function fixture(active=false){
@@ -42,3 +43,17 @@ test('late side acknowledgement cannot replace the newly selected chat draft',as
 });
 
 test('replacing an expired side chat preserves unsent text and attachments but does not replay history',async()=>{const old={id:'expired',expired:true,parent:'parent',draft:'保留草稿',selections:[{text:'选文'}],turns:[{id:'old-turn'}]},moves=[],created=[];const c=vm.createContext({selected:old,chats:new Map(),input:{value:old.draft},crypto:{randomUUID:()=> 'new-request'},attachments:{moveDraft:(...args)=>moves.push(args)},render(){},create:async s=>created.push(s)});vm.runInContext(source.slice(source.indexOf(' async function restartExpired('),source.indexOf(' async function create(')),c);await c.restartExpired();assert.equal(c.selected.parent,'parent');assert.equal(c.selected.draft,old.draft);assert.equal(c.selected.turns.length,0);assert.equal(c.selected.selections[0].text,'选文');assert.deepEqual(moves,[['expired','new-request']]);assert.equal(created.length,1);assert.equal(old.turns.length,1);});
+
+test('side receipt matches the server-normalized selection input before and after HTTP acknowledgement',async()=>{
+ for(const active of [false,true])for(const eventFirst of [false,true]){
+  const f=fixture(active);f.selected.draft='  中文请求\n保留内部换行  ';f.c.input.value=f.selected.draft;const sending=f.c.submit();
+  const native=messageInput(f.calls[0].options.body.text),result=active?{turnId:'native-turn'}:{turn:{id:'native-turn',status:'inProgress',items:[]}};
+  if(!eventFirst){f.resolve(result);await sending;}
+  applySideEvent(f.selected.turns,'item/completed',{turnId:'native-turn',item:{id:'native-input',type:'userMessage',content:native}});
+  applySideEvent(f.selected.turns,'item/completed',{turnId:'native-turn',item:{id:'reply',type:'agentMessage',text:'真实回复'}});
+  f.c.render();assert.equal(f.view().length,0,'native input replaces the pending bubble');
+  if(eventFirst){f.resolve(result);await sending;}
+  assert.equal(f.view().length,0);assert.equal(f.selected.turns[0].items.filter(i=>i.type==='userMessage').length,1);
+  assert.match(native[0].text,/中文请求\n保留内部换行/);assert.equal(f.calls.length,1);
+ }
+});
