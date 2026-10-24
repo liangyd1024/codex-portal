@@ -1295,7 +1295,9 @@ async function sendMessage(e,alternate=false) {
     const cleared = state.drafts.acknowledge(sent);
     if (scope===targetHost+':'+state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }
     if (scope===targetHost+':'+state.selectedId && selection === state.selectionVersion) { if(d.turn)upsertTurn(d.turn);renderThread(); }
-    try { if (id === state.selectedId && selection === state.selectionVersion) await refreshSelected(); } catch (err) { recordError(err,'thread'); }
+    // Native acceptance ends submission. History/status reads must not keep
+    // the composer locked; refreshSelected guards late responses and coalesces reads.
+    if (scope===targetHost+':'+state.selectedId && selection===state.selectionVersion) void refreshSelected().catch(err=>recordError(err,'thread'));
   });
 }
 async function implementPlan(id,plan){
