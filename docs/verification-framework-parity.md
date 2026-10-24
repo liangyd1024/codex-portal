@@ -2,6 +2,8 @@
 
 ## 当前运行基准与新增复验
 
+详情导航迁移候选 `c38703d`／干净资源 `839e02ca` 已完成 36 对桌面与 iPhone 行为复验及完整回归。桌面切换仍有额外性能开销，未更新预览；详见[详情导航报告](verification-framework-inspector-navigation.md)。
+
 侧聊流式正文与焦点新增 36 对比较一致，覆盖长回复追加、选区、展开状态、暂停跟随后的位置和手机键盘循环；初始采样问题与限制单独保留。详见[侧聊补验](verification-framework-side-chat.md#流式正文与焦点补验)。
 
 侧聊 React/TypeScript 迁移提交 `00a3ec9` 已完成 168 对桌面与 iPhone 模式隔离比较，全部一致；类型检查及 820 Node／74 Python 回归通过。独立预览已更新到干净构建 `00a3ec9`／资源 `ea89d9e4`；桌面与 iPhone 三视口八个真实启动样本及窄屏抽屉触控通过。详见[侧聊验收报告](verification-framework-side-chat.md)。整体迁移与验收仍未完成。
