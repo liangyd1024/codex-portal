@@ -1,3 +1,4 @@
+import {createMessageSend} from '../src/web/services/message-send';
 import {createPlanSubmit} from '../src/web/services/plan-submit';
 import {createStopRequest} from '../src/web/services/stop-request';
 import {createDesktopSend} from '../src/web/services/desktop-send';
@@ -1077,48 +1078,15 @@ async function createThreadFromDraft(){
   });
   if(created){await sendMessage();void Promise.allSettled([loadThreads(),loadStatus()]);}
 }
-async function sendMessage(e,alternate=false) {
-  e?.preventDefault();
-  if ($('send-message').disabled&&!alternate) return;
-  if(newChatOpen){await createThreadFromDraft();return;}
-  if(state.desktopMode){await sendDesktopMessage();return;}
-  const annotationDraft=annotations.capture();
-  const text = annotatedText($('message-input').value.trim(),annotationDraft.items), id = state.selectedId;
-  if ((!text&&!attachments?.has()) || attachments?.pending() || !id || !usable() || !controlled() || state.busy.has('message')) return;
-  const active = running(), selection = state.selectionVersion;
-  const followUp=followUpAction({active,touch:touchInput(),alternate});
-  try{composer.validateSend(text,active);}catch(error){toast(error.message,true);return;}
-  const sent = state.drafts.capture(id,$('message-input').value), pictures=attachments.capture();
-  await action('message',async () => {
-    const images=pictures.items.map(i=>({url:i.url}));
-    const options=composer.options();
-    if(options.threads.length&&(active||composer.isGoalPending()))throw new Error('请在当前任务结束后单独发送会话引用，暂不能与启动目标模式合并发送。草稿已保留。');
-    const payload = active ? {text,images,skills:options.skills,plugins:options.plugins,threads:options.threads} : {text,images,model:state.model,effort:state.effort,...options};
-    const scope=targetHost+':'+id;
-    const content=[...(text?[{type:'text',text}]:[]),...images.map(i=>({type:'image',url:i.url}))];
-    const receipt=sendReceipts.begin(scope,content,turns());
-    renderMessages();scrollFollow?.schedule();
-    let d,submitted=false;
-    try{
-      const goalStarted=await composer.prepareSend(id,text,active);
-      submitted=true;
-      d=followUp==='queue'?await api('/api/threads/'+encodeURIComponent(id)+'/queue-add',{method:'POST',body:payload}):await sendAfterGoal({goalStarted,id,payload,active,api});
-      if(d.queuedSubmission){sendReceipts.remove(scope,receipt);if(scope===targetHost+':'+state.selectedId&&selection===state.selectionVersion&&state.detail){const queue=state.detail.queue||{data:[]};state.detail.queue={...queue,data:[...(queue.data||[]).filter(q=>q.id!==d.queuedSubmission.id),d.queuedSubmission]};}}
-      else sendReceipts.accept(receipt,d);
-    }catch(error){
-      if(submitted)sendReceipts.fail(receipt,error);else receipt.status='failed';
-      if(scope===targetHost+':'+state.selectedId)renderMessages();
-      throw error;
-    }
-    attachments.acknowledge(pictures);annotations.acknowledge(annotationDraft);
-    const cleared = state.drafts.acknowledge(sent);
-    if (scope===targetHost+':'+state.selectedId && cleared && $('message-input').value === sent.text) { $('message-input').value = ''; resizeInput(); }
-    if (scope===targetHost+':'+state.selectedId && selection === state.selectionVersion) { if(d.turn)upsertTurn(d.turn);renderThread(); }
-    // Native acceptance ends submission. History/status reads must not keep
-    // the composer locked; refreshSelected guards late responses and coalesces reads.
-    if (scope===targetHost+':'+state.selectedId && selection===state.selectionVersion) void refreshSelected().catch(err=>recordError(err,'thread'));
-  });
-}
+const submitMessage=createMessageSend({state,input:()=>$('message-input'),disabled:()=>$('send-message').disabled,
+  newChatOpen:()=>newChatOpen,createThread:()=>createThreadFromDraft(),sendDesktop:()=>sendDesktopMessage(),host:()=>targetHost,
+  captureAnnotation:()=>annotations.capture(),annotatedText:(text,draft)=>annotatedText(text,draft.items),acknowledgeAnnotation:draft=>annotations.acknowledge(draft),
+  hasAttachments:()=>attachments?.has(),attachmentsPending:()=>attachments?.pending(),captureAttachments:()=>attachments.capture(),acknowledgeAttachments:pictures=>attachments.acknowledge(pictures),
+  captureDraft:(id,text)=>state.drafts.capture(id,text),acknowledgeDraft:draft=>state.drafts.acknowledge(draft),usable,controlled,running,touch:touchInput,followUp:followUpAction,
+  validate:(text,active)=>composer.validateSend(text,active),options:()=>composer.options(),goalPending:()=>composer.isGoalPending(),prepare:(...args)=>composer.prepareSend(...args),
+  send:context=>sendAfterGoal({...context,api}),post:(path,body)=>api(path,{method:'POST',body}),receipts:sendReceipts,turns,action,
+  renderMessages,followScroll:()=>scrollFollow?.schedule(),resize:resizeInput,upsert:upsertTurn,renderThread,refresh:()=>refreshSelected(),recordError,toast});
+async function sendMessage(e,alternate=false){return submitMessage(e,alternate);}
 const submitPlan=createPlanSubmit({state,newChatOpen:()=>newChatOpen,usable,controlled,running,
   completed:()=>completedPlan(turns()),text:implementationText,access:WEB_ACCESS,
   post:(path,body)=>api(path,{method:'POST',body}),upsert:upsertTurn,renderControls,renderThread,
