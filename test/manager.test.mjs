@@ -378,6 +378,41 @@ test('ephemeral goal exclusion never bypasses active turns or unknown goal failu
     assert.ok(!serviceCalls.includes('release'));
   }
 });
+test('maintenance accepts the native ephemeral queue exclusion for release and login reload',async(t)=>{
+  for(const reloadLogin of [false,true]){
+    const {manager,rpc,serviceCalls}=fixture(t,{
+      'thread/loaded/list':()=>({data:['temporary','ordinary']}),
+      'thread/goal/get':({threadId})=>{if(threadId==='temporary')throw new Error('ephemeral thread does not support goals: temporary');return {goal:null};},
+      'thread/queue/list':({threadId})=>{if(threadId==='temporary')throw new Error('ephemeral thread does not support queued submissions: temporary');return {data:[]};},
+    });
+    await manager.release({allEntrancesDisconnected:true},reloadLogin);
+    assert.deepEqual(serviceCalls,[reloadLogin?'reload-login':'release']);
+    assert.equal(rpc.calls.filter(c=>c.method==='thread/backgroundTerminals/list').length,2);
+    assert.equal(rpc.calls.filter(c=>c.method==='thread/queue/list').length,2);
+  }
+});
+test('ephemeral queue exclusion preserves maintenance blockers and fails closed on other errors',async(t)=>{
+  const exclusion='ephemeral thread does not support queued submissions: temporary';
+  const cases=[
+    {'thread/read':()=>({thread:{status:{type:'active'}}})},
+    {'thread/goal/get':()=>({goal:{status:'active'}})},
+    {'thread/backgroundTerminals/list':()=>({data:[{processId:'background'}]})},
+    {'thread/queue/list':()=>{throw new Error('network failure');}},
+    {'thread/queue/list':()=>{throw new Error(exclusion+' extra failure');}},
+    {'thread/queue/list':()=>{throw new Error('ephemeral thread does not support queued submissions: other');}},
+    {'thread/queue/list':()=>({})},
+  ];
+  for(const reloadLogin of [false,true])for(const handlers of cases){
+    const {manager,serviceCalls}=fixture(t,{
+      'thread/loaded/list':()=>({data:['temporary']}),
+      'thread/queue/list':()=>{throw new Error(exclusion);},...handlers,
+    });
+    await assert.rejects(manager.release({allEntrancesDisconnected:true},reloadLogin));
+    assert.deepEqual(serviceCalls,[]);
+    assert.equal(manager.connection.state,'connected');
+    assert.equal(manager.releasing,false);
+  }
+});
 test('decision answers require every question, preserve free text, and reject duplicate submission',t=>{
   const {manager,rpc}=fixture(t);
   manager.onRequest({id:'decision',method:'item/tool/requestUserInput',params:{threadId:'original',questions:[{id:'choice',question:'请选择',options:[{label:'继续'}]}]}});
