@@ -34,6 +34,7 @@ import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from './message
 import {markdown} from './message-body.js';
 import {userMessageTime, timedTurnGroups} from './message-time.js';
 import {renderTurnFiles} from './turn-files.js';
+import {closeTurnFileViewer} from './turn-file-viewer.js';
 import {reconcileMessages} from './message-dom.js';
 import {NewChatDraft} from './new-chat.js';
 import {installAttachments} from './attachments.js';
@@ -659,7 +660,7 @@ function renderMessages() {
   if(document.activeElement?.matches('.output-controls input')) return;
   const scroller = $('messages-scroller');
   const context=targetHost+':'+state.selectedId;
-  if(scrollContext!==context){turnNavigation?.switchContext(context);closeFileViewer();scrollContext=context;scrollFollow?.reset();clear($('messages'));lastMessageShape=undefined;messageCache.clear();}
+  if(scrollContext!==context){turnNavigation?.switchContext(context);closeFileViewer();closeTurnFileViewer();scrollContext=context;scrollFollow?.reset();clear($('messages'));lastMessageShape=undefined;messageCache.clear();}
   progressiveTurns.reset(context+':'+state.selectionVersion+':'+state.detailVersion);
   const visibleTurns=progressiveTurns.view(state.loadingDetail?[]:turns());
   $('messages').setAttribute('aria-busy',String(state.loadingDetail||progressiveTurns.pending));
