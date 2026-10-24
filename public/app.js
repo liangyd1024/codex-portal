@@ -993,6 +993,7 @@ async function refreshSelected() {
   const key=JSON.stringify([id,seq,version]);
   const isCurrent=()=>!newChatOpen&&id===state.selectedId&&seq===state.selectionVersion&&version===state.detailVersion;
   if(detailReads.has(key)) return detailReads.get(key);
+  let applied=false;
   const read=(async()=>{
   // Recovery is optional: a slow or blocked IndexedDB read must not delay HTTP.
   // restoreDetail only applies while this selection still has no network detail.
@@ -1003,11 +1004,11 @@ async function refreshSelected() {
   data.turns = mergeLiveTurns(turns(), data.turns || data.thread?.turns || []);
   if (state.loadedOlderHistory) data.nextCursor = state.historyCursor;
   state.loadingDetail=false;
-  applyDetail(data,resetModels);
+  applyDetail(data,resetModels);applied=true;
   })().catch(error=>{if(isCurrent())throw error;});
   detailReads.set(key,read);
   try { await read; }
-  finally { if(detailReads.get(key)===read)detailReads.delete(key); }
+  finally { if(detailReads.get(key)===read)detailReads.delete(key); if(applied&&isCurrent())turnNavigation?.update(); }
 }
 async function refreshWorkspace(forceModels = false, statusReady = false) {
   if (workspaceRefreshPromise) return workspaceRefreshPromise;
@@ -1655,7 +1656,7 @@ function wireEvents() {
   $('project-list').hidden = !readLayout('projects',true);
   $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
   mobileUI = installMobileUI({closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:mobile=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
-  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:id=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
+  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),ready:usable()&&!state.loadingDetail&&!state.historyError&&!state.detail?.recovering&&!detailReads.has(JSON.stringify([state.selectedId,state.selectionVersion,state.detailVersion])),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:id=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {

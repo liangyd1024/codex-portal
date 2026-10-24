@@ -56,9 +56,9 @@ function detailFixture() {
   const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
   const state={selectedId:'a',selectionVersion:1,detailVersion:1,detail:{thread:{id:'a'},turns:[]},loadedOlderHistory:false,
     status:{instanceId:'one',connection:{state:'connected'},controlledThreads:[],handoffs:[]}};
-  const requests=[],applied=[],cacheReads=[];
+  const requests=[],applied=[],cacheReads=[],navigationUpdates=[];
   const context=vm.createContext({state,newChatOpen:false,automations:null,desktopSends:{},performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
-    reportThreadView:()=>null,turns:()=>state.detail?.turns||[],outputBases:()=>new Map(),decodeOutputs:async x=>x,hydrateOutputs:x=>x,
+    turnNavigation:{update:()=>navigationUpdates.push(state.selectedId)},reportThreadView:()=>null,turns:()=>state.detail?.turns||[],outputBases:()=>new Map(),decodeOutputs:async x=>x,hydrateOutputs:x=>x,
     readDetailCache:()=>new Promise(resolve=>cacheReads.push(resolve)),scheduleDetailRefresh:()=>{},
     api:path=>new Promise((resolve,reject)=>requests.push({path,resolve,reject})),
     applyDetail:data=>{state.detail=data;applied.push(data);},
@@ -66,7 +66,7 @@ function detailFixture() {
   vm.runInContext(source.slice(source.indexOf('async function restoreDetail('),source.indexOf('function applyDetail(')),context);
   vm.runInContext(source.slice(source.indexOf('async function readSelectedDetail('),source.indexOf('async function refreshWorkspace('))+'\nglobalThis.read=refreshSelected;',context);
   vm.runInContext(source.slice(source.indexOf('function applyStatus('),source.indexOf('\nconst $'))+'\nglobalThis.status=applyStatus;',context);
-  return {state,requests,applied,cacheReads,context,read:context.read,status:context.status};
+  return {state,requests,applied,cacheReads,navigationUpdates,context,read:context.read,status:context.status};
 }
 test('late thread and connection replies cannot overwrite a new selection; duplicate reads coalesce',async()=>{
   const f=detailFixture(),old=f.read(),duplicate=f.read();assert.equal(f.requests.length,1);
@@ -224,4 +224,10 @@ test('native metadata repairs missed running notifications without overriding ne
     finish({thread:{id:'a',status:{type:'idle'}}});await pending;
     assert.equal(known.status.type,mode==='native'?'idle':'active');
   }
+});
+
+test('automatic navigation starts after the current detail settles, never after a failed preview resume',async()=>{
+ const f=detailFixture();const read=f.read();assert.deepEqual(f.navigationUpdates,[]);
+ f.requests[0].resolve({thread:{id:'a'},turns:[]});await read;assert.deepEqual(f.navigationUpdates,['a']);
+ const failed=f.read();f.requests[1].reject(Error('offline'));await assert.rejects(failed,/offline/);assert.deepEqual(f.navigationUpdates,['a']);
 });

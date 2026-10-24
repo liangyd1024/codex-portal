@@ -46,7 +46,7 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
   const entry=el('button','turn-navigation-entry','轮次');entry.type='button';entry.setAttribute('aria-haspopup','dialog');entryHost.append(entry);
   const dialog=el('dialog','turn-directory');dialog.setAttribute('aria-label','对话轮次');
   const header=el('div','turn-directory-header'),title=el('h2','','对话轮次'),close=el('button','','关闭'),list=el('div','turn-directory-list'),more=el('button','turn-directory-more','加载更早轮次'),feedback=el('p','turn-directory-feedback');feedback.setAttribute('role','status');close.type=more.type='button';header.append(title,close);dialog.append(header,list,feedback,more);document.body.append(dialog);
-  let key=null,rows=[],signature='',hovered=null,hideTimer,frame,currentId,loading=false,loadVersion=0,loadMessage='';
+  let key=null,rows=[],signature='',hovered=null,hideTimer,frame,currentId,loading=false,loadVersion=0,loadMessage='',autoStarted=false;
   let owners=new Map();
   const buttons=new Map(),positions=new Map();let restore=null,directoryTarget=null;
   const nodes=()=>[...content.querySelectorAll('.message-turn')];
@@ -78,11 +78,11 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
     list.scrollTop=top;if(anchor){const node=list.querySelector('[data-turn-target="'+CSS.escape(anchor.id)+'"]');if(node)list.scrollTop+=node.getBoundingClientRect().top-list.getBoundingClientRect().top-anchor.offset;}if(focused)list.querySelector('[data-turn-target="'+CSS.escape(focused)+'"]')?.focus({preventScroll:true});
   }
   function report(message){loadMessage=message;feedback.textContent=message;syncLoad();}
-  async function earlier(){
+  async function earlier({automatic=false}={}){
     if(loading)return;
     if(!context().hasEarlier){context().renderHistory?.();return;}
     const version=++loadVersion,started=key,isCurrent=()=>started===key&&version===loadVersion;
-    loading=true;follow.pause({sticky:true});
+    autoStarted=true;loading=true;if(!automatic)follow.pause({sticky:true});
     const progress=()=>{update();report('正在加载全部轮次 · 已加载 '+navigationIndex(context().turns).inputs.length+' 轮');};
     progress();
     try{
@@ -121,7 +121,7 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
   }
   function schedule(){if(!frame)frame=requestAnimationFrame(measure);}
   function switchContext(next){
-    if(next===key)return;key=next;restore=positions.get(next)||null;signature='';hide();if(dialog.open)dialog.close();loadVersion++;loading=false;loadMessage='';feedback.textContent='';
+    if(next===key)return;key=next;restore=positions.get(next)||null;signature='';hide();if(dialog.open)dialog.close();loadVersion++;loading=false;loadMessage='';autoStarted=false;feedback.textContent='';
   }
   function update(){
     const c=context(),index=navigationIndex(c.turns);owners=index.owners;
@@ -134,6 +134,7 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
     }
     if(restore&&rows.length){const target=locate(restore.id);if(restore.following){follow.reset();restore=null;}else if(target){follow.pause({sticky:true});scroller.scrollTop+=target.getBoundingClientRect().top-scroller.getBoundingClientRect().top-restore.offset;restore=null;}else if(!c.hasEarlier&&!c.rendering){restore=null;}}
     syncLoad();schedule();
+    if(key&&!autoStarted&&!loading&&c.visible&&c.ready&&c.hasEarlier)void earlier({automatic:true});
   }
   for(const event of ['wheel','touchstart','keydown'])scroller.addEventListener(event,()=>{restore=null;},{passive:true});
   ticks.addEventListener('scroll',hide,{passive:true});
