@@ -1230,3 +1230,5 @@
 - 桌面接续模式在两种视口补验可用、不可用、恢复、发送中、拒绝后恢复，共 20 个样本／10 对。按样本独立生成的 messageId 归一化后，其余状态与请求深比较一致。该部分用 click，不等于实体手机桌面客户端操作。
 - 本轮静态 master 两次未完成模块初始化。记录中 app.js 为 200，而多个依赖 responseStatus=0、transferSize=0；直接 import 报动态模块获取失败。静态服务进程存活，HTTP app.js 返回 200。页面重载恢复后各流程通过；开启 Network 记录后的再加载未见 loadingFailed。故障原因仍未确定，不归因于新按钮组件，也不记为已修复。
 - 浏览器操作全为隔离虚构会话，没有停止任何真实任务。原始证据在仓库外：`rcm-send-buttons-stable-results.json`、`rcm-send-actions-create-recovered-results.json`、`rcm-send-buttons-desktop-mode-results.json`；加载失败另存 `rcm-send-buttons-baseline-load-failure.json` 和网络事件记录。
+
+发送区交付复核：产品 `8e611ba`，干净构建资源 `7bd825c9`。独立 4327／4338／4339 已更新，正式 4317 仍为 `525347a`。重启前各目标无待处理请求或连接中状态，仅重启独立预览。首次真实入口轮次在正式 4317 初始化失败，多个模块资源为零字节／零响应状态；两入口版本接口正常，未重启正式服务。通过页面重试恢复后，开启 Network 记录完成桌面及 iPhone 竖屏／横屏／缩小高度八次加载，均已连接、无横向溢出，未记录 loadingFailed；390px 两种高度的侧栏触控开关通过。不能以这轮通过消除此前加载失败，原因继续未明。证据 `rcm-send-actions-live-observed-results.json`、失败和重试网络记录位于仓库外。
