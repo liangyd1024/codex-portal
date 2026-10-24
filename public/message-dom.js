@@ -50,6 +50,7 @@ function reconcileNode(old, fresh) {
     if (old.hasAttribute('open')) fresh.setAttribute('open','');
     return fresh;
   }
+  if (old.matches('.mermaid-block') && fresh.matches('.mermaid-block') && old.dataset.mermaidSource === fresh.dataset.mermaidSource) return old;
   if (old.matches('.code-block,.command-output-view,.decision-notice') || old.onclick || old.oninput || old.onblur) {
     return old.isEqualNode(fresh) ? old : fresh;
   }

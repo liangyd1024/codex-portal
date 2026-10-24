@@ -68,3 +68,13 @@ test('changed deferred tool binds its new payload even when closed markup is ide
  reconcileMessages(parent,tree(fresh));assert.equal(parent.firstChild,fresh);assert.equal(fresh.ontoggle(),'new');assert.equal(fresh.hasAttribute('open'),true);
  reconcileMessages(parent,tree(fresh));assert.equal(parent.firstChild,fresh);
 });
+
+test('rendered Mermaid image and source toggle survive streaming; changed source replaces widget',()=>{
+ const diagram=source=>{const n=new Node();n.dataset.mermaidSource=source;n.matches=s=>s==='.mermaid-block';return n;};
+ const old=diagram('flowchart LR; A-->B'),parent=tree(old);old.append(new Node('IMG'));old.setAttribute('data-source-visible','true');
+ for(let i=0;i<30;i++)reconcileMessages(parent,tree(diagram('flowchart LR; A-->B')));
+ assert.equal(parent.firstChild,old);assert.equal(old.firstChild.nodeName,'IMG');assert.equal(old.getAttribute('data-source-visible'),'true');
+ // Changed widgets go through the existing atomic code-block replacement path.
+ const fresh=diagram('flowchart LR; A-->C');old.matches=s=>s==='.mermaid-block'||s.startsWith('.code-block,');old.isEqualNode=()=>false;
+ reconcileMessages(parent,tree(fresh));assert.equal(parent.firstChild,fresh);
+});

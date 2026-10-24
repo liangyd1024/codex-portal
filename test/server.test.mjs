@@ -249,3 +249,16 @@ test('directory and deferred tool reads are scoped to the selected target and it
  assert.deepEqual(calls[0],['directory','sample']);assert.deepEqual(calls[1],['item','sample','tool']);
  assert.equal(calls[2].at(-1),true);assert.equal(calls[2][2],'db:3');
 });
+
+test('Mermaid assets are explicit, local, and isolated from workbench CSP',async t=>{
+ const {request}=await fixture(t);
+ const main=await request('/');
+ const frame=await request('/mermaid-frame.html');
+ assert.equal(frame.status,200);
+ assert.match(frame.headers['content-security-policy'],/sandbox allow-scripts/);
+ assert.match(frame.headers['content-security-policy'],/default-src 'none'/);
+ assert.doesNotMatch(frame.headers['content-security-policy'],/allow-same-origin/);
+ assert.doesNotMatch(main.headers['content-security-policy'],/unsafe-inline/);
+ for(const asset of ['/mermaid-view.js','/mermaid-frame.js','/vendor/mermaid-12.2.0.js'])assert.equal((await request(asset)).status,200);
+ assert.equal((await request('/vendor/README.md')).status,404);
+});

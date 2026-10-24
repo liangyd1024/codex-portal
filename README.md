@@ -249,6 +249,14 @@ python3 scripts/restore-apply.py apply /absolute/restore-directory --entrances-d
 
 程序再次校验文件和本机身份，读取专用服务确认空闲，生成恢复前备份，进入维护模式，再停止本项目网页和专用服务。当前文件、WAL/SHM 均移动到 `restore-history/` 保留；不执行批量删除。替换失败时恢复旧文件和服务。恢复后关闭自动连接、撤销手机配对并保留证书；浏览器数据需另行导入。Codex 原生数据不会迁移。
 
+## 会话中的 Mermaid 图表
+
+完整的 `mermaid` 代码块自动显示图表，支持源码切换、复制和放大。长图可在图表区域滚动。流式输出尚未闭合代码块时保留源码，生成失败时可检查源码并重试。
+
+图表在本机浏览器内渲染，不发送至第三方。当前使用 Mermaid Tiny，支持流程图、时序图等常见图表，不包含思维导图、架构图、KaTeX 和 ELK；不支持的内容仍可查看原文。Safari 需 17.4 或更新版本。
+
+实现与验证边界见 [Mermaid 验收记录](docs/verification-2026-10-24-mermaid.md)。
+
 ## 验证
 
 ```sh

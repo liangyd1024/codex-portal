@@ -1,3 +1,4 @@
+import {enhanceMermaid} from './mermaid-view.js';
 import {copyText} from './feedback.js';
 function el(tag, cls, text) { const n=document.createElement(tag); if(cls)n.className=cls; if(text != null)n.textContent=text; return n; }
 // Only explicit commentary with a final answer is collapsed. Legacy messages,
@@ -80,7 +81,9 @@ export function markdown(text, depth = 0, options = {}) {
       copy.onclick=()=>copyText(value,{button:copy,status:feedback,failure:'复制失败，请选择代码复制'});
       header.append(el('span','code-language',language||'代码'),feedback,copy);
       const pre=el('pre'), content=el('code','',value);pre.tabIndex=0;pre.setAttribute('aria-label',(language||'')+'代码，可横向滚动');
-      pre.append(content);block.append(header,pre);n.append(block);continue;
+      pre.append(content);block.append(header,pre);
+      if(language.toLowerCase()==='mermaid' && i<lines.length)enhanceMermaid(block,header,pre,value);
+      n.append(block);continue;
     }
     if (!line.trim()) { flush(); continue; }
     if (/^ {0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/.test(line)) { flush(); n.append(el('hr')); continue; }
