@@ -30,18 +30,18 @@ test('cancel stays cancelled across updates; a new conversation automatically lo
 test('loading stays silent; failure and cancellation expose retry',async t=>{
  const f=fixture(t,{fail:true});f.nav.update();assert.equal(f.count().textContent,'');
  f.state.ready=true;f.nav.update();assert.equal(f.count().textContent,'');assert.equal(f.rail().hidden,true);assert.equal(f.ticks().hidden,true);
- await settle();assert.equal(f.count().textContent,'点击重试');
+ await settle();assert.equal(f.count().textContent,'重试');
  f.count().onclick();assert.equal(f.count().textContent,'');
- f.count().onclick();assert.equal(f.count().textContent,'点击重试');
+ f.count().onclick();assert.equal(f.count().textContent,'重试');
  await settle();assert.equal(f.calls.length,2);
 });
 
 test('directory opening never downloads transcript pages or renders full history',async t=>{
  const f=fixture(t,{directory:true});f.state.ready=true;f.nav.update();f.nav.update();await settle();
- assert.deepEqual(f.calls,['directory']);assert.deepEqual(f.renders,[]);assert.equal(f.state.hasEarlier,true);assert.equal(f.count().textContent,'共 0 轮');
+ assert.deepEqual(f.calls,['directory']);assert.deepEqual(f.renders,[]);assert.equal(f.state.hasEarlier,true);assert.equal(f.count().textContent,'0轮');
  f.nav.update();await settle();assert.deepEqual(f.calls,['directory']);
 });
 test('directory failure remains retryable without falling back to bulk history',async t=>{
  const f=fixture(t,{directory:true,fail:true});f.state.ready=true;f.nav.update();await settle();
- assert.equal(f.count().textContent,'点击重试');f.count().onclick();await settle();assert.deepEqual(f.calls,['directory','directory']);assert.deepEqual(f.renders,[]);
+ assert.equal(f.count().textContent,'重试');f.count().onclick();await settle();assert.deepEqual(f.calls,['directory','directory']);assert.deepEqual(f.renders,[]);
 });
