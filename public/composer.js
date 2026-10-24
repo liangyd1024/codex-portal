@@ -49,47 +49,17 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
   const mirror=installInlineMentions(input,references);
   input.addEventListener('input',()=>{syncReferences();save();mirror.render();});
   const dialog=document.createElement('dialog');dialog.className='composer-dialog';document.body.append(dialog);
-  let opener,dialogVersion=0,goalEditor;
+  let opener,dialogVersion=0,goalEditor,catalog;
   dialog.addEventListener('click',e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
   dialog.addEventListener('close',()=>{if(!dialog.open&&document.activeElement!==input)opener?.focus();});
   function open(title,button){
-    dialogVersion++;goalEditor?.clear();opener=button.closest('details')?.querySelector('summary')||button;tools.open=false;dialog.replaceChildren();
+    dialogVersion++;goalEditor?.clear();catalog?.clear();opener=button.closest('details')?.querySelector('summary')||button;tools.open=false;dialog.replaceChildren();
     const heading=document.createElement('h2');heading.textContent=title;
     const close=document.createElement('button');close.type='button';close.textContent='关闭';close.className='composer-dialog-close';close.onclick=()=>dialog.close();
     dialog.append(heading,close);dialog.showModal();return context();
   }
-  const text=(tag,value)=>{const e=document.createElement(tag);e.textContent=value;return e;};
-  async function picker(kind,button){
-    dialog.classList.add('catalog-dialog');
-    const current=open(kind==='skills'?'选择技能':'已安装插件',button),id=current.id,version=dialogVersion;
-    const pending=text('p','正在读取目标机器…');pending.setAttribute('role','status');dialog.append(pending);loading=true;
-    try{
-      const catalog=await api('/api/composer?cwd='+encodeURIComponent(current.cwd)+'&kind='+kind);
-      if(context().id!==id||context().cwd!==current.cwd||!dialog.open||version!==dialogVersion)return;
-      pending.remove();
-      const source=kind==='skills'?catalog.skills:catalog.plugins;
-      if(source.error)throw Error(source.error);
-      const entries=kind==='skills'?(source.data||[]).flatMap(e=>e.skills||[]):(source.marketplaces||[]).flatMap(e=>e.plugins||[]).filter(p=>p.installed);
-      const seen=new Set(),items=entries.filter(e=>{const key=e.path||e.id;if(seen.has(key))return false;seen.add(key);return true;});
-      const search=document.createElement('input');search.type='search';search.placeholder='搜索';search.setAttribute('aria-label','搜索'+(kind==='skills'?'技能':'插件'));dialog.append(search);
-      const list=document.createElement('div');list.className='composer-catalog';dialog.append(list);
-      const errors=kind==='skills'?(source.data||[]).flatMap(e=>e.errors||[]):source.marketplaceLoadErrors||[];
-      if(errors.length){const warning=text('p','部分目录未能读取，列表可能不完整。已有选择仍保留。'),retry=text('button','重新读取');warning.setAttribute('role','status');retry.type='button';retry.onclick=()=>{dialog.close();void picker(kind,button);};dialog.append(warning,retry);}
-      for(const key of choice()[kind])if(!seen.has(key))items.push({[kind==='skills'?'path':'id']:key,name:key,enabled:false,missing:true});
-      if(!items.length)list.append(text('p',kind==='skills'?'此项目暂无技能。':'目标机器暂无已安装插件。'));
-      for(const entry of items){
-        const key=kind==='skills'?entry.path:entry.id,label=document.createElement('label');label.className='composer-catalog-item';
-        const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=present().some(r=>r.kind===kind&&r.key===key);checkbox.disabled=!entry.enabled&&!checkbox.checked;
-        const body=document.createElement('span');body.append(text('strong',entry.interface?.displayName||entry.name),text('small',[entry.description||entry.interface?.shortDescription, !entry.enabled?(entry.missing?'目录中暂不可用，可取消选择后重试':(entry.disabledReason||'未启用')+'；已选项目可取消选择'):''].filter(Boolean).join(' · ')));
-        checkbox.onchange=()=>{if(context().id!==id)return;if(checkbox.checked){dialog.close();insertReference(entry,kind);}else{for(const range of present().filter(r=>r.kind===kind&&r.key===key).reverse())input.setRangeText('',range.start,range.end,'end');syncReferences();save();render();input.dispatchEvent(new Event('input',{bubbles:true}));}checkbox.disabled=!entry.enabled&&!checkbox.checked;};
-        label.dataset.search=[entry.name,entry.path,entry.id,body.textContent].filter(Boolean).join(' ').toLowerCase();label.append(checkbox,body);list.append(label);
-      }
-      const empty=text('p','没有匹配的'+(kind==='skills'?'技能':'插件')+'。');empty.hidden=true;empty.setAttribute('role','status');list.append(empty);
-      search.oninput=()=>{let visible=0;for(const row of list.querySelectorAll('label')){row.hidden=!row.dataset.search.includes(search.value.trim().toLowerCase());if(!row.hidden)visible++;}empty.hidden=visible>0||!items.length;};
-      dialog.append(text('p','选择后在下一条消息中使用。插件安装及账号授权请在 Codex 中管理。'));search.focus();
-    }catch(e){if(context().id===id&&context().cwd===current.cwd&&dialog.open&&version===dialogVersion){pending.remove();const failure=text('p','暂时无法加载'+(kind==='skills'?'技能':'插件')+'，请重试。你的草稿已保留。');failure.setAttribute('role','status');dialog.append(failure);const details=document.createElement('details');details.append(text('summary','错误详情'),text('p',e.message));dialog.append(details);const retry=text('button','重试');retry.type='button';retry.onclick=()=>{dialog.close();void picker(kind,button);};dialog.append(retry);}}
-    finally{loading=false;}
-  }
+  catalog=installComposerCatalog({dialog,input,context,open,version:()=>dialogVersion,api,choice,present,insertReference,syncReferences,save,render,loading:value=>{loading=value;}});
+  const picker=(kind,button)=>catalog.picker(kind,button);
   tool('skill-picker').onclick=e=>void picker('skills',e.currentTarget);
   tool('plugin-picker').onclick=e=>void picker('plugins',e.currentTarget);
   const goalButton=tool('goal-settings');
@@ -151,4 +121,11 @@ export function configurePlanCompletion(installer){planCompletionInstaller=insta
 export function installPlanCompletion(options){
   if(!planCompletionInstaller)throw new Error('计划执行卡片尚未初始化。');
   return planCompletionInstaller(options);
+}
+
+let catalogInstaller;
+export function configureComposerCatalog(installer){catalogInstaller=installer;}
+export function installComposerCatalog(options){
+  if(!catalogInstaller)throw new Error('输入目录尚未初始化。');
+  return catalogInstaller(options);
 }
