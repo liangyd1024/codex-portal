@@ -1,3 +1,4 @@
+import {createTaskNotifications} from '../src/web/services/task-notifications';
 import {createAutoRefresh} from '../src/web/services/auto-refresh';
 import {createDetailRecovery} from '../src/web/services/detail-recovery';
 import {createLayoutController} from '../src/web/services/layout';
@@ -968,29 +969,15 @@ async function sendTaskNotification(title, body, tag, threadId, host=targetHost)
     failed:message=>{liveNotifications.delete(notification);notificationDiagnostic(title + '：' + message);publishNotificationView({status:message+'。请检查浏览器和系统的通知设置。'});},
   });
 }
-const attemptedNotices=new Set();
-async function notifyTaskEvent(method, params) {
-  if (!taskNotificationsEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
-  const host=targetHost;
-  const threadId = params.threadId || params.thread?.id || (params.request || params).params?.threadId;
-  const thread = state.threads.find(t => t.id === threadId) || (state.selectedId === threadId ? currentThread() : null);
-  const notice = taskNotice(method, params, {host, known:!!thread || state.status?.controlledThreads?.includes(threadId) || state.status?.subscribedThreads?.includes(threadId)});
-  if (!notice) return;
-  const body=(state.status?.host?.alias || host) + ' · ' + (thread ? threadName(thread) : '会话 ' + threadId.slice(0,8));
-  try {
-    const delivered = await navigator.locks.request('rcm.task-notifications', async () => {
-      if (host!==targetHost || localStorage.getItem('rcm.taskNotifications.' + host) !== 'true') return false;
-      return deliverNotice(localStorage,notice.key,()=>{
-        if(attemptedNotices.has(notice.key))return false;
-        attemptedNotices.add(notice.key);
-        if(attemptedNotices.size>1000)attemptedNotices.delete(attemptedNotices.values().next().value);
-        return sendTaskNotification('Codex · ' + notice.label,body,notice.key,threadId,host);
-      });
-    });
-    if(delivered && host===targetHost)await api('/api/notices/ack',{method:'POST',body:{key:notice.key}});
-    return delivered;
-  } catch (error) { notificationDiagnostic('通知处理失败：'+error.message);recordError(error,'notifications');return false; }
-}
+const notifyTaskEvent=createTaskNotifications({enabled:()=>taskNotificationsEnabled,
+  permitted:()=>('Notification' in window)&&Notification.permission==='granted',host:()=>targetHost,
+  thread:id=>state.threads.find(t=>t.id===id)||(state.selectedId===id?currentThread():null),
+  known:id=>state.status?.controlledThreads?.includes(id)||state.status?.subscribedThreads?.includes(id),
+  alias:()=>state.status?.host?.alias,threadName,notice:taskNotice,
+  lock:(key,work)=>navigator.locks.request(key,work),preference:key=>localStorage.getItem(key),
+  deliver:(key,send)=>deliverNotice(localStorage,key,send),send:(...args)=>sendTaskNotification(...args),
+  acknowledge:key=>api('/api/notices/ack',{method:'POST',body:{key}}),
+  diagnostic:notificationDiagnostic,recordError});
 
 async function connectRemote() {
   maintenanceFeedback('');

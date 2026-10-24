@@ -1,12 +1,16 @@
 import {authRecoveryMessage} from '../shared/account-state.js';
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';
 import {taskNotice} from '../shared/connection-state.js';import {deliverNotice} from '../public/notification-delivery.js';
+import ts from 'typescript';
+const typed=readFileSync(new URL('../src/web/services/task-notifications.ts',import.meta.url),'utf8');
+const output=ts.transpileModule(typed,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {createTaskNotifications}=await import('data:text/javascript;base64,'+Buffer.from(output).toString('base64'));
 const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 function fixture(success=true){
  const values=new Map([['rcm.taskNotifications.local','true']]),sent=[],acks=[];let lock=Promise.resolve();
  const storage={getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)};
- const c=vm.createContext({sideChat:null,authRecoveryMessage,taskNotificationsEnabled:true,window:{Notification:{}},Notification:{permission:'granted'},targetHost:'local',state:{threads:[{id:'a'}],status:{},selectedId:null,detail:null},currentThread:()=>null,threadName:()=> 'test',taskNotice,deliverNotice,localStorage:storage,navigator:{locks:{request:(_key,work)=>{const next=lock.then(work);lock=next.catch(()=>{});return next;}}},sendTaskNotification:async(...args)=>{sent.push(args);return success;},api:async(path,options)=>acks.push({path,options}),notificationDiagnostic(){},recordError(){},scheduleListRefresh(){}});
- vm.runInContext(source.slice(source.indexOf('const attemptedNotices='),source.indexOf('async function connectRemote()')),c);
+ const c=vm.createContext({createTaskNotifications,sideChat:null,authRecoveryMessage,taskNotificationsEnabled:true,window:{Notification:{}},Notification:{permission:'granted'},targetHost:'local',state:{threads:[{id:'a'}],status:{},selectedId:null,detail:null},currentThread:()=>null,threadName:()=> 'test',taskNotice,deliverNotice,localStorage:storage,navigator:{locks:{request:(_key,work)=>{const next=lock.then(work);lock=next.catch(()=>{});return next;}}},sendTaskNotification:async(...args)=>{sent.push(args);return success;},api:async(path,options)=>acks.push({path,options}),notificationDiagnostic(){},recordError(){},scheduleListRefresh(){}});
+ vm.runInContext(source.slice(source.indexOf('const notifyTaskEvent=createTaskNotifications'),source.indexOf('async function connectRemote()'))+'\nglobalThis.notifyTaskEvent=notifyTaskEvent;',c);
  vm.runInContext(source.slice(source.indexOf('function handleEvent('),source.indexOf('function setupEvents()')),c);
  return {c,sent,acks,values,emit:(id)=>c.notifyTaskEvent('turn/completed',{threadId:'a',turn:{id,status:'completed'}})};
 }
@@ -24,6 +28,24 @@ test('SSE backlog and reconstructed history never notify, while new live complet
  f.c.handleEvent({data:JSON.stringify({method:'manager/taskNotice',params:{key:'old',event:{method:'turn/completed',params}}})});
  f.c.handleEvent({data:JSON.stringify({method:'turn/completed',params,replayed:true})});await new Promise(r=>setImmediate(r));assert.equal(f.sent.length,0);
  f.c.handleEvent({data:JSON.stringify({method:'turn/completed',params:{...params,turn:{...params.turn,id:'new'}}})});await new Promise(r=>setImmediate(r));assert.equal(f.sent.length,1);
+});
+
+test('connection changes while waiting for the notification lock prevent delivery',async()=>{
+ const f=fixture();let release;
+ f.c.navigator.locks.request=(_key,work)=>new Promise(resolve=>{release=()=>resolve(work());});
+ const pending=f.emit('waiting');f.c.targetHost='remote';release();assert.equal(await pending,false);assert.equal(f.sent.length,0);assert.equal(f.acks.length,0);
+});
+test('connection changes during delivery retain the old claim but never acknowledge on the new connection',async()=>{
+ const f=fixture();let release;
+ f.c.sendTaskNotification=(...args)=>{f.sent.push(args);return new Promise(resolve=>{release=resolve;});};
+ const pending=f.emit('late');await new Promise(resolve=>setImmediate(resolve));f.c.targetHost='remote';release(true);
+ assert.equal(await pending,true);assert.equal(f.sent.length,1);assert.equal(f.sent[0].at(-1),'local');assert.equal(f.acks.length,0);
+ f.c.targetHost='local';assert.equal(await f.emit('late'),true);assert.equal(f.sent.length,1);assert.equal(f.acks.length,1);
+});
+test('failed-attempt eviction keeps the original 1000-key limit and permits the oldest key again',async()=>{
+ const f=fixture(false);for(let i=0;i<1001;i++)await f.emit('turn-'+i);
+ await f.emit('turn-1000');assert.equal(f.sent.length,1001);
+ await f.emit('turn-0');assert.equal(f.sent.length,1002);assert.equal(f.acks.length,0);
 });
 
 test('opening SSE never transmits stored historical task notifications',async()=>{
