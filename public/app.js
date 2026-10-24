@@ -1,3 +1,4 @@
+import {publishNotificationView,installNotificationActions,appendNotificationDiagnostic} from '../src/web/components/NotificationControls';
 import {createWorkspaceRefresh} from '../src/web/services/workspace-refresh.ts';
 import {createDetailReader} from '../src/web/services/detail-reader.ts';
 import {createApiClient} from '../src/web/services/api.ts';
@@ -948,10 +949,9 @@ let taskNotificationsEnabled = false;
 
 function renderTaskNotifications() {
   const {supported,message} = notificationSupport();
-  $('task-notifications').disabled = !supported || notificationPending;
-  $('task-notifications').checked = taskNotificationsEnabled && supported && Notification.permission === 'granted';
-  $('test-notification').disabled = !$('task-notifications').checked;
-  setText('notification-status', !supported ? message : Notification.permission === 'denied' ? '通知已被阻止。请在浏览器网站设置中允许通知。' : $('task-notifications').checked ? '已开启。页面保持打开时提醒新发生的任务完成和待处理事项；不补发历史通知。' : '通知未开启');
+  const checked = taskNotificationsEnabled && supported && Notification.permission === 'granted';
+  publishNotificationView({disabled:!supported || notificationPending,checked,testDisabled:!checked,
+    status:(!supported ? message : Notification.permission === 'denied' ? '通知已被阻止。请在浏览器网站设置中允许通知。' : checked ? '已开启。页面保持打开时提醒新发生的任务完成和待处理事项；不补发历史通知。' : '通知未开启') || '—'});
 }
 let notificationPending = false;
 let notificationRegistration;
@@ -959,8 +959,7 @@ async function setTaskNotifications(enabled) {
   if(notificationPending)return;
   const host=targetHost;
   notificationPending=true;
-  $('task-notifications').disabled=true;
-  setText('notification-status',enabled?'正在申请通知权限…':'正在关闭通知…');
+  publishNotificationView({disabled:true,status:enabled?'正在申请通知权限…':'正在关闭通知…'});
   let failure;
   try {
     if(enabled && !notificationSupport().supported)throw Error(notificationSupport().message);
@@ -972,14 +971,11 @@ async function setTaskNotifications(enabled) {
     taskNotificationsEnabled=allowed;
     localStorage.setItem('rcm.taskNotifications.'+host,String(allowed));
   } catch(error){failure=error.message;recordError(error,'notifications');}
-  finally {notificationPending=false;if(host===targetHost){renderTaskNotifications();if(failure)setText('notification-status','通知未开启：'+failure+'。请重试。');}}
+  finally {notificationPending=false;if(host===targetHost){renderTaskNotifications();if(failure)publishNotificationView({status:'通知未开启：'+failure+'。请重试。'});}}
 }
 const liveNotifications = new Set();
 function notificationDiagnostic(message) {
-  let list = $('notification-history');
-  if (!list) { list = el('div','notification-history'); list.id = 'notification-history'; list.setAttribute('role','log'); document.querySelector('.notification-controls').append(list); }
-  list.prepend(el('p','',dateTime(new Date()) + ' · ' + message));
-  while (list.children.length > 3) list.lastElementChild.remove();
+  appendNotificationDiagnostic(dateTime(new Date()) + ' · ' + message);
 }
 function openNotificationThread({host,threadId}) {
   if(host!==targetHost){
@@ -1006,7 +1002,7 @@ async function sendTaskNotification(title, body, tag, threadId, host=targetHost)
     return notification;
   },{
     shown:()=>notificationDiagnostic(title + '：浏览器报告已显示；若系统未弹出，请检查系统的浏览器通知开关'),
-    failed:message=>{liveNotifications.delete(notification);notificationDiagnostic(title + '：' + message);setText('notification-status',message+'。请检查浏览器和系统的通知设置。');},
+    failed:message=>{liveNotifications.delete(notification);notificationDiagnostic(title + '：' + message);publishNotificationView({status:message+'。请检查浏览器和系统的通知设置。'});},
   });
 }
 const attemptedNotices=new Set();
@@ -1497,8 +1493,7 @@ function wireEvents() {
   setupResizableLayout();
   try { taskNotificationsEnabled = localStorage.getItem('rcm.taskNotifications.' + targetHost) === 'true'; } catch {}
   renderTaskNotifications();
-  $('task-notifications').onchange = event => setTaskNotifications(event.target.checked);
-  $('test-notification').onclick = () => { if (taskNotificationsEnabled && Notification.permission === 'granted') sendTaskNotification('Codex · 测试通知','浏览器通知已接入。请检查设备通知中心。','codex-test'); };
+  installNotificationActions({change:setTaskNotifications,test:() => { if (taskNotificationsEnabled && Notification.permission === 'granted') sendTaskNotification('Codex · 测试通知','浏览器通知已接入。请检查设备通知中心。','codex-test'); }});
   const syncNotificationPreference=()=>{try{taskNotificationsEnabled=localStorage.getItem('rcm.taskNotifications.'+targetHost)==='true';}catch{}renderTaskNotifications();};
   window.addEventListener('focus',syncNotificationPreference);
   window.addEventListener('storage',event=>{if(event.key==='rcm.taskNotifications.'+targetHost)syncNotificationPreference();});
