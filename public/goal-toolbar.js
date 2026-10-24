@@ -10,38 +10,11 @@ export function goalPresentation(goal,error){
  const status=goal?.status;
  return {visible:Boolean(error||(goal&&status!=='complete')),label:error?'目标待确认':labels[status]||'目标待确认',action:!error?(status==='active'?'paused':['paused','blocked'].includes(status)?'active':null):null};
 }
-const shapes={goal:'<circle cx="11" cy="13" r="8"/><circle cx="11" cy="13" r="4"/><path d="m11 13 9-9m-5 0h5v5"/>',clear:'<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7m4-7v7"/>',paused:'<circle cx="12" cy="12" r="9"/><path d="M10 8v8m4-8v8"/>',active:'<circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4Z"/>'};
-function icon(kind){return '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">'+shapes[kind]+'</svg>';}
-export function installGoalToolbar({input,context,api,refresh,edit}){
- const bar=document.createElement('section');bar.className='goal-toolbar';bar.hidden=true;bar.setAttribute('aria-label','会话目标');
- bar.innerHTML='<button type="button" class="goal-edit" aria-label="编辑目标" title="编辑目标">'+icon('goal')+'<span class="goal-toolbar-info"><strong></strong><span class="goal-toolbar-usage"></span></span></button><button type="button" class="goal-clear" aria-label="删除目标" title="删除目标">'+icon('clear')+'</button><button type="button" class="goal-toggle"></button><span class="goal-toolbar-feedback" role="status"></span>';
- input.form.before(bar);
- const editButton=bar.querySelector('.goal-edit'),label=bar.querySelector('strong'),usage=bar.querySelector('.goal-toolbar-usage'),clear=bar.querySelector('.goal-clear'),toggle=bar.querySelector('.goal-toggle'),feedback=bar.querySelector('[role=status]');
- let pending=false,error='',errorId=null;
- function render(){
-  const c=context(),view=goalPresentation(c.goal,c.goalError);
-  bar.hidden=c.draft||c.ephemeral||!view.visible;
-  bar.setAttribute('aria-busy',String(pending));label.textContent=view.label;label.title=c.goal?.objective||'';
-  usage.textContent=goalDuration(c.goal?.timeUsedSeconds);
-  clear.disabled=pending||!c.ready||c.busy||Boolean(c.goalError)||!c.goal;
-  editButton.disabled=clear.disabled;
-  toggle.hidden=!view.action;toggle.disabled=clear.disabled||(view.action==='active'&&c.active);
-  const name=view.action==='paused'?'暂停目标':'继续目标';toggle.title=name;toggle.setAttribute('aria-label',name);if(toggle.dataset.action!==view.action){toggle.dataset.action=view.action||'';toggle.innerHTML=icon(view.action||'active');}
-  feedback.textContent=errorId===c.id?error:'';
- }
- async function mutate(clearGoal){
-  const c=context(),view=goalPresentation(c.goal,c.goalError);
-  if(pending||!c.ready||c.busy||c.goalError||!c.goal||(!clearGoal&&(!view.action||(view.action==='active'&&c.active))))return;
-  const id=c.id;pending=true;error='';errorId=id;render();
-  try{
-   await api('/api/threads/'+encodeURIComponent(id)+'/goal',{method:'POST',body:clearGoal?{clear:true}:{status:view.action}});
-   if(context().id===id){await refresh();if(clearGoal&&context().id===id&&!context().goal)input.focus();}
-  }catch(e){if(context().id===id)error='目标操作未确认：'+e.message;}
-  finally{pending=false;render();}
- }
- editButton.onclick=()=>{if(!editButton.disabled)edit(editButton);};
- clear.onclick=()=>mutate(true);toggle.onclick=()=>mutate(false);
- return {render};
+let toolbarInstaller;
+export function configureGoalToolbar(installer){toolbarInstaller=installer;}
+export function installGoalToolbar(options){
+ if(!toolbarInstaller)throw new Error('目标工具栏尚未初始化。');
+ return toolbarInstaller(options);
 }
 
 // Completion is native goal metadata, never an invented assistant message.
