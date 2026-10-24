@@ -117,6 +117,10 @@ def main():
             # Chat requests need interactive CPU/I/O QoS. Background applies a
             # launch-time QoS clamp that taskpolicy -B cannot fully remove.
             'ProcessType': 'Interactive',
+            # launchd defaults to 256 descriptors. Persistent native sessions
+            # retain tool pipes as well as files; leave room for concurrent work.
+            # Applies only at bootstrap, never restart a running engine here.
+            'SoftResourceLimits': {'NumberOfFiles': 4096},
             'Umask': 0o077,
             'EnvironmentVariables': {'HOME': str(HOME), 'CODEX_HOME': str(HOME / '.codex'), 'PATH': ':'.join(entries), 'LANG': 'en_US.UTF-8'},
             'StandardOutPath': str(ROOT / 'service.stdout.log'),

@@ -1,4 +1,5 @@
 import pathlib
+import plistlib
 import tempfile
 import types
 import unittest
@@ -45,6 +46,25 @@ class AccountReloadTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, '已有维护标记'): self.run_main(home, env)
         self.assertEqual(calls, [])
         self.assertIn('restore', (root / 'maintenance.json').read_text())
+
+    def test_new_engine_has_descriptor_headroom_without_lowering_hard_limit(self):
+        home, root, env, calls = self.fixture()
+        self.run_main(home, env)
+        config = plistlib.loads(env['JOB'].read_bytes())
+        self.assertEqual(config['SoftResourceLimits']['NumberOfFiles'], 4096)
+        self.assertNotIn('HardResourceLimits', config)
+        self.assertEqual(config['ProgramArguments'][0], str(env['BINARY']))
+
+    def test_ensure_does_not_restart_or_rewrite_running_engine(self):
+        home, root, env, calls = self.fixture()
+        env['ACTION'] = 'ensure'
+        env['JOB'].parent.mkdir(parents=True)
+        original = plistlib.dumps({'Label': env['LABEL']})
+        env['JOB'].write_bytes(original)
+        (root / 'app-server.sock').touch()
+        self.run_main(home, env)
+        self.assertEqual(env['JOB'].read_bytes(), original)
+        self.assertFalse(any('bootout' in c or 'bootstrap' in c for c in calls))
 
     def test_failed_stop_keeps_marker_and_does_not_start_engine(self):
         home, root, env, calls = self.fixture(stop_fails=True)
