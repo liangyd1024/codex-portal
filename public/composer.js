@@ -32,17 +32,11 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
   }
   const mirror=installInlineMentions(input,references);
   input.addEventListener('input',()=>{syncReferences();save();mirror.render();});
-  const dialog=document.createElement('dialog');dialog.className='composer-dialog';document.body.append(dialog);
-  let opener,dialogVersion=0,goalEditor,catalog;
-  dialog.addEventListener('click',e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
-  dialog.addEventListener('close',()=>{if(!dialog.open&&document.activeElement!==input)opener?.focus();});
-  function open(title,button){
-    dialogVersion++;goalEditor?.clear();catalog?.clear();opener=button.closest('details')?.querySelector('summary')||button;controls.closeMenu();dialog.replaceChildren();
-    const heading=document.createElement('h2');heading.textContent=title;
-    const close=document.createElement('button');close.type='button';close.textContent='关闭';close.className='composer-dialog-close';close.onclick=()=>dialog.close();
-    dialog.append(heading,close);dialog.showModal();return context();
-  }
-  catalog=installComposerCatalog({dialog,input,context,open,version:()=>dialogVersion,api,choice,present,insertReference,syncReferences,save,render,loading:value=>{loading=value;}});
+  let goalEditor,catalog;
+  const dialogController=installComposerDialog({input,beforeOpen:()=>{goalEditor?.clear();catalog?.clear();},dismissMenu:()=>controls.closeMenu()});
+  const dialog=dialogController.dialog;
+  function open(title,button){dialogController.open(title,button);return context();}
+  catalog=installComposerCatalog({dialog,input,context,open,version:dialogController.version,api,choice,present,insertReference,syncReferences,save,render,loading:value=>{loading=value;}});
   const picker=(kind,button)=>catalog.picker(kind,button);
   const goalButton=controls.goalButton;
   function selectGoal(){
@@ -56,7 +50,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
     save();render();controls.closeMenu();input.focus();
   }
   let goalUpdating=false;
-  goalEditor=installGoalEditor({dialog,input,context,api,open,version:()=>dialogVersion,opener:()=>opener,choice,save,render,refresh,notify,updating:{get:()=>goalUpdating,set:value=>{goalUpdating=value;}}});
+  goalEditor=installGoalEditor({dialog,input,context,api,open,version:dialogController.version,opener:dialogController.opener,choice,save,render,refresh,notify,updating:{get:()=>goalUpdating,set:value=>{goalUpdating=value;}}});
   const editGoal=button=>goalEditor.edit(button);
   const goalToolbar=installGoalToolbar({input,context:()=>({...context(),busy:context().busy||goalUpdating}),api,refresh,edit:editGoal});
   const suggestions=installSkillSuggestions({input,api,context,select:(entry,range,kind)=>insertReference(entry,kind,range)});
@@ -106,4 +100,11 @@ export function configureComposerControls(installer){composerControlsInstaller=i
 export function installComposerControls(options){
   if(!composerControlsInstaller)throw new Error('输入模式控件尚未初始化。');
   return composerControlsInstaller(options);
+}
+
+let composerDialogInstaller;
+export function configureComposerDialog(installer){composerDialogInstaller=installer;}
+export function installComposerDialog(options){
+  if(!composerDialogInstaller)throw new Error('输入工具弹窗尚未初始化。');
+  return composerDialogInstaller(options);
 }
