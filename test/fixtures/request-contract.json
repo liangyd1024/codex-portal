@@ -807,6 +807,27 @@
           "required": []
         }
       }
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "thread/queue/update"
+          ]
+        },
+        "params": {
+          "properties": {
+            "threadId": {},
+            "queuedSubmissionId": {},
+            "input": {}
+          },
+          "required": [
+            "threadId",
+            "queuedSubmissionId",
+            "input"
+          ]
+        }
+      }
     }
   ]
 }
