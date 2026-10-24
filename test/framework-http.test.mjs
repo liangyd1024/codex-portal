@@ -799,3 +799,49 @@ test('request responses preserve decoded keys, raw answers and authentication pr
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+test('static responses preserve wire compression, validators and allowlist boundaries',async()=>{
+ const {request}=await import('node:http');
+ const {gunzipSync}=await import('node:zlib');
+ const wire=(base,url,method='GET',headers={})=>new Promise((resolve,reject)=>{
+  const req=request(base,{path:url,method,headers},res=>{const chunks=[];res.on('data',chunk=>chunks.push(chunk));res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,bytes:Buffer.concat(chunks)}));res.on('error',reject);});
+  req.on('error',reject);req.end();
+ });
+ const outcomes=[],css=await readFile(path.join(root,'public/styles.css'));
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),records=[];
+  try{
+   const record=async(url,method='GET',headers={})=>{
+    const r=await wire(env.base,url,method,headers);
+    records.push({status:r.status,headers:Object.fromEntries(['content-type','content-length','content-encoding','cache-control','vary','etag','content-security-policy','x-content-type-options','referrer-policy'].map(k=>[k,r.headers[k]??null])),hex:r.bytes.toString('hex')});
+    return r;
+   };
+   const plain=await record('/styles.css','GET',{'accept-encoding':'identity'});
+   assert.equal(plain.status,200);assert.deepEqual(plain.bytes,css);
+   const packed=await record('/styles.css','GET',{'accept-encoding':'gzip'});
+   assert.equal(packed.headers['content-encoding'],'gzip');assert.deepEqual(gunzipSync(packed.bytes),css);
+   assert.equal(Number(packed.headers['content-length']),packed.bytes.length);
+   assert.notEqual(plain.headers.etag,packed.headers.etag);
+   const head=await record('/styles.css','HEAD',{'accept-encoding':'gzip'});
+   assert.equal(head.status,200);assert.equal(head.bytes.length,0);assert.equal(head.headers.etag,packed.headers.etag);assert.equal(head.headers['content-length'],packed.headers['content-length']);
+   for(const [encoding,tag,status] of [
+    ['identity',plain.headers.etag,304],['gzip',packed.headers.etag,304],
+    ['gzip',plain.headers.etag,200],['identity',packed.headers.etag,200],
+    ['identity','W/'+plain.headers.etag,304],['identity','"unmatched", '+plain.headers.etag,304],['identity','*',304],
+   ]){const r=await record('/styles.css','GET',{'accept-encoding':encoding,'if-none-match':tag});assert.equal(r.status,status);if(status===304){assert.equal(r.bytes.length,0);assert.equal(r.headers['content-length'],undefined);}}
+   for(const encoding of ['gzip;q=0','gzip;q=0, *;q=1','br','*','GZIP;q=1']){
+    const r=await record('/styles.css','GET',{'accept-encoding':encoding});
+    assert.deepEqual(r.headers['content-encoding']==='gzip'?gunzipSync(r.bytes):r.bytes,css);
+   }
+   const query=await record('/styles.css?cache=unchanged');assert.deepEqual(query.bytes,css);
+   for(const url of ['/styles%2Ecss','/../server.mjs','/%2e%2e/server.mjs','/package.json','/src/server/application.ts','/unknown.css']){
+    const r=await record(url);assert.equal(r.status,404,url);assert.equal(r.bytes.toString(),'Not found');
+   }
+   const unsupported=await record('/styles.css','PUT');assert.equal(unsupported.status,405);
+   const denied=await record('/styles.css','GET',{origin:'https://untrusted.test','if-none-match':'*'});assert.equal(denied.status,403);
+   const host=await record('/styles.css','HEAD',{host:'untrusted.test'});assert.equal(host.status,403);assert.equal(host.bytes.length,0);
+   assert.deepEqual(env.calls,[]);outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
