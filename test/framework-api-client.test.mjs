@@ -39,3 +39,14 @@ test('typed client preserves parse, network and read/write timeout messages with
   await assert.rejects(api('/api/operation',{method,timeout:5}),{message:method==='GET'?'读取超时，已有内容和草稿保留，请重试刷新。':'操作结果未确认，草稿已保留。请先核对会话记录，避免重复提交。'});assert.equal(calls,1);
  }
 });
+test('default client resolves current fetch for every request while explicit transport stays injected',async t=>{
+ const calls=[];
+ t.mock.method(globalThis,'fetch',async()=>{calls.push('initial');return json({value:'initial'});});
+ const dynamic=fixture(undefined,'token').api;
+ const injected=fixture(async()=>{calls.push('injected');return json({value:'injected'});},'token').api;
+ assert.equal((await dynamic('/api/status')).value,'initial');
+ globalThis.fetch=async()=>{calls.push('replacement');return json({value:'replacement'});};
+ assert.equal((await dynamic('/api/status')).value,'replacement');
+ assert.equal((await injected('/api/status')).value,'injected');
+ assert.deepEqual(calls,['initial','replacement','injected']);
+});

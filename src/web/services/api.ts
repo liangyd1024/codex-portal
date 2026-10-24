@@ -22,7 +22,7 @@ export interface ApiDependencies {
  fetch?:typeof globalThis.fetch;
 }
 // Preserve the wire payload, request ordering and browser-clock freshness contract.
-export function createApiClient({targetUrl,csrf,flushDrafts,reload,fetch=globalThis.fetch}:ApiDependencies) {
+export function createApiClient({targetUrl,csrf,flushDrafts,reload,fetch=(...args:Parameters<typeof globalThis.fetch>)=>globalThis.fetch(...args)}:ApiDependencies) {
 async function api<T=WireEnvelope>(path:string, options:ApiOptions = {}):Promise<T> {
   path=targetUrl(path);
   const method = options.method || 'GET';
