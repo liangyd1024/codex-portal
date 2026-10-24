@@ -404,3 +404,111 @@ test('media routes preserve image bytes, query selection, download headers and f
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+test('desktop and automation routes preserve binding, receipts, payload precedence and target isolation',async()=>{
+ const ids=Array.from({length:6},(_,i)=>'00000000-0000-0000-0000-'+String(i+1).padStart(12,'0'));
+ const [bound,generic,messageId,otherMessage,turnId,otherThread]=ids,outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),records=[];
+  try{
+   for(const [host,manager] of env.managers){
+    manager.subscriptions=new Map();manager.mutations=0;
+    manager.saveState=(_file,state)=>env.calls.push([host,'saveState',{threadId:state.threadId,receipts:Object.fromEntries(Object.entries(state.submissions).map(([id,v])=>[id,v.status]))}]);
+    manager.passive=async(action,options)=>{
+     env.calls.push([host,'passive',action,options]);
+     if(action==='threads')return {data:[{id:bound}],future:{verbatim:'保留'}};
+     if(action==='history')return {data:[{id:turnId,items:[{type:'agentMessage',text:'原文\n中文',future:7}]}],totalTurns:1,nextCursor:'opaque/next'};
+     return {thread:{id:options.threadId,archived:false,activity:{state:'idle'},future:{keep:true}}};
+    };
+    manager.remote=async(source,options)=>{
+     const match=source.match(/PAYLOAD=json.loads\(base64.b64decode\('([^']+)'\)\)/);assert.ok(match);
+     const payload=JSON.parse(Buffer.from(match[1],'base64').toString());env.calls.push([host,'remote',payload,options]);
+     if(payload.action==='send')return {result:{result:{turn:{id:turnId}}},future:'unchanged'};
+     if(payload.action==='probe')return {threadReferencesSupported:true,settings:{settings:{model:'fixture'}}};
+     return {data:[{id:'fixture-automation',unknown:{text:'完整'}}],future:['原文']};
+    };
+   }
+   const request=async(path,body,extra={})=>{
+    env.calls.length=0;const response=await fetch(env.base+path,{...(body===undefined?{}:{method:'POST',body:JSON.stringify(body),headers:{'x-csrf-token':env.token}}),...extra});
+    const text=await response.text();const record={status:response.status,body:text?JSON.parse(text):null,calls:structuredClone(env.calls),mutations:[...env.managers.values()].map(m=>m.mutations)};records.push(record);return record;
+   };
+   await request('/api/desktop/candidates?host=b&search=first&search=last&cursor=a%2Fb');
+   await request('/api/automations?host=b');
+   await request('/api/automations/candidates?host=b&search=first&search=last&cursor=ignored');
+   await request('/api/automations/session?host=b');
+   await request('/api/automations/history?host=b&threadId='+bound);
+   await request('/api/automations/binding?host=b',{threadId:bound},{headers:{}});
+   await request('/api/automations/binding?host=b',{threadId:bound});
+   await request('/api/automations/binding?host=b',{threadId:otherThread});
+   await request('/api/automations/session?host=b');
+   await request('/api/automations/history?host=b&threadId='+bound+'&cursor=a%2Fb&cursor=ignored');
+   await request('/api/automations/history?host=b&threadId='+otherThread);
+   await request('/api/threads/'+bound+'/message?host=b',{text:'不得发送'});
+   await request('/api/threads/'+bound+'/message?host=a',{text:'独立目标'});
+   await request('/api/desktop/threads/'+generic+'?host=b');
+   await request('/api/desktop/threads/'+generic+'/history?host=b&cursor=first&cursor=last');
+   await request('/api/desktop/threads/'+generic+'/message?host=b',{threadId:otherThread,messageId,text:'中文\n原文',unknown:{keep:true}});
+   await request('/api/desktop/threads/'+generic+'/message?host=b',{threadId:otherThread,messageId,text:'中文\n原文'});
+   await request('/api/desktop/threads/'+generic+'/message?host=b',{messageId,text:'变更'});
+   await request('/api/desktop/threads/'+generic+'/interrupt?host=b',{threadId:otherThread,turnId});
+   await request('/api/desktop/threads/'+generic+'/acknowledge?host=b',{threadId:otherThread,messageId});
+   await request('/api/automations/message?host=b',{threadId:bound,messageId:otherMessage,text:'原生管理消息'});
+   await request('/api/desktop/threads/'+bound+'/message?host=b',{messageId:otherMessage,text:'原生管理消息'});
+   await request('/api/automations/interrupt?host=b',{threadId:bound,turnId});
+   await request('/api/automations/acknowledge?host=b',{threadId:bound,messageId:otherMessage});
+   await request('/api/desktop/threads/'+'-'.repeat(36)+'/message?host=b');
+   await request('/api/desktop/threads/'+generic+'/message?host=b');
+   await request('/api/desktop/threads/'+generic+'?host=b',undefined,{method:'HEAD'});
+   await request('/api/automations/session?host=unknown');
+   assert.deepEqual(records.map(r=>r.status),[200,200,200,400,409,403,200,409,200,200,409,409,200,200,200,200,200,409,200,200,200,200,200,200,400,404,404,404]);
+   assert.deepEqual(records[0].calls[0],['b','passive','threads',{search:'first',cursor:'a/b'}]);
+   assert.deepEqual(records[2].calls[0],['b','passive','threads',{search:'first'}]);
+   assert.equal(records[7].body.error.code,'DESKTOP_BINDING_FIXED');
+   assert.equal(records[11].body.error.code,'DESKTOP_MANAGED');
+   for(const index of [5,7,10,11,16,17,21,24,25,26,27])assert.equal(records[index].calls.length,0);
+   assert.equal(records[15].calls.find(c=>c[1]==='remote'&&c[2].action==='send')[2].threadId,generic);
+   assert.ok(records.every(r=>r.mutations.every(n=>n===0)));
+   outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
+
+test('desktop pending and unknown outcomes block both entries until explicitly acknowledged',async()=>{
+ const threadId='00000000-0000-0000-0000-000000000011',turnId='00000000-0000-0000-0000-000000000012';
+ const messageIds=[13,14,15].map(i=>'00000000-0000-0000-0000-'+String(i).padStart(12,'0')),outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),manager=env.managers.get('b'),native=[],records=[];let release,started,loseReply=false;
+  const sending=new Promise(resolve=>{started=resolve;});
+  manager.subscriptions=new Map();manager.mutations=0;manager.saveState=()=>{};
+  manager.passive=async action=>action==='history'?{data:[]}:{thread:{id:threadId,archived:false,activity:{state:'idle'}}};
+  manager.remote=async source=>{
+   const payload=JSON.parse(Buffer.from(source.match(/PAYLOAD=json.loads\(base64.b64decode\('([^']+)'\)\)/)[1],'base64').toString());native.push(payload);
+   if(payload.action!=='send')return {};
+   if(native.filter(p=>p.action==='send').length===1){started();await new Promise(resolve=>{release=resolve;});}
+   if(loseReply)throw Error('模拟回执丢失');
+   return {result:{result:{turn:{id:turnId}}}};
+  };
+  const request=async(path,data)=>{const r=await fetch(env.base+path+'?host=b',{method:'POST',headers:{'x-csrf-token':env.token},body:JSON.stringify(data)});return {status:r.status,body:await r.json()};};
+  const desktop='/api/desktop/threads/'+threadId;
+  let pending;
+  try{
+   pending=request(desktop+'/message',{messageId:messageIds[0],text:'首条'});await sending;
+   records.push(await request('/api/threads/'+threadId+'/message',{text:'不得绕过桌面发送'}));
+   records.push(await request(desktop+'/message',{messageId:messageIds[1],text:'等待时不得发送'}));
+   assert.equal(manager.mutations,1);assert.equal(native.filter(p=>p.action==='send').length,1);
+   release();records.push(await pending);
+   loseReply=true;records.push(await request(desktop+'/message',{messageId:messageIds[1],text:'回执未知'}));
+   loseReply=false;records.push(await request(desktop+'/message',{messageId:messageIds[1],text:'回执未知'}));
+   records.push(await request(desktop+'/message',{messageId:messageIds[2],text:'待核对'}));
+   records.push(await request(desktop+'/acknowledge',{messageId:messageIds[1]}));
+   records.push(await request(desktop+'/message',{messageId:messageIds[2],text:'待核对'}));
+   assert.deepEqual(records.map(r=>r.status),[409,409,200,502,409,409,200,200]);
+   assert.deepEqual([records[0],records[1],records[4],records[5]].map(r=>r.body.error.code),['SEND_PENDING','SEND_PENDING','OUTCOME_UNKNOWN','SEND_PENDING']);
+   assert.equal(native.filter(p=>p.action==='send').length,3);assert.equal(manager.mutations,0);
+   assert.equal(env.calls.filter(c=>c[1]==='message').length,0);
+   outcomes.push({records,native});
+  }finally{release?.();if(pending)await pending;await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
