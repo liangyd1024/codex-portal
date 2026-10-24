@@ -1,3 +1,4 @@
+import {createWorkspaceRefresh} from '../src/web/services/workspace-refresh.ts';
 import {createDetailReader} from '../src/web/services/detail-reader.ts';
 import {createApiClient} from '../src/web/services/api.ts';
 import {createSidebarLoader} from '../src/web/services/sidebar-loader.ts';
@@ -810,7 +811,7 @@ function renderRequests() {
 }
 
 async function loadStatus() { applyStatus(await api('/api/status')); renderStatus(); renderRequests(); return state.status; }
-let workspaceRefreshPromise, accountViewVersion=0;
+let accountViewVersion=0;
 const catalogs=createCatalogReaders({state,version:()=>accountViewVersion,modelId,
   readModels:path=>api(path),readProjects:()=>api('/api/projects'),renderModels,renderProjects});
 const {loadModels,loadProjects}=catalogs;
@@ -923,17 +924,12 @@ const selectedRefresh=createSelectedRefresh({state,blocked:()=>automations?.open
   apply:applyDetail,updated:()=>turnNavigation?.update()});
 const refreshSelected=selectedRefresh.refresh;
 async function refreshWorkspace(forceModels = false, statusReady = false) {
-  if (workspaceRefreshPromise) return workspaceRefreshPromise;
-  workspaceRefreshPromise = showRefresh('工作区', async () => {
-    if(!statusReady)await loadStatus(); if (!connected()) throw new Error('目标机器未连接。请先连接，再刷新。');
-    const results = await Promise.allSettled([loadModels(forceModels),loadProjects(),loadThreads(false,true),refreshSelected(),refreshAccountUsage?.(true)]);
-    const labels = ['模型列表','项目列表','会话列表','当前会话','账号与用量'];
-    const failures = results.flatMap((r,i) => r.status === 'rejected' ? [labels[i] + '：' + (r.reason?.message || String(r.reason))] : []);
-    if (failures.length) throw new Error(failures.join('；'));
-  });
-  try { await workspaceRefreshPromise; }
-  finally { workspaceRefreshPromise = null; }
+  return workspaceRefresh(forceModels,statusReady);
 }
+const workspaceRefresh=createWorkspaceRefresh({showRefresh:(...args)=>showRefresh(...args),
+  loadStatus:()=>loadStatus(),connected:()=>connected(),loadModels:force=>loadModels(force),
+  loadProjects:()=>loadProjects(),loadThreads:(...args)=>loadThreads(...args),
+  refreshSelected:()=>refreshSelected(),refreshAccountUsage:()=>refreshAccountUsage?.(true)});
 let autoRefreshTimer = null;
 async function refreshCatalogs() {
   if (document.hidden || !usable() || state.refreshing || catalogs.pendingModels() || catalogs.pendingProjects()) return;
