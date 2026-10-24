@@ -1,3 +1,4 @@
+import {createApiClient} from '../src/web/services/api.ts';
 import {installDeferredTool} from './deferred-tool.js';
 import {renderSelectOptions,renderDiagnosticsView,publishWorkspace,createWorkspaceState} from '../src/web/views.tsx';
 import {completedGoalPlacement,renderCompletedGoal} from './goal-toolbar.js';
@@ -290,37 +291,8 @@ function recordError(error, stage = 'client') {
 }
 function toast(...args) { return (toast.presenter??=createToasts({region:$('toasts'),make:el,icon}))(...args); }
 
-async function api(path, options = {}) {
-  path=targetUrl(path);
-  const method = options.method || 'GET';
-  const headers = {Accept:'application/json',...options.headers};
-  if (method !== 'GET') {
-    if (!state.csrf) { const c = await api('/api/csrf'); state.csrf = c.token; }
-    headers['Content-Type'] = 'application/json'; headers['X-CSRF-Token'] = state.csrf;
-  }
-  const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), options.timeout || 90000);
-  let response;
-  try {
-    response = await fetch(path, {method, credentials:'same-origin', headers, signal:controller.signal, ...(method !== 'GET' ? {body:JSON.stringify(options.body || {})} : {})});
-    const raw = await response.text();
-    let data;
-    try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error('服务未返回有效数据。请查看连接诊断。'); }
-    if (!response.ok) {
-      if(response.status===401&&data.error?.code==='PAIRING_REQUIRED'){flushDrafts();location.reload();}
-      const e = new Error(data.error?.message || data.message || '请求失败，HTTP ' + response.status);
-      e.readOnly = method==='GET'; e.status = response.status; e.code = data.error?.code; e.details = data.error?.details; throw e;
-    }
-    // Freshness uses this browser's clock, including observations from SSH hosts.
-    for(const thread of [data.thread,...(Array.isArray(data.data)?data.data:[])]) {
-      if(thread?.activity)thread.activity.observedAt=Date.now();
-    }
-    return data;
-  } catch (e) {
-    if (e.name === 'AbortError') throw new Error(method==='GET'?'读取超时，已有内容和草稿保留，请重试刷新。':'操作结果未确认，草稿已保留。请先核对会话记录，避免重复提交。');
-    if (e instanceof TypeError) throw new Error('无法连接本机服务。请确认服务仍在运行。');
-    throw e;
-  } finally { clearTimeout(timer); }
-}
+const api=createApiClient({targetUrl,csrf:{get:()=>state.csrf,set:token=>{state.csrf=token;}},flushDrafts,reload:()=>location.reload()});
+
 async function action(key, fn) {
   if (state.busy.has(key)) return;
   state.busy.add(key); renderControls();
