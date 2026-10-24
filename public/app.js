@@ -1,3 +1,4 @@
+import {installInspectorNavigation,installAutomationNavigation} from '../src/web/components/InspectorNavigation';
 import {publishConnectionSelect,installConnectionSelectAction} from '../src/web/components/ConnectionSelect';
 import {publishProjectPicker,installProjectPickerActions} from '../src/web/components/ProjectPicker';
 import {publishNewChatControls,installNewChatActions} from '../src/web/components/NewChatControls';
@@ -1183,7 +1184,7 @@ function wireEvents() {
   automations=installAutomations({api,onOpen:()=>{flushDrafts();closeNewChat();state.selectionVersion++;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);queueMicrotask(renderControls);},
     openSession:async(id,prompt)=>{await selectThread(id,{desktop:true});if(prompt&&state.selectedId===id){const previous=$('message-input').value;if(previous&&previous!==prompt){toast('管理会话已有未发送草稿，请先处理草稿，再返回定时任务继续。',true);$('message-input').focus();return;}$('message-input').value=prompt;state.drafts.set(id,$('message-input').value);resizeInput();renderControls();}$('message-input').focus();},
     openThread:id=>selectThread(id),notify:toast});
-  const scheduleNav=el('button','automations-nav');scheduleNav.id='open-automations';scheduleNav.type='button';scheduleNav.textContent='定时任务';scheduleNav.onclick=()=>automations.open();document.querySelector('.inspector-nav').append(scheduleNav);
+  installAutomationNavigation(()=>automations.open());
   const desktopEntry=el('button','text-button','通过桌面继续');desktopEntry.id='desktop-entry';desktopEntry.type='button';desktopEntry.hidden=true;desktopEntry.onclick=()=>selectThread(state.selectedId,{desktop:true});$('takeover').after(desktopEntry);
   const review=el('button','text-button','已核对会话记录，解锁发送');review.id='desktop-review';review.type='button';review.hidden=true;
   review.onclick=()=>action('desktop-review',async()=>{const threadId=state.selectedId;await api('/api/desktop/threads/'+encodeURIComponent(threadId)+'/acknowledge',{method:'POST',body:{messageId:state.detail?.desktop?.unconfirmed||desktopSends[threadId]?.messageId}});delete desktopSends[threadId];saveDesktopSends();await refreshSelected();});
@@ -1289,20 +1290,17 @@ async function init() {
   });
   installBrowserBackup(connectionConfig,flushDrafts,()=>{draftWritesSuspended=true;});
   const inspector=$('inspector');
-  const navigation=el('nav','inspector-nav');navigation.setAttribute('aria-label','工作区详情分类');
-  inspector.querySelector('.inspector-heading').after(navigation);
+  const selectInspectorView=installInspectorNavigation(showInspectorView);
   const groups=[...inspector.querySelectorAll(':scope > details')];
   const category=group=>group.id==='mobile-access'?'mobile':'settings';
   groups.forEach(group=>{group.open=group.id!=='diagnostics'&&group.id!=='browser-backup'&&!group.classList.contains('connection-section');});
-  const views=[['settings','设置'],['mobile','手机访问']];
   function showInspectorView(view){
     if(view==='settings'&&!$('app-shell').classList.contains('inspector-hidden'))loadSettings();
     if(view==='mobile')loadMobile();
     groups.forEach(group=>{group.dataset.viewHidden=String(category(group)!==view);group.hidden=group.dataset.viewHidden==='true'||group.dataset.empty==='true';});
-    navigation.querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.view===view)));
+    selectInspectorView(view);
     inspector.scrollTop = 0;
   }
-  for(const [view,title] of views){const button=el('button','',title);button.type='button';button.dataset.view=view;button.onclick=()=>showInspectorView(view);navigation.append(button);}
   showInspectorView('settings');
   wireEvents(); renderStatus(); renderThread(); renderThreads(); setupEvents();
   window.dispatchEvent(new Event('rcm-ready'));
