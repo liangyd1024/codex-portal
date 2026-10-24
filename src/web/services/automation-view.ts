@@ -1,4 +1,4 @@
-export interface AutomationTask {id:string;name:string;status:string;rrule:string;prompt?:string;target_thread_id?:string;kind?:string;last_run_at?:number;next_run_at?:number|null;[field:string]:unknown}
+export interface AutomationTask {id:string;name:string;status:string;rrule:string;prompt?:string|null;target_thread_id?:string|null;kind?:string|null;last_run_at?:number|null;next_run_at?:number|null;[field:string]:unknown}
 export interface AutomationRun {automation_id:string;thread_id:string;created_at:number;status:string;[field:string]:unknown}
 export type TaskMode='view'|'edit'|'delete';
 type Time=(value:number|null|undefined)=>string;
@@ -15,3 +15,10 @@ export function taskPresentation(task:AutomationTask,mode:TaskMode,runs:Automati
 }
 export type TaskRow=ReturnType<typeof taskRow>;
 export type TaskPresentation=ReturnType<typeof taskPresentation>;
+
+export interface AutomationListOptions {list:HTMLElement;showTask:(task:AutomationTask,mode?:TaskMode)=>void}
+export interface AutomationDialogOptions {dialog:HTMLDialogElement;view:TaskPresentation;edit:()=>void;manage:()=>void;openThread:(id:string)=>void}
+export interface AutomationViewsRenderer {
+ list:(options:AutomationListOptions)=>{render:(rows:TaskRow[]|null)=>void};
+ task:(options:AutomationDialogOptions)=>{closeButton:HTMLButtonElement;dispose:()=>void};
+}
