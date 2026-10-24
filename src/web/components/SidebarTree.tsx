@@ -1,0 +1,39 @@
+import {Fragment,memo,useRef,type KeyboardEvent,type SyntheticEvent} from 'react';
+import {createPortal,flushSync} from 'react-dom';
+import {createStore,useStore,type StoreApi} from 'zustand';
+import {treePresentation,type Controller,type Group,type GroupView,type ItemView,type Badge,type MenuEntry} from '../services/sidebar-tree';
+interface View {groups:GroupView[];empty:string}
+interface Instance {id:number;controller:Controller;store:StoreApi<{view:View|null;busy:ReadonlySet<string>;scope:string}>}
+const registry=createStore<{instances:Instance[]}>(()=>({instances:[]}));let sequence=0;
+function Icon({name,extra=''}:{name:string;extra?:string}){return <svg className={'icon'+(extra?' '+extra:'')} aria-hidden="true"><use href={'#i-'+name}/></svg>;}
+function Activity({badge}:{badge:Badge}){return <span className={badge.className} title={badge.title} role="img" aria-label={badge.title}>{badge.icon&&<Icon name={badge.icon}/>}{badge.count!==undefined&&<span className={badge.icon?'question-count':undefined}>{badge.count}</span>}</span>;}
+function Badges({badges}:{badges:Badge[]}){return <>{badges.map((badge,index)=><Activity key={index} badge={badge}/>)}</>;}
+function disclosure(c:Controller,key:string,e:KeyboardEvent){if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();if(c.isExpanded(key)!==(e.key==='ArrowRight'))c.toggle(key);}}
+function useMenu(instance:Instance,key:string,visible:boolean,entries:()=>MenuEntry[]){
+ const ref=useRef<HTMLButtonElement>(null),c=instance.controller;
+ const disabled=useStore(instance.store,s=>s.busy.has(s.scope+':'+('menu:'+key).replace(/^menu:thread:/,'')));
+ const open=(e:SyntheticEvent)=>{if(!visible)return;e.preventDefault();c.openMenu(ref.current!,entries());};
+ return {open,key:(e:KeyboardEvent)=>{if(e.key==='ContextMenu'||e.key==='F10'&&e.shiftKey)open(e);},button:(label:string)=>visible?<button ref={ref} type="button" className="sidebar-item-menu" aria-label={'更多操作：'+label} data-focus-key={'menu:'+key} disabled={disabled} aria-busy={String(disabled) as 'true'|'false'} onClick={open}>⋯</button>:null};
+}
+function Item({item,instance}:{item:ItemView;instance:Instance}){return item.kind==='project'?<Project item={item} instance={instance}/>:<Thread item={item} instance={instance}/>;}
+// Remount changing controls to clear native sticky touch hover, as the baseline does.
+// Stable row identities avoid rebuilding unrelated thread contents.
+function Project({item,instance}:{item:Extract<ItemView,{kind:'project'}>;instance:Instance}){
+ const c=instance.controller,p=item.raw,key='project:'+p.id,id='sidebar-project-'+p.id,label='在项目中新建会话：'+p.name;
+ return <div className="project-group"><div className="project-heading"><button key={String(item.expanded)} type="button" className="project-button" data-project-id={p.id} data-focus-key={key} title={p.roots.join('\n')} aria-expanded={item.expanded} aria-controls={id} onClick={()=>c.toggle(key)} onKeyDown={e=>disclosure(c,key,e)}><Icon name="chevron" extra="project-chevron"/><Icon name="folder"/><span className="project-name">{p.name}</span><Badges badges={item.badges}/></button><button type="button" className="sidebar-project-create" data-focus-key={'create:'+key} title={label} aria-label={label} disabled={item.createDisabled} onClick={()=>{if(!c.o.connected()||!p.roots[0])return;c.closeMenu(false);c.o.newThread(p.roots[0]);}}><Icon name="plus"/></button></div><div className="project-threads" id={id} hidden={!item.expanded}>{item.children.map(child=><Item key={child.kind+':'+child.raw.id} item={child} instance={instance}/>)}{!item.children.length&&<p className="project-empty">暂无会话</p>}</div></div>;
+}
+const Thread=memo(function Thread({item,instance}:{item:Extract<ItemView,{kind:'thread'}>;instance:Instance}){
+ const c=instance.controller,t=item.raw,key='thread:'+t.id,menu=useMenu(instance,key,item.menu,()=>c.threadMenu(t));
+ return <div className="sidebar-thread"><button key={String(item.selected)} type="button" className={'thread-row'+(item.selected?' selected':'')} data-thread-id={t.id} data-focus-key={key} title={item.name} aria-current={item.selected?'true':undefined} onClick={()=>c.o.select(t)} onContextMenu={menu.open} onKeyDown={menu.key} draggable={item.draggable?true:undefined} onDragStart={item.draggable?e=>{if(c.pending){e.preventDefault();return;}c.drag=t;e.dataTransfer.setData('text/plain',t.id);}:undefined} onDragEnd={item.draggable?()=>{c.drag=null;c.render(c.snapshot,c.view);}:undefined} onDragOver={item.draggable?e=>{if(c.drag&&c.drag.id!==t.id&&c.drag.sectionId===t.sectionId)e.preventDefault();}:undefined} onDrop={item.draggable?e=>{e.preventDefault();if(c.drag&&c.drag.sectionId===t.sectionId&&c.drag.id!==t.id)c.run('reorderThread',c.drag,{beforeThreadId:t.id});c.drag=null;}:undefined}><div className="thread-name">{item.unread&&<span className="thread-unread" aria-label="未读"/>}<span>{item.name}</span><Activity badge={item.badge}/></div><div className="thread-meta"><span className="thread-time">{item.time}</span></div></button>{menu.button(item.name)}</div>;
+},(a,b)=>a.instance===b.instance&&a.item.raw===b.item.raw&&a.item.name===b.item.name&&a.item.time===b.item.time&&a.item.selected===b.item.selected&&a.item.unread===b.item.unread&&a.item.menu===b.item.menu&&a.item.draggable===b.item.draggable&&a.item.badge.className===b.item.badge.className&&a.item.badge.title===b.item.badge.title&&a.item.badge.icon===b.item.badge.icon);
+function Section({group,instance}:{group:GroupView;instance:Instance}){
+ const c=instance.controller,key='section:'+group.id,id='sidebar-section-'+group.id,menu=useMenu(instance,key,group.menu,()=>c.sectionMenu(group.section!));
+ return <section className="sidebar-group"><div className="sidebar-group-heading"><button key={String(group.expanded)} type="button" className="sidebar-section-button" data-focus-key={key} aria-expanded={group.expanded} aria-controls={id} onClick={()=>c.toggle(key)} onContextMenu={menu.open} onKeyDown={e=>{disclosure(c,key,e);menu.key(e);}}><Icon name="chevron"/><span className="sidebar-section-name">{group.name}</span><Badges badges={group.badges}/></button>{menu.button(group.menuLabel)}</div><div className="sidebar-group-items" id={id} hidden={!group.expanded}>{group.items.map(item=><Item key={item.kind+':'+item.raw.id} item={item} instance={instance}/>)}{!group.items.length&&<p className="project-empty">暂无会话或项目</p>}</div></section>;
+}
+function Tree({instance}:{instance:Instance}){const view=useStore(instance.store,s=>s.view);if(!view)return null;return createPortal(<Fragment>{view.groups.map(group=><Section key={group.id} group={group} instance={instance}/>)}{!view.groups.length&&<p className="sidebar-empty">{view.empty}</p>}</Fragment>,instance.controller.node);}
+export function SidebarTrees(){const instances=useStore(registry).instances;return <>{instances.map(instance=><Tree key={instance.id} instance={instance}/>)}</>;}
+export function installReactSidebarTree(controller:Controller){
+ const instance:Instance={id:++sequence,controller,store:createStore(()=>({view:null as View|null,busy:new Set<string>() as ReadonlySet<string>,scope:''}))};
+ registry.setState({instances:[...registry.getState().instances,instance]});
+ return {render(groups:Group[],empty:string){const view={groups:treePresentation(groups,controller),empty};flushSync(()=>instance.store.setState({view,scope:controller.snapshot.accountScope,busy:new Set(controller.operations?.keys())}));},setBusy(){const old=instance.store.getState(),scope=controller.snapshot.accountScope,keys=new Set(controller.operations?.keys());if(scope===old.scope&&keys.size===old.busy.size&&[...keys].every(k=>old.busy.has(k)))return;flushSync(()=>instance.store.setState({scope,busy:keys}));}};
+}

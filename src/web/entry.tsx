@@ -1,3 +1,5 @@
+import {installReactSidebarTree} from './components/SidebarTree';
+import {configureSidebarTree} from '../../public/sidebar.js';
 import {installReactSidebarToolbar} from './components/SidebarToolbar';
 import {configureSidebarToolbar} from '../../public/sidebar.js';
 import {installReactSidebarUndo} from './components/SidebarUndo';
@@ -46,5 +48,6 @@ configureSidebarMenu(installReactSidebarMenu);
 configureSidebarDialog(installReactSidebarDialog);
 configureSidebarUndo(installReactSidebarUndo);
 configureSidebarToolbar(installReactSidebarToolbar);
+configureSidebarTree(installReactSidebarTree);
 // Commands remain event-driven; mounting components never sends native commands.
 await import('../../public/app.js');

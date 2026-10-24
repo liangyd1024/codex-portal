@@ -1,5 +1,4 @@
-import {activitySource,activityIcon,threadSourceIcon,questionActivityIcon} from './activity.js';
-const make=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
+import {activitySource} from './activity.js';
 function orderItems(items,keys=[],orderedThreadIds=null){
   const rank=new Map(keys.map((key,i)=>[key,i]));
   const result=[...items].sort((a,b)=>(rank.get(a.kind+':'+a.value.id)??Infinity)-(rank.get(b.kind+':'+b.value.id)??Infinity));
@@ -63,6 +62,7 @@ export function sidebarGroups(snapshot){
 export class Sidebar {
   constructor(options){
     this.o=options;this.node=options.node;this.snapshot=null;this.pending=false;this.menu=null;this.dialog=null;this.scope=null;this.expanded=new Set();this.searchOverrides=new Map();this.searchExpanded=true;
+    this.treeView=installSidebarTree(this);
     this.dialogView=installSidebarDialog();
     this.menuView=installSidebarMenu(item=>{this.closeMenu(false);item.run?.();});
     this.toolbarView=installSidebarToolbar({before:this.node,onArchive:()=>options.onArchiveView(!this.snapshot?.archived),onMore:more=>this.openMenu(more,[
@@ -104,22 +104,7 @@ export class Sidebar {
     if(shape===this.renderShape){this.setBusy(this.pending);return;}
     this.renderShape=shape;
     const focused=document.activeElement?.dataset?.focusKey,scroll=this.node.parentElement.scrollTop;
-    this.node.replaceChildren();
-    for(const group of sidebarGroups(display)){
-      const items=group.items.filter(i=>!view.search||i.kind==='thread'||i.children.length);
-      if(view.search&&!items.length)continue;
-      const wrap=make('section','sidebar-group'),header=make('div','sidebar-group-heading');
-      const disclosure=make('button','sidebar-section-button');disclosure.type='button';disclosure.dataset.focusKey='section:'+group.id;
-      const expanded=this.isExpanded('section:'+group.id);disclosure.setAttribute('aria-expanded',String(expanded));disclosure.append(this.o.icon('chevron'),make('span','sidebar-section-name',group.name));
-      this.renderActivity(disclosure,group.items);
-      const children=make('div','sidebar-group-items');children.id='sidebar-section-'+group.id;children.hidden=!expanded;disclosure.setAttribute('aria-controls',children.id);
-      disclosure.onclick=()=>{this.toggle('section:'+group.id);};this.disclosureKeys(disclosure,'section:'+group.id);header.append(disclosure);
-      if(group.section)this.addMenu(header,disclosure,()=>this.sectionMenu(group.section));
-      for(const item of items)if(item.kind==='project')this.renderProject(children,item);else this.renderThread(children,item.value);
-      if(!items.length)children.append(make('p','project-empty','暂无会话或项目'));
-      wrap.append(header,children);this.node.append(wrap);
-    }
-    if(!this.node.childElementCount)this.node.append(make('p','sidebar-empty',view.loading?'正在读取…':view.search?'没有匹配的会话':snapshot.archived?'暂无已归档会话':'暂无会话'));
+    this.treeView.render(sidebarGroups(display),view.loading?'正在读取…':view.search?'没有匹配的会话':snapshot.archived?'暂无已归档会话':'暂无会话');
     if(focused)[...this.node.querySelectorAll('[data-focus-key]')].find(n=>n.dataset.focusKey===focused)?.focus({preventScroll:true});
     this.node.parentElement.scrollTop=scroll;this.setBusy(this.pending);
   }
@@ -129,11 +114,7 @@ export class Sidebar {
   }
   setBusy(pending){
     this.node.setAttribute('aria-busy',String(pending));this.progress.hidden=!pending;
-    for(const b of this.node.querySelectorAll('.sidebar-item-menu')){
-      const id=b.dataset.focusKey?.replace(/^menu:thread:/,'');
-      b.disabled=!!this.operations?.has(this.snapshot.accountScope+':'+id);
-      b.setAttribute('aria-busy',String(b.disabled));
-    }
+    this.treeView.setBusy();
   }
   // Queue only native mutations; a slow list refresh must not block the next item.
   enqueue(work){
@@ -142,53 +123,7 @@ export class Sidebar {
   }
 
   toggle(key){if(this.view?.search)this.searchOverrides.set(key,!this.isExpanded(key));else{if(this.expanded.has(key))this.expanded.delete(key);else this.expanded.add(key);this.save();}this.render(this.snapshot,this.view);}
-  disclosureKeys(button,key){button.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();if(this.isExpanded(key)!==(e.key==='ArrowRight'))this.toggle(key);}});}
   source(t){return this.o.activitySource?this.o.activitySource(t):activitySource(t,{connected:this.o.connected(),webActive:t.status?.type==='active'});}
-  renderActivity(parent,items){
-    const counts=new Map();let waiting=0;
-    const visit=item=>{if(item.kind==='project'){item.children.forEach(visit);return;}if(this.o.needsAnswer?.(item.value.id)){waiting++;return;}const source=this.source(item.value);if(source)counts.set(source,(counts.get(source)||0)+1);};
-    items.forEach(visit);
-    if(waiting){const badge=questionActivityIcon(this.o.icon);badge.title=waiting+' 个会话需要你回答';badge.setAttribute('aria-label',badge.title);badge.append(make('span','question-count',String(waiting)));parent.append(badge);}
-    if(!counts.size)return;
-    const total=[...counts.values()].reduce((sum,count)=>sum+count,0);
-    const badge=activityIcon(counts.has('web')?'web':'desktop',this.o.icon);
-    badge.className='activity-icon activity-running activity-summary';
-    badge.replaceChildren(make('span','',String(total)));
-    badge.title=total+' 个会话运行中（'+[counts.has('web')?'网页端 '+counts.get('web'):'',counts.has('desktop')?'桌面端 '+counts.get('desktop'):''].filter(Boolean).join('，')+'）';
-    badge.setAttribute('aria-label',badge.title);parent.append(badge);
-  }
-  renderProject(parent,item){
-    const p=item.value,group=make('div','project-group'),header=make('div','project-heading');
-    const button=make('button','project-button');button.type='button';button.dataset.projectId=p.id;button.dataset.focusKey='project:'+p.id;button.title=p.roots.join('\n');
-    const expanded=this.isExpanded('project:'+p.id);button.setAttribute('aria-expanded',String(expanded));button.append(this.o.icon('chevron','project-chevron'),this.o.icon('folder'),make('span','project-name',p.name));
-    this.renderActivity(button,item.children);
-    const children=make('div','project-threads');children.id='sidebar-project-'+p.id;children.hidden=!expanded;button.setAttribute('aria-controls',children.id);button.onclick=()=>this.toggle('project:'+p.id);this.disclosureKeys(button,'project:'+p.id);header.append(button);
-    const create=make('button','sidebar-project-create');create.type='button';
-    create.dataset.focusKey='create:project:'+p.id;create.title='在项目中新建会话：'+p.name;create.setAttribute('aria-label',create.title);
-    create.disabled=!this.o.connected()||!p.roots[0];create.append(this.o.icon('plus'));
-    create.onclick=()=>{if(!this.o.connected()||!p.roots[0])return;this.closeMenu(false);this.o.newThread(p.roots[0]);};header.append(create);
-    for(const child of item.children)this.renderThread(children,child.value);
-    if(!item.children.length)children.append(make('p','project-empty','暂无会话'));
-    group.append(header,children);parent.append(group);
-  }
-  renderThread(parent,t){
-    const row=make('div','sidebar-thread'),button=make('button','thread-row'+(this.o.selectedId()===t.id?' selected':''));button.type='button';button.dataset.threadId=t.id;button.dataset.focusKey='thread:'+t.id;button.title=this.o.threadName(t);
-    if(this.o.selectedId()===t.id)button.setAttribute('aria-current','true');
-    const title=make('div','thread-name');if(t.isUnread){const dot=make('span','thread-unread');dot.setAttribute('aria-label','未读');title.append(dot);}title.append(make('span','',this.o.threadName(t)));
-    const source=this.source(t);
-    title.append(threadSourceIcon(t,source,this.o.icon,this.o.needsAnswer?.(t.id)));
-    const meta=make('div','thread-meta');meta.append(make('span','thread-time',this.o.relativeTime(t.recencyAt||t.updatedAt)));button.append(title,meta);button.onclick=()=>this.o.select(t);
-    row.append(button);this.addMenu(row,button,()=>this.threadMenu(t));
-    const manual=t.isPinned&&this.snapshot.preferences.pinned==='manual'&&this.snapshot.capabilities.reorderThread.supported;
-    if(manual&&!this.snapshot.archived){button.draggable=true;button.ondragstart=e=>{if(this.pending){e.preventDefault();return;}this.drag=t;e.dataTransfer.setData('text/plain',t.id);};button.ondragend=()=>{this.drag=null;this.render(this.snapshot,this.view);};button.ondragover=e=>{if(this.drag&&this.drag.id!==t.id&&this.drag.sectionId===t.sectionId)e.preventDefault();};button.ondrop=e=>{e.preventDefault();if(this.drag?.sectionId===t.sectionId&&this.drag.id!==t.id)this.run('reorderThread',this.drag,{beforeThreadId:t.id});this.drag=null;};}
-    parent.append(row);
-  }
-  addMenu(container,anchor,entries){
-    if(!entries().some(item=>!item.hidden))return;
-    const more=make('button','sidebar-item-menu','⋯');more.type='button';more.setAttribute('aria-label','更多操作：'+(anchor.title||anchor.textContent));more.dataset.focusKey='menu:'+anchor.dataset.focusKey;
-    const open=e=>{e.preventDefault();this.openMenu(more,entries());};more.onclick=open;anchor.oncontextmenu=open;
-    anchor.onkeydown=e=>{if(e.key==='ContextMenu'||e.key==='F10'&&e.shiftKey)open(e);};container.append(more);
-  }
   threadMenu(t){
     if(this.operations?.has(this.snapshot.accountScope+':'+t.id))return [{label:'正在处理此会话…',disabled:true}];
     if(t.archived)return [this.entry('恢复会话','restore',()=>this.run('restore',t))];
@@ -300,4 +235,11 @@ export function configureSidebarToolbar(installer){sidebarToolbarInstaller=insta
 export function installSidebarToolbar(options){
   if(!sidebarToolbarInstaller)throw new Error('侧栏工具栏尚未初始化。');
   return sidebarToolbarInstaller(options);
+}
+
+let sidebarTreeInstaller;
+export function configureSidebarTree(installer){sidebarTreeInstaller=installer;}
+export function installSidebarTree(controller){
+  if(!sidebarTreeInstaller)throw new Error('侧栏树尚未初始化。');
+  return sidebarTreeInstaller(controller);
 }
