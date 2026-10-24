@@ -15,6 +15,11 @@ test('isolated SSE interruption holds reconnect until recovery and rejects forei
   const stream=await fetch(origin+'/__parity_events'+query,{signal:abort.signal});
   assert.equal(stream.headers.get('content-type'),'text/event-stream');
   const reader=stream.body.getReader();assert.match(new TextDecoder().decode((await reader.read()).value),/retry: 1000/);
+  assert.equal((await control('pulse',{Origin:'https://other.invalid'})).status,403);
+  assert.equal((await (await control('pulse')).json()).sequence,1);
+  assert.match(new TextDecoder().decode((await reader.read()).value), /event: qa\/pulse\ndata: \{"sequence":1\}/);
+  assert.equal((await (await control('pulse')).json()).sequence,2);
+  assert.match(new TextDecoder().decode((await reader.read()).value), /"sequence":2/);
   assert.equal((await control('disconnect',{Origin:'https://other.invalid'})).status,403);
   assert.equal((await control('disconnect')).status,200);
   assert.equal((await reader.read()).done,true);

@@ -2,9 +2,11 @@
 (() => {
  const f=window.rcmFixture,client=crypto.randomUUID(),events=[];
  const base='/__parity_events',query='?client='+client;
+ f.nativeEvents={client,events,pulses:[]};
  for(const type of ['offline','online'])addEventListener(type,()=>events.push({type,readyState:f.stream?.readyState}));
  window.EventSource=class extends f.NativeEventSource {
   constructor(){super(base+query);f.stream=this;
+   this.addEventListener('qa/pulse',event=>f.nativeEvents.pulses.push(JSON.parse(event.data).sequence));
    for(const type of ['open','error'])this.addEventListener(type,()=>events.push({type,readyState:this.readyState}));
   }
  };
