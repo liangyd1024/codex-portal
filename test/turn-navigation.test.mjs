@@ -82,3 +82,15 @@ test('a pending page that exhausts history needs no extra request',async()=>{
  x.options.loadEarlier=async()=>{calls++;return true;};
  assert.equal(await loadAllEarlier(x.options),true);assert.equal(calls,0);
 });
+
+test('partial continuation history does not claim zero conversation turns',()=>{
+ const turns=[{id:'continuation',items:[{type:'agentMessage',text:'原始回复'}]}];
+ assert.equal(turnCountLabel({turns,hasEarlier:true}),'待加载轮次');
+ assert.equal(turnCountLabel({turns,hasEarlier:true,loading:true}),'正在加载轮次');
+ assert.equal(turnCountLabel({turns,hasEarlier:true,loadMessage:'加载失败'}),'加载未完成，点击重试');
+ assert.equal(turnCountLabel({turns,hasEarlier:false}),'共 0 轮');
+ const input={id:'question',items:[{type:'userMessage'}]};
+ assert.equal(turnCountLabel({turns:[input,...turns],hasEarlier:true,loading:true}),'已加载 1 轮 · 加载中');
+ assert.equal(turnCountLabel({turns:[input,...turns],hasEarlier:true,loadMessage:'已取消'}),'已加载 1 轮 · 点击重试');
+ assert.equal(turnCountLabel({turns:[input,...turns],hasEarlier:false,loadMessage:'旧错误'}),'共 1 轮');
+});

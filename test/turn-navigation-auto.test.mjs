@@ -26,3 +26,12 @@ test('cancel stays cancelled across updates; a new conversation automatically lo
  const f=fixture(t);f.state.ready=true;f.nav.update();f.count().onclick();await settle();f.nav.update();await settle();assert.equal(f.calls.length,1);
  f.nav.switchContext('b');f.nav.update();await settle();assert.deepEqual(f.calls,['0','1','2']);
 });
+
+test('count exposes loading, failure and cancellation without requiring hover',async t=>{
+ const f=fixture(t,{fail:true});f.nav.update();assert.equal(f.count().textContent,'待加载轮次');
+ f.state.ready=true;f.nav.update();assert.equal(f.count().textContent,'正在加载轮次');
+ await settle();assert.equal(f.count().textContent,'加载未完成，点击重试');
+ f.count().onclick();assert.equal(f.count().textContent,'正在加载轮次');
+ f.count().onclick();assert.equal(f.count().textContent,'加载未完成，点击重试');
+ await settle();assert.equal(f.calls.length,2);
+});
