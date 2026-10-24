@@ -57,3 +57,23 @@ test('side receipt matches the server-normalized selection input before and afte
   assert.match(native[0].text,/中文请求\n保留内部换行/);assert.equal(f.calls.length,1);
  }
 });
+
+test('side drafts are editable during native creation, failure, expiry and disconnection; sending stays gated',()=>{
+ const control=()=>({setAttribute(){}}),selected={model:'test',effort:'medium',selections:[{text:'quote'}]};
+ const c=vm.createContext({selected,context:()=>({ready:true,models:[{id:'test',efforts:['medium']}]}),localContext:()=>({ready:!!selected.id&&!selected.expired}),input:{value:'草稿'},status:{},send:control(),stop:{},retry:{},unlock:{},restart:{},recovery:{},attachments:{pending:()=>false},composer:null});
+ const start=source.indexOf(' function renderControls('),end=source.indexOf('  const models=context()',start);
+ vm.runInContext(source.slice(start,end)+'}',c);
+ for(const state of [{creating:true},{creating:false,error:'创建失败'},{id:'side-a',expired:true},{id:undefined,expired:false}]){
+  Object.assign(selected,state);c.renderControls();assert.equal(c.input.disabled,false);assert.equal(c.send.disabled,true);assert.equal(c.input.value,'草稿');
+ }
+ Object.assign(selected,{id:'side-a',expired:false,error:''});c.renderControls();assert.equal(c.send.disabled,false);
+ selected.busy=true;c.renderControls();assert.equal(c.input.disabled,true);assert.equal(c.send.disabled,true);
+});
+
+test('pending native side creation is deduplicated and preserves typed drafts without sending',async()=>{
+ const selected={parent:'parent',requestId:'request',draft:''},calls=[];let resolve;
+ const c=vm.createContext({selected,attachments:{moveDraft(){}},render(){},requestsChanged(){},notify(){},api:(path)=>{calls.push(path);return new Promise(r=>resolve=r);}});
+ vm.runInContext(source.slice(source.indexOf(' async function create('),source.indexOf(' return {\n  requestsHost')),c);
+ const pending=c.create(selected);await c.create(selected);selected.draft='等待期间输入';
+ resolve({thread:{id:'side-a'}});await pending;assert.equal(selected.draft,'等待期间输入');assert.equal(selected.id,'side-a');assert.equal(selected.creating,false);assert.deepEqual(calls,['/api/threads/parent/side-chat']);
+});
