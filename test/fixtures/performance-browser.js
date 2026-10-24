@@ -14,6 +14,15 @@
   {id:'perf-answer-'+i,type:'agentMessage',text:'## 样本 '+i+'\n\n'+'固定中文段落与标点。'.repeat(100)+'\n\n```text\nfixed code\n```'}
  ]}));
  f.turns.set('qa-a',rows);
+ const fetchFixture=window.fetch;
+ window.fetch=(url,options)=>{
+  const u=new URL(typeof url==='string'?url:url.url,location.href);
+  if(u.pathname==='/api/threads/qa-a/turn-directory'){
+   f.calls.push({path:u.pathname,query:u.search,method:'GET'});
+   return Promise.resolve(new Response(JSON.stringify({data:rows.map(t=>({...t,items:t.items.map(i=>i.type==='agentMessage'?{...i,text:i.text.slice(0,1000)}:i)}))}),{headers:{'Content-Type':'application/json'}}));
+  }
+  return fetchFixture(url,options);
+ };
  addEventListener('DOMContentLoaded',()=>{
   const panel=document.createElement('details');panel.style.cssText='position:fixed;top:56px;right:4px;z-index:100000;background:white;border:1px solid black;max-height:65vh;overflow:auto;max-width:330px';
   const summary=document.createElement('summary');summary.textContent='性能验收控制';panel.append(summary);
