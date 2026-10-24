@@ -26,6 +26,7 @@ export function createHttpFramework(handler:RequestListener,tls?:TLSOptions):Htt
   const options={logger:false as const,exposeHeadRoutes:false,
     schemaController:{compilersFactory:{buildValidator:unsupportedSchema,buildSerializer:unsupportedSchema}},
     ajv:{customOptions:{coerceTypes:false,useDefaults:false,removeAdditional:false}},
-    routerOptions:{maxParamLength:16384,onBadUrl:(_url:string,req:IncomingMessage,res:ServerResponse)=>handler(req,res)}};
+    // Only the compatibility dispatcher reads query parameters, after origin checks.
+    routerOptions:{querystringParser:()=>Object.create(null),maxParamLength:16384,onBadUrl:(_url:string,req:IncomingMessage,res:ServerResponse)=>handler(req,res)}};
   return tls?install(Fastify({...options,https:tls}),handler):install(Fastify(options),handler);
 }

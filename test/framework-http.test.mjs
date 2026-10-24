@@ -31,7 +31,10 @@ async function create(factory,options={}){const calls=[],managers=new Map(['a','
 }
 const cases=[
  ['/api/version'],['/api/connections'],['/api/status'],['/api/status?host=unknown'],['/api/models'],
- ['/api/threads?host=b&search=a&search=b&cursor=opaque'],['/api/threads/id/history?cursor=a%2Fb'],
+ ['/api/threads?host=b&search=a&search=b&cursor=opaque'],
+ ['/api/threads?host=b&search=%E4%B8%AD%E6%96%87%2B%26&search=final+value&cursor=%E0%A4%A'],
+ ['/api/threads?host=b&__proto__=unchanged&constructor=raw&search[]=array&search=plain'],
+ ['/api/threads?'+Array.from({length:1100},(_,i)=>'q'+i+'=x').join('&')+'&search=tail'],['/api/threads/id/history?cursor=a%2Fb'],
  ['/api/threads/id?preview=1&fast=1&outputEncoding=delta',{headers:{'x-output-versions':'{"x":3}'}}],
  ['/api/threads/id',{headers:{'x-output-versions':'invalid'}}],['/api/not-a-route'],
  ['/api/threads',{method:'POST',body:'{"unknown":{"a":1},"text":"中文"}',auth:true}],
