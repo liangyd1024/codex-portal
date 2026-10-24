@@ -17,6 +17,13 @@ export function installGoalToolbar(options){
  return toolbarInstaller(options);
 }
 
+let editorInstaller;
+export function configureGoalEditor(installer){editorInstaller=installer;}
+export function installGoalEditor(options){
+ if(!editorInstaller)throw new Error('目标编辑器尚未初始化。');
+ return editorInstaller(options);
+}
+
 // Completion is native goal metadata, never an invented assistant message.
 export function completedGoalPlacement(goal,turns,error){
  if(error||goal?.status!=='complete')return null;

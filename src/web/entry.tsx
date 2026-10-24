@@ -1,4 +1,5 @@
-import {configureGoalToolbar} from '../../public/goal-toolbar.js';
+import {installReactGoalEditor} from './components/GoalEditor';
+import {configureGoalToolbar,configureGoalEditor} from '../../public/goal-toolbar.js';
 import {installReactGoalToolbar} from './components/GoalToolbar';
 import { hydrateRoot } from 'react-dom/client';
 import { useLayoutEffect } from 'react';
@@ -17,5 +18,6 @@ if(!shell)throw new Error('工作台结构缺失。');
 hydrateRoot(shell,<Application/>,{onRecoverableError(error){hydrationFailure=error;console.error('工作台结构不一致',error);}});
 await ready;
 configureGoalToolbar(installReactGoalToolbar);
+configureGoalEditor(installReactGoalEditor);
 // Commands remain event-driven; mounting components never sends native commands.
 await import('../../public/app.js');
