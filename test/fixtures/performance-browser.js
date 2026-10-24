@@ -4,7 +4,7 @@
  let phaseSample=null;
  const phaseEnabled=new URLSearchParams(location.search).get('perfPhases')==='1';
  if(phaseEnabled){
-  const observe=(object,key,label)=>{const original=object[key];object[key]=function(...args){if(!phaseSample)return Reflect.apply(original,this,args);const bucket=phaseSample[label]??={calls:0,ms:0},start=performance.now();bucket.calls++;try{return Reflect.apply(original,this,args);}finally{bucket.ms+=performance.now()-start;}};};
+  const observe=(object,key,label)=>{const original=object[key];object[key]=function(...args){if(!phaseSample)return Reflect.apply(original,this,args);const bucket=phaseSample[label]??={calls:0,ms:0,maxMs:0,slow:[]},start=performance.now();bucket.calls++;let result;try{result=Reflect.apply(original,this,args);return result;}finally{const elapsed=performance.now()-start;bucket.ms+=elapsed;bucket.maxMs=Math.max(bucket.maxMs,elapsed);if(elapsed>=20&&bucket.slow.length<5)bucket.slow.push({ms:elapsed,resultLength:typeof result==='string'?result.length:null,stack:new Error('fixture timing callsite').stack});}};};
   observe(JSON,'parse','jsonParse');observe(JSON,'stringify','jsonStringify');
   observe(Element.prototype,'getBoundingClientRect','rect');observe(Element.prototype,'querySelectorAll','queryAll');
   observe(Node.prototype,'cloneNode','clone');
