@@ -55,6 +55,7 @@
     }
     if(p==='/api/sidebar')return json(sidebar(u));
     if(p==='/api/sidebar/activity')return json({accountScope:'qa-account',data:JSON.parse(u.searchParams.get('ids')).map(id=>({id}))});
+    if(p==='/api/thread-view'&&method==='POST')return json({ok:true});
     if(p==='/api/connect'||p==='/api/disconnect'||p==='/api/service/release'){f.connected=p==='/api/connect';f.update();return json(status());}
     if(p==='/api/threads'&&method==='POST'){const t=thread('qa-new-'+f.threads.length,'新会话');f.threads.push(t);f.owned.add(t.id);return json(detail(t.id));}
     if(p==='/api/sidebar/actions'){

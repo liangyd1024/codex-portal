@@ -5,7 +5,7 @@ import type {ApplicationOptions} from '../types';
 import {createThreadRoutes,matchThreadRoute} from './threads';
 import {createStaticResponse} from '../../../lib/http/static-response.mjs';
 import {createSystemRoutes} from './system';
-import {createEventRoute} from './events';
+import {createEventRoute,createThreadViewRoute} from './events';
 import {WebUpdate} from '../../../lib/web-update.mjs';
 import {createConnectionRoutes} from './connections';
 import {createWorkspaceRoutes} from './workspace';
@@ -33,6 +33,7 @@ export function createDispatcher(context:RouteServices){
  const accessRoutes=createAccessRoutes(context);
  const systemRoutes=createSystemRoutes(context);
  const openEvents=createEventRoute(context);
+ const threadView=createThreadViewRoute(context);
  const workspaceRoutes=new WeakMap<Manager,ReturnType<typeof createWorkspaceRoutes>>();
  const workspaceRoutesFor=(manager:Manager)=>{let routes=workspaceRoutes.get(manager);if(!routes){routes=createWorkspaceRoutes(manager);workspaceRoutes.set(manager,routes);}return routes;};
  const desktopRoutes=new Map<string,ReturnType<typeof createDesktopRoutes>>();
@@ -72,7 +73,7 @@ export function createDispatcher(context:RouteServices){
       if(!manager)throw new AppError('未知连接。',404,'UNKNOWN_HOST');
       if(req.method==='GET'&&p==='/api/csrf')return json(res,200,{token:csrf});
       if(req.method==='GET'&&p==='/api/events'){
-        openEvents(req,res,manager,targetKey,remote);return;
+        openEvents(req,res,manager,targetKey,remote,url);return;
       }
       if(req.method==='GET'){const route=routesFor(manager).get('GET '+p);if(route){await route(url,undefined,res);return;}}
       if(req.method==='GET'&&p==='/api/system/deployment-status'){await systemRoutes.deployment(manager,remote,res);return;}
@@ -95,6 +96,7 @@ export function createDispatcher(context:RouteServices){
         if(p==='/api/sidebar/actions'){await workspaceRoutesFor(manager).get('POST '+p)!(url,data,res);return;}
         const accessRoute=accessRoutes.write(p,remote,mobileConfig);if(accessRoute){await accessRoute(req,res,data);return;}
         const connectionRoute=routesFor(manager).get('POST '+p);if(connectionRoute){await connectionRoute(url,data,res);return;}
+        if(p==='/api/thread-view'){await threadView(req,res,manager,targetKey,remote,data);return;}
         const threadRoute=threadRoutesFor(manager).write(p,match);if(threadRoute){await threadRoute(req,res,url,data);return;}
         const approval=p.match(/^\/api\/requests\/([^/]+)\/respond$/);
         if(approval)return json(res,200,manager.respond(decodeURIComponent(approval[1]),data));

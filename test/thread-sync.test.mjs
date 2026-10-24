@@ -225,3 +225,46 @@ test('native metadata repairs missed running notifications without overriding ne
     assert.equal(known.status.type,mode==='native'?'idle':'active');
   }
 });
+
+function viewReportFixture(){
+ const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+ const start=source.indexOf('const threadViewId='),end=source.indexOf('const retiredStatusInstances=',start);
+ assert.ok(start>=0&&end>start);
+ const requests=[],refreshes=[];
+ const state={transport:true,desktopMode:false,selectedId:'a',detailVersion:1,status:{instanceId:'engine-1',connection:{connectedAt:'time-1'}}};
+ const context=vm.createContext({state,newChatOpen:false,automations:null,sideChat:null,targetHost:'local',crypto:{randomUUID:()=> 'fixture-page-0001'},
+  api:(path,options)=>new Promise((resolve,reject)=>requests.push({path,body:structuredClone(options.body),resolve,reject})),scheduleDetailRefresh:()=>refreshes.push('refresh')});
+ vm.runInContext(source.slice(start,end),context);
+ return {state,context,requests,refreshes,report:()=>context.reportThreadView(),reconnect:()=>vm.runInContext('threadViewReport=null',context)};
+}
+test('page presence merges duplicate reads and preserves a stable view id across reconnect',async()=>{
+ const f=viewReportFixture();const first=f.report(),duplicate=f.report();assert.equal(first,duplicate);assert.equal(f.requests.length,1);
+ assert.deepEqual(f.requests[0].body,{viewId:'fixture-page-0001',threadId:'a',sideThreadId:null,revision:1});f.requests[0].resolve({ok:true});await first;
+ assert.equal(f.report(),first);f.reconnect();const second=f.report();assert.equal(f.requests.length,2);assert.deepEqual(f.requests[1].body,{viewId:'fixture-page-0001',threadId:'a',sideThreadId:null,revision:2});f.requests[1].resolve({ok:true});await second;
+});
+test('presence hides thread selection on non-thread pages and skips disconnected transport',async()=>{
+ const f=viewReportFixture();f.state.transport=false;await f.report();assert.equal(f.requests.length,0);f.state.transport=true;
+ for(const mode of ['new','desktop','automations']){
+  f.reconnect();f.context.newChatOpen=mode==='new';f.state.desktopMode=mode==='desktop';f.context.automations={opened:mode==='automations'};
+  const pending=f.report();assert.equal(f.requests.at(-1).body.threadId,null);f.requests.at(-1).resolve({ok:true});await pending;
+ }
+ assert.deepEqual(f.requests.map(r=>r.body.revision),[1,2,3]);
+});
+test('late presence failure cannot discard a newer selection; current failure remains retryable',async()=>{
+ const f=viewReportFixture(),old=f.report();const rejected=assert.rejects(old,/old failure/);
+ f.state.selectedId='b';const current=f.report();f.requests[0].reject(Error('old failure'));await rejected;assert.equal(f.report(),current);
+ f.requests[1].resolve({ok:true});await current;assert.deepEqual(f.refreshes,[]);
+ f.context.targetHost='remote';const failed=f.report();const failure=assert.rejects(failed,/current failure/);f.requests[2].reject(Error('current failure'));await failure;
+ const retry=f.report();assert.equal(f.requests[3].body.revision,4);f.requests[3].resolve({ok:true});await retry;
+});
+test('only the current presence response schedules a detail refresh after runtime restoration',async()=>{
+ const f=viewReportFixture(),old=f.report();f.state.selectedId='b';f.state.detailVersion++;
+ const current=f.report();f.state.detailVersion++;f.requests[0].resolve({ok:true});await old;assert.deepEqual(f.refreshes,[]);
+ f.requests[1].resolve({ok:true});await current;assert.deepEqual(f.refreshes,['refresh']);
+});
+test('side chat visibility changes presence without changing the main selection',async()=>{
+ const f=viewReportFixture();f.context.sideChat={visibleId:'side-a'};const opened=f.report();f.requests[0].resolve({ok:true});await opened;
+ assert.equal(f.requests[0].body.threadId,'a');assert.equal(f.requests[0].body.sideThreadId,'side-a');assert.equal(f.report(),opened);
+ f.context.sideChat.visibleId=null;const closed=f.report();f.requests[1].resolve({ok:true});await closed;
+ assert.equal(f.requests[1].body.threadId,'a');assert.equal(f.requests[1].body.sideThreadId,null);assert.equal(f.requests[1].body.revision,2);
+});

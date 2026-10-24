@@ -15,4 +15,4 @@ export interface ApplicationOptions {
  access?:MobileAccess;config?:Config;stateDir?:string;
  managers?:Map<string,Manager>;updater?:WebUpdate;
 }
-export interface Response extends ServerResponse {allowGzip?:boolean;targetKey?:string;mobileRequest?:IncomingMessage|null}
+export interface Response extends ServerResponse {allowGzip?:boolean;targetKey?:string;mobileRequest?:IncomingMessage|null;viewId?:string|null}
