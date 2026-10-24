@@ -86,10 +86,11 @@ const threadViewId=crypto.randomUUID();let threadViewRevision=0,threadViewReport
 function reportThreadView(){
   if(!state.transport)return Promise.resolve();
   const threadId=newChatOpen||state.desktopMode||automations?.opened?null:state.selectedId||null;
-  const key=JSON.stringify([targetHost,threadId,state.status?.instanceId,state.status?.connection?.connectedAt]);
+  const sideThreadId=sideChat?.visibleId||null;
+  const key=JSON.stringify([targetHost,threadId,sideThreadId,state.status?.instanceId,state.status?.connection?.connectedAt]);
   if(threadViewReport?.key===key)return threadViewReport.promise;
   const report={key},version=state.detailVersion;threadViewReport=report;
-  report.promise=api('/api/thread-view',{method:'POST',body:{viewId:threadViewId,threadId,revision:++threadViewRevision}}).then(result=>{
+  report.promise=api('/api/thread-view',{method:'POST',body:{viewId:threadViewId,threadId,sideThreadId,revision:++threadViewRevision}}).then(result=>{
     if(threadViewReport===report&&threadId&&state.detailVersion!==version)scheduleDetailRefresh();
     return result;
   }).catch(error=>{if(threadViewReport===report)threadViewReport=null;throw error;});
@@ -1583,7 +1584,7 @@ function wireEvents() {
     state.projects=[...state.projects.filter(p=>p.id!==project.id),project];updateNewProjects(project.roots[0]);renderProjects();renderControls();void loadThreads().catch(error=>recordError(error,'刷新新项目'));
   }});
   composer=installComposer({host:targetHost,api,implementPlan,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,desktop:state.desktopMode,threadReferencesSupported:state.detail?.desktop?.threadReferencesSupported===true,turns:turns(),goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
-  sideChat=installSideChat({api,requestsChanged:renderRequests,context:()=>({id:inputId(),cwd:currentThread()?.cwd,ready:usable(),model:state.model,effort:state.effort,models:state.models.map(m=>({id:modelId(m),label:m.displayName||modelId(m),defaultEffort:defaultEffort(modelId(m)),efforts:effortsFor(modelId(m)).map(e=>e.value)}))}),renderItem,notify:toast,selectionChanged:()=>annotations?.refreshMarks()});
+  sideChat=installSideChat({api,requestsChanged:renderRequests,context:()=>({id:inputId(),cwd:currentThread()?.cwd,ready:usable(),model:state.model,effort:state.effort,models:state.models.map(m=>({id:modelId(m),label:m.displayName||modelId(m),defaultEffort:defaultEffort(modelId(m)),efforts:effortsFor(modelId(m)).map(e=>e.value)}))}),renderItem,notify:toast,selectionChanged:()=>{annotations?.refreshMarks();void reportThreadView().catch(e=>recordError(e,'thread'));}});
   annotations=installResponseAnnotations({host:targetHost,context:()=>({id:inputId()}),onSideChat:fragment=>sideChat.open(fragment),sideSelections:()=>sideChat.fragments(),changed:renderControls,notify:toast});
   const settings = $('composer-settings');
   document.addEventListener('click',event => { if (!settings.contains(event.target)) settings.open = false; });
