@@ -10,6 +10,10 @@ const refreshSource=readFileSync(new URL('../src/web/services/selected-refresh.t
 const refreshOutput=ts.transpileModule(refreshSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const {createSelectedRefresh}=await import('data:text/javascript;base64,'+Buffer.from(refreshOutput).toString('base64'));
 
+const detailReaderSource=readFileSync(new URL('../src/web/services/detail-reader.ts',import.meta.url),'utf8');
+const detailReaderOutput=ts.transpileModule(detailReaderSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {createDetailReader}=await import('data:text/javascript;base64,'+Buffer.from(detailReaderOutput).toString('base64'));
+
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(t,overrides={}) {
   t.mock.timers.enable({apis:['setTimeout']});
@@ -61,14 +65,14 @@ function detailFixture() {
   const state={selectedId:'a',selectionVersion:1,detailVersion:1,detail:{thread:{id:'a'},turns:[]},loadedOlderHistory:false,
     status:{instanceId:'one',connection:{state:'connected'},controlledThreads:[],handoffs:[]}};
   const requests=[],applied=[],cacheReads=[],navigationUpdates=[];
-  const context=vm.createContext({createSelectedRefresh,state,newChatOpen:false,automations:null,desktopSends:{},performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
+  const context=vm.createContext({createDetailReader,createSelectedRefresh,state,newChatOpen:false,automations:null,desktopSends:{},performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
     turnNavigation:{update:()=>navigationUpdates.push(state.selectedId)},reportThreadView:()=>null,turns:()=>state.detail?.turns||[],outputBases:()=>new Map(),decodeOutputs:async x=>x,hydrateOutputs:x=>x,
     readDetailCache:()=>new Promise(resolve=>cacheReads.push(resolve)),scheduleDetailRefresh:()=>{},
     api:path=>new Promise((resolve,reject)=>requests.push({path,resolve,reject})),
     applyDetail:data=>{state.detail=data;applied.push(data);},
   });
   vm.runInContext(source.slice(source.indexOf('async function restoreDetail('),source.indexOf('function applyDetail(')),context);
-  vm.runInContext(source.slice(source.indexOf('async function readSelectedDetail('),source.indexOf('async function refreshWorkspace('))+'\nglobalThis.read=refreshSelected;',context);
+  vm.runInContext(source.slice(source.indexOf('const readSelectedDetail='),source.indexOf('async function refreshWorkspace('))+'\nglobalThis.read=refreshSelected;',context);
   vm.runInContext(source.slice(source.indexOf('function applyStatus('),source.indexOf('\nconst $'))+'\nglobalThis.status=applyStatus;',context);
   return {state,requests,applied,cacheReads,navigationUpdates,context,read:context.read,status:context.status};
 }
@@ -277,4 +281,33 @@ test('automatic navigation starts after the current detail settles, never after 
  const f=detailFixture();const read=f.read();assert.deepEqual(f.navigationUpdates,[]);
  f.requests[0].resolve({thread:{id:'a'},turns:[]});await read;assert.deepEqual(f.navigationUpdates,['a']);
  const failed=f.read();f.requests[1].reject(Error('offline'));await assert.rejects(failed,/offline/);assert.deepEqual(f.navigationUpdates,['a']);
+});
+
+test('desktop accepted receipts clear only the matching draft and current input',async()=>{
+ for(const scenario of ['matching','new-draft','retired','wrong-thread','unaccepted']){
+  const draft=scenario==='new-draft'?'新的草稿':'已发送内容';
+  const state={desktopMode:true,detail:null,loadingDetail:false,drafts:new Map([['a',draft]])};
+  const sends={a:{messageId:'receipt-a',text:'已发送内容'}},input={value:draft};let resized=0,saved=0;
+  const payload={thread:{id:scenario==='wrong-thread'?'other':'a'},desktop:{receipts:{'receipt-a':{status:scenario==='unaccepted'?'pending':'accepted'}}},unknown:{native:['完整原文']}};
+  const reader=createDetailReader({state,sends,reportView:()=>null,recordError:()=>{},request:async()=>payload,input:()=>input,resizeInput:()=>resized++,saveSends:()=>saved++});
+  if(scenario==='wrong-thread'){await assert.rejects(reader('a',()=>true),/桌面会话已变化/);assert.ok(sends.a);assert.equal(saved,0);continue;}
+  assert.equal(await reader('a',()=>scenario!=='retired'),payload);
+  assert.equal(state.drafts.get('a'),scenario==='matching'||scenario==='retired'?'':draft);
+  assert.equal(input.value,scenario==='matching'?'':draft);
+  assert.equal(resized,scenario==='matching'?1:0);
+  assert.equal(saved,scenario==='unaccepted'?0:1);
+  assert.equal(Boolean(sends.a),scenario==='unaccepted');
+ }
+});
+
+test('detail reader preserves the last fifty output bases and unknown native fields through decoding',async()=>{
+ for(const gzip of [false,true]){
+  const raw={thread:{id:'a'},unknown:{keep:['中文',1]}},bases=new Map(Array.from({length:60},(_,i)=>['item-'+i,{token:'version-'+i}]));
+  const calls=[],order=[];const state={desktopMode:false,detail:{thread:{id:'a'}},loadingDetail:false,drafts:new Map()};
+  const reader=createDetailReader({state,sends:{},reportView:()=>Promise.resolve(),recordError:()=>{},request:async(path,options)=>{calls.push({path,options});return raw;},now:()=>0,canDecompress:()=>gzip,turns:()=>[],outputBases:()=>bases,decode:async data=>{order.push('decode');assert.equal(data,raw);return data;},hydrate:(data,received)=>{order.push('hydrate');assert.equal(received,bases);return data;}});
+  assert.equal(await reader('a',()=>true),raw);assert.deepEqual(order,['decode','hydrate']);
+  assert.equal(calls[0].path,'/api/threads/a?outputEncoding='+(gzip?'gzip-base64':'plain')+'&lazyTools=1');
+  assert.deepEqual(JSON.parse(calls[0].options.headers['X-Output-Versions']),Object.fromEntries([...bases].slice(10).map(([id,b])=>[id,b.token])));
+  assert.deepEqual(raw.unknown,{keep:['中文',1]});
+ }
 });

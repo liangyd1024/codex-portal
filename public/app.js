@@ -1,3 +1,4 @@
+import {createDetailReader} from '../src/web/services/detail-reader.ts';
 import {createApiClient} from '../src/web/services/api.ts';
 import {createSidebarLoader} from '../src/web/services/sidebar-loader.ts';
 import {createCatalogReaders} from '../src/web/services/catalogs.ts';
@@ -910,36 +911,13 @@ async function selectThread(id,options={}) {
   try { await refreshSelected(); if (seq !== state.selectionVersion) return; scrollFollow?.schedule(); }
   catch (e) { if (seq !== state.selectionVersion) return; state.loadingDetail = false; state.historyError = messageOf(e); recordError(e,'thread'); renderThread(); }
 }
-async function readSelectedDetail(id,isCurrent){
-  const viewReady=reportThreadView();
-  viewReady?.catch(()=>{}); // A preview may finish after a failed view request.
-  if(state.desktopMode){
-    viewReady?.catch(e=>recordError(e,'thread'));
-    const data=await api('/api/desktop/threads/'+encodeURIComponent(id));if(data.thread.id!==id)throw new Error('桌面会话已变化，请重新打开。');
-    const pending=desktopSends[id];
-    if(pending&&data.desktop?.receipts?.[pending.messageId]?.status==='accepted'){
-      if(state.drafts.get(id)===pending.text){state.drafts.set(id,'');if(isCurrent()&&$('message-input').value===pending.text){$('message-input').value='';resizeInput();}}
-      delete desktopSends[id];saveDesktopSends();
-    }
-    return data;
-  }
-  const cold=!state.detail,started=performance.now();let firstMs=null;
-  if(!state.detail){
-    const preview=await api('/api/threads/'+encodeURIComponent(id)+'?preview=1&lazyTools=1');
-    if(!isCurrent())return preview;
-    state.loadingDetail=false;applyDetail(preview,true);firstMs=performance.now()-started;
-  }
-  if(viewReady)await viewReady;
-  if(!isCurrent())return state.detail||{};
-  const bases=outputBases(turns());
-  const versions=Object.fromEntries([...bases].slice(-50).map(([id,b])=>[id,b.token]));
-  const encoding=(typeof DecompressionStream==='function'?'?outputEncoding=gzip-base64':'?outputEncoding=plain')+(cold?'&fast=1':'')+'&lazyTools=1';
-  const response=await api('/api/threads/' + encodeURIComponent(id)+encoding,{headers:{'X-Output-Versions':JSON.stringify(versions)}}),received=performance.now();
-  const result=hydrateOutputs(await decodeOutputs(response),bases);
-  if(cold&&isCurrent())document.body.dataset.logRecovery=JSON.stringify({host:targetHost,id,firstMs:Math.round(firstMs),networkMs:Math.round(received-started-firstMs),decodeMs:Math.round(performance.now()-received),completeMs:Math.round(performance.now()-started)});
-  if(cold)setTimeout(()=>{if(isCurrent())scheduleDetailRefresh();},1000);
-  return result;
-}
+const readSelectedDetail=createDetailReader({state,sends:desktopSends,
+  reportView:()=>reportThreadView(),recordError:error=>recordError(error,'thread'),request:(...args)=>api(...args),
+  input:()=>$('message-input'),resizeInput:()=>resizeInput(),saveSends:()=>saveDesktopSends(),
+  now:()=>performance.now(),host:()=>targetHost,canDecompress:()=>typeof DecompressionStream==='function',
+  applyPreview:preview=>applyDetail(preview,true),turns:()=>turns(),outputBases:values=>outputBases(values),
+  decode:data=>decodeOutputs(data),hydrate:(data,bases)=>hydrateOutputs(data,bases),
+  recordTiming:value=>{document.body.dataset.logRecovery=value;},defer:(run,delay)=>setTimeout(run,delay),refreshSoon:()=>scheduleDetailRefresh()});
 const selectedRefresh=createSelectedRefresh({state,blocked:()=>automations?.opened||newChatOpen,
   newChatOpen:()=>newChatOpen,restore:restoreDetail,read:readSelectedDetail,turns,merge:mergeLiveTurns,
   apply:applyDetail,updated:()=>turnNavigation?.update()});
