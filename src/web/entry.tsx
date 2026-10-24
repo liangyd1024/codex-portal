@@ -1,5 +1,6 @@
+import {installReactComposerControls} from './components/ComposerControls';
 import {installReactComposerCatalog} from './components/ComposerCatalog';
-import {configurePlanCompletion,configureComposerCatalog} from '../../public/composer.js';
+import {configurePlanCompletion,configureComposerCatalog,configureComposerControls} from '../../public/composer.js';
 import {installReactPlanCompletion} from './components/PlanCompletion';
 import {installReactGoalEditor} from './components/GoalEditor';
 import {configureGoalToolbar,configureGoalEditor} from '../../public/goal-toolbar.js';
@@ -24,5 +25,6 @@ configureGoalToolbar(installReactGoalToolbar);
 configureGoalEditor(installReactGoalEditor);
 configurePlanCompletion(installReactPlanCompletion);
 configureComposerCatalog(installReactComposerCatalog);
+configureComposerControls(installReactComposerControls);
 // Commands remain event-driven; mounting components never sends native commands.
 await import('../../public/app.js');
