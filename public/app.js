@@ -1,3 +1,4 @@
+import {publishConnectionSettings,installConnectionActions} from '../src/web/components/ConnectionSettings';
 import {publishNotificationView,installNotificationActions,appendNotificationDiagnostic} from '../src/web/components/NotificationControls';
 import {createWorkspaceRefresh} from '../src/web/services/workspace-refresh.ts';
 import {createDetailReader} from '../src/web/services/detail-reader.ts';
@@ -317,14 +318,13 @@ function renderStatus() {
   const label = connected() && !state.transport ? '实时连接中断' : stages[conn] || conn;
   document.title = (currentThread() ? threadName(currentThread()) + ' · ' : '') + 'Codex 工作台';
   setText('host-name',h.alias || '目标机器'); setText('breadcrumb-host',h.alias || '目标机器');
-  setText('host-address',h.hostname || '目标机器'); setText('connection-label',label); setText('inspector-connection',label);
-  setText('detail-host',h.hostname || h.alias || '目标机器'); setText('detail-user',h.user);
-  setText('detail-version', service.version || h.version); setText('detail-connected', dateTime(c.connectedAt));
-  setText('transport-label', state.transport ? '实时通道已连接' : '实时通道未连接');
-  ['machine-dot','inspector-dot'].forEach(id => $(id).className = 'connection-dot ' + variant);
+  setText('host-address',h.hostname || '目标机器'); setText('connection-label',label);
+  publishConnectionSettings({ready:true,variant,label,host:h.hostname || h.alias || '目标机器',user:h.user,
+    version:service.version || h.version,connectedAt:dateTime(c.connectedAt),transport:state.transport ? '实时通道已连接' : '实时通道未连接',
+    icon:connected()||connectionPending() ? 'close' : 'link',connectLabel:state.busy.has('disconnect') ? '正在断开…' : connectionPending()?'取消连接':connected() ? '断开本机连接' : '连接目标机器'});
+  $('machine-dot').className = 'connection-dot ' + variant;
   $('connection-pill').className = 'connection-pill ' + variant;
   $('connection-pill').querySelector('.connection-dot').className = 'connection-dot ' + variant;
-  const connect = $('connect-button'); clear(connect); connect.append(icon(connected()||connectionPending() ? 'close' : 'link'),el('span','',state.busy.has('disconnect') ? '正在断开…' : connectionPending()?'取消连接':connected() ? '断开本机连接' : '连接目标机器'));
   const welcome = $('welcome-connect'); clear(welcome); welcome.append(icon(connected() ? 'plus' : 'link'),el('span','',connectionPending() ? '正在连接…' : connected() ? '新建目标机器会话' : '连接 ' + (h.alias || '目标机器')));
   setText('welcome-footnote',connected() ? '已连接。选择左侧会话，或新建目标机器会话。' : '等待连接。此页面不包含演示会话。');
   renderControlOverview();
@@ -368,11 +368,11 @@ function renderControls() {
   const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
   $('connection-select').disabled=creating;
   $('new-thread').disabled = !!state.status?.loginRecovery || !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels;
-  $('connect-button').disabled = state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release');
+  publishConnectionSettings({connectDisabled:state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release')});
   $('welcome-connect').disabled = connectionPending() || state.busy.has('connect') || state.busy.has('disconnect') || (connected() && (!ready || !state.models.length||!featureReady('create')));
-  $('reload-login').disabled=!ready||!featureReady('release')||state.busy.has('release');
-  $('release-service').disabled = !ready || !featureReady('release') || !state.status?.service?.running || state.busy.has('release');
-  $('release-service').textContent = state.busy.has('release') ? '正在检查并释放…' : '停止目标服务（影响所有入口）';
+  publishConnectionSettings({reloadDisabled:!ready||!featureReady('release')||state.busy.has('release'),
+    releaseDisabled:!ready || !featureReady('release') || !state.status?.service?.running || state.busy.has('release'),
+    releaseLabel:state.busy.has('release') ? '正在检查并释放…' : '停止目标服务（影响所有入口）'});
   $('refresh-projects').disabled = !ready || state.refreshing; $('refresh-all').disabled = state.refreshing || state.busy.has('refresh');
   $('thread-search').disabled = !connected();
   $('model-select').disabled = !ready || !state.models.length || state.loadingModels;
@@ -396,7 +396,7 @@ function renderControls() {
   $('new-thread').setAttribute('aria-description',!ready ? '连接恢复后可新建会话。' : !state.models.length ? '正在等待目标机器模型目录。' : creating ? '正在创建，请稍候。' : '');
   controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
   controlReason('takeover',!ready ? '连接恢复后可接管。' : switching ? '正在接管，请稍候。' : handing ? '交还状态正在确认，请稍候。' : '当前引擎暂不支持接管。');
-  controlReason('release-service',!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。');
+  publishConnectionSettings({releaseReason:!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。'});
   $('interrupt').querySelector('span').textContent=stopLabel;
   $('interrupt').title=stopping?'停止请求已发出，等待目标确认。':active?'停止当前轮次':'停止后台命令';
   $('interrupt').setAttribute('aria-label',stopping?stopLabel:$('interrupt').title);
@@ -1071,7 +1071,7 @@ async function endThreadUse() {
   });
 }
 function maintenanceFeedback(message) {
-  const note=$('maintenance-feedback');note.textContent=message;note.hidden=!message;
+  publishConnectionSettings({feedback:message});
 }
 async function reloadLogin() {
   const host=targetHost;
@@ -1515,9 +1515,9 @@ function wireEvents() {
     const width = entries[0].contentRect.width;
     if (width !== composerWidth) { composerWidth = width; requestAnimationFrame(resizeInput); }
   }).observe($('message-input'));
-  $('connect-button').onclick = () => connected()||connectionPending() ? disconnectRemote() : connectRemote();
+  installConnectionActions({connect:()=>connected()||connectionPending()?disconnectRemote():connectRemote(),reload:reloadLogin,release:releaseService});
   $('welcome-connect').onclick = () => connected() ? openNewDialog() : connectRemote();
-  $('new-thread').onclick = openNewDialog; $('takeover').onclick = takeoverThread; $('release-service').onclick = releaseService; $('reload-login').onclick = reloadLogin;
+  $('new-thread').onclick = openNewDialog; $('takeover').onclick = takeoverThread;
   $('refresh-all').onclick = () => action('refresh',() => refreshWorkspace(true)); $('refresh-projects').onclick = () => action('projects',() => showRefresh('侧边栏',()=>loadThreads(false,true)));
   $('project-list').addEventListener('scroll',loadVisibleThreads,{passive:true});
   new ResizeObserver(loadVisibleThreads).observe($('project-list'));
