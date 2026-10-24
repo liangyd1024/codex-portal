@@ -20,7 +20,11 @@ export interface AutomationListOptions {list:HTMLElement;showTask:(task:Automati
 export interface AutomationDialogOptions {dialog:HTMLDialogElement;view:TaskPresentation;edit:()=>void;manage:()=>void;openThread:(id:string)=>void}
 export interface AutomationControlsState {loading:boolean;feedback:string}
 export interface AutomationControlsOptions {header:HTMLElement;toolbar:HTMLElement;feedback:HTMLElement;onCreate:()=>unknown;onRefresh:()=>unknown;onSearch:()=>void;onFilter:(value:string)=>void}
+export interface AutomationCandidate {id:string;name?:string|null;title?:string|null;[field:string]:unknown}
+export interface AutomationPickerState {busy:boolean;confirmDisabled:boolean;error:string}
+export interface AutomationPickerOptions {dialog:HTMLDialogElement;confirm:()=>Promise<void>;cancel:()=>void;search:()=>void;select:()=>void}
 export interface AutomationViewsRenderer {
+ picker:(options:AutomationPickerOptions)=>{query:HTMLInputElement;choices:HTMLSelectElement;setState:(state:Partial<AutomationPickerState>)=>void;setCandidates:(candidates:AutomationCandidate[],preferredId:string|null)=>void;dispose:()=>void};
  controls:(options:AutomationControlsOptions)=>{search:HTMLInputElement;createButton:HTMLButtonElement;setState:(state:Partial<AutomationControlsState>)=>void};
  list:(options:AutomationListOptions)=>{render:(rows:TaskRow[]|null)=>void};
  task:(options:AutomationDialogOptions)=>{closeButton:HTMLButtonElement;dispose:()=>void};

@@ -51,3 +51,26 @@ test('task filtering keeps raw identities, stable native order and unknown run s
  const detail=taskPresentation(task,'delete',[{automation_id:'other',thread_id:'ignore',created_at:1,status:'ACCEPTED'},{automation_id:task.id,thread_id:'run',created_at:2,status:'FUTURE_STATUS'}],n=>'T'+n,scheduleLabel);
  assert.deepEqual(detail.runs,[{threadId:'run',label:'T2 · FUTURE_STATUS'}]);assert.equal(detail.prompt,task.prompt);assert.match(detail.emptyRuns,/原会话运行/);assert.match(detail.managePrompt,/只删除这一项/);
 });
+
+
+test('management picker retains input after failure and blocks duplicate binding',async t=>{
+ const body=new Element('body'),main=new Element('main'),footer=new Element('footer'),query=new Element('input'),choices=new Element('select'),state={},opened=[],writes=[];
+ let picker,resolveBinding,rejectBinding,disposed=0;
+ const previousDocument=globalThis.document;
+ globalThis.document={body,createElement:tag=>new Element(tag),querySelector:s=>s==='.main-panel'?main:footer};
+ t.after(()=>{globalThis.document=previousDocument;configureAutomationViews(undefined);});
+ // Capture the actual create callback through the view boundary; no DOM shape assumptions.
+ let create;
+ configureAutomationViews({controls(options){create=options.onCreate;return {search:new Element('input'),createButton:new Element('button'),setState(){}};},list(){return {render(){}};},picker(options){picker=options;return {query,choices,setState(update){Object.assign(state,update);},setCandidates(candidates,preferredId){choices.value=candidates.some(t=>t.id===preferredId)?preferredId:'';},dispose(){disposed++;}};}});
+ const view=installAutomations({onOpen(){},notify(){},openThread(){},openSession:async(...args)=>opened.push(args),api:async(path,options)=>{
+  if(path==='/api/automations')return {threadId:null,items:[],runs:[],observedAt:1};
+  if(path.startsWith('/api/automations/candidates?'))return {data:[{id:'management',name:'Fixture'}]};
+  assert.equal(path,'/api/automations/binding');writes.push(options.body);return new Promise((resolve,reject)=>{resolveBinding=resolve;rejectBinding=reject;});
+ }});
+ view.open();await new Promise(r=>setImmediate(r));await create();assert.equal(state.confirmDisabled,true);assert.equal(body.children.length,1);
+ query.value='保留搜索';choices.value='management';picker.select();assert.equal(state.confirmDisabled,false);
+ const rejected=picker.confirm();assert.equal(state.busy,true);assert.equal(state.confirmDisabled,true);await picker.confirm();assert.equal(writes.length,1);
+ let prevented=false;picker.dialog.events.cancel({preventDefault(){prevented=true;}});assert.equal(prevented,true);
+ rejectBinding(Error('binding rejected'));await rejected;assert.equal(state.error,'binding rejected');assert.equal(state.busy,false);assert.equal(state.confirmDisabled,false);assert.equal(query.value,'保留搜索');assert.equal(choices.value,'management');assert.equal(disposed,0);
+ const accepted=picker.confirm();resolveBinding({threadId:'management'});await accepted;assert.equal(writes.length,2);assert.equal(disposed,1);assert.equal(body.children.length,0);assert.deepEqual(opened,[['management','请帮我创建一个定时任务。']]);
+});

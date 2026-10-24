@@ -1,10 +1,9 @@
-import {matchingTasks,taskRow,taskPresentation,type AutomationTask,type AutomationRun,type TaskMode,type AutomationViewsRenderer} from './automation-view.ts';
+import {matchingTasks,taskRow,taskPresentation,type AutomationTask,type AutomationRun,type TaskMode,type AutomationViewsRenderer,type AutomationCandidate} from './automation-view.ts';
 import type {createApiClient} from './api';
 export interface AutomationSnapshot {threadId:string|null;items:AutomationTask[];runs:AutomationRun[];observedAt:number;pendingNativeRefresh?:boolean;truncated?:boolean;[field:string]:unknown}
-export interface AutomationCandidate {id:string;name?:string|null;title?:string|null;[field:string]:unknown}
+export type {AutomationCandidate} from './automation-view.ts';
 interface Options {api:ReturnType<typeof createApiClient>;onOpen:()=>void;openSession:(id:string,prompt:string)=>unknown;openThread:(id:string)=>unknown;notify:(message:string,error:boolean)=>unknown}
 const node=<K extends keyof HTMLElementTagNameMap>(tag:K,cls?:string,text?:string)=>{const n=document.createElement(tag);n.className=cls||'';if(text!=null)n.textContent=text;return n;};
-const button=(text:string,fn:(event:MouseEvent)=>unknown,cls='text-button')=>{const b=node('button',cls,text);b.type='button';b.onclick=fn;return b;};
 const time=(value:number|null|undefined)=>value?new Date(value).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
 export function scheduleLabel(rule:unknown){
   const fields:Record<string,string|undefined>=Object.fromEntries(String(rule||'').replace(/^RRULE:/,'').split(';').map(v=>v.split('=')));
@@ -52,21 +51,19 @@ export function installAutomations({api,onOpen,openSession,openThread,notify}:Op
   }
   async function choose(prompt=''){
     const trigger=document.activeElement as HTMLElement|null;
-    const dialog=node('dialog','automation-picker');const title=node('h2','','选择桌面管理会话');const hint=node('p','subtle','先在目标机器的 Codex 桌面打开一条专用会话，再从这里选择。');
-    const query=node('input');query.type='search';query.placeholder='按会话名称搜索';query.setAttribute('aria-label','搜索桌面会话');
-    const choices=node('select');choices.size=7;choices.setAttribute('aria-label','桌面管理会话');
-    const error=node('p','turn-error');error.setAttribute('role','status');let request=0,busy=false;
-    const cancel=button('取消',()=>dialog.close(),'secondary-button');
-    const confirm=button('使用此会话',async()=>{
-      if(!choices.value||busy)return;busy=true;confirm.disabled=true;cancel.disabled=true;query.disabled=true;choices.disabled=true;error.textContent='正在确认桌面托管状态…';
+    const dialog=node('dialog','automation-picker');let request=0,busy=false;
+    let timer:ReturnType<typeof setTimeout>|undefined;
+    const view=automationViews!.picker({dialog,cancel:()=>dialog.close(),search:()=>{clearTimeout(timer);timer=setTimeout(find,250);},select:()=>view.setState({confirmDisabled:!choices.value}),confirm:async()=>{
+      if(!choices.value||busy)return;busy=true;view.setState({busy:true,confirmDisabled:true,error:'正在确认桌面托管状态…'});
       try{const result=await api<{threadId:string}>('/api/automations/binding',{method:'POST',body:{threadId:choices.value}});threadId=result.threadId;dialog.close();await manage(prompt);}
-      catch(e){error.textContent=(e as Error).message;}
-      finally{busy=false;confirm.disabled=false;cancel.disabled=false;query.disabled=false;choices.disabled=false;}
-    },'primary-button');
-    dialog.append(title,hint,query,choices,error,cancel,confirm);document.body.append(dialog);dialog.showModal();query.focus();
-    dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});dialog.addEventListener('close',()=>{request++;dialog.remove();if(page.hidden)return;(trigger?.isConnected?trigger:create).focus();},{once:true});
-    async function find(){const version=++request;confirm.disabled=true;try{const result=await api<{data:AutomationCandidate[]}>('/api/automations/candidates?search='+encodeURIComponent(query.value));if(version!==request)return;choices.replaceChildren(...result.data.map(t=>new Option(t.name||t.title||t.id,t.id)));if(result.data.some(t=>t.id===threadId))choices.value=threadId!;confirm.disabled=!choices.value;error.textContent=result.data.length?'':'没有匹配的会话。';}catch(e){if(version===request)error.textContent=(e as Error).message;}}
-    let timer:ReturnType<typeof setTimeout>|undefined;query.oninput=()=>{clearTimeout(timer);timer=setTimeout(find,250);};choices.onchange=()=>confirm.disabled=!choices.value;await find();
+      catch(e){view.setState({error:(e as Error).message});}
+      finally{busy=false;view.setState({busy:false,confirmDisabled:false});}
+    }});
+    const {query,choices}=view;
+    document.body.append(dialog);dialog.showModal();query.focus();
+    dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});dialog.addEventListener('close',()=>{request++;view.dispose();dialog.remove();if(page.hidden)return;(trigger?.isConnected?trigger:create).focus();},{once:true});
+    async function find(){const version=++request;view.setState({confirmDisabled:true});try{const result=await api<{data:AutomationCandidate[]}>('/api/automations/candidates?search='+encodeURIComponent(query.value));if(version!==request)return;view.setCandidates(result.data,threadId);view.setState({confirmDisabled:!choices.value,error:result.data.length?'':'没有匹配的会话。'});}catch(e){if(version===request)view.setState({error:(e as Error).message});}}
+    await find();
   }
   return {get threadId(){return threadId;},get opened(){return !page.hidden;},
     open(){onOpen();page.hidden=false;document.querySelector<HTMLElement>('.main-panel')!.classList.add('automations-open');void load();},
