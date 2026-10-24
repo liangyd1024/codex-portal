@@ -1,3 +1,5 @@
+import {installReactSkillSuggestionsView} from './components/SkillSuggestions';
+import {configureSkillSuggestionsView} from '../../public/skill-suggestions.js';
 import {installReactComposerDialog} from './components/ComposerDialog';
 import {installReactComposerControls} from './components/ComposerControls';
 import {installReactComposerCatalog} from './components/ComposerCatalog';
@@ -28,5 +30,6 @@ configurePlanCompletion(installReactPlanCompletion);
 configureComposerCatalog(installReactComposerCatalog);
 configureComposerControls(installReactComposerControls);
 configureComposerDialog(installReactComposerDialog);
+configureSkillSuggestionsView(installReactSkillSuggestionsView);
 // Commands remain event-driven; mounting components never sends native commands.
 await import('../../public/app.js');

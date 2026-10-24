@@ -39,8 +39,9 @@ export function installSkillSuggestions({input,api,context,select}) {
   let version=0,rows=[],index=0,query=null,composing=false,ended=-Infinity;
   const close=()=>{version++;box.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');};
   const position=()=>{if(box.hidden)return;const r=input.getBoundingClientRect(),v=window.visualViewport;box.style.left=Math.max(8,r.left)+'px';box.style.width=Math.max(0,Math.min(r.width,(v?.width||innerWidth)-16))+'px';box.style.bottom=Math.max(8,innerHeight-r.top+8)+'px';box.style.maxHeight=Math.max(60,Math.min(300,r.top-(v?.offsetTop||0)-16))+'px';};
-  const highlight=()=>{[...box.querySelectorAll('[role=option]')].forEach((node,i)=>node.setAttribute('aria-selected',String(i===index)));const node=box.querySelectorAll('[role=option]')[index];if(node){input.setAttribute('aria-activedescendant',node.id);node.scrollIntoView({block:'nearest'});}};
+  const highlight=()=>{view.highlight(index);const node=box.querySelectorAll('[role=option]')[index];if(node){input.setAttribute('aria-activedescendant',node.id);node.scrollIntoView({block:'nearest'});}};
   const choose=entry=>{if(!query||input.disabled||!context().ready||context().busy)return;const range={...query};close();select(entry,range,entry.mentionKind||query.kind||'skills');};
+  const view=installSkillSuggestionsView({box,choose});
   async function update(){
     close();rows=[];if(composing||input.disabled||!context().ready||context().busy)return;
     query=pluginQuery(input.value,input.selectionStart)||skillQuery(input.value,input.selectionStart);if(!query)return;
@@ -48,9 +49,9 @@ export function installSkillSuggestions({input,api,context,select}) {
     if(desktop&&query.kind!=='plugins')return;
     const kind=desktop?'threads':query.kind==='plugins'?'mentions':'skills',label=kind==='threads'?'会话':kind==='mentions'?'会话与插件':'技能';
     query.kind=kind;box.setAttribute('aria-label',label);
-    if(desktop&&!context().threadReferencesSupported){box.hidden=false;box.textContent='此桌面会话尚未确认支持会话引用，请在桌面新建支持引用的会话。';input.setAttribute('aria-expanded','true');position();return;}
+    if(desktop&&!context().threadReferencesSupported){box.hidden=false;view.text('此桌面会话尚未确认支持会话引用，请在桌面新建支持引用的会话。');input.setAttribute('aria-expanded','true');position();return;}
     const stamp=version,id=context().id,cwd=context().cwd,value=input.value,caret=input.selectionStart;
-    box.replaceChildren();box.hidden=false;input.setAttribute('aria-expanded','true');position();box.textContent='正在读取'+label+'…';input.removeAttribute('aria-activedescendant');
+    view.text('');box.hidden=false;input.setAttribute('aria-expanded','true');position();view.text('正在读取'+label+'…');input.removeAttribute('aria-activedescendant');
     try{
       let source,loadErrors=[];
       if(kind==='threads'||kind==='mentions'){
@@ -71,25 +72,14 @@ export function installSkillSuggestions({input,api,context,select}) {
         source=catalog[kind];if(source.error)throw Error(source.error);
         rows=matchingSkills((source.data||[]).flatMap(e=>e.skills||[]),query.query);
       }
-      box.replaceChildren();index=0;
-      const heading=document.createElement('div');heading.className='skill-suggestions-heading';heading.textContent=label;box.append(heading);
-      for(const [i,entry] of rows.entries()){
-        const button=document.createElement('button');button.type='button';button.id=box.id+'-option-'+i;button.setAttribute('role','option');
-        const rowKind=entry.mentionKind||kind;
-        const view=skillPresentation(entry);
-        const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.classList.add('icon');icon.setAttribute('aria-hidden','true');const use=document.createElementNS(icon.namespaceURI,'use');use.setAttribute('href',rowKind==='threads'?'#i-chat':'#i-mark');icon.append(use);
-        const name=document.createElement('strong');name.textContent=view.name;name.title=entry.name;
-        const description=document.createElement('span');description.className='skill-description';description.textContent=view.description;
-        const source=document.createElement('span');source.className='skill-source';source.textContent=rowKind==='threads'?'会话':rowKind==='plugins'?'插件':view.source;
-        button.title=[view.name,view.description,view.source,entry.path].filter(Boolean).join('\n');
-        button.append(icon,name,description,source);button.onpointerdown=e=>{if(e.pointerType==='mouse')e.preventDefault();};button.onclick=()=>choose(entry);box.append(button);
-      }
-      if(!rows.length)box.append(document.createTextNode('没有匹配的可用'+label+'。'));
-      if((source.data||[]).some(e=>e.errors?.length)||source.marketplaceLoadErrors?.length)box.append(document.createTextNode('部分目录未能读取，请重新输入以重试。'));
-      for(const error of loadErrors)box.append(document.createTextNode(error+'。重新输入可重试。'));
-      if((kind==='threads'||kind==='mentions')&&source.nextCursor)box.append(document.createTextNode('输入会话名称可查找更早的会话。'));
+      index=0;const messages=[];
+      if(!rows.length)messages.push('没有匹配的可用'+label+'。');
+      if((source.data||[]).some(e=>e.errors?.length)||source.marketplaceLoadErrors?.length)messages.push('部分目录未能读取，请重新输入以重试。');
+      for(const error of loadErrors)messages.push(error+'。重新输入可重试。');
+      if((kind==='threads'||kind==='mentions')&&source.nextCursor)messages.push('输入会话名称可查找更早的会话。');
+      view.render({label,kind,rows,messages});
       highlight();position();
-    }catch(error){if(stamp===version){rows=[];box.textContent=label+'读取失败，重新输入可重试：'+error.message;}}
+    }catch(error){if(stamp===version){rows=[];view.text(label+'读取失败，重新输入可重试：'+error.message);}}
   }
   input.addEventListener('input',()=>void update());input.addEventListener('click',()=>void update());
   input.addEventListener('compositionstart',()=>{composing=true;close();});input.addEventListener('compositionend',()=>{composing=false;ended=performance.now();void update();});
@@ -105,4 +95,11 @@ export function installSkillSuggestions({input,api,context,select}) {
   new ResizeObserver(position).observe(input);window.addEventListener('scroll',position,true);
   window.addEventListener('resize',position);window.visualViewport?.addEventListener('resize',position);window.visualViewport?.addEventListener('scroll',position);
   return {close};
+}
+
+let suggestionsViewInstaller;
+export function configureSkillSuggestionsView(installer){suggestionsViewInstaller=installer;}
+export function installSkillSuggestionsView(options){
+  if(!suggestionsViewInstaller)throw new Error('输入建议列表尚未初始化。');
+  return suggestionsViewInstaller(options);
 }
