@@ -1,3 +1,5 @@
+import {installReactInlineMentionView} from './components/InlineMentions';
+import {configureInlineMentionView} from '../../public/inline-mentions.js';
 import {installReactSkillSuggestionsView} from './components/SkillSuggestions';
 import {configureSkillSuggestionsView} from '../../public/skill-suggestions.js';
 import {installReactComposerDialog} from './components/ComposerDialog';
@@ -31,5 +33,6 @@ configureComposerCatalog(installReactComposerCatalog);
 configureComposerControls(installReactComposerControls);
 configureComposerDialog(installReactComposerDialog);
 configureSkillSuggestionsView(installReactSkillSuggestionsView);
+configureInlineMentionView(installReactInlineMentionView);
 // Commands remain event-driven; mounting components never sends native commands.
 await import('../../public/app.js');

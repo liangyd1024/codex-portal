@@ -15,6 +15,7 @@ export function mentionRanges(value, references) {
 export function installInlineMentions(input,references){
   const wrap=document.createElement('div');wrap.className='mention-input-wrap';input.before(wrap);wrap.append(input);
   const mirror=document.createElement('div');mirror.className='mention-mirror';mirror.setAttribute('aria-hidden','true');wrap.prepend(mirror);
+  const view=installInlineMentionView(mirror);
   let composing=false,lastText,lastStyle;
   function render(){
     const style=getComputedStyle(input);
@@ -27,9 +28,7 @@ export function installInlineMentions(input,references){
     const refs=references(),textStamp=JSON.stringify([input.value,refs,composing]);
     if(textStamp!==lastText){
       lastText=textStamp;
-      const ranges=mentionRanges(input.value,refs);mirror.replaceChildren();let offset=0;
-      for(const range of ranges){mirror.append(document.createTextNode(input.value.slice(offset,range.start)));const mark=document.createElement('span');mark.className='inline-mention';mark.textContent=input.value.slice(range.start,range.end);mirror.append(mark);offset=range.end;}
-      mirror.append(document.createTextNode(input.value.slice(offset)+'\n'));wrap.classList.toggle('has-mentions',ranges.length>0&&!composing);
+      const ranges=mentionRanges(input.value,refs);view.render(input.value,ranges);wrap.classList.toggle('has-mentions',ranges.length>0&&!composing);
     }
     mirror.scrollTop=input.scrollTop;mirror.scrollLeft=input.scrollLeft;
   }
@@ -37,4 +36,11 @@ export function installInlineMentions(input,references){
   input.addEventListener('compositionstart',()=>{composing=true;render();});input.addEventListener('compositionend',()=>{composing=false;render();});
   new ResizeObserver(render).observe(input);
   return {render};
+}
+
+let inlineMentionViewInstaller;
+export function configureInlineMentionView(installer){inlineMentionViewInstaller=installer;}
+export function installInlineMentionView(mirror){
+  if(!inlineMentionViewInstaller)throw new Error('输入引用标记尚未初始化。');
+  return inlineMentionViewInstaller(mirror);
 }
