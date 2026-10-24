@@ -158,10 +158,11 @@ export function createApp({serverFactory=handler=>http.createServer(handler),pro
         if(p==='/api/disconnect')return json(res,200,manager.disconnect());
         if(p==='/api/thread-view'){
           if(typeof data.viewId!=='string'||!Number.isSafeInteger(data.revision)||data.revision<0||
-            (data.threadId!==null&&(typeof data.threadId!=='string'||!/^[0-9a-f-]{36}$/i.test(data.threadId))))throw new AppError('会话页面参数无效。');
+            (data.threadId!==null&&(typeof data.threadId!=='string'||!/^[0-9a-f-]{36}$/i.test(data.threadId)))||
+            (data.sideThreadId!=null&&(typeof data.sideThreadId!=='string'||!/^[0-9a-f-]{36}$/i.test(data.sideThreadId))))throw new AppError('会话页面参数无效。');
           const client=[...clients].find(c=>c.targetKey===targetKey&&c.viewId===data.viewId&&Boolean(c.mobileRequest)===remote&&(!remote||access.token(c.mobileRequest)===access.token(req)));
           if(!client||!manager.retention)throw new AppError('页面连接已变化，请重试。',409,'VIEW_DISCONNECTED');
-          await manager.retention.view(data.viewId,data.threadId,data.revision);
+          await manager.retention.view(data.viewId,data.threadId,data.revision,data.sideThreadId??null);
           return json(res,200,{ok:true});
         }
         if(p==='/api/account/reload')return json(res,200,await manager.reloadLogin(data));
