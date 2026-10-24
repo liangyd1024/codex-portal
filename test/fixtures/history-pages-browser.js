@@ -10,7 +10,8 @@
  const historyMode=new URLSearchParams(location.search);
  const touchEvents=[];
  if(historyMode.get('historyTouch')==='1')for(const type of ['pointerdown','touchstart','touchmove','touchend'])document.addEventListener(type,event=>{if(touchEvents.length<100)touchEvents.push({type,pointerType:event.pointerType||null,target:event.target.closest('button,summary')?.getAttribute('aria-label')||event.target.closest('button,summary')?.textContent||event.target.tagName});},{capture:true,passive:true});
- const anchorRecords=[];
+ const anchorRecords=[],delayRecords=[];
+ const recordDelay=phase=>delayRecords.push({phase,turns:[...document.querySelectorAll(".message-turn")].map(n=>n.dataset.turnId),requests:f.calls.map(c=>({path:c.path,query:c.query,method:c.method}))});
  if(historyMode.get('historyAnchor')==='1'){
   const longText='完整历史正文，用于检查前插后的可见位置。\n\n'.repeat(45);
   f.turns.get('qa-a')[0].items.find(item=>item.type==='agentMessage').text+= '\n\n'+longText;
@@ -57,7 +58,7 @@
    if(path==='/api/threads/qa-a/history'&&++pages===2){
     f.delay={path,ignoreAbort:true};
     const release=document.createElement('button');release.textContent='释放验收历史响应';release.style.minHeight='44px';
-    release.onclick=()=>{f.pending?.resolve();release.remove();};
+    release.onclick=()=>{recordDelay('before-release');f.pending?.resolve();release.remove();requestAnimationFrame(()=>requestAnimationFrame(()=>recordDelay('two-frames')));setTimeout(()=>recordDelay('one-second'),1000);};
     (document.querySelector('dialog[aria-label="对话轮次"][open]')||document.querySelector('[data-history-panel]')).append(release);
    }
    return fetchFixture(url,options);
@@ -73,7 +74,12 @@
   const output=document.createElement('pre');output.setAttribute('aria-label','历史检查记录');output.style.whiteSpace='pre-wrap';panel.append(output);
   button.onclick=()=>{output.textContent=JSON.stringify({
    requests:f.calls.filter(c=>c.path.endsWith('/history')),turns:[...document.querySelectorAll('.message-turn')].map(n=>n.dataset.turnId),
-   originalNodePreserved:Boolean(original?.isConnected&&document.querySelector('[data-turn-id="qa-turn"]')===original),...(historyMode.get('historyAnchor')==='1'?{anchors:anchorRecords}:{}),...(historyMode.get('historyTouch')==='1'?{touchEvents}:{}),errors:f.errors,
-  },null,2);};document.body.append(panel);
+   originalNodePreserved:Boolean(original?.isConnected&&document.querySelector('[data-turn-id="qa-turn"]')===original),...(historyMode.get('historyAnchor')==='1'?{anchors:anchorRecords}:{}),...(historyMode.get('historyTouch')==='1'?{touchEvents}:{}),...(historyMode.get('historyDelay')==='1'?{delayRecords}:{}),errors:f.errors,
+  },null,2);};
+  if(historyMode.get('historyDelay')==='1'){
+   const refresh=document.createElement('button');refresh.textContent='触发样本详情刷新';refresh.style.minHeight='44px';
+   refresh.onclick=()=>{recordDelay('before-detail-refresh');f.emit('thread/queue/changed',{threadId:'qa-a'});setTimeout(()=>recordDelay('after-detail-refresh'),1200);};panel.append(refresh);
+  }
+  document.body.append(panel);
  });
 })();
