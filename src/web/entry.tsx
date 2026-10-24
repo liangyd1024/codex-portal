@@ -1,3 +1,5 @@
+import {installReactAttachmentView} from './components/Attachments';
+import {configureAttachmentView} from '../../public/attachments.js';
 import {installReactSidebarTree} from './components/SidebarTree';
 import {configureSidebarTree} from '../../public/sidebar.js';
 import {installReactSidebarToolbar} from './components/SidebarToolbar';
@@ -36,6 +38,7 @@ const shell=document.getElementById('app-shell');
 if(!shell)throw new Error('工作台结构缺失。');
 hydrateRoot(shell,<Application/>,{onRecoverableError(error){hydrationFailure=error;console.error('工作台结构不一致',error);}});
 await ready;
+configureAttachmentView(installReactAttachmentView);
 configureGoalToolbar(installReactGoalToolbar);
 configureGoalEditor(installReactGoalEditor);
 configurePlanCompletion(installReactPlanCompletion);
