@@ -8,7 +8,7 @@ import {browseFolders,createFolder,openFolderProject} from '../../../lib/project
 import {deploymentStatus} from '../../../lib/deployment-status.mjs';
 import {WebUpdate} from '../../../lib/web-update.mjs';
 import {createConnectionRoutes} from './connections';
-import {fileResponse} from '../../../lib/file-response.mjs';
+import {createMediaRoutes} from './media';
 import {readSidebar,readSidebarActivity,sidebarAction} from '../../../lib/sidebar.mjs';
 import {composerCatalog} from '../../../lib/composer.mjs';
 import http from 'node:http';
@@ -31,6 +31,8 @@ export interface RouteServices {
  server:()=>import('node:http').Server;mobileConfig:()=>MobileConfig|null;setMobileConfig:(value:MobileConfig)=>void;
 }
 export function createDispatcher(context:RouteServices){
+ const mediaRoutes=new WeakMap<Manager,ReturnType<typeof createMediaRoutes>>();
+ const mediaRoutesFor=(manager:Manager)=>{let routes=mediaRoutes.get(manager);if(!routes){routes=createMediaRoutes(manager);mediaRoutes.set(manager,routes);}return routes;};
  const threadRoutes=new WeakMap<Manager,ReturnType<typeof createThreadRoutes>>();
  const threadRoutesFor=(manager:Manager)=>{let routes=threadRoutes.get(manager);if(!routes){routes=createThreadRoutes(manager);threadRoutes.set(manager,routes);}return routes;};
  const connectionRoutes=new WeakMap<Manager,ReturnType<typeof createConnectionRoutes>>();
@@ -94,15 +96,7 @@ export function createDispatcher(context:RouteServices){
       if(req.method==='GET'&&p==='/api/sidebar/activity')return json(res,200,await readSidebarActivity(manager,Object.fromEntries(url.searchParams)));
       if(req.method==='GET'&&p==='/api/sidebar')return json(res,200,await readSidebar(manager,Object.fromEntries(url.searchParams)));
       if(req.method==='GET'&&p==='/api/project-folders')return json(res,200,await browseFolders(manager,url.searchParams.get('path')));
-      const fileMatch=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})\/items\/([A-Za-z0-9_-]{1,160})\/file$/);
-      if(['GET','HEAD'].includes(req.method||'')&&fileMatch){await fileResponse(manager,req,res,fileMatch[1],fileMatch[2],url);return;}
-      const image=p.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})\/items\/([A-Za-z0-9_-]{1,160})\/image$/);
-      if(req.method==='GET'&&image){
-        const result=await manager.image(image[1],image[2],{preview:url.searchParams.get('preview')==='1',part:url.searchParams.get('part'),reference:url.searchParams.get('reference')});
-        const content=Buffer.from(result.data,'base64');
-        if(!['image/png','image/jpeg','image/webp','image/gif'].includes(result.mime))throw new AppError('不支持此图片格式。');
-        res.writeHead(200,{'Content-Type':result.mime,'Content-Length':content.length,'Cache-Control':'private, max-age=300',...(url.searchParams.get('download')==='1'?{'Content-Disposition':`attachment; filename="${image[2]}.${result.extension}"`}:{})});res.end(content);return;
-      }
+      const mediaRoute=mediaRoutesFor(manager).read(req.method,p);if(mediaRoute){await mediaRoute(req,res,url);return;}
       const match=matchThreadRoute(p);
       if(req.method==='GET'){const route=threadRoutesFor(manager).read(p,match);if(route){await route(req,res,url,undefined);return;}}
       if(req.method==='POST'){

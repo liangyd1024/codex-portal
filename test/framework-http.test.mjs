@@ -363,3 +363,44 @@ test('closing one SSE client preserves other clients and never disconnects the t
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+test('media routes preserve image bytes, query selection, download headers and failure order',async()=>{
+ const outcomes=[];
+ const scenarios=[
+  {mime:'image/png'}, {mime:'image/jpeg'}, {mime:'image/webp'}, {mime:'image/gif'},
+  {query:'&preview=1&part=0&reference=opaque%2Fref&download=1'},
+  {query:'&preview=true&preview=1&part=first&part=second&reference=&download=true&download=1'},
+  {mime:'image/svg+xml'}, {mime:'text/html'},
+  {failure:true}, {method:'HEAD'}, {method:'POST',auth:true}, {method:'POST',auth:false},
+  {thread:'a'.repeat(160),item:'b'.repeat(160)}, {thread:'a'.repeat(161)}, {item:'b'.repeat(161)},
+  {thread:'bad%2Fid'}, {host:'unknown'},
+ ];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),records=[];
+  try{
+   for(const scenario of scenarios){
+    const calls=[],bytes=Buffer.from([0,255,10,13,128,65,0]);
+    for(const [id,manager] of env.managers)manager.image=async(...args)=>{
+     calls.push({id,args});
+     if(scenario.failure)throw Object.assign(new Error('原生图片读取失败。'),{status:409,code:'IMAGE_PENDING',details:{unknown:['完整',1]}});
+     return {data:bytes.toString('base64'),mime:scenario.mime||'image/png',extension:'fixture',unknown:{preserved:true}};
+    };
+    const response=await fetch(env.base+'/api/threads/'+(scenario.thread||'qa-thread')+'/items/'+(scenario.item||'qa-item')+'/image?host='+(scenario.host||'b')+(scenario.query||''),{
+     method:scenario.method||'GET',headers:scenario.auth?{'x-csrf-token':env.token}:{},...(scenario.method==='POST'?{body:'{}'}:{}),
+    });
+    records.push({status:response.status,bytes:Buffer.from(await response.arrayBuffer()).toString('hex'),calls,headers:Object.fromEntries([
+     'content-type','content-length','cache-control','content-disposition','content-security-policy','x-content-type-options',
+    ].map(key=>[key,response.headers.get(key)]))});
+   }
+   assert.deepEqual(records.map(r=>r.status),[200,200,200,200,200,200,400,400,409,404,404,403,200,404,404,404,404]);
+   for(const index of [0,1,2,3,4,5,12])assert.equal(records[index].bytes,'00ff0a0d804100');
+   assert.deepEqual(records[4].calls,[{id:'b',args:['qa-thread','qa-item',{preview:true,part:'0',reference:'opaque/ref'}]}]);
+   assert.equal(records[4].headers['content-disposition'],'attachment; filename="qa-item.fixture"');
+   assert.deepEqual(records[5].calls[0].args[2],{preview:false,part:'first',reference:''});
+   assert.equal(records[5].headers['content-disposition'],null);
+   for(const index of [9,10,11,13,14,15,16])assert.equal(records[index].calls.length,0);
+   outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
