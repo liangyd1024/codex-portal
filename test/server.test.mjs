@@ -237,3 +237,15 @@ test('browser module graph is served as JavaScript without missing imports', asy
   assert.ok(visited.has('/app.js'));
   assert.ok(visited.has('/process-summary.js'));
 });
+
+test('directory and deferred tool reads are scoped to the selected target and item',async t=>{
+ const {manager,request}=await fixture(t);const calls=[];
+ manager.turnDirectory=id=>{calls.push(['directory',id]);return {data:[]};};
+ manager.toolItem=(id,item)=>{calls.push(['item',id,item]);return {item:{id:item}};};
+ manager.history=(...args)=>{calls.push(['history',...args]);return {data:[]};};
+ assert.equal((await request('/api/threads/sample/turn-directory')).status,200);
+ assert.equal((await request('/api/threads/sample/items/tool/detail')).status,200);
+ assert.equal((await request('/api/threads/sample/history?cursor=db%3A3&lazyTools=1')).status,200);
+ assert.deepEqual(calls[0],['directory','sample']);assert.deepEqual(calls[1],['item','sample','tool']);
+ assert.equal(calls[2].at(-1),true);assert.equal(calls[2][2],'db:3');
+});

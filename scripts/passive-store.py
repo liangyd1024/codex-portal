@@ -655,6 +655,56 @@ def goal_input_items(connection, identifier, turn_ids):
         return {}
 
 
+def read_turn_directory(payload):
+    """Presentation-only projection; native IDs and original input order are preserved."""
+    identifier = thread_id(payload)
+    db = connect_store('thread_history_1.sqlite')
+    try:
+        rows = db.execute('SELECT turn_id,status,started_at FROM thread_turns WHERE thread_id=? ORDER BY rollout_ordinal,turn_id', [identifier]).fetchall()
+        goals = goal_input_items(db, identifier, [r['turn_id'] for r in rows])
+        turns = {r['turn_id']: {'id': r['turn_id'], 'status': r['status'], 'startedAt': r['started_at'], 'items': goals.get(r['turn_id'], [])} for r in rows}
+        # Do not return tool arguments, results, screenshots or command output.
+        items = db.execute("""SELECT turn_id, item_id, json_extract(item_json,'$.type') AS type,
+            CASE WHEN json_extract(item_json,'$.type')='userMessage' THEN json_extract(item_json,'$.content') END AS content,
+            substr(json_extract(item_json,'$.text'),1,1000) AS text, json_extract(item_json,'$.phase') AS phase
+            FROM thread_items WHERE thread_id=? AND json_extract(item_json,'$.type') IN ('userMessage','agentMessage')
+            ORDER BY rollout_ordinal,item_id""", [identifier])
+        for item in items:
+            turn = turns.get(item['turn_id'])
+            if turn is None: continue
+            values = turn['items']
+            if item['type'] == 'userMessage' and not any(v['type'] in ('userMessage','goalMessage') for v in values):
+                parts = json.loads(item['content'] or '[]')
+                content = [{'type':'text','text':v.get('text','')[:180]} if v.get('type')=='text' else {'type':'image','url':'preview'} for v in parts if v.get('type') in ('text','image','localImage')]
+                values.insert(0, {'id':item['item_id'],'type':'userMessage','content':content})
+            elif item['type'] == 'agentMessage' and (item['text'] or '').strip():
+                prior = next((v for v in values if v['type']=='agentMessage'), None)
+                if prior is None or (prior.get('phase')!='final_answer' and item['phase']=='final_answer'):
+                    if prior is not None: values.remove(prior)
+                    values.append({'id':item['item_id'],'type':'agentMessage','text':item['text'],'phase':item['phase']})
+        for turn in turns.values():
+            for item in turn['items']:
+                if item['type']=='goalMessage': item['objective']=item['objective'][:180]
+        return {'data':list(turns.values()),'historySource':'snapshot'}
+    finally:
+        db.close()
+
+
+def read_tool_item(payload):
+    identifier = thread_id(payload)
+    item_id = optional_text(payload, 'itemId')
+    if not item_id: raise ValueError('缺少工具记录 ID。')
+    db = connect_store('thread_history_1.sqlite')
+    try:
+        row = db.execute('SELECT item_id,item_json FROM thread_items WHERE thread_id=? AND item_id=?', [identifier,item_id]).fetchone()
+        if not row: raise ValueError('未找到工具记录。')
+        item = history_item(row, identifier)
+        if item.get('type')!='mcpToolCall': raise ValueError('此记录不是工具调用。')
+        return {'item':item}
+    finally:
+        db.close()
+
+
 def read_history(payload):
     # On a new installation even the history database is absent until the first
     # turn. Only the manager's successful new-thread path may allow that absence.
@@ -684,6 +734,8 @@ def read_history(payload):
         outputs = read_outputs({**payload, 'turnIds': [row['turn_id'] for row in rows[:limit]]})['data'] if payload.get('withOutputs') else []
         journal_ids = [entry['item']['id'] for entry in outputs]
         item_sql = "CASE WHEN json_extract(item_json,'$.type')='commandExecution' THEN json_set(item_json,'$.aggregatedOutput',substr(coalesce(json_extract(item_json,'$.aggregatedOutput'),''),1,16384),'$.outputPartial',json('true')) ELSE item_json END" if payload.get('preview') else 'item_json'
+        if payload.get('lazyTools'):
+            item_sql = "CASE WHEN json_extract(item_json,'$.type')='mcpToolCall' AND json_extract(item_json,'$.status') IN ('completed','failed') THEN json_set(json_remove(item_json,'$.arguments','$.result'),'$.detailsDeferred',json('true')) ELSE " + item_sql + ' END'
         # Do not decode and transmit the same large command twice. Keep fallback
         # history intact when no authoritative private journal entry exists.
         if journal_ids:
@@ -897,7 +949,7 @@ def main():
     if not isinstance(payload, dict):
         raise ValueError('PAYLOAD 必须是 JSON 对象。')
     action = payload.get('action')
-    handlers = {'sidebar': read_sidebar, 'sidebarActivity': read_sidebar_activity, 'sidebarMetadata': read_sidebar_metadata, 'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
+    handlers = {'turnDirectory': read_turn_directory, 'toolItem': read_tool_item, 'sidebar': read_sidebar, 'sidebarActivity': read_sidebar_activity, 'sidebarMetadata': read_sidebar_metadata, 'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
     if action not in handlers:
         raise ValueError('不支持的只读操作。')
     return handlers[action](payload)

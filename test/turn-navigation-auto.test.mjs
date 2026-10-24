@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {installTurnNavigation} from '../public/turn-navigation.js';
 
-function fixture(t,{fail=false}={}){
+function fixture(t,{fail=false,directory=false}={}){
  const elements=[];
  const element=()=>{const n={children:[],dataset:{},style:{},classList:{toggle(){}},append(...nodes){this.children.push(...nodes);},setAttribute(){},removeAttribute(){},addEventListener(){},querySelectorAll(){return [];},getBoundingClientRect(){return {top:0,bottom:100,height:100};},insertBefore(node){this.children.push(node);},remove(){},replaceChildren(){this.children=[];}};elements.push(n);return n;};
  for(const [name,value] of Object.entries({document:{createElement:element,body:element(),addEventListener(){},querySelector:element},window:{addEventListener(){}},ResizeObserver:class{observe(){}},requestAnimationFrame:()=>1})){const original=Object.getOwnPropertyDescriptor(globalThis,name);Object.defineProperty(globalThis,name,{value,configurable:true,writable:true});t.after(()=>{if(original)Object.defineProperty(globalThis,name,original);else delete globalThis[name];});}
  const state={visible:true,ready:false,turns:[],hasEarlier:true,cursor:'0'},calls=[],paused=[],renders=[];
- const nav=installTurnNavigation({scroller:element(),content:element(),entryHost:element(),follow:{pause:()=>paused.push(1)},context:()=>({...state,renderHistory:()=>renders.push(1)}),loadEarlier:async()=>{calls.push(state.cursor);if(fail)return false;state.cursor=String(Number(state.cursor)+1);state.hasEarlier=Number(state.cursor)<3;return true;}});
+ const nav=installTurnNavigation({...(directory?{loadDirectory:async()=>{calls.push('directory');if(fail)throw Error('offline');return {data:[]};}}:{}),scroller:element(),content:element(),entryHost:element(),follow:{pause:()=>paused.push(1)},context:()=>({...state,renderHistory:()=>renders.push(1)}),loadEarlier:async()=>{calls.push(state.cursor);if(fail)return false;state.cursor=String(Number(state.cursor)+1);state.hasEarlier=Number(state.cursor)<3;return true;}});
  nav.switchContext('a');
  return {state,nav,calls,paused,renders,count:()=>elements.find(n=>n.className==='turn-navigation-count'),rail:()=>elements.find(n=>n.className==='turn-navigation'),ticks:()=>elements.find(n=>n.className==='turn-navigation-ticks')};
 }
@@ -34,4 +34,14 @@ test('loading stays silent; failure and cancellation expose retry',async t=>{
  f.count().onclick();assert.equal(f.count().textContent,'');
  f.count().onclick();assert.equal(f.count().textContent,'点击重试');
  await settle();assert.equal(f.calls.length,2);
+});
+
+test('directory opening never downloads transcript pages or renders full history',async t=>{
+ const f=fixture(t,{directory:true});f.state.ready=true;f.nav.update();f.nav.update();await settle();
+ assert.deepEqual(f.calls,['directory']);assert.deepEqual(f.renders,[]);assert.equal(f.state.hasEarlier,true);assert.equal(f.count().textContent,'共 0 轮');
+ f.nav.update();await settle();assert.deepEqual(f.calls,['directory']);
+});
+test('directory failure remains retryable without falling back to bulk history',async t=>{
+ const f=fixture(t,{directory:true,fail:true});f.state.ready=true;f.nav.update();await settle();
+ assert.equal(f.count().textContent,'点击重试');f.count().onclick();await settle();assert.deepEqual(f.calls,['directory','directory']);assert.deepEqual(f.renders,[]);
 });

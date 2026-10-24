@@ -1,3 +1,4 @@
+import {installDeferredTool} from './deferred-tool.js';
 import {completedGoalPlacement,renderCompletedGoal} from './goal-toolbar.js';
 import {installQueuedInputs} from './queued-inputs.js';
 let queuedInputs;
@@ -634,10 +635,14 @@ function renderItem(item,{threadId=state.selectedId,side=false,refresh=renderMes
   const name = item.tool || item.name || item.type || '目标机器事件';
   const {d,body} = toolDetails(item, name, 'terminal');
   if (item.type === 'mcpToolCall') {
-    body.append(el('div','tool-meta', '服务：' + (item.server || '—')));
-    if (item.arguments) body.append(el('pre','tool-output',pretty(item.arguments)));
-    if (item.result) body.append(el('pre','tool-output',pretty(item.result)));
-    if (item.error) body.append(el('div','tool-error',messageOf(item.error)));
+    const host=targetHost,selection=state.selectionVersion;
+    installDeferredTool({details:d,body,isCurrent:()=>targetHost===host&&(side||state.selectedId===threadId&&state.selectionVersion===selection),
+      load:async()=>item.detailsDeferred?(await api('/api/threads/'+encodeURIComponent(threadId)+'/items/'+encodeURIComponent(item.id)+'/detail')).item:item,
+      render:(value,body)=>{body.append(el('div','tool-meta','服务：'+(value.server||'—')));
+        if(value.arguments)body.append(el('pre','tool-output',pretty(value.arguments)));
+        if(value.result)body.append(el('pre','tool-output',pretty(value.result)));
+        if(value.error)body.append(el('div','tool-error',messageOf(value.error)));}
+    });
   } else if (item.type === 'functionCallOutput') body.append(el('pre','tool-output',typeof item.output === 'string' ? item.output : pretty(item.output)));
   else if (item.type === 'dynamicToolCall') { body.append(el('pre','tool-output',pretty(item.arguments || {}))); if (item.contentItems) body.append(el('pre','tool-output',pretty(item.contentItems))); }
   else if (item.type === 'webSearch') body.append(el('pre','tool-output',item.query || pretty(item.action || item)));
@@ -971,7 +976,7 @@ async function readSelectedDetail(id,isCurrent){
   }
   const cold=!state.detail,started=performance.now();let firstMs=null;
   if(!state.detail){
-    const preview=await api('/api/threads/'+encodeURIComponent(id)+'?preview=1');
+    const preview=await api('/api/threads/'+encodeURIComponent(id)+'?preview=1&lazyTools=1');
     if(!isCurrent())return preview;
     state.loadingDetail=false;applyDetail(preview,true);firstMs=performance.now()-started;
   }
@@ -979,7 +984,7 @@ async function readSelectedDetail(id,isCurrent){
   if(!isCurrent())return state.detail||{};
   const bases=outputBases(turns());
   const versions=Object.fromEntries([...bases].slice(-50).map(([id,b])=>[id,b.token]));
-  const encoding=(typeof DecompressionStream==='function'?'?outputEncoding=gzip-base64':'?outputEncoding=plain')+(cold?'&fast=1':'');
+  const encoding=(typeof DecompressionStream==='function'?'?outputEncoding=gzip-base64':'?outputEncoding=plain')+(cold?'&fast=1':'')+'&lazyTools=1';
   const response=await api('/api/threads/' + encodeURIComponent(id)+encoding,{headers:{'X-Output-Versions':JSON.stringify(versions)}}),received=performance.now();
   const result=hydrateOutputs(await decodeOutputs(response),bases);
   if(cold&&isCurrent())document.body.dataset.logRecovery=JSON.stringify({host:targetHost,id,firstMs:Math.round(firstMs),networkMs:Math.round(received-started-firstMs),decodeMs:Math.round(performance.now()-received),completeMs:Math.round(performance.now()-started)});
@@ -1356,7 +1361,7 @@ async function moreHistory({deferRender=false}={}) {
   $('messages-scroller').setAttribute('aria-busy','true');
   try { return await action('history',async () => {
     let d;
-    try{d=await api((state.desktopMode?'/api/desktop/threads/'+encodeURIComponent(id)+'/history':'/api/threads/'+encodeURIComponent(id)+'/history')+'?cursor='+encodeURIComponent(state.historyCursor)+(state.desktopMode?'&threadId='+encodeURIComponent(id):''));}
+    try{d=await api((state.desktopMode?'/api/desktop/threads/'+encodeURIComponent(id)+'/history':'/api/threads/'+encodeURIComponent(id)+'/history')+'?cursor='+encodeURIComponent(state.historyCursor)+'&lazyTools=1'+(state.desktopMode?'&threadId='+encodeURIComponent(id):''));}
     catch(error){if(error.code==='HISTORY_CURSOR_CHANGED')throw new Error('历史记录已更新。请刷新会话后再向上滚动。');throw error;}
     if (id !== state.selectedId || version !== state.selectionVersion) return;
     const old = new Map(turns().map(t => [t.id,t])); const all = [...[...(d.data || [])].reverse(),...turns()]; const seen = new Set(); state.detail.turns = all.filter(t => !seen.has(t.id) && seen.add(t.id)).map(t => old.get(t.id) || t);
@@ -1656,7 +1661,7 @@ function wireEvents() {
   $('project-list').hidden = !readLayout('projects',true);
   $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
   mobileUI = installMobileUI({closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:mobile=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
-  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),ready:usable()&&!state.loadingDetail&&!state.historyError&&!state.detail?.recovering&&!detailReads.has(JSON.stringify([state.selectedId,state.selectionVersion,state.detailVersion])),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:id=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
+  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,loadDirectory:()=>api('/api/threads/'+encodeURIComponent(state.selectedId)+'/turn-directory'),onError:message=>toast(message,true),context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),ready:usable()&&!state.loadingDetail&&!state.historyError&&!state.detail?.recovering&&!detailReads.has(JSON.stringify([state.selectedId,state.selectionVersion,state.detailVersion])),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:id=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {

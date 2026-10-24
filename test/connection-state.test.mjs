@@ -36,3 +36,12 @@ test('confirmed user message replaces accepted placeholder without duplication',
  const result=mergeLiveTurns([{id:'t',items:[{id:'accepted-t',type:'userMessage',content,localAccepted:true}]}],[{id:'t',items:[{id:'real-id',type:'userMessage',content}]}]);
  assert.equal(result[0].items.length,1);assert.equal(result[0].items[0].id,'real-id');
 });
+
+test('full live tool results replace deferred markers without losing original results',()=>{
+ const turn=item=>[{id:'t',items:[{id:'i',type:'mcpToolCall',status:'completed',...item}]}];
+ const full={result:{content:[{type:'text',text:'原文'}]}};
+ let merged=mergeLiveTurns(turn({detailsDeferred:true}),turn(full));
+ assert.equal(merged[0].items[0].detailsDeferred,undefined);assert.deepEqual(merged[0].items[0].result,full.result);
+ merged=mergeLiveTurns(turn(full),turn({detailsDeferred:true}));
+ assert.equal(merged[0].items[0].detailsDeferred,undefined);assert.deepEqual(merged[0].items[0].result,full.result);
+});
