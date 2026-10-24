@@ -1,3 +1,4 @@
+import {publishProjectPicker,installProjectPickerActions} from '../src/web/components/ProjectPicker';
 import {publishNewChatControls,installNewChatActions} from '../src/web/components/NewChatControls';
 import {createThreadFromDraft as createThreadSubmit} from '../src/web/services/thread-create';
 import {createMessageSend} from '../src/web/services/message-send';
@@ -425,7 +426,7 @@ function renderControls() {
     input.disabled=!ready||posting;input.placeholder='描述你想完成的任务…';
     availability.textContent=reason;availability.hidden=!reason;
     publishNewChatControls({retryHidden:newDraft.phase!=='uncertain',closeDisabled:creating});
-    $('new-cwd').disabled=!ready||creating||newDraft.phase==='uncertain';
+    publishProjectPicker({disabled:!ready||creating||newDraft.phase==='uncertain'});
     buttonView.stop.hidden=true;$('takeover').hidden=true;
     $('thread-title').hidden=false;setText('thread-title','新会话');
   }
@@ -1034,17 +1035,15 @@ async function respondRequest(r, answer) {
 }
 function updateNewProjects(projectRoot) {
   const preferred=(typeof projectRoot==='string'?projectRoot:null)||newDraft.cwd||state.projects.find(p=>p.id===state.projectId)?.roots?.[0]||currentThread()?.cwd;
-  const select=clear($('new-cwd'));
   const options=projectFolderOptions(state.projects);
-  for(const p of options){const option=el('option','',p.name);option.value=p.root;select.append(option);}
-  if(options.some(p=>p.root===preferred))select.value=preferred;
-  newDraft.cwd=select.value;rememberNewDraft();
+  const value=options.some(p=>p.root===preferred)?preferred:(options[0]?.root||'');
+  publishProjectPicker({options,value});newDraft.cwd=value;rememberNewDraft();
 }
 function openNewDialog(projectRoot) {
   if(state.busy.has('create'))return;
   automations?.close();document.querySelector('.main-panel').classList.remove('desktop-chat');
   flushDrafts();updateNewProjects(projectRoot);
-  $('new-cwd').onchange=()=>{newDraft.cwd=$('new-cwd').value;rememberNewDraft();renderControls();};
+  installProjectPickerActions({change:value=>{newDraft.cwd=value;rememberNewDraft();renderControls();}});
   state.selectionVersion++;newChatOpen=true;$('new-chat-page').hidden=false;document.querySelector('.main-panel').classList.add('new-chat-open');
   void reportThreadView().catch(e=>recordError(e,'thread'));
   $('new-composer-slot').append(document.querySelector('.composer-region'));
