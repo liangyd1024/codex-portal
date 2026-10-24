@@ -19,7 +19,8 @@ export function AttachmentViews(){const instances=useStore(registry).instances;r
 export function installReactAttachmentView(options:Options){
  const instance:Instance={...options,key:++sequence,store:createStore<State>(()=>({view:null,revision:0,picture:null,pictureRevision:0}))};
  flushSync(()=>registry.setState({instances:[...registry.getState().instances,instance]}));
- return {render(view:View){
+ const buttonState=createStore(()=>({disabled:false}));
+ return {images:{store:buttonState,open:options.openFiles,setDisabled(disabled:boolean){if(buttonState.getState().disabled!==disabled)flushSync(()=>buttonState.setState({disabled}));}},render(view:View){
   const old=instance.store.getState().view;
   const same=old&&old.id===view.id&&old.busy===view.busy&&old.items.length===view.items.length&&old.items.every((item,i)=>item.id===view.items[i]!.id&&item.name===view.items[i]!.name&&item.url===view.items[i]!.url);
   // Typing does not change the cards. Skip that render only when rebuilding

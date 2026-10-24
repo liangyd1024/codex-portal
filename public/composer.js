@@ -4,7 +4,7 @@ import {installSkillSuggestions} from './skill-suggestions.js';
 import {installInlineMentions,mentionRanges} from './inline-mentions.js';
 export const WEB_ACCESS='full';
 
-export function installComposer({host,api,context,refresh,notify,implementPlan,input=document.getElementById('message-input'),images=document.getElementById('add-images'),prefix=''}) {
+export function installComposer({host,api,context,refresh,notify,implementPlan,input=document.getElementById('message-input'),images,prefix=''}) {
   if(!document.querySelector('link[href="/composer.css"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/composer.css';document.head.append(link);}
   const bar=document.createElement('div');bar.className='composer-tools';
   input.form.querySelector('.composer-bottom').prepend(bar);
@@ -64,7 +64,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
     const currentGoal=Boolean(c.goal),disabled=!c.ready||c.busy||goalUpdating;
     controls.render({plan:choice().mode==='plan',goalPending:Boolean(choice().goalPending),currentGoal,ephemeral:Boolean(c.ephemeral),disabled,menuDisabled:Boolean(!c.ready||c.busy),active:Boolean(c.active),status:[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ')});
     // Attachments can accompany a native turn/steer while the current turn runs.
-    images.disabled=disabled;
+    images.setDisabled(disabled);
 
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
