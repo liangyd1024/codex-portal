@@ -7,6 +7,20 @@
   {id:'qa-history-user-'+n,type:'userMessage',content:[{type:'text',text:'较早提问 '+n+'：保留顺序。'}]},
   {id:'qa-history-answer-'+n,type:'agentMessage',text:'较早回复 '+n+'：完整原文。'},
  ]})));
+ // Current master reads the lightweight directory before requesting history.
+ // Keep newest-first storage for pagination; the directory is chronological.
+ const directoryFetch=window.fetch;
+ window.fetch=(url,options={})=>{
+  const request=new URL(typeof url==='string'?url:url.url,location.href);
+  const match=request.pathname.match(/^\/api\/threads\/([^/]+)\/turn-directory$/);
+  if(!match)return directoryFetch(url,options);
+  const id=decodeURIComponent(match[1]);
+  f.calls.push({path:request.pathname,query:request.search,method:options.method||'GET'});
+  const data=[...(f.history.get(id)||[])].reverse().concat(f.turns.get(id)||[]).map(turn=>({
+   id:turn.id,status:turn.status,items:turn.items.filter(item=>item.type==='userMessage'||item.type==='agentMessage'),
+  }));
+  return Promise.resolve(new Response(JSON.stringify({data}),{headers:{'Content-Type':'application/json'}}));
+ };
  const historyMode=new URLSearchParams(location.search);
  let cursorUnavailable=historyMode.get('historyCursorPermanent')==='1';
  if(historyMode.get('historyNoInput')==='1'){
