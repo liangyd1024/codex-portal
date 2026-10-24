@@ -321,7 +321,10 @@ async function action(key, fn) {
   if (state.busy.has(key)) return;
   state.busy.add(key); renderControls();
   try { return await fn(); }
-  catch (e) { recordError(e,key); toast(messageOf(e),true,11000); }
+  catch (e) {
+    if(key.startsWith('request:')){state.busy.delete(key);syncRequestCards({ready:usable(),pending:id=>state.busy.has('request:'+id),controlledThreads:state.status?.controlledThreads});}
+    recordError(e,key); toast(messageOf(e),true,11000);
+  }
   finally { state.busy.delete(key); if(['connect','disconnect','release'].includes(key))renderStatus();else renderControls(); }
 }
 
