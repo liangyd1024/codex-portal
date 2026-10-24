@@ -2,7 +2,8 @@
 (()=>{
  const f=window.rcmFixture;f.sideExpiry=true;f.sideSerial=0;
  const receiptMode=new URLSearchParams(location.search).get('sideReceipt')==='1';
- let pendingSend,serial=0;
+ let pendingSend,serial=0;const touchEvents=[];
+ if(receiptMode)for(const type of ['pointerdown','touchstart','touchend'])document.addEventListener(type,event=>{const button=event.target.closest('button');if(button?.getAttribute('aria-label')==='发送侧边聊天消息')touchEvents.push({type,pointerType:event.pointerType||null,trusted:event.isTrusted});},{capture:true,passive:true});
  if(receiptMode){
   const fetchFixture=window.fetch;
   window.fetch=(url,options={})=>{
@@ -35,7 +36,7 @@
    button('读取发送回执记录',()=>{const side=document.querySelector('.side-chat-panel');out.textContent=JSON.stringify({
     sends:f.calls.filter(c=>/\/(message|steer)$/.test(c.path)),receipts:side.querySelectorAll('[data-send-receipt]').length,
     output:side.querySelector('.side-chat-output').textContent,draft:side.querySelector('textarea').value,
-    httpDone:pendingSend?.httpDone,nativeDone:pendingSend?.nativeDone,errors:f.errors,
+    httpDone:pendingSend?.httpDone,nativeDone:pendingSend?.nativeDone,touchEvents,errors:f.errors,
    },null,2);});
   }
   panel.append(out);document.body.append(panel);
