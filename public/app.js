@@ -1,3 +1,4 @@
+import {publishWelcome,setWelcomeDisabled,installWelcomeAction,installClearRecovery} from '../src/web/components/WorkspaceActions';
 import {installDesktopControls,publishDesktopControls} from '../src/web/components/DesktopControls';
 import {installInspectorNavigation,installAutomationNavigation} from '../src/web/components/InspectorNavigation';
 import {publishConnectionSelect,installConnectionSelectAction} from '../src/web/components/ConnectionSelect';
@@ -347,7 +348,7 @@ function renderStatus() {
   publishConnectionSettings({ready:true,variant,label,host:h.hostname || h.alias || '目标机器',user:h.user,
     version:service.version || h.version,connectedAt:dateTime(c.connectedAt),transport:state.transport ? '实时通道已连接' : '实时通道未连接',
     icon:connected()||connectionPending() ? 'close' : 'link',connectLabel:state.busy.has('disconnect') ? '正在断开…' : connectionPending()?'取消连接':connected() ? '断开本机连接' : '连接目标机器'});
-  const welcome = $('welcome-connect'); clear(welcome); welcome.append(icon(connected() ? 'plus' : 'link'),el('span','',connectionPending() ? '正在连接…' : connected() ? '新建目标机器会话' : '连接 ' + (h.alias || '目标机器')));
+  publishWelcome({ready:true,icon:connected()?'plus':'link',label:connectionPending()?'正在连接…':connected()?'新建目标机器会话':'连接 '+(h.alias||'目标机器')});
   setText('welcome-footnote',connected() ? '已连接。选择左侧会话，或新建目标机器会话。' : '等待连接。此页面不包含演示会话。');
   renderControlOverview();
   renderControls(); renderDiagnostics(); if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();
@@ -386,7 +387,7 @@ function renderControls() {
   publishConnectionSelect({disabled:creating});
   $('new-thread').disabled = !!state.status?.loginRecovery || !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels;
   publishConnectionSettings({connectDisabled:state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release')});
-  $('welcome-connect').disabled = connectionPending() || state.busy.has('connect') || state.busy.has('disconnect') || (connected() && (!ready || !state.models.length||!featureReady('create')));
+  setWelcomeDisabled(connectionPending() || state.busy.has('connect') || state.busy.has('disconnect') || (connected() && (!ready || !state.models.length||!featureReady('create'))));
   publishConnectionSettings({reloadDisabled:!ready||!featureReady('release')||state.busy.has('release'),
     releaseDisabled:!ready || !featureReady('release') || !state.status?.service?.running || state.busy.has('release'),
     releaseLabel:state.busy.has('release') ? '正在检查并释放…' : '停止目标服务（影响所有入口）'});
@@ -1228,7 +1229,7 @@ function wireEvents() {
     if (width !== composerWidth) { composerWidth = width; requestAnimationFrame(resizeInput); }
   }).observe($('message-input'));
   installConnectionActions({connect:()=>connected()||connectionPending()?disconnectRemote():connectRemote(),reload:reloadLogin,release:releaseService});
-  $('welcome-connect').onclick = () => connected() ? openNewDialog() : connectRemote();
+  installWelcomeAction(() => connected() ? openNewDialog() : connectRemote());
   $('new-thread').onclick = openNewDialog; $('takeover').onclick = takeoverThread;
   $('refresh-all').onclick = () => action('refresh',() => refreshWorkspace(true)); $('refresh-projects').onclick = () => action('projects',() => showRefresh('侧边栏',()=>loadThreads(false,true)));
   $('project-list').addEventListener('scroll',loadVisibleThreads,{passive:true});
@@ -1315,7 +1316,4 @@ await init();
 publishConnectionSelect({value:targetHost});
 installConnectionSelectAction(value=>{if(state.busy.has('create'))return;rememberHost(value);if(inputId())state.drafts.set(inputId(),$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',value);url.searchParams.delete('thread');location.assign(url);});
 
-const clearRecovery=el('button','text-button','清除日志缓存并重新加载');
-clearRecovery.type='button';
-clearRecovery.onclick=async()=>{flushDrafts();clearRecovery.disabled=true;cancelDetailSave();try{await clearDetailCache();location.reload();}catch(e){clearRecovery.disabled=false;toast('无法清除日志缓存：'+messageOf(e),true);}};
-$('diagnostics').append(clearRecovery);
+const setClearRecoveryDisabled=installClearRecovery(async()=>{flushDrafts();setClearRecoveryDisabled(true);cancelDetailSave();try{await clearDetailCache();location.reload();}catch(e){setClearRecoveryDisabled(false);toast('无法清除日志缓存：'+messageOf(e),true);}});

@@ -1,5 +1,7 @@
 # 框架迁移：实现与验收记录
 
+欢迎入口与缓存清除迁移候选已完成四视口 56 对功能比较及完整回归，但状态刷新存在可重复性能增量，尚未更新预览。详见[候选验收记录](verification-framework-workspace-actions.md)。整体任务仍未完成。
+
 本轮只交付 `refactor/framework-migration`，不合并 master，不部署正式服务。
 网页端和手机端的视觉、功能和交互保持不变是验收条件。
 
