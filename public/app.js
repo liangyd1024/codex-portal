@@ -54,7 +54,7 @@ import {sendAfterGoal} from './goal-submit.js';
 import {notificationSupport,prepareNotificationWorker,submitWorkerNotification} from './notification-platform.js';
 import {deliverNotice,submitNotification} from './notification-delivery.js';
 import {asyncQuestions,QuestionDrafts} from './questions.js';
-import {questionForm} from './question-form.js';
+import {questionForm,releaseQuestionForms,restoreQuestionForm,syncQuestionForms} from './question-form.js';
 import {fileLink,closeFileViewer} from './message-files.js';
 import {notifyManagerError, recoveryMessage, selectedRecoveryMessage} from './recovery-state.js';
 import {processSummary,renderProcessSummary} from './process-summary.js';
@@ -438,7 +438,8 @@ function renderControls() {
   const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '查看模式。接管后可在原会话继续工作。';
   setText('composer-hint',state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
   setText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
-  document.querySelectorAll('.request-card button,.request-card input,.request-card textarea').forEach(n => { const card=n.closest('.request-card');n.disabled = state.busy.has('request:' + card.dataset.requestId) || (n.dataset.local!=='true'&&(!ready||(card.dataset.asyncQuestion==='true'&&!state.status?.controlledThreads?.includes(card.dataset.threadId)))); });
+  document.querySelectorAll('.request-card button,.request-card input,.request-card textarea').forEach(n => { if(n.closest('.question-form'))return;const card=n.closest('.request-card');n.disabled = state.busy.has('request:' + card.dataset.requestId) || (n.dataset.local!=='true'&&(!ready||(card.dataset.asyncQuestion==='true'&&!state.status?.controlledThreads?.includes(card.dataset.threadId)))); });
+  syncQuestionForms({ready,pending:id=>state.busy.has('request:'+id),controlledThreads:state.status?.controlledThreads});
   document.querySelectorAll('.request-card').forEach(card => {
     const pending = state.busy.has('request:' + card.dataset.requestId);
     card.setAttribute('aria-busy',String(pending));
@@ -781,6 +782,7 @@ function renderRequests() {
   for(const r of list)if(r.params?.questions?.length)notifyTaskEvent('manager/request',r);
   if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();
   const saved = new Map([...document.querySelectorAll('.request-card')].map(card => [card.dataset.requestId, {fields:[...card.querySelectorAll('input,textarea')].map(f => ({name:f.name,value:f.value,checked:f.checked})),open:Boolean(card.querySelector('details[open]'))}]));
+  releaseQuestionForms();
   const inline = clear($('conversation-requests'));if(sideChat)clear(sideChat.requestsHost);
   list.forEach(r => {
     const threadId=requestThread(r);
@@ -813,7 +815,9 @@ function renderRequests() {
     }
     const previous = saved.get(requestPath(r));
     if (previous) {
-      card.querySelectorAll('input,textarea').forEach(f => { const found = previous.fields.find(x => x.name === f.name && (f.type !== 'radio' || x.value === f.value)); if (found) { if (f.type === 'radio') f.checked = found.checked; else f.value = found.value; } });
+      const form=card.querySelector('.question-form');
+      if(form)restoreQuestionForm(form,previous.fields);
+      else card.querySelectorAll('input,textarea').forEach(f => { const found = previous.fields.find(x => x.name === f.name && (f.type !== 'radio' || x.value === f.value)); if (found) { if (f.type === 'radio') f.checked = found.checked; else f.value = found.value; } });
       if (previous.open && card.querySelector('details')) card.querySelector('details').open = true;
     }
     if(sideChat?.id&&threadId===sideChat.id)sideChat.requestsHost.append(card);else inline.append(card);

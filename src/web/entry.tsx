@@ -1,3 +1,5 @@
+import {reactQuestionForms} from './components/QuestionForms';
+import {configureQuestionForms} from '../../public/question-form.js';
 import {installReactAttachmentView} from './components/Attachments';
 import {configureAttachmentView} from '../../public/attachments.js';
 import {installReactSidebarTree} from './components/SidebarTree';
@@ -38,6 +40,7 @@ const shell=document.getElementById('app-shell');
 if(!shell)throw new Error('工作台结构缺失。');
 hydrateRoot(shell,<Application/>,{onRecoverableError(error){hydrationFailure=error;console.error('工作台结构不一致',error);}});
 await ready;
+configureQuestionForms(reactQuestionForms);
 configureAttachmentView(installReactAttachmentView);
 configureGoalToolbar(installReactGoalToolbar);
 configureGoalEditor(installReactGoalEditor);
