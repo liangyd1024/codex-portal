@@ -61,3 +61,10 @@ test('retained cached nodes move into new groups without rebuilding, and changed
  const next=new Node('DETAILS','group');next.append(item('changed'));reconcileMessages(parent,tree(next));assert.equal(parent.firstChild.firstChild,original);assert.equal(builds,2);
  reconcileMessages(parent,tree());cache.bind(parent);assert.equal(cache.entries.size,0);
 });
+
+test('changed deferred tool binds its new payload even when closed markup is identical',()=>{
+ const old=new Node('DETAILS','tool');old.ontoggle=()=> 'old';old.setAttribute('open','');
+ const fresh=new Node('DETAILS','tool');fresh.ontoggle=()=> 'new';const parent=tree(old);
+ reconcileMessages(parent,tree(fresh));assert.equal(parent.firstChild,fresh);assert.equal(fresh.ontoggle(),'new');assert.equal(fresh.hasAttribute('open'),true);
+ reconcileMessages(parent,tree(fresh));assert.equal(parent.firstChild,fresh);
+});

@@ -1,6 +1,7 @@
 import type {IncomingMessage} from 'node:http';
 import type {Response} from '../types';
 import {AppError,type Manager} from '../../../lib/manager.mjs';
+import {json} from '../protocol';
 import {fileResponse} from '../../../lib/file-response.mjs';
 import {createMediaService} from '../services/media';
 
@@ -13,6 +14,8 @@ export function createMediaRoutes(manager:Manager) {
    if((method==='GET'||method==='HEAD')&&file)return async(req,res,url)=>{
     await fileResponse(service,req,res,file[1],file[2],url);
    };
+   const toolItem=path.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})\/items\/([A-Za-z0-9_-]{1,160})\/detail$/);
+   if(method==='GET'&&toolItem)return async(_req,res)=>json(res,200,await service.toolItem(toolItem[1],toolItem[2]));
    const image=path.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})\/items\/([A-Za-z0-9_-]{1,160})\/image$/);
    if(method!=='GET'||!image)return;
    return async(_req,res,url)=>{

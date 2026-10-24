@@ -94,3 +94,13 @@ test('partial continuation history does not claim zero conversation turns',()=>{
  assert.equal(turnCountLabel({turns:[input,...turns],hasEarlier:true,loadMessage:'已取消'}),'点击重试');
  assert.equal(turnCountLabel({turns:[input,...turns],hasEarlier:false,loadMessage:'旧错误'}),'共 1 轮');
 });
+
+test('jump reads only until the requested original turn and rejects stale completion',async()=>{
+ const {loadTurnUntil}=await import('../public/turn-navigation.js');
+ const state={turns:[],hasEarlier:true,cursor:'a'};let calls=0,current=true;
+ const options={context:()=>state,isCurrent:()=>current,loadEarlier:async()=>{calls++;state.turns.unshift({id:'target'});state.cursor='b';return true;}};
+ assert.equal(await loadTurnUntil('target',options),true);assert.equal(calls,1);
+ assert.equal(await loadTurnUntil('target',options),true);assert.equal(calls,1);
+ state.turns=[];options.loadEarlier=async()=>{current=false;state.turns=[{id:'target'}];return true;};
+ assert.equal(await loadTurnUntil('target',options),false);
+});

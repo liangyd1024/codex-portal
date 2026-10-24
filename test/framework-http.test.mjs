@@ -281,7 +281,7 @@ test('thread routes preserve query rules, helper validation and native queue for
    }
    assert.deepEqual(records[0].calls,[['a','threads',{search:'first',cursor:'one'}]]);
    assert.deepEqual(records[1].calls,[['a','threads',{search:'last',cursor:'two'}]]);
-   assert.deepEqual(records[2].calls,[['a','history',['id','one']]]);
+   assert.deepEqual(records[2].calls,[['a','history',['id','one',false,{},false,null,false]]]);
    assert.deepEqual(records[8].calls.filter(c=>c[0]==='rpc'),[['rpc','thread/queue/delete',{threadId:'id',queuedSubmissionId:'queue-1'},null]]);
    assert.deepEqual(records[9].calls.filter(c=>c[0]==='rpc'),[['rpc','thread/read',{threadId:'id',includeTurns:false},null],['rpc','thread/queue/start',{threadId:'id',queuedSubmissionId:'queue-2'},null]]);
    assert.deepEqual(records[10].calls.filter(c=>c[0]==='rpc'),[['rpc','thread/goal/clear',{threadId:'id',origin:'user'},{timeoutMs:10000}]]);
@@ -896,6 +896,51 @@ test('repeated SSE reconnects release view retention and update subscriptions ea
     }finally{abort.abort();}
    }
    assert.equal((await fetch(env.base+'/api/status?host=b').then(r=>r.json())).connection.state,'connected');outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
+
+
+test('lazy history and deferred detail endpoints preserve parameters, raw fields and security order',async()=>{
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),records=[];
+  for(const [id,manager] of env.managers){
+   for(const method of ['turnDirectory','toolItem'])manager[method]=async(...args)=>{
+    env.calls.push([id,method,args]);
+    if(args[0]==='denied')throw Object.assign(Error('原生读取拒绝。'),{status:409,code:'NATIVE_STATE',details:{future:'原文'}});
+    return {data:[{id:'turn',question:'中文原文'}],item:{id:args[1],result:{unknown:['完整',1]}},future:{keep:true}};
+   };
+  }
+  try{
+   for(const [route,options={}] of [
+    ['/api/threads/sample/turn-directory?host=b'],
+    ['/api/threads/sample/items/tool/detail?host=b'],
+    ['/api/threads/denied/turn-directory'],['/api/threads/denied/items/tool/detail'],
+    ['/api/threads/sample/history?cursor=db%3A3&lazyTools=1'],
+    ['/api/threads/sample/history?lazyTools=true'],
+    ['/api/threads/sample?preview=1&fast=1&lazyTools=1&outputEncoding=gzip-base64'],
+    ['/api/threads/sample/turn-directory?host=missing'],
+    ['/api/threads/sample/items/tool/detail',{headers:{origin:'https://untrusted.test'}}],
+    ['/api/threads/sample/turn-directory',{method:'HEAD'}],
+    ['/api/threads/sample/turn-directory',{method:'POST'}],
+    ['/api/threads/sample/items/tool/detail',{method:'POST'}],
+    ['/api/threads/sample%2Fother/turn-directory'],
+    ['/api/threads/sample/items/tool%2Fother/detail'],
+    ['/deferred-tool.js'],
+   ]){
+    env.calls.length=0;const response=await fetch(env.base+route,options),body=await response.text();
+    records.push({route,status:response.status,body,calls:structuredClone(env.calls)});
+   }
+   assert.equal(records[0].status,200);assert.deepEqual(records[0].calls,[['b','turnDirectory',['sample']]]);
+   assert.deepEqual(records[1].calls,[['b','toolItem',['sample','tool']]]);
+   assert.equal(records[2].status,409);assert.equal(records[3].status,409);
+   assert.deepEqual(records[4].calls,[['a','history',['sample','db:3',false,{},false,null,true]]]);
+   assert.equal(records[5].calls[0][2].at(-1),false);assert.equal(records[6].calls[0][2].at(-1),true);
+   for(const index of [7,8,9,10,11,12,13])assert.equal(records[index].calls.length,0);
+   assert.equal(records[14].status,200);assert.equal(records[14].body,await readFile(path.join(root,'public/deferred-tool.js'),'utf8'));
+   outcomes.push(records);
   }finally{await env.close();}
  }
  assert.deepEqual(outcomes[1],outcomes[0]);

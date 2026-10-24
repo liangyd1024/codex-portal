@@ -237,6 +237,18 @@ test('built browser module graph is served as JavaScript without missing imports
   const app=await createFrameworkApp({config:{defaultConnection:'remote-b',connections:[]},managers:new Map([['remote-b',new FakeManager()]]),staticRoot,extraAssets,
     updater:{status:async()=>({}),subscribe:()=>()=>{}}});
   await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
+
+test('directory and deferred tool reads are scoped to the selected target and item',async t=>{
+ const {manager,request}=await fixture(t);const calls=[];
+ manager.turnDirectory=id=>{calls.push(['directory',id]);return {data:[]};};
+ manager.toolItem=(id,item)=>{calls.push(['item',id,item]);return {item:{id:item}};};
+ manager.history=(...args)=>{calls.push(['history',...args]);return {data:[]};};
+ assert.equal((await request('/api/threads/sample/turn-directory')).status,200);
+ assert.equal((await request('/api/threads/sample/items/tool/detail')).status,200);
+ assert.equal((await request('/api/threads/sample/history?cursor=db%3A3&lazyTools=1')).status,200);
+ assert.deepEqual(calls[0],['directory','sample']);assert.deepEqual(calls[1],['item','sample','tool']);
+ assert.equal(calls[2].at(-1),true);assert.equal(calls[2][2],'db:3');
+});
   t.after(()=>app.close());
   const request=async url=>{const r=await fetch('http://127.0.0.1:'+app.server.address().port+url);return {status:r.status,headers:Object.fromEntries(r.headers),text:await r.text()};};
   const pending = ['/bootstrap.js'], visited = new Set();

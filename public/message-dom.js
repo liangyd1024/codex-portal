@@ -44,6 +44,12 @@ function reconcileNode(old, fresh) {
   if (old.matches('.message-image')) {
     return fresh.matches('.message-image') && old.dataset.source === fresh.dataset.source ? old : fresh;
   }
+  // Unchanged tool nodes are retained by RenderCache above. A fresh deferred
+  // tool can have identical empty markup but a different payload closure.
+  if (old.ontoggle) {
+    if (old.hasAttribute('open')) fresh.setAttribute('open','');
+    return fresh;
+  }
   if (old.matches('.code-block,.command-output-view,.decision-notice') || old.onclick || old.oninput || old.onblur) {
     return old.isEqualNode(fresh) ? old : fresh;
   }

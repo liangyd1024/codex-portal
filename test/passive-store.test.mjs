@@ -243,3 +243,25 @@ test('cold history bounds fallback command output and full read clears partial s
  const full=f.query({action:'history',threadId:'original'}).data[0].items[0];
  assert.equal(full.aggregatedOutput,entry.item.aggregatedOutput);assert.equal(full.outputPartial,false);
 });
+
+test('turn directory projects native inputs and preferred replies without tool payloads',async t=>{
+ const user=item(1,1,'');user.item={id:user.item_id,type:'userMessage',content:[{type:'text',text:'问题'},{type:'image',url:'data:large'}]};
+ const answer=item(1,2,'原始最终回复');answer.item.phase='final_answer';
+ const tool=item(2,4,'');tool.item={id:tool.item_id,type:'mcpToolCall',status:'completed',result:{text:'x'.repeat(100000)}};
+ const {query}=await fixture(t,{turns:[turn(1),turn(2)],items:[user,answer,item(1,3,'后续过程'),tool]});
+ const result=query({action:'turnDirectory',threadId:'original'});
+ assert.deepEqual(result.data.map(t=>t.id),['turn-1','turn-2']);
+ assert.equal(result.data[0].items[0].content[0].text,'问题');
+ assert.equal(result.data[0].items[1].text,'原始最终回复');
+ assert.deepEqual(result.data[1].items,[]);
+ assert.ok(JSON.stringify(result).length<1000);
+});
+test('deferred tools preserve exact payload on scoped detail reads and full-history compatibility',async t=>{
+ const tool=item(1,1,'');tool.item={id:tool.item_id,type:'mcpToolCall',status:'completed',arguments:{text:'参数'},result:{content:[{type:'text',text:'原始结果'.repeat(1000)}]}};
+ const {query}=await fixture(t,{turns:[turn(1)],items:[tool]});
+ const light=query({action:'history',threadId:'original',lazyTools:true}).data[0].items[0];
+ assert.equal(light.detailsDeferred,true);assert.equal(light.arguments,undefined);assert.equal(light.result,undefined);
+ assert.deepEqual(query({action:'toolItem',threadId:'original',itemId:tool.item_id}).item,tool.item);
+ assert.deepEqual(query({action:'history',threadId:'original'}).data[0].items[0],tool.item);
+ assert.match(query({action:'toolItem',threadId:'other',itemId:tool.item_id}).error,/未找到/);
+});

@@ -10,6 +10,7 @@ export function createThreadService(manager:Manager) {
   list:(options:Parameters<Manager['threads']>[0])=>manager.threads(options),
   detail:(...args:Parameters<Manager['detail']>)=>manager.detail(...args),
   history:(...args:Parameters<Manager['history']>)=>manager.history(...args),
+  turnDirectory:(id:string)=>manager.turnDirectory(id),
   sideChat:(id:string)=>readSideChat(manager,id),
   create:(data:NativePayload)=>manager.newThread(data),
   actions:{

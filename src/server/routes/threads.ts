@@ -4,7 +4,7 @@ import type {Response} from '../types';
 import {body,json} from '../protocol';
 import {createThreadService} from '../services/threads';
 
-export const matchThreadRoute=(path:string)=>path.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(side-chat|side-chat-view|history|takeover|handoff|message|steer|queue-add|queue-steer|queue-delete|interrupt|goal|question-answer|retry-capacity))?$/);
+export const matchThreadRoute=(path:string)=>path.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(side-chat|side-chat-view|turn-directory|history|takeover|handoff|message|steer|queue-add|queue-steer|queue-delete|interrupt|goal|question-answer|retry-capacity))?$/);
 type Match=ReturnType<typeof matchThreadRoute>;
 type Route=(req:IncomingMessage,res:Response,url:URL,data:Awaited<ReturnType<typeof body>>)=>void|Promise<void>;
 export function createThreadRoutes(manager:Manager) {
@@ -19,8 +19,9 @@ export function createThreadRoutes(manager:Manager) {
    if(!match)return;
    const [,id,action]=match;
    if(action==='side-chat-view')return async(_req,res)=>json(res,200,await service.sideChat(id));
-   if(action==='history')return async(_req,res,url)=>json(res,200,await service.history(id,url.searchParams.get('cursor')));
-   if(!action)return async(req,res,url)=>json(res,200,await service.detail(id,JSON.parse(String(req.headers['x-output-versions']||'{}')),url.searchParams.get('preview')==='1',url.searchParams.get('outputEncoding'),url.searchParams.get('fast')==='1'));
+   if(action==='turn-directory')return async(_req,res)=>json(res,200,await service.turnDirectory(id));
+   if(action==='history')return async(_req,res,url)=>json(res,200,await service.history(id,url.searchParams.get('cursor'),false,{},false,null,url.searchParams.get('lazyTools')==='1'));
+   if(!action)return async(req,res,url)=>json(res,200,await service.detail(id,JSON.parse(String(req.headers['x-output-versions']||'{}')),url.searchParams.get('preview')==='1',url.searchParams.get('outputEncoding'),url.searchParams.get('fast')==='1',url.searchParams.get('lazyTools')==='1'));
   },
   write(path:string,match:Match):Route|undefined {
    if(path==='/api/threads')return create;

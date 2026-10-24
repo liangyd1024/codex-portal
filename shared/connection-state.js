@@ -36,6 +36,8 @@ export function mergeLiveTurns(current = [], incoming = []) {
   const terminal = value => ['completed','failed','interrupted'].includes(value);
   const mergeItem = (old, next) => {
     const merged = {...old, ...next};
+    if(next.type==='mcpToolCall' && ((!next.detailsDeferred&&Object.hasOwn(next,'result')) ||
+      (next.detailsDeferred&&terminal(old.status)&&!old.detailsDeferred&&Object.hasOwn(old,'result'))))delete merged.detailsDeferred;
     for (const key of ['text','aggregatedOutput','command','cwd']) {
       if (typeof old[key] === 'string' && (!next[key] || old[key].length > next[key].length)) merged[key] = old[key];
     }
