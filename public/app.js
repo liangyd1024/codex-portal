@@ -1383,7 +1383,7 @@ function handleEvent(event) {
     renderThreads();renderProjects();renderModels();
     void refreshAccountUsage?.(true);
     // Drain old reads before reloading; their version guards discard late data.
-    void Promise.allSettled([modelLoadPromise,projectLoadPromise,listRead?.promise]).then(()=>{
+    void Promise.allSettled([modelLoadPromise,projectLoadPromise,loadThreads.pending()]).then(()=>{
       if(version!==accountViewVersion||!connected())return;
       return Promise.allSettled([loadModels(true),loadProjects(),loadThreads(false,true)]).then(results=>{for(const result of results)if(result.status==='rejected')recordError(result.reason,'账号切换刷新');});
     });

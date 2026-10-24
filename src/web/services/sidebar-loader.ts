@@ -28,5 +28,7 @@ export function createSidebarLoader({key, read}: SidebarLoaderDependencies) {
     active = record;
     return reportFailure ? record.promise : record.promise.catch(() => {});
   }
-  return load;
+  // Account changes drain the currently active read before rebuilding catalogs.
+  // Return its snapshot, not a promise that starts another request.
+  return Object.assign(load, {pending: (): Promise<void> | undefined => active?.promise});
 }

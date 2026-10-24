@@ -22,6 +22,19 @@ test('older sidebar completion cannot clear a newer pending read',async()=>{
  assert.equal(f.load(false,true),b);assert.equal(calls,2);
  current.resolve();await b;
 });
+test('account refresh can drain a snapshot of the pending sidebar read without starting work',async()=>{
+ const old=gate(),next=gate();let calls=0,drained=false;
+ const f=loader(()=>++calls===1?old.promise:next.promise);
+ assert.equal(f.load.pending(),undefined);
+ const first=f.load();const snapshot=f.load.pending();
+ const drain=Promise.allSettled([snapshot]).then(()=>{drained=true;});
+ f.state.selectedId='b';const second=f.load(false,true);
+ assert.equal(f.load.pending(),second);assert.notEqual(snapshot,second);
+ await tick();assert.equal(drained,false);assert.equal(calls,2);
+ old.reject(Error('old account unavailable'));await first;await drain;
+ assert.equal(drained,true);assert.equal(f.load.pending(),second);assert.equal(calls,2);
+ next.resolve();await second;assert.equal(f.load.pending(),undefined);
+});
 test('fresh sidebar refresh rechecks current selection after failure and coalesces queued refreshes',async()=>{
  const old=gate(),next=gate(),seen=[];
  const f=loader(append=>{seen.push({selected:f.state.selectedId,append});return seen.length===1?old.promise:next.promise;});
