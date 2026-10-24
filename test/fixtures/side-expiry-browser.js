@@ -2,6 +2,8 @@
 (()=>{
  const f=window.rcmFixture;f.sideExpiry=true;f.sideSerial=0;
  const receiptMode=new URLSearchParams(location.search).get('sideReceipt')==='1';
+ const createDelay=new URLSearchParams(location.search).get('sideCreateDelay')==='1';
+ if(createDelay)f.delay={path:'/api/threads/qa-a/side-chat'};
  let pendingSend,serial=0;const touchEvents=[];
  if(receiptMode)for(const type of ['pointerdown','touchstart','touchend'])document.addEventListener(type,event=>{const button=event.target.closest('button');if(button?.getAttribute('aria-label')==='发送侧边聊天消息')touchEvents.push({type,pointerType:event.pointerType||null,trusted:event.isTrusted});},{capture:true,passive:true});
  if(receiptMode){
@@ -30,6 +32,10 @@
   button('下次重建失败',()=>{f.fail={path:'/api/threads/qa-a/side-chat',status:503,message:'模拟重建失败'};panel.open=false;});
   button('模拟侧聊到期',()=>{panel.open=false;f.emit('side-chat/expired',{threadId:'qa-side-'+f.sideSerial});});
   button('读取侧聊记录',()=>{out.textContent=JSON.stringify({creates:f.calls.filter(c=>c.path.endsWith('/side-chat')),views:f.calls.filter(c=>c.path==='/api/thread-view').map(c=>c.body.sideThreadId),errors:f.errors},null,2);});
+  if(createDelay){
+   button('释放侧聊创建',()=>f.pending?.resolve());
+   button('读取创建中草稿',()=>{const side=document.querySelector('.side-chat-panel');out.textContent=JSON.stringify({draft:side.querySelector('textarea').value,inputDisabled:side.querySelector('textarea').disabled,sendDisabled:side.querySelector('[aria-label="发送侧边聊天消息"]').disabled,creates:f.calls.filter(c=>c.path.endsWith('/side-chat')).length,sends:f.calls.filter(c=>/\/(message|steer)$/.test(c.path)).length,errors:f.errors},null,2);});
+  }
   if(receiptMode){
    button('释放发送确认',()=>pendingSend?.http());
    button('释放原生输入与回复',()=>pendingSend?.native());
