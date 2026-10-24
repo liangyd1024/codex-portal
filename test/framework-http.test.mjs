@@ -1024,3 +1024,18 @@ test('router boundaries preserve raw paths, uncommon methods and security preced
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+test('isolated preview never arms automatic task interruption from copied connection policy',async()=>{
+ const {mkdtemp}=await import('node:fs/promises');
+ const {tmpdir}=await import('node:os');
+ const stateDir=await mkdtemp(path.join(tmpdir(),'rcm-recovery-isolation-'));
+ const host={id:'fixture',kind:'ssh',alias:'Fixture',user:'tester',home:'/home/tester',binary:'/opt/codex',address:'example.invalid',port:22,identityFile:'/nonexistent/fixture-key',autoReloadLogin:'interrupt'};
+ for(const factory of [createApp,createFrameworkApp]){
+  const app=await factory({config:{formatVersion:1,machineId:'fixture',defaultConnection:'fixture',connections:[host]},stateDir,buildVersion:'fixture-release'});
+  assert.equal(app.manager.accountRecovery,null);
+  assert.equal(app.manager.connection.state,'disconnected');
+  app.manager.setLoginRecovery('请重新加载登录');
+  assert.equal(app.manager.loginRecovery,'请重新加载登录');
+  if(app.close)await app.close();
+ }
+});

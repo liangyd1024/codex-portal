@@ -15,6 +15,13 @@ function fixture(overrides={}){
  m.connect=async()=>{calls.push(['connect']);m.connection.state='connected';m.rpc={connected:true,request:async()=>({account:{type:'apiKey'}})};};
  return {m,calls};
 }
+test('account recovery is opt-in and is not enabled by copied preview configuration',()=>{
+ const host={id:'test',autoReloadLogin:'interrupt'};
+ assert.equal(new Manager({host}).accountRecovery,null);
+ assert.equal(new Manager({host:{id:'test'},enableAccountRecovery:true}).accountRecovery,null);
+ const m=new Manager({host,enableAccountRecovery:true});assert.ok(m.accountRecovery);assert.equal(m.accountRecovery.timer,undefined);
+ m.setLoginRecovery('请重新加载登录');assert.match(m.loginRecovery,/自动加载/);
+});
 test('login reload requires explicit confirmation and never runs during active or unknown work',async()=>{
  const first=fixture();await assert.rejects(first.m.reloadLogin(),e=>e.code==='MAINTENANCE_CONFIRMATION_REQUIRED');assert.equal(first.calls.length,0);
  for(const overrides of [
@@ -35,6 +42,16 @@ test('idle login reload restarts only the dedicated engine and does not replay i
  assert.deepEqual(await m.reloadLogin({allEntrancesDisconnected:true}),{ok:true});
  assert.equal(calls.filter(([method])=>method==='reload-login').length,1);assert.equal(calls.some(([method])=>method==='turn/start'),false);
  assert.ok(events.some(e=>e.method==='account/updated'&&e.params.authMode==='apiKey'));assert.equal(m.releasing,false);
+});
+test('automatic reload preserves native queue only for an explicitly enabled policy',async()=>{
+ for(const enabled of [false,true]){
+  const {m,calls}=fixture({'thread/queue/list':()=>({data:[{id:'queued'}]})});
+  m.expectedHost.autoReloadLogin=enabled?'interrupt':'off';
+  if(enabled)await m.reloadLogin({allEntrancesDisconnected:true},true);
+  else await assert.rejects(m.reloadLogin({allEntrancesDisconnected:true},true),e=>e.code==='SERVICE_BUSY');
+  assert.equal(calls.some(([method])=>method==='reload-login'),enabled);
+  assert.ok(!calls.some(([method])=>['thread/queue/delete','thread/queue/start','turn/start'].includes(method)));
+ }
 });
 test('failed native restart is not automatically repeated or reported as success',async()=>{
  const {m}=fixture();let calls=0;m.serviceAction=async()=>{calls++;throw Error('restart result unknown');};

@@ -31,7 +31,8 @@ import {NativeAutomations} from './lib/native-automations.mjs';
 const ROOT=path.dirname(fileURLToPath(import.meta.url));
 let BUILD_VERSION='development';try{BUILD_VERSION=(await readFile(path.join(ROOT,'VERSION'),'utf8')).trim();}catch{}
 export function createApp({serverFactory=handler=>http.createServer(handler),proxyFactory=handler=>http.createServer(handler),secureFactory=(options,handler)=>https.createServer(options,handler),staticRoot=path.join(ROOT,'public'),extraAssets={},buildVersion=BUILD_VERSION,mobileConfig=null,setupMobile=null,access=new MobileAccess(null),config=loadConfig(),stateDir=process.env.RCM_STATE_DIR||path.join(homedir(),'.codex/remote-codex-manager'),managers:providedManagers,updater=new WebUpdate({supportDir,root:ROOT,version:BUILD_VERSION})}={}) {
- const managers=providedManagers||new Map(config.connections.map(host=>[host.id,new Manager({titleStore:path.join(stateDir,`web-titles-${host.id}.json`),host:publicHost(host),...(host.kind==='local'?createLocalTransport(host):createSshTransport(host))})]));
+ const enableAccountRecovery=buildVersion!=='development'&&stateDir===path.join(homedir(),'.codex/remote-codex-manager')&&Number(process.env.RCM_PORT||4317)===4317;
+ const managers=providedManagers||new Map(config.connections.map(host=>[host.id,new Manager({enableAccountRecovery,titleStore:path.join(stateDir,`web-titles-${host.id}.json`),host:publicHost(host),...(host.kind==='local'?createLocalTransport(host):createSshTransport(host))})]));
  const manager=managers.get(config.defaultConnection);
  const automations=new Map([...managers].map(([id,m])=>[id,new NativeAutomations(m)]));
  const desktopSessions=new Map();
