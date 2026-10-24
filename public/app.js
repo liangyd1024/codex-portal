@@ -1,3 +1,4 @@
+import {createHistoryPagination} from '../src/web/services/history-pagination';
 import {createNotificationDelivery} from '../src/web/services/notification-delivery';
 import {createNotificationPreference} from '../src/web/services/notification-preference';
 import {createTaskNotifications} from '../src/web/services/task-notifications';
@@ -1147,6 +1148,8 @@ async function sendDesktopMessage(){
     }
   });
 }
+const historyPagination=createHistoryPagination({state,busy:value=>$('messages-scroller').setAttribute('aria-busy',String(value)),
+  action:(...args)=>action(...args),read:path=>api(path),turns,render:()=>renderThread()});
 async function interruptThread() {
   if(state.busy.has('interrupt')||stopFeedback.has(stopContext())||!state.selectedId||newChatOpen)return;
   const desktop=state.desktopMode,id=state.selectedId,selection=state.selectionVersion,key=stopContext();
@@ -1166,19 +1169,7 @@ async function interruptThread() {
     if(current())await refreshSelected();
   });
 }
-async function moreHistory({deferRender=false}={}) {
-  if (!state.historyCursor || !state.selectedId || !state.detail || state.loadingDetail || state.busy.has('history')) return;
-  const id = state.selectedId, version = state.selectionVersion;
-  $('messages-scroller').setAttribute('aria-busy','true');
-  try { return await action('history',async () => {
-    let d;
-    try{d=await api((state.desktopMode?'/api/desktop/threads/'+encodeURIComponent(id)+'/history':'/api/threads/'+encodeURIComponent(id)+'/history')+'?cursor='+encodeURIComponent(state.historyCursor)+'&lazyTools=1'+(state.desktopMode?'&threadId='+encodeURIComponent(id):''));}
-    catch(error){if(error.code==='HISTORY_CURSOR_CHANGED')throw new Error('历史记录已更新。请刷新会话后再向上滚动。');throw error;}
-    if (id !== state.selectedId || version !== state.selectionVersion) return;
-    const old = new Map(turns().map(t => [t.id,t])); const all = [...[...(d.data || [])].reverse(),...turns()]; const seen = new Set(); state.detail.turns = all.filter(t => !seen.has(t.id) && seen.add(t.id)).map(t => old.get(t.id) || t);
-    state.historyCursor = d.nextCursor || null; state.loadedOlderHistory = true; if (d.historySource === 'snapshot') state.detail.historySource = 'snapshot'; if(!deferRender)renderThread();return true;
-  }); } finally { $('messages-scroller').setAttribute('aria-busy','false'); }
-}
+async function moreHistory(options={}) { return historyPagination(options); }
 let inputSizeKey;
 function resizeInput() {
   const t = $('message-input');
