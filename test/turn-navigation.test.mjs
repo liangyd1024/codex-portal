@@ -46,7 +46,7 @@ test('non-advancing cursors do not produce duplicate requests',async()=>{
 
 test('navigation counts explicit inputs, never native execution totals',()=>{
  const turns=[{id:'input',items:[{type:'userMessage'}]},{id:'auto',items:[]}];
- assert.equal(turnCountLabel({totalTurns:231,turns,hasEarlier:true}),'已加载 1 轮');
+ assert.equal(turnCountLabel({totalTurns:231,turns,hasEarlier:true}),'');
  assert.equal(turnCountLabel({turns,hasEarlier:false}),'共 1 轮');
  assert.equal(turnCountLabel({totalTurns:0,turns:[],hasEarlier:false}),'共 0 轮');
 });
@@ -85,12 +85,12 @@ test('a pending page that exhausts history needs no extra request',async()=>{
 
 test('partial continuation history does not claim zero conversation turns',()=>{
  const turns=[{id:'continuation',items:[{type:'agentMessage',text:'原始回复'}]}];
- assert.equal(turnCountLabel({turns,hasEarlier:true}),'待加载轮次');
- assert.equal(turnCountLabel({turns,hasEarlier:true,loading:true}),'正在加载轮次');
- assert.equal(turnCountLabel({turns,hasEarlier:true,loadMessage:'加载失败'}),'加载未完成，点击重试');
+ assert.equal(turnCountLabel({turns,hasEarlier:true}),'');
+ assert.equal(turnCountLabel({turns,hasEarlier:true,loading:true}),'');
+ assert.equal(turnCountLabel({turns,hasEarlier:true,loadMessage:'加载失败'}),'点击重试');
  assert.equal(turnCountLabel({turns,hasEarlier:false}),'共 0 轮');
  const input={id:'question',items:[{type:'userMessage'}]};
- assert.equal(turnCountLabel({turns:[input,...turns],hasEarlier:true,loading:true}),'已加载 1 轮 · 加载中');
- assert.equal(turnCountLabel({turns:[input,...turns],hasEarlier:true,loadMessage:'已取消'}),'已加载 1 轮 · 点击重试');
+ assert.equal(turnCountLabel({turns:[input,...turns],hasEarlier:true,loading:true}),'');
+ assert.equal(turnCountLabel({turns:[input,...turns],hasEarlier:true,loadMessage:'已取消'}),'点击重试');
  assert.equal(turnCountLabel({turns:[input,...turns],hasEarlier:false,loadMessage:'旧错误'}),'共 1 轮');
 });

@@ -36,9 +36,8 @@ export async function loadAllEarlier({context,loadEarlier,isCurrent,onProgress=(
 }
 export function turnCountLabel({turns=[],hasEarlier,loading=false,loadMessage=''},count=navigationIndex(turns).inputs.length) {
   // The engine total includes automatic executions, not just explicit inputs.
-  if(hasEarlier&&count===0)return loading?'正在加载轮次':loadMessage?'加载未完成，点击重试':'待加载轮次';
-  const label=(hasEarlier?'已加载 ':'共 ')+count+' 轮';
-  return hasEarlier?(label+(loading?' · 加载中':loadMessage?' · 点击重试':'')):label;
+  if(loading||hasEarlier)return !loading&&loadMessage?'点击重试':'';
+  return '共 '+count+' 轮';
 }
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
 export function installTurnNavigation({scroller,content,entryHost,context,follow,loadEarlier}) {
@@ -85,7 +84,8 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
     if(!context().hasEarlier){context().renderHistory?.();return;}
     const version=++loadVersion,started=key,isCurrent=()=>started===key&&version===loadVersion;
     autoStarted=true;loading=true;if(!automatic)follow.pause({sticky:true});
-    const progress=()=>{update();const n=rows.length;report(n?'正在加载全部轮次 · 已加载 '+n+' 轮':'正在查找更早的提问…');};
+    loadMessage='';feedback.textContent='';
+    const progress=()=>update();
     progress();
     try{
       const loaded=await loadAllEarlier({context,loadEarlier:()=>loadEarlier({deferRender:true}),isCurrent,onProgress:progress});
@@ -97,7 +97,9 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
     const c=context();if(!c.hasEarlier&&!loading){loadMessage='';feedback.textContent='';}older.hidden=more.hidden=!c.hasEarlier;older.disabled=loading||c.loading;more.disabled=!loading&&c.loading;
     older.title=loading?'正在加载全部轮次…':'加载全部轮次';
     more.textContent=loading?'取消加载':loadMessage?'继续加载全部轮次':'加载全部轮次';
-    const label=turnCountLabel({...c,loading,loadMessage},rows.length);count.textContent=label;entry.textContent='轮次 · '+label;title.textContent='对话轮次 · '+label;
+    const label=turnCountLabel({...c,loading,loadMessage},rows.length);count.textContent=label;entry.textContent=label?'轮次 · '+label:'轮次';title.textContent=label?'对话轮次 · '+label:'对话轮次';
+    ticks.hidden=loading||c.hasEarlier;list.hidden=loading||c.hasEarlier;
+    if(!label){rail.hidden=true;entry.hidden=true;hide();}schedule();
     count.title=loading?'正在加载全部轮次，点击取消':loadMessage||'加载并显示全部轮次';
     count.setAttribute('aria-label',loading?'取消加载全部轮次':loadMessage?'重试加载全部轮次':'加载并显示全部轮次');
     rail.setAttribute('aria-busy',String(loading));
@@ -114,7 +116,8 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
   rail.addEventListener('keydown',e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;const entries=[...ticks.children],index=entries.indexOf(document.activeElement);if(index<0)return;e.preventDefault();entries[e.key==='Home'?0:e.key==='End'?entries.length-1:Math.max(0,Math.min(entries.length-1,index+(e.key==='ArrowDown'?1:-1)))]?.focus();});
   function measure(){
     frame=null;const c=context(),r=scroller.getBoundingClientRect();const visible=c.visible&&(rows.length>0||c.hasEarlier)&&r.height>0;
-    rail.hidden=!visible||compactLayout();entry.hidden=!visible;
+    const complete=Boolean(turnCountLabel({...c,loading,loadMessage},rows.length));
+    rail.hidden=!visible||!complete||compactLayout();entry.hidden=!visible||!complete;
     document.querySelector('.main-panel').classList.toggle('has-turn-navigation',visible);
     rail.style.left=(r.left+4)+'px';rail.style.top=(r.top+12)+'px';rail.style.height=Math.max(0,r.height-24)+'px';
     const active=reading();currentId=owners.get(active?.dataset.turnId);

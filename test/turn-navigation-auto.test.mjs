@@ -9,7 +9,7 @@ function fixture(t,{fail=false}={}){
  const state={visible:true,ready:false,turns:[],hasEarlier:true,cursor:'0'},calls=[],paused=[],renders=[];
  const nav=installTurnNavigation({scroller:element(),content:element(),entryHost:element(),follow:{pause:()=>paused.push(1)},context:()=>({...state,renderHistory:()=>renders.push(1)}),loadEarlier:async()=>{calls.push(state.cursor);if(fail)return false;state.cursor=String(Number(state.cursor)+1);state.hasEarlier=Number(state.cursor)<3;return true;}});
  nav.switchContext('a');
- return {state,nav,calls,paused,renders,count:()=>elements.find(n=>n.className==='turn-navigation-count')};
+ return {state,nav,calls,paused,renders,count:()=>elements.find(n=>n.className==='turn-navigation-count'),rail:()=>elements.find(n=>n.className==='turn-navigation'),ticks:()=>elements.find(n=>n.className==='turn-navigation-ticks')};
 }
 const settle=()=>new Promise(resolve=>setTimeout(resolve,30));
 test('opening waits for ready detail then loads every page without clicking or pausing follow',async t=>{
@@ -27,11 +27,11 @@ test('cancel stays cancelled across updates; a new conversation automatically lo
  f.nav.switchContext('b');f.nav.update();await settle();assert.deepEqual(f.calls,['0','1','2']);
 });
 
-test('count exposes loading, failure and cancellation without requiring hover',async t=>{
- const f=fixture(t,{fail:true});f.nav.update();assert.equal(f.count().textContent,'待加载轮次');
- f.state.ready=true;f.nav.update();assert.equal(f.count().textContent,'正在加载轮次');
- await settle();assert.equal(f.count().textContent,'加载未完成，点击重试');
- f.count().onclick();assert.equal(f.count().textContent,'正在加载轮次');
- f.count().onclick();assert.equal(f.count().textContent,'加载未完成，点击重试');
+test('loading stays silent; failure and cancellation expose retry',async t=>{
+ const f=fixture(t,{fail:true});f.nav.update();assert.equal(f.count().textContent,'');
+ f.state.ready=true;f.nav.update();assert.equal(f.count().textContent,'');assert.equal(f.rail().hidden,true);assert.equal(f.ticks().hidden,true);
+ await settle();assert.equal(f.count().textContent,'点击重试');
+ f.count().onclick();assert.equal(f.count().textContent,'');
+ f.count().onclick();assert.equal(f.count().textContent,'点击重试');
  await settle();assert.equal(f.calls.length,2);
 });
