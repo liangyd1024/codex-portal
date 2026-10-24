@@ -43,9 +43,14 @@ test('image load state and retries persist only for the same source',()=>{
 });
 
 test('file cards retain cached toggles and replace changed cards with their own lazy handlers',()=>{
- const card=()=>{const n=new Node('SECTION');n.dataset.itemId='files';n.matches=selector=>selector==='.turn-file-changes';return n;};
+ const card=()=>{const n=new Node('DETAILS');n.dataset.itemId='files';n.matches=selector=>selector==='.turn-file-changes';n.querySelectorAll=selector=>n.childNodes.filter(row=>selector!=='.turn-file[open]'||row.hasAttribute('open'));return n;};
  const old=card(),parent=tree(old);reconcileMessages(parent,tree(old));assert.equal(parent.firstChild,old);
- const fresh=card();reconcileMessages(parent,tree(fresh));assert.equal(parent.firstChild,fresh);
+ old.setAttribute('open','');
+ const row=new Node('DETAILS');row.dataset.itemId='file-a';row.setAttribute('open','');old.append(row);
+ const fresh=card(),nextRow=new Node('DETAILS');nextRow.dataset.itemId='file-a';fresh.append(nextRow);
+ reconcileMessages(parent,tree(fresh));assert.equal(parent.firstChild,fresh);
+ assert.equal(fresh.hasAttribute('open'),true);assert.equal(nextRow.hasAttribute('open'),true);
+ fresh.removeAttribute('open');const closed=card();reconcileMessages(parent,tree(closed));assert.equal(closed.hasAttribute('open'),false);
 });
 
 test('retained cached nodes move into new groups without rebuilding, and changed nodes bind to reconciled DOM',async t=>{

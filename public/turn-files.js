@@ -22,16 +22,21 @@ export function turnFiles(items,cwd='') {
 export function renderTurnFiles(items,{turnId,cwd='',uncertain=false}={}) {
   const files=turnFiles(items,cwd);
   if(!files.length)return null;
-  const card=el('section','turn-file-changes');card.setAttribute('aria-label','本轮文件变更');
+  const card=el('details','turn-file-changes');card.setAttribute('aria-label','本轮文件变更');
   card.dataset.itemId='turn-files-'+turnId;
   const completed=files.every(f=>f.edits.every(e=>e.status==='completed'));
-  const heading=el('div','turn-files-heading');
+  const heading=el('summary','turn-files-heading');
   heading.append(icon('file'),el('strong','',completed?'已编辑 '+files.length+' 个文件':'文件变更 · '+files.length+' 个文件'));
+  heading.append(icon('chevron'));
   card.append(heading);
+  const list=el('div','turn-files-list');card.append(list);
   for(const file of files){
     const row=el('details','turn-file');row.dataset.itemId=card.dataset.itemId+':'+file.path;
     const summary=el('summary'),last=file.edits.at(-1),status=uncertain&&['inProgress','in_progress','running'].includes(last.status)?'状态未确认':statusNames[last.status]||last.status||'状态未确认';
-    const path=el('span','turn-file-path',file.label);path.title=file.path;
+    const path=el('span','turn-file-path');path.title=file.path;
+    const slash=file.label.lastIndexOf('/');
+    if(slash>=0)path.append(el('span','turn-file-directory',file.label.slice(0,slash+1)));
+    path.append(el('span','turn-file-name',file.label.slice(slash+1)));
     summary.append(path,el('span','turn-file-kind',file.edits.length>1?file.edits.length+' 次变更':kindNames[last.kind]||last.kind||'修改'));
     if(last.status!=='completed')summary.append(el('span','turn-file-status',status));
     summary.append(icon('chevron'));
@@ -40,13 +45,14 @@ export function renderTurnFiles(items,{turnId,cwd='',uncertain=false}={}) {
     // Allocate potentially large patch text only when the user opens a file.
     row.ontoggle=()=>{
       if(!row.open||body.childNodes.length)return;
+      body.append(el('p','turn-file-full-path',file.path));
       file.edits.forEach((edit,index)=>{
         if(file.edits.length>1)body.append(el('p','subtle','第 '+(index+1)+' 次变更 · '+(statusNames[edit.status]||edit.status||'状态未确认')));
         if(typeof edit.diff==='string'&&edit.diff){const pre=el('pre','turn-file-diff',edit.diff);pre.tabIndex=0;pre.setAttribute('aria-label',file.label+' 的原始变更，可横向滚动');body.append(pre);}
         else body.append(el('p','subtle','原生记录未提供变更内容。'));
       });
     };
-    card.append(row);
+    list.append(row);
   }
   return card;
 }
