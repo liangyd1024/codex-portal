@@ -8,16 +8,18 @@ const registry=createStore<{instances:Instance[]}>(()=>({instances:[]}));let seq
 function AttachmentView({instance}:{instance:Instance}){
  const {view,revision,picture,pictureRevision}=useStore(instance.store);
  // Keep the original form order before annotation controls are installed.
- useLayoutEffect(()=>{instance.form.prepend(instance.list.current!);},[instance]);
+ useLayoutEffect(()=>{instance.form.prepend(instance.list.current!);instance.form.append(instance.file.current!);},[instance]);
  const show=(item:Item)=>{
   flushSync(()=>instance.store.setState(s=>({picture:{...item},pictureRevision:s.pictureRevision+1})));
   instance.preview.current!.showModal();
  };
  // The clipboard adapter only toggles its selection class; React owns the nodes.
- return <>{createPortal(<><div ref={instance.list} className="attachment-list" aria-label="待发送图片" hidden={!view?.items.length}>{view?<Fragment key={revision}>{view.items.map(item=><div className="attachment-card" key={item.id}><button type="button" className="attachment-preview" aria-label={'预览 '+item.name} disabled={!item.url} onClick={item.url?()=>show(item):undefined}>{item.url?<img src={item.url} alt={item.name}/>: '处理中…'}</button><button type="button" aria-label={'移除 '+item.name} disabled={view.busy} onClick={()=>instance.remove(view.id,item.id)}>×</button></div>)}</Fragment>:null}</div><input ref={instance.file} type="file" accept="image/*" multiple hidden id={instance.prefix+'image-files'} onChange={event=>{const files=[...event.currentTarget.files!];event.currentTarget.value='';void instance.addFiles(files);}}/></>,instance.form)}{createPortal(<dialog ref={instance.preview} className="composer-dialog image-preview" onClick={event=>{if(event.target===event.currentTarget)event.currentTarget.close();}}>{picture?<Fragment key={pictureRevision}><button type="button" onClick={()=>instance.preview.current!.close()}>关闭</button><img src={picture.url} alt={picture.name}/></Fragment>:null}</dialog>,document.body)}</>;
+ const formContent=<><div ref={instance.list} className="attachment-list" aria-label="待发送图片" hidden={!view?.items.length}>{view?<Fragment key={revision}>{view.items.map(item=><div className="attachment-card" key={item.id}><button type="button" className="attachment-preview" aria-label={'预览 '+item.name} disabled={!item.url} onClick={item.url?()=>show(item):undefined}>{item.url?<img src={item.url} alt={item.name}/>: '处理中…'}</button><button type="button" aria-label={'移除 '+item.name} disabled={view.busy} onClick={()=>instance.remove(view.id,item.id)}>×</button></div>)}</Fragment>:null}</div><input ref={instance.file} type="file" accept="image/*" multiple hidden id={instance.prefix+'image-files'} onChange={event=>{const files=[...event.currentTarget.files!];event.currentTarget.value='';void instance.addFiles(files);}}/></>;
+ return <>{instance.form.id==='message-form'?formContent:createPortal(formContent,instance.form)}{createPortal(<dialog ref={instance.preview} className="composer-dialog image-preview" onClick={event=>{if(event.target===event.currentTarget)event.currentTarget.close();}}>{picture?<Fragment key={pictureRevision}><button type="button" onClick={()=>instance.preview.current!.close()}>关闭</button><img src={picture.url} alt={picture.name}/></Fragment>:null}</dialog>,document.body)}</>;
 
 }
-export function AttachmentViews(){const instances=useStore(registry).instances;return <>{instances.map(instance=><AttachmentView key={instance.key} instance={instance}/>)}</>;}
+export function MainAttachments(){const instance=useStore(registry).instances.find(instance=>instance.form.id==='message-form');return instance?<AttachmentView instance={instance}/>:null;}
+export function AttachmentViews(){const instances=useStore(registry).instances;return <>{instances.filter(instance=>instance.form.id!=='message-form').map(instance=><AttachmentView key={instance.key} instance={instance}/>)}</>;}
 export function installReactAttachmentView(options:Options){
  const instance:Instance={...options,list:createRef(),preview:createRef(),file:createRef(),key:++sequence,store:createStore<State>(()=>({view:null,revision:0,picture:null,pictureRevision:0}))};
  flushSync(()=>registry.setState({instances:[...registry.getState().instances,instance]}));
