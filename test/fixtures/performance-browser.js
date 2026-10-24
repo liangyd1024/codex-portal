@@ -25,10 +25,13 @@
      nodeCount:nodes.length,nodesPreserved:nodes.every(n=>n.isConnected),apiCalls:f.calls.length-calls});
    }));
   },{capture:true});
+  const longFrames=[];
+  const longFrameSupported=PerformanceObserver.supportedEntryTypes.includes('long-animation-frame');
+  if(longFrameSupported)new PerformanceObserver(list=>{for(const e of list.getEntries())longFrames.push({start:e.startTime,duration:e.duration,blocking:e.blockingDuration,renderStart:e.renderStart,styleLayoutStart:e.styleAndLayoutStart,scripts:(e.scripts||[]).map(s=>({duration:s.duration,executionStart:s.executionStart,forcedLayout:s.forcedStyleAndLayoutDuration,source:s.sourceURL,position:s.sourceCharPosition,fn:s.sourceFunctionName,invoker:s.invoker,invokerType:s.invokerType}))});}).observe({type:'long-animation-frame',buffered:false});
   let serial=0;
   button.onclick=async()=>{
    if(button.disabled)return;button.disabled=true;
-   const results=[],nodes=[...document.querySelectorAll('.message-turn')];
+   const results=[],nodes=[...document.querySelectorAll('.message-turn')],measurementStart=performance.now();
    try{
     if(nodes.length!==200)throw Error('历史尚未完整显示：'+nodes.length);
     for(let i=0;i<5;i++){
@@ -42,7 +45,7 @@
        if(observed||!tail?.textContent.includes(token))return;observed=true;observer.disconnect();
        const domMs=performance.now()-started;
        requestAnimationFrame(()=>requestAnimationFrame(()=>{
-        clearTimeout(timeout);resolve({domMs,framesMs:performance.now()-started,apiCalls:f.calls.length-calls,focused:document.hasFocus(),visible:document.visibilityState==='visible'});
+        clearTimeout(timeout);resolve({started,domAt:started+domMs,domMs,framesMs:performance.now()-started,apiCalls:f.calls.length-calls,focused:document.hasFocus(),visible:document.visibilityState==='visible'});
        }));
       });
       observer.observe(document.getElementById('messages'),{subtree:true,childList:true,characterData:true});
@@ -52,7 +55,7 @@
       });
      });results.push(result);
     }
-    out.textContent=JSON.stringify({samples:results,nodeCount:nodes.length,nodesPreserved:nodes.every(n=>n.isConnected),errors:f.errors},null,2);
+    out.textContent=JSON.stringify({longFrameSupported,longFrames:longFrames.filter(e=>e.start>=measurementStart),samples:results,nodeCount:nodes.length,nodesPreserved:nodes.every(n=>n.isConnected),errors:f.errors},null,2);
    }catch(error){out.textContent=JSON.stringify({error:error.message,samples:results});}
    finally{button.disabled=false;}
   };
