@@ -65,13 +65,11 @@ export class Sidebar {
     this.o=options;this.node=options.node;this.snapshot=null;this.pending=false;this.menu=null;this.dialog=null;this.scope=null;this.expanded=new Set();this.searchOverrides=new Map();this.searchExpanded=true;
     this.dialogView=installSidebarDialog();
     this.menuView=installSidebarMenu(item=>{this.closeMenu(false);item.run?.();});
-    this.toolbar=make('div','sidebar-tools');
-    const archive=make('button','sidebar-view','已归档');archive.type='button';archive.onclick=()=>options.onArchiveView(!this.snapshot?.archived);this.archiveButton=archive;
-    const more=make('button','icon-button','⋯');more.type='button';more.setAttribute('aria-label','侧边栏设置');more.onclick=()=>this.openMenu(more,[
+    this.toolbarView=installSidebarToolbar({before:this.node,onArchive:()=>options.onArchiveView(!this.snapshot?.archived),onMore:more=>this.openMenu(more,[
       {label:'全部折叠',run:()=>{this.collapseAll();more.focus({preventScroll:true});}},
       this.entry('新建分区','createSection',()=>this.edit('createSection',null,'新建分区')),
-    ]);
-    this.progress=make('span','sidebar-progress','正在更新…');this.progress.setAttribute('role','status');this.progress.hidden=true;this.toolbar.append(archive,this.progress,more);options.node.before(this.toolbar);
+    ])});
+    this.toolbar=this.toolbarView.node;this.progress=this.toolbarView.progress;
     this.undoView=installSidebarUndo({anchor:this.toolbar,api:path=>this.o.api(path),restore:thread=>this.run('restore',thread,{},true),focus:()=>this.focusAnchor(),error:message=>this.o.toast(message,true)});
     document.addEventListener('pointerdown',e=>{if(this.menu&&!this.menu.contains(e.target)&&!this.menuAnchor?.contains(e.target))this.closeMenu(false);});
     document.addEventListener('keydown',e=>{if(e.key==='Escape'&&this.menu){e.preventDefault();e.stopImmediatePropagation();this.closeMenu();}},true);
@@ -100,7 +98,7 @@ export class Sidebar {
       if(key===snapshot.accountScope+':'+t.id&&!this.operations?.has(key)&&!snapshot.data.some(row=>row.id===t.id))this.archiving.delete(key);
     }
     if(this.scope!==snapshot.accountScope){this.scope=snapshot.accountScope;try{const saved=JSON.parse(localStorage.getItem(this.key())||'[]');this.expanded=new Set(Array.isArray(saved)?saved.filter(k=>typeof k==='string'):[]);}catch{this.expanded=new Set();}this.searchOverrides.clear();this.searchExpanded=true;this.closeMenu(false);this.undoView?.hide();}
-    this.archiveButton.textContent=snapshot.archived?'返回会话':'已归档';this.archiveButton.setAttribute('aria-pressed',String(snapshot.archived));
+    this.toolbarView.setArchived(snapshot.archived);
     const display=this.archiveDisplay(snapshot);
     const shape=JSON.stringify([display,view.search,display.data.length?false:view.loading,this.o.selectedId(),this.o.connected(),[...this.expanded],[...this.searchOverrides],this.searchExpanded,display.data.map(t=>[this.source(t),this.o.needsAnswer?.(t.id),this.o.relativeTime(t.recencyAt||t.updatedAt)])],(key,value)=>key==='observedAt'?undefined:value);
     if(shape===this.renderShape){this.setBusy(this.pending);return;}
@@ -131,7 +129,6 @@ export class Sidebar {
   }
   setBusy(pending){
     this.node.setAttribute('aria-busy',String(pending));this.progress.hidden=!pending;
-    this.archiveButton.disabled=false;this.toolbar.querySelector('.icon-button').disabled=false;
     for(const b of this.node.querySelectorAll('.sidebar-item-menu')){
       const id=b.dataset.focusKey?.replace(/^menu:thread:/,'');
       b.disabled=!!this.operations?.has(this.snapshot.accountScope+':'+id);
@@ -296,4 +293,11 @@ export function configureSidebarUndo(installer){sidebarUndoInstaller=installer;}
 export function installSidebarUndo(options){
   if(!sidebarUndoInstaller)throw new Error('侧栏归档撤销尚未初始化。');
   return sidebarUndoInstaller(options);
+}
+
+let sidebarToolbarInstaller;
+export function configureSidebarToolbar(installer){sidebarToolbarInstaller=installer;}
+export function installSidebarToolbar(options){
+  if(!sidebarToolbarInstaller)throw new Error('侧栏工具栏尚未初始化。');
+  return sidebarToolbarInstaller(options);
 }

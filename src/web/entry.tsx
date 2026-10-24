@@ -1,3 +1,5 @@
+import {installReactSidebarToolbar} from './components/SidebarToolbar';
+import {configureSidebarToolbar} from '../../public/sidebar.js';
 import {installReactSidebarUndo} from './components/SidebarUndo';
 import {configureSidebarUndo} from '../../public/sidebar.js';
 import {installReactSidebarDialog} from './components/SidebarDialog';
@@ -43,5 +45,6 @@ configureInlineMentionView(installReactInlineMentionView);
 configureSidebarMenu(installReactSidebarMenu);
 configureSidebarDialog(installReactSidebarDialog);
 configureSidebarUndo(installReactSidebarUndo);
+configureSidebarToolbar(installReactSidebarToolbar);
 // Commands remain event-driven; mounting components never sends native commands.
 await import('../../public/app.js');
