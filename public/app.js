@@ -1,3 +1,4 @@
+import {installDesktopControls,publishDesktopControls} from '../src/web/components/DesktopControls';
 import {installInspectorNavigation,installAutomationNavigation} from '../src/web/components/InspectorNavigation';
 import {publishConnectionSelect,installConnectionSelectAction} from '../src/web/components/ConnectionSelect';
 import {publishProjectPicker,installProjectPickerActions} from '../src/web/components/ProjectPicker';
@@ -443,11 +444,7 @@ function renderControls() {
   setText('composer-hint',state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
   setText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
   syncRequestCards({ready,pending:id=>state.busy.has('request:'+id),controlledThreads:state.status?.controlledThreads});
-  if($('desktop-entry')){
-    $('desktop-entry').hidden=newChatOpen||!state.selectedId||state.selectedArchived||own||state.desktopMode;
-    $('desktop-entry').disabled=!state.transport||state.busy.size>0||Boolean(handoff&&handoff.state!=='released');
-  }
-  if($('desktop-review'))$('desktop-review').hidden=true;
+  const desktopView={entryHidden:newChatOpen||!state.selectedId||state.selectedArchived||own||state.desktopMode,entryDisabled:!state.transport||state.busy.size>0||Boolean(handoff&&handoff.state!=='released'),reviewHidden:true};
   if(state.desktopMode&&!newChatOpen){
     const desktop=state.detail?.desktop,online=state.transport&&desktop?.available,unconfirmed=desktop?.unconfirmed||desktopSends[state.selectedId]?.messageId;
     input.disabled=posting;input.placeholder=active?'任务执行中，可先输入下一条要求…':'发送消息，输入 @ 引用会话…';
@@ -457,9 +454,10 @@ function renderControls() {
     buttonView.stop.hidden=!active&&!stopping;buttonView.stop.disabled=!online||state.busy.has('interrupt')||stopping;
     const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     availability.textContent=reason;availability.hidden=!reason;
-    $('desktop-review').hidden=!unconfirmed;$('desktop-review').disabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
+    desktopView.reviewHidden=!unconfirmed;desktopView.reviewDisabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
     setText('composer-hint','使用桌面会话的模型与设置。发送成功仅代表会话已接收，任务结果以原始回复为准。');
   }
+  publishDesktopControls(desktopView);
   publishSendActions(buttonView);
   if(automations?.opened){$('thread-title').hidden=false;setText('thread-title','定时任务');}
 }
@@ -1185,10 +1183,8 @@ function wireEvents() {
     openSession:async(id,prompt)=>{await selectThread(id,{desktop:true});if(prompt&&state.selectedId===id){const previous=$('message-input').value;if(previous&&previous!==prompt){toast('管理会话已有未发送草稿，请先处理草稿，再返回定时任务继续。',true);$('message-input').focus();return;}$('message-input').value=prompt;state.drafts.set(id,$('message-input').value);resizeInput();renderControls();}$('message-input').focus();},
     openThread:id=>selectThread(id),notify:toast});
   installAutomationNavigation(()=>automations.open());
-  const desktopEntry=el('button','text-button','通过桌面继续');desktopEntry.id='desktop-entry';desktopEntry.type='button';desktopEntry.hidden=true;desktopEntry.onclick=()=>selectThread(state.selectedId,{desktop:true});$('takeover').after(desktopEntry);
-  const review=el('button','text-button','已核对会话记录，解锁发送');review.id='desktop-review';review.type='button';review.hidden=true;
-  review.onclick=()=>action('desktop-review',async()=>{const threadId=state.selectedId;await api('/api/desktop/threads/'+encodeURIComponent(threadId)+'/acknowledge',{method:'POST',body:{messageId:state.detail?.desktop?.unconfirmed||desktopSends[threadId]?.messageId}});delete desktopSends[threadId];saveDesktopSends();await refreshSelected();});
-  $('composer-availability').after(review);
+  installDesktopControls({enter:()=>selectThread(state.selectedId,{desktop:true}),
+    review:()=>action('desktop-review',async()=>{const threadId=state.selectedId;await api('/api/desktop/threads/'+encodeURIComponent(threadId)+'/acknowledge',{method:'POST',body:{messageId:state.detail?.desktop?.unconfirmed||desktopSends[threadId]?.messageId}});delete desktopSends[threadId];saveDesktopSends();await refreshSelected();})});
   document.querySelector('.main-panel').classList.toggle('desktop-chat',state.desktopMode);
   setInterval(()=>{if(automations.opened&&!document.hidden)void automations.refresh();},15000);
 
