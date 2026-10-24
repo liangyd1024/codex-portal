@@ -5,6 +5,8 @@
 
 ## 当前验收状态
 
+桌面接续与未知结果解锁控件已迁入 React/TypeScript，独立预览更新为 `b0705b6`／干净资源 `f0f8ad93`。四视口 52 对行为比较一致，完整回归及八个真实启动样本通过；输入相对上一迁移版未见稳定增量，但相对正式的既有开销仍未关闭。详见[桌面控件报告](verification-framework-desktop-controls.md)。
+
 详情导航点击时序修复 `7dc2132` 已更新独立预览，干净资源 `01d9e7b9`。36 对功能比较一致，正反两轮 960 个性能样本未复现此前稳定增量；完整回归及八个真实启动样本通过。整体性能与剩余迁移仍未完成，详见[详情导航复验](verification-framework-inspector-navigation.md#点击分发调整与复验)。
 
 详情导航迁移候选 `c38703d`／干净资源 `839e02ca` 已完成 36 对桌面与 iPhone 行为复验及完整回归。桌面切换仍有额外性能开销，未更新预览；详见[详情导航报告](verification-framework-inspector-navigation.md)。
