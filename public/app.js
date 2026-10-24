@@ -55,7 +55,7 @@ import {installMobileUI, compactLayout, touchInput, installScrollFollow} from '.
 let mobileUI, draftWritesSuspended = false;
 import {createHandoffControls} from './thread-handoff.js';
 let handoffControls;
-import {installBrowserBackup} from './browser-backup.js';
+import {installBrowserBackup} from '../src/web/components/BrowserBackup';
 import {installComposer, WEB_ACCESS,implementationText,completedPlan} from './composer.js';
 import {installMobile,showMobileError} from '../src/web/components/MobileAccess.tsx';
 let composer;
