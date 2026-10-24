@@ -72,6 +72,7 @@ export class Sidebar {
       this.entry('新建分区','createSection',()=>this.edit('createSection',null,'新建分区')),
     ]);
     this.progress=make('span','sidebar-progress','正在更新…');this.progress.setAttribute('role','status');this.progress.hidden=true;this.toolbar.append(archive,this.progress,more);options.node.before(this.toolbar);
+    this.undoView=installSidebarUndo({anchor:this.toolbar,api:path=>this.o.api(path),restore:thread=>this.run('restore',thread,{},true),focus:()=>this.focusAnchor(),error:message=>this.o.toast(message,true)});
     document.addEventListener('pointerdown',e=>{if(this.menu&&!this.menu.contains(e.target)&&!this.menuAnchor?.contains(e.target))this.closeMenu(false);});
     document.addEventListener('keydown',e=>{if(e.key==='Escape'&&this.menu){e.preventDefault();e.stopImmediatePropagation();this.closeMenu();}},true);
     window.addEventListener('resize',()=>this.positionMenu());
@@ -98,7 +99,7 @@ export class Sidebar {
     if(!snapshot.archived&&!view.search&&!snapshot.nextCursor)for(const [key,t] of this.archiving||[]){
       if(key===snapshot.accountScope+':'+t.id&&!this.operations?.has(key)&&!snapshot.data.some(row=>row.id===t.id))this.archiving.delete(key);
     }
-    if(this.scope!==snapshot.accountScope){this.scope=snapshot.accountScope;try{const saved=JSON.parse(localStorage.getItem(this.key())||'[]');this.expanded=new Set(Array.isArray(saved)?saved.filter(k=>typeof k==='string'):[]);}catch{this.expanded=new Set();}this.searchOverrides.clear();this.searchExpanded=true;this.closeMenu(false);this.undoNode?.remove();}
+    if(this.scope!==snapshot.accountScope){this.scope=snapshot.accountScope;try{const saved=JSON.parse(localStorage.getItem(this.key())||'[]');this.expanded=new Set(Array.isArray(saved)?saved.filter(k=>typeof k==='string'):[]);}catch{this.expanded=new Set();}this.searchOverrides.clear();this.searchExpanded=true;this.closeMenu(false);this.undoView?.hide();}
     this.archiveButton.textContent=snapshot.archived?'返回会话':'已归档';this.archiveButton.setAttribute('aria-pressed',String(snapshot.archived));
     const display=this.archiveDisplay(snapshot);
     const shape=JSON.stringify([display,view.search,display.data.length?false:view.loading,this.o.selectedId(),this.o.connected(),[...this.expanded],[...this.searchOverrides],this.searchExpanded,display.data.map(t=>[this.source(t),this.o.needsAnswer?.(t.id),this.o.relativeTime(t.recencyAt||t.updatedAt)])],(key,value)=>key==='observedAt'?undefined:value);
@@ -253,7 +254,7 @@ export class Sidebar {
       this.progress.textContent='正在刷新列表…';
       await this.o.changed(action,target);
       if(!current())return;
-      if(action==='archive'){if(!this.snapshot.archived&&!this.snapshot.data?.some(t=>t.id===target.id))this.archiving.delete(key);this.undo(target.id);}if(action==='restore'&&this.undoId===target.id)this.undoNode?.remove();
+      if(action==='archive'){if(!this.snapshot.archived&&!this.snapshot.data?.some(t=>t.id===target.id))this.archiving.delete(key);this.undo(target.id);}if(action==='restore'&&this.undoId===target.id)this.undoView?.hide();
     }catch(error){
       // Show the outcome before another potentially slow remote read.
       clearTimeout(slow);
@@ -267,10 +268,8 @@ export class Sidebar {
     finally{clearTimeout(slow);if(!current())this.archiving.delete(key);this.operations.delete(key);this.pending=this.operations.size>0;this.setBusy(this.pending);this.progress.textContent=this.pending?'正在处理会话…':'正在更新…';if(dialog)dialog.dataset.busy='false';if(!this.dialog&&globalThis.document?.activeElement===globalThis.document?.body&&this.menuAnchor===anchor)this.focusAnchor();}
   }
 
-  undo(id){
-    const scope=this.snapshot.accountScope;this.undoId=id;
-    this.undoNode?.remove();const node=make('div','sidebar-undo');node.setAttribute('role','status');node.append(make('span','','会话已归档'));const button=make('button','','撤销');button.type='button';button.onclick=async()=>{button.disabled=true;try{const s=await this.o.api('/api/sidebar?archived=true&search=');if(s.accountScope!==scope)throw Error('目标账号已变化，请在已归档列表核对。');let t=s.data.find(t=>t.id===id),cursor=s.nextCursor;while(!t&&cursor){const p=await this.o.api('/api/sidebar?archived=true&cursor='+encodeURIComponent(cursor));t=p.data.find(t=>t.id===id);cursor=p.nextCursor;}if(!t)throw Error('归档状态已变化，请刷新列表。');await this.run('restore',t,{},true);node.remove();this.focusAnchor();}catch(e){this.o.toast(e.message,true);button.disabled=false;}};node.append(button);this.toolbar.after(node);this.undoNode=node;
-  }
+  undo(id){this.undoId=id;this.undoView.show(id,this.snapshot.accountScope);}
+
 }
 
 let sidebarMenuInstaller;
@@ -285,4 +284,11 @@ export function configureSidebarDialog(installer){sidebarDialogInstaller=install
 export function installSidebarDialog(){
   if(!sidebarDialogInstaller)throw new Error('侧栏弹窗尚未初始化。');
   return sidebarDialogInstaller();
+}
+
+let sidebarUndoInstaller;
+export function configureSidebarUndo(installer){sidebarUndoInstaller=installer;}
+export function installSidebarUndo(options){
+  if(!sidebarUndoInstaller)throw new Error('侧栏归档撤销尚未初始化。');
+  return sidebarUndoInstaller(options);
 }
