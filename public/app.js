@@ -1,3 +1,4 @@
+import {createThreadFromDraft as createThreadSubmit} from '../src/web/services/thread-create';
 import {createMessageSend} from '../src/web/services/message-send';
 import {createPlanSubmit} from '../src/web/services/plan-submit';
 import {createStopRequest} from '../src/web/services/stop-request';
@@ -1050,34 +1051,12 @@ function openNewDialog(projectRoot) {
   $('new-chat-error').hidden=true;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);
   renderModels();renderControls();resizeInput();mobileUI?.syncDrawers();$('message-input').focus();
 }
-async function createThreadFromDraft(){
-  if(state.busy.has('create')||newDraft.phase!=='editing')return;
-  const cwd=newDraft.cwd,model=state.model,effort=state.effort,text=$('message-input').value;
-  if(!cwd||(!text.trim()&&!attachments.has())||attachments.pending())return;
-  try{composer.validateSend(text,false);}catch(error){toast(error.message,true);return;}
-  state.drafts.set(newDraftId,text);$('new-chat-error').hidden=true;
-  let created=false;
-  await action('create',async()=>{
-    try{
-      newDraft.begin();
-      const d=await api('/api/threads',{method:'POST',body:{cwd,model,effort,access:WEB_ACCESS}});
-      const id=d.thread?.id||d.id;if(!id)throw Error('未返回会话 ID，请刷新侧栏核对创建结果。');
-      const thread={...d.thread,id,cwd,name:d.thread?.name||'新会话'};
-      createdThreads.set(id,thread);state.threads.unshift(thread);
-      attachments.moveDraft(newDraftId,id);composer.moveDraft(newDraftId,id);
-      closeNewChat(false);state.desktopMode=false;state.drafts.set(id,text);state.drafts.delete(newDraftId);
-      state.sidebarArchived=false;state.selectedArchived=false;state.selectedId=id;state.selectionVersion++;
-      state.model=model;state.effort=effort;state.loadingDetail=false;
-      const project=state.projects.find(p=>p.roots?.includes(cwd));state.projectId=project?.id||null;if(project)sidebar.expandProject(project.id);
-      state.search='';$('thread-search').value='';state.historyCursor=null;state.loadedOlderHistory=false;state.historyError='';
-      saveView();$('message-input').value=text;applyDetail({...d,thread,controlled:true},true);renderThreads();
-      newDraft.complete();created=true;
-    }catch(error){
-      newDraft.failed(error);$('new-chat-error').textContent=messageOf(error);$('new-chat-error').hidden=false;recordError(error,'create');
-    }
-  });
-  if(created){await sendMessage();void Promise.allSettled([loadThreads(),loadStatus()]);}
-}
+const createThreadFromDraft=createThreadSubmit({state,draft:newDraft,draftId:newDraftId,access:WEB_ACCESS,createdThreads,
+  input:()=>$('message-input'),hasAttachments:()=>attachments.has(),attachmentsPending:()=>attachments.pending(),validate:(...args)=>composer.validateSend(...args),toast,
+  hideError:()=>{$('new-chat-error').hidden=true;},showError:error=>{$('new-chat-error').textContent=messageOf(error);$('new-chat-error').hidden=false;},recordError,action,
+  post:body=>api('/api/threads',{method:'POST',body}),moveAttachments:(...args)=>attachments.moveDraft(...args),moveComposer:(...args)=>composer.moveDraft(...args),close:closeNewChat,
+  expandProject:id=>sidebar.expandProject(id),clearSearch:()=>{$('thread-search').value='';},saveView,applyDetail,renderThreads,
+  send:()=>sendMessage(),loadThreads:()=>loadThreads(),loadStatus:()=>loadStatus()});
 const submitMessage=createMessageSend({state,input:()=>$('message-input'),disabled:()=>$('send-message').disabled,
   newChatOpen:()=>newChatOpen,createThread:()=>createThreadFromDraft(),sendDesktop:()=>sendDesktopMessage(),host:()=>targetHost,
   captureAnnotation:()=>annotations.capture(),annotatedText:(text,draft)=>annotatedText(text,draft.items),acknowledgeAnnotation:draft=>annotations.acknowledge(draft),
