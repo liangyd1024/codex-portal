@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {createSendReceipts} from '../public/connection-state.js';
 const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
-const sendSource=source.slice(source.indexOf('async function sendMessage('),source.indexOf('async function implementPlan('));
+const sendSource=source.slice(source.indexOf('async function sendMessage('),source.indexOf('const submitPlan='));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 function fixture(){
  const response=deferred(),history=deferred(),errors=[],calls=[];

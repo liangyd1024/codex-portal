@@ -1,3 +1,4 @@
+import {createPlanSubmit} from '../src/web/services/plan-submit';
 import {createStopRequest} from '../src/web/services/stop-request';
 import {createDesktopSend} from '../src/web/services/desktop-send';
 import {publishSendActions,installSendActions} from '../src/web/components/SendActions';
@@ -1118,19 +1119,11 @@ async function sendMessage(e,alternate=false) {
     if (scope===targetHost+':'+state.selectedId && selection===state.selectionVersion) void refreshSelected().catch(err=>recordError(err,'thread'));
   });
 }
-async function implementPlan(id,plan){
-  if(id!==state.selectedId||newChatOpen||state.desktopMode||!usable()||!controlled()||running()||state.busy.size||completedPlan(turns())?.turnId!==plan.turnId)throw Object.assign(new Error('会话状态已变化，请重新核对计划。'),{status:409});
-  const selection=state.selectionVersion;
-  state.busy.add('message');renderControls();
-  try{
-    const d=await api('/api/threads/'+encodeURIComponent(id)+'/message',{method:'POST',body:{text:implementationText(plan),mode:'default',access:WEB_ACCESS,model:state.model,effort:state.effort}});
-    if(id===state.selectedId&&selection===state.selectionVersion){
-      if(d.turn)upsertTurn(d.turn);
-      renderThread();
-      try{await refreshSelected();}catch(error){recordError(error,'thread');}
-    }
-  }finally{state.busy.delete('message');renderControls();}
-}
+const submitPlan=createPlanSubmit({state,newChatOpen:()=>newChatOpen,usable,controlled,running,
+  completed:()=>completedPlan(turns()),text:implementationText,access:WEB_ACCESS,
+  post:(path,body)=>api(path,{method:'POST',body}),upsert:upsertTurn,renderControls,renderThread,
+  refresh:()=>refreshSelected(),recordError:(...args)=>recordError(...args)});
+async function implementPlan(id,plan){return submitPlan(id,plan);}
 const sendDesktopMessage=createDesktopSend({state,input:()=>$('message-input'),
   captureAnnotation:()=>annotations.capture(),annotatedText:(text,draft)=>annotatedText(text,draft.items),
   acknowledgeAnnotation:draft=>annotations.acknowledge(draft),hasAttachments:()=>attachments?.has(),
