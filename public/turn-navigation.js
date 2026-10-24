@@ -120,11 +120,11 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
     const c=context(),pending=pendingHistory(c);if(!pending&&!loading){loadMessage='';feedback.textContent='';}older.hidden=more.hidden=!pending;older.disabled=loading||c.loading;more.disabled=!loading&&c.loading;
     older.title=loading?'正在加载全部轮次…':'加载全部轮次';
     more.textContent=loading?'取消加载':loadMessage?'继续加载全部轮次':'加载全部轮次';
-    const label=turnCountLabel({...c,hasEarlier:pendingHistory(c),loading,loadMessage},rows.length);count.textContent=label;entry.textContent=label?'轮次 · '+label:'轮次';title.textContent=label?'对话轮次 · '+label:'对话轮次';
+    const label=turnCountLabel({...c,hasEarlier:pendingHistory(c),loading,loadMessage},rows.length);count.textContent=label?(loadMessage?'重试':rows.length+'轮'):'';entry.textContent=label?'轮次 · '+label:'轮次';title.textContent=label?'对话轮次 · '+label:'对话轮次';
     ticks.hidden=loading||pending;list.hidden=loading||pending;
     if(!label){rail.hidden=true;entry.hidden=true;hide();}schedule();
-    count.title=loading?'正在加载全部轮次，点击取消':loadMessage||'加载并显示全部轮次';
-    count.setAttribute('aria-label',loading?'取消加载全部轮次':loadMessage?'重试加载全部轮次':'加载并显示全部轮次');
+    count.title=loading?'正在加载全部轮次，点击取消':loadMessage||(label?label+'，显示全部轮次':'显示全部轮次');
+    count.setAttribute('aria-label',loading?'取消加载全部轮次':loadMessage?'重试加载全部轮次':label?label+'，显示全部轮次':'显示全部轮次');
     rail.setAttribute('aria-busy',String(loading));
   }
   function cancel(){loadVersion++;loading=false;context().renderHistory?.();report('已取消继续加载。');}
