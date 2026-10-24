@@ -616,3 +616,88 @@ test('sidebar routes preserve repeated queries, account revision guards and acti
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+test('mobile access routes preserve authentication order and revoke only affected SSE clients',{timeout:10000},async()=>{
+ const {request:httpRequest}=await import('node:http');const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const access=new MobileAccess(null,()=>1000),env=await create(factory,{access,mobileConfig:{origins:['https://phone.test'],ca:'/fixture/unused'}});
+  const records=[],streams=[];let disconnects=0;
+  for(const manager of env.managers.values())manager.disconnect=()=>{disconnects++;};
+  await new Promise(resolve=>env.app.proxyServer.listen(0,'127.0.0.1',resolve));
+  const port=env.app.proxyServer.address().port;
+  const request=(path,{method='GET',cookie='',origin='https://phone.test',host='phone.test',raw,csrf=''}={})=>new Promise((resolve,reject)=>{
+   const req=httpRequest({hostname:'127.0.0.1',port,path,method,headers:{host,...(origin===null?{}:{origin}),cookie,'x-csrf-token':csrf}},res=>{
+    const chunks=[];res.on('data',c=>chunks.push(c));res.on('end',()=>resolve({status:res.statusCode,text:Buffer.concat(chunks).toString(),cookie:res.headers['set-cookie']?.[0]||null,mime:res.headers['content-type']}));
+   });req.on('error',reject);req.end(raw);
+  });
+  const record=async(path,options)=>{const r=await request(path,options);records.push({...r,cookie:r.cookie?.replace(/rcm_mobile=[a-f0-9]{64}/,'rcm_mobile=<token>')||null});return r;};
+  const pair=async()=>{
+   const response=await fetch(env.base+'/api/access/code',{method:'POST',headers:{'x-csrf-token':env.token},body:JSON.stringify({ttlSeconds:null,sessionTtlSeconds:null})});
+   assert.equal(response.status,200);const code=await response.json();assert.match(code.code,/^\d{6}$/);assert.equal(code.expires,null);
+   const r=await record('/api/access/login',{method:'POST',raw:JSON.stringify({code:code.code})});assert.equal(r.status,200);
+   return {cookie:r.cookie.split(';')[0],usedCode:code.code};
+  };
+  const openStream=async(cookie,local=false)=>new Promise((resolve,reject)=>{
+   const req=httpRequest({hostname:'127.0.0.1',port:local?env.app.server.address().port:port,path:'/api/events?host=b',headers:local?{}:{host:'phone.test',cookie}},res=>{
+    assert.equal(res.statusCode,200);let end;const stream={req,res,text:'',ended:false,end:new Promise(r=>{end=r;})};
+    res.on('data',c=>{stream.text+=c.toString();});res.on('end',()=>{stream.ended=true;end();});streams.push(stream);resolve(stream);
+   });req.on('error',reject);req.end();
+  });
+  const received=(stream,marker)=>new Promise(resolve=>{if(stream.text.includes(marker))return resolve();const listener=()=>{if(stream.text.includes(marker)){stream.res.off('data',listener);resolve();}};stream.res.on('data',listener);});
+  try{
+   await record('/api/status');
+   await record('/api/access/login',{method:'POST',origin:null,raw:'{'});
+   await record('/api/access/login',{method:'POST',origin:'https://evil.test',raw:'{'});
+   await record('/api/access/login',{method:'POST',raw:'{'});
+   await record('/api/access/login',{method:'POST',host:'evil.test',raw:'{}'});
+   const first=await pair();
+   await record('/api/access/login',{method:'POST',raw:JSON.stringify({code:first.usedCode})});
+   await record('/api/access/status',{cookie:first.cookie});
+   await record('/api/access/logout',{method:'POST',cookie:first.cookie,raw:'{'});
+   for(const path of ['/api/access/setup','/api/access/code','/api/access/revoke'])await record(path,{method:'POST',cookie:first.cookie,csrf:env.token,raw:'{}'});
+   const second=await pair();
+   const one=await openStream(first.cookie),two=await openStream(second.cookie),local=await openStream('',true);
+   await record('/api/access/logout',{method:'POST',cookie:first.cookie,csrf:env.token,raw:'{}'});await one.end;
+   env.managers.get('b').emit('event',{method:'after/logout',params:{unknown:'完整'}});
+   await Promise.all([received(two,'after/logout'),received(local,'after/logout')]);
+   assert.equal(two.ended,false);assert.equal(local.ended,false);
+   await record('/api/status',{cookie:first.cookie});await record('/api/access/status',{cookie:second.cookie});
+   const revoked=await fetch(env.base+'/api/access/revoke',{method:'POST',headers:{'x-csrf-token':env.token},body:'{}'});assert.equal(revoked.status,200);assert.deepEqual(await revoked.json(),{ok:true});
+   await two.end;env.managers.get('b').emit('event',{method:'after/revoke',params:{keep:true}});await received(local,'after/revoke');assert.equal(local.ended,false);
+   await record('/api/status',{cookie:second.cookie});
+   assert.deepEqual(records.map(r=>r.status),[401,403,403,400,403,200,401,200,403,404,404,404,200,200,401,200,401]);
+   assert.equal(JSON.parse(records[7].text).sessionExpires,null);assert.match(records[7].cookie,/HttpOnly; Secure; SameSite=Strict; Max-Age=34560000/);
+   assert.match(records[13].cookie,/rcm_mobile=;.*Max-Age=0/);assert.equal(disconnects,0);
+   outcomes.push({records,closed:[one.ended,two.ended,local.ended],disconnects});
+  }finally{
+   for(const stream of streams)stream.req.destroy();env.app.proxyServer.closeAllConnections();
+   await new Promise(resolve=>env.app.proxyServer.close(resolve));await env.close();
+  }
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
+
+test('access certificate, QR selection and pairing expiry validation remain byte-compatible',async()=>{
+ const {mkdtemp,writeFile}=await import('node:fs/promises'),{tmpdir}=await import('node:os');
+ const directory=await mkdtemp(path.join(tmpdir(),'rcm-access-http-'));
+ await writeFile(path.join(directory,'ca.crt'),Buffer.from([0,255,10,128]));
+ await writeFile(path.join(directory,'lan.png'),Buffer.from([1,2,3]));
+ await writeFile(path.join(directory,'tailscale.png'),Buffer.from([4,5,6]));
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory,{access:new MobileAccess(null,()=>1000),mobileConfig:{origins:['https://phone.test'],ca:path.join(directory,'ca.crt')}}),records=[];
+  try{
+   for(const url of ['/api/access/ca','/api/access/qr','/api/access/qr?kind=tailscale&kind=lan','/api/access/qr?kind=unknown']){
+    const r=await fetch(env.base+url);records.push({status:r.status,hex:Buffer.from(await r.arrayBuffer()).toString('hex'),headers:Object.fromEntries(['content-type','content-disposition','cache-control'].map(k=>[k,r.headers.get(k)]))});
+   }
+   const post=async(data)=>{const r=await fetch(env.base+'/api/access/code',{method:'POST',headers:{'x-csrf-token':env.token},body:JSON.stringify(data)});const body=await r.json();if(body.code){assert.match(body.code,/^\d{6}$/);body.code='<code>';}records.push({status:r.status,body});};
+   await post({ttlSeconds:601});await post({sessionTtlSeconds:60});await post({ttlSeconds:600,sessionTtlSeconds:86400});await post({ttlSeconds:null,sessionTtlSeconds:null});
+   env.app.setMobileConfig({origins:[],ca:path.join(directory,'ca.crt')});await post(null);
+   assert.deepEqual(records.map(r=>r.status),[200,200,200,200,400,400,200,200,409]);
+   assert.deepEqual(records.slice(0,4).map(r=>r.hex),['00ff0a80','010203','040506','010203']);
+   assert.equal(records[6].body.expires,601000);assert.equal(records[7].body.expires,null);
+   assert.equal(records[8].body.error.code,'MOBILE_NOT_CONFIGURED');outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});

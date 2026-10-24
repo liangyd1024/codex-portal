@@ -13,7 +13,7 @@ import {createMediaRoutes} from './media';
 import http from 'node:http';
 import {json,body} from '../protocol';
 import {MobileAccess} from '../../../lib/mobile-access.mjs';
-import {tailscaleHealth} from '../../../lib/tailscale-serve.mjs';
+import {createAccessRoutes} from './access';
 import path from 'node:path';
 import {readFile} from 'node:fs/promises';
 import {timingSafeEqual} from 'node:crypto';
@@ -30,6 +30,7 @@ export interface RouteServices {
  server:()=>import('node:http').Server;mobileConfig:()=>MobileConfig|null;setMobileConfig:(value:MobileConfig)=>void;
 }
 export function createDispatcher(context:RouteServices){
+ const accessRoutes=createAccessRoutes(context);
  const workspaceRoutes=new WeakMap<Manager,ReturnType<typeof createWorkspaceRoutes>>();
  const workspaceRoutesFor=(manager:Manager)=>{let routes=workspaceRoutes.get(manager);if(!routes){routes=createWorkspaceRoutes(manager);workspaceRoutes.set(manager,routes);}return routes;};
  const desktopRoutes=new Map<string,ReturnType<typeof createDesktopRoutes>>();
@@ -40,9 +41,9 @@ export function createDispatcher(context:RouteServices){
  const threadRoutesFor=(manager:Manager)=>{let routes=threadRoutes.get(manager);if(!routes){routes=createThreadRoutes(manager);threadRoutes.set(manager,routes);}return routes;};
  const connectionRoutes=new WeakMap<Manager,ReturnType<typeof createConnectionRoutes>>();
  const routesFor=(manager:Manager)=>{let routes=connectionRoutes.get(manager);if(!routes){routes=createConnectionRoutes(manager);connectionRoutes.set(manager,routes);}return routes;};
- const {config,managers,automations,desktopSessions,csrf,clients,staticResponse,access,setupMobile,updater,providedManagers,buildVersion,staticRoot,extraAssets}=context;
+ const {config,managers,automations,desktopSessions,csrf,clients,staticResponse,access,updater,providedManagers,buildVersion,staticRoot,extraAssets}=context;
   return async(req:IncomingMessage,res:Response,remote=false)=>{
-    const server=context.server();let mobileConfig=context.mobileConfig();
+    const server=context.server();const mobileConfig=context.mobileConfig();
     res.allowGzip=String(req.headers['accept-encoding']||'').split(',').some(part=>/^gzip(?:\s*;|\s*$)/i.test(part.trim())&&!/;\s*q=0(?:\.0*)?(?:\s*;|\s*$)/i.test(part));
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
@@ -53,10 +54,7 @@ export function createDispatcher(context:RouteServices){
       if(!origin)throw new AppError('访问地址未获授权。',403,'FORBIDDEN');
       if((req.headers.origin&&req.headers.origin!==origin)||(remote&&req.method==='POST'&&req.headers.origin!==origin))throw new AppError('不允许跨站访问。',403,'FORBIDDEN');
       const url=new URL(req.url!,origin);const p=url.pathname;
-      if(p==='/api/access/login'&&remote&&req.method==='POST'){
-        const data=await body(req);
-        const token=access.login(data.code);res.setHeader('Set-Cookie',access.cookie(token));return json(res,200,{ok:true});
-      }
+      if(p==='/api/access/login'&&remote&&req.method==='POST'){await accessRoutes.login(req,res);return;}
       if(remote&&!access.valid(req)){
         if(req.method==='GET'&&['/','/index.html','/login.js','/styles.css','/mobile-ui.css'].includes(p)){
           const file=p==='/login.js'?'login.js':p==='/styles.css'?'styles.css':p==='/mobile-ui.css'?'mobile-ui.css':'login.html';
@@ -65,9 +63,7 @@ export function createDispatcher(context:RouteServices){
         throw new AppError('请先使用本机生成的配对码登录。',401,'PAIRING_REQUIRED');
       }
       if(remote&&access.expires(req)===null)res.setHeader('Set-Cookie',access.cookie(access.token(req)));
-      if(p==='/api/access/status'&&req.method==='GET')return json(res,200,{local:!remote,sessionExpires:remote?access.expires(req):undefined,origins:remote?[]:mobileConfig?.origins||[],canSetup:!remote&&Boolean(setupMobile),tailscaleStatus:!remote&&mobileConfig?.origins.some(origin=>new URL(origin).hostname.endsWith('.ts.net'))?await tailscaleHealth():undefined});
-      if(p==='/api/access/ca'&&!remote&&req.method==='GET'&&mobileConfig){res.writeHead(200,{'Content-Type':'application/x-x509-ca-cert','Content-Disposition':'attachment; filename="Codex-Local-CA.crt"'});return res.end(await readFile(mobileConfig.ca));}
-      if(p==='/api/access/qr'&&!remote&&req.method==='GET'&&mobileConfig){const name=url.searchParams.get('kind')==='tailscale'?'tailscale.png':'lan.png';res.writeHead(200,{'Content-Type':'image/png'});return res.end(await readFile(path.join(path.dirname(mobileConfig.ca),name)));}
+      if(req.method==='GET'){const route=accessRoutes.read(p,remote,mobileConfig);if(route){await route(req,res,url);return;}}
       if(req.method==='GET'&&p==='/api/connections')return json(res,200,{machineId:config.machineId,defaultConnection:config.defaultConnection,data:[...managers].map(([id,m])=>({id,host:publicHost(m.host),connection:m.connection}))});
       if(req.method==='GET'&&p==='/api/system/update'){if(url.searchParams.get('check')==='1')void updater.checkLatest?.().catch(()=>{});return json(res,200,await updater.status());}
       if(req.method==='GET'&&p==='/api/version')return json(res,200,{version:buildVersion,machineId:config.machineId});
@@ -105,10 +101,7 @@ export function createDispatcher(context:RouteServices){
         const automationRoute=desktopRoutesFor(targetKey,manager).automationWrite(p);if(automationRoute){await automationRoute(url,data,res);return;}
         if(match&&match[1]===automations.get(targetKey)!.state.threadId&&match[2])throw new AppError('此管理会话由桌面执行，请从定时任务入口继续。',409,'DESKTOP_MANAGED');
         if(p==='/api/sidebar/actions'){await workspaceRoutesFor(manager).get('POST '+p)!(url,data,res);return;}
-        if(p==='/api/access/setup'&&!remote){if(!setupMobile)throw new AppError('此入口不支持配置手机访问。请在本机正式服务中操作。',409);if(data.mode!==undefined&&!['lan','tailscale'].includes(data.mode))throw new AppError('未知手机访问方式。');mobileConfig=await setupMobile(data.mode||'lan');context.setMobileConfig(mobileConfig);return json(res,200,{ok:true});}
-        if(p==='/api/access/code'&&!remote){if(!mobileConfig?.origins?.length)throw new AppError('请先配置手机访问地址，再生成配对码。',409,'MOBILE_NOT_CONFIGURED');return json(res,200,access.createCode(data.ttlSeconds,data.sessionTtlSeconds));}
-        if(p==='/api/access/revoke'&&!remote){access.revoke();for(const client of clients)if(client.mobileRequest){client.end();clients.delete(client);}return json(res,200,{ok:true});}
-        if(p==='/api/access/logout'){access.logout(req);res.setHeader('Set-Cookie',access.cookie());for(const client of clients)if(client.mobileRequest&&!access.valid(client.mobileRequest)){client.end();clients.delete(client);}return json(res,200,{ok:true});}
+        const accessRoute=accessRoutes.write(p,remote,mobileConfig);if(accessRoute){await accessRoute(req,res,data);return;}
         const connectionRoute=routesFor(manager).get('POST '+p);if(connectionRoute){await connectionRoute(url,data,res);return;}
         const threadRoute=threadRoutesFor(manager).write(p,match);if(threadRoute){await threadRoute(req,res,url,data);return;}
         const approval=p.match(/^\/api\/requests\/([^/]+)\/respond$/);
