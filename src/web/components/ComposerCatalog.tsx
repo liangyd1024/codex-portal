@@ -1,4 +1,4 @@
-import {memo,useMemo,useRef} from 'react';
+import {memo,useLayoutEffect,useMemo,useRef} from 'react';
 import {createPortal,flushSync} from 'react-dom';
 import {createStore,useStore,type StoreApi} from 'zustand';
 type Kind='skills'|'plugins';
@@ -10,14 +10,19 @@ interface Row {entry:Entry;key:string;search:string;checked:boolean;description:
 interface View {kind:Kind;phase:'pending'|'ready'|'error';rows:Row[];partial:boolean;error?:string;query:string;search:(value:string)=>void;change:(index:number,checked:boolean)=>void;retry:()=>void}
 interface Instance {id:number;dialog:HTMLDialogElement;store:StoreApi<{view:View|null}>}
 const registry=createStore<{instances:Instance[]}>(()=>({instances:[]}));let sequence=0;
-const CatalogRow=memo(function CatalogRow({row,index,checked,hidden,change}:{row:Row;index:number;checked:boolean;hidden:boolean;change:View['change']}){
+const CatalogRow=memo(function CatalogRow({row,index,checked,change}:{row:Row;index:number;checked:boolean;change:View['change']}){
  const content=useMemo(()=><><input type="checkbox" checked={checked} disabled={!row.entry.enabled&&!checked} onChange={e=>change(index,e.currentTarget.checked)}/><span><strong>{row.entry.interface?.displayName||row.entry.name}</strong><small>{row.description}</small></span></>,[row,index,checked,change]);
- return <label className="composer-catalog-item" data-search={row.search} hidden={hidden}>{content}</label>;
+ return <label className="composer-catalog-item" data-search={row.search}>{content}</label>;
 });
 function Catalog({dialog,store}:Instance){
- const v=useStore(store).view,search=useRef<HTMLInputElement>(null);if(!v)return null;
+ const v=useStore(store).view,search=useRef<HTMLInputElement>(null),list=useRef<HTMLDivElement>(null);
+ const rows=useMemo(()=>v?.rows.map((r,i)=><CatalogRow key={i} row={r} index={i} checked={r.checked} change={v.change}/>),[v?.rows,v?.change]);
+ // This component alone owns row visibility. Keep the baseline bounded DOM update
+ // without reconciling unchanged row contents on each search keystroke.
+ useLayoutEffect(()=>{if(v?.phase==='ready'&&list.current)for(const row of list.current.querySelectorAll<HTMLLabelElement>('label'))row.hidden=!row.dataset.search!.includes(v.query);},[v?.phase,v?.rows,v?.query]);
+ if(!v)return null;
  const name=v.kind==='skills'?'技能':'插件';
- return createPortal(v.phase==='pending'?<p role="status">正在读取目标机器…</p>:v.phase==='error'?<><p role="status">{'暂时无法加载'+name+'，请重试。你的草稿已保留。'}</p><details><summary>错误详情</summary><p>{v.error}</p></details><button type="button" onClick={v.retry}>重试</button></>:<><input ref={search} type="search" placeholder="搜索" aria-label={'搜索'+name} onInput={e=>v.search(e.currentTarget.value)}/><div className="composer-catalog">{!v.rows.length&&<p>{v.kind==='skills'?'此项目暂无技能。':'目标机器暂无已安装插件。'}</p>}{v.rows.map((r,i)=><CatalogRow key={i} row={r} index={i} checked={r.checked} hidden={!r.search.includes(v.query)} change={v.change}/>)}<p hidden={!v.rows.length||v.rows.some(r=>r.search.includes(v.query))} role="status">{'没有匹配的'+name+'。'}</p></div>{v.partial&&<><p role="status">部分目录未能读取，列表可能不完整。已有选择仍保留。</p><button type="button" onClick={v.retry}>重新读取</button></>}<p>选择后在下一条消息中使用。插件安装及账号授权请在 Codex 中管理。</p></>,dialog);
+ return createPortal(v.phase==='pending'?<p role="status">正在读取目标机器…</p>:v.phase==='error'?<><p role="status">{'暂时无法加载'+name+'，请重试。你的草稿已保留。'}</p><details><summary>错误详情</summary><p>{v.error}</p></details><button type="button" onClick={v.retry}>重试</button></>:<><input ref={search} type="search" placeholder="搜索" aria-label={'搜索'+name} onInput={e=>v.search(e.currentTarget.value)}/><div ref={list} className="composer-catalog">{!v.rows.length&&<p>{v.kind==='skills'?'此项目暂无技能。':'目标机器暂无已安装插件。'}</p>}{rows}<p hidden={!v.rows.length||v.rows.some(r=>r.search.includes(v.query))} role="status">{'没有匹配的'+name+'。'}</p></div>{v.partial&&<><p role="status">部分目录未能读取，列表可能不完整。已有选择仍保留。</p><button type="button" onClick={v.retry}>重新读取</button></>}<p>选择后在下一条消息中使用。插件安装及账号授权请在 Codex 中管理。</p></>,dialog);
 }
 export function ComposerCatalogs(){const instances=useStore(registry).instances;return <>{instances.map(instance=><Catalog key={instance.id} {...instance}/>)}</>;}
 export function installReactComposerCatalog(o:Options){
@@ -28,7 +33,7 @@ export function installReactComposerCatalog(o:Options){
   const same=()=>o.context().id===id&&o.context().cwd===current.cwd&&o.dialog.open&&version===o.version();
   const retry=()=>{o.dialog.close();void picker(kind,button);};
   const view:View={kind,phase:'pending',rows:[],partial:false,query:'',retry,search(value){view.query=value.trim().toLowerCase();publish({...view});},change(index,checked){
-   if(o.context().id!==id)return;const row=view.rows[index]!;row.checked=checked;
+   if(o.context().id!==id)return;const row=view.rows[index]!;row.checked=checked;view.rows=[...view.rows];
    if(checked){o.dialog.close();o.insertReference(row.entry,kind);}else{for(const range of o.present().filter(r=>r.kind===kind&&r.key===row.key).reverse())o.input.setRangeText('',range.start,range.end,'end');o.syncReferences();o.save();o.render();o.input.dispatchEvent(new Event('input',{bubbles:true}));}
    publish({...view});
   }};publish(view);o.loading(true);
