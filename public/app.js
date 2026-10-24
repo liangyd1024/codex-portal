@@ -211,7 +211,7 @@ function icon(name, extra = '') {
   s.append(u); return s;
 }
 function clear(n) { n.replaceChildren(); return n; }
-function setText(id, value) { $(id).textContent = value == null || value === '' ? '—' : String(value); }
+function setText(id, value) { const node=$(id),text=value == null || value === '' ? '—' : String(value);if(node.textContent!==text||node.childElementCount)node.textContent=text; }
 function pretty(value) { try { return JSON.stringify(value, null, 2); } catch { return String(value); } }
 function messageOf(value) {
   const message=typeof value === 'string' ? value : value?.message || pretty(value);
@@ -441,7 +441,7 @@ function renderControls() {
   setText('composer-model-label',(modelFor(state.model)?.displayName || state.model || '模型')+' · '+(effortNames[state.effort] || state.effort || '档位'));
   composer?.render(); attachments?.render();
   const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '查看模式。接管后可在原会话继续工作。';
-  setText('composer-hint',state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
+  setText('composer-hint',state.desktopMode&&!newChatOpen?'使用桌面会话的模型与设置。发送成功仅代表会话已接收，任务结果以原始回复为准。':state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
   setText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
   syncRequestCards({ready,pending:id=>state.busy.has('request:'+id),controlledThreads:state.status?.controlledThreads});
   const desktopView={entryHidden:newChatOpen||!state.selectedId||state.selectedArchived||own||state.desktopMode,entryDisabled:!state.transport||state.busy.size>0||Boolean(handoff&&handoff.state!=='released'),reviewHidden:true};
@@ -455,7 +455,6 @@ function renderControls() {
     const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     availability.textContent=reason;availability.hidden=!reason;
     desktopView.reviewHidden=!unconfirmed;desktopView.reviewDisabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
-    setText('composer-hint','使用桌面会话的模型与设置。发送成功仅代表会话已接收，任务结果以原始回复为准。');
   }
   publishDesktopControls(desktopView);
   publishSendActions(buttonView);
