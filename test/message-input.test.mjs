@@ -32,3 +32,28 @@ test('image-sized HTTP bodies are accepted only on message routes after CSRF val
  const accepted=await post('/api/threads/test/message',token);assert.equal(accepted.status,200);assert.equal((await accepted.json()).size,1100000);
  }finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));}
 });
+
+test('attachment persistence keeps pending items in memory and preserves unknown metadata',()=>{
+ const values=new Map(),storage={getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value)};
+ const drafts=new AttachmentDrafts(storage,'images');
+ const pending={id:'pending',name:'待处理图片',future:{source:'clipboard'}};
+ drafts.add('one',pending);
+ assert.equal(drafts.get('one')[0],pending);
+ assert.deepEqual(JSON.parse(values.get('images')),[['one',[]]]);
+ pending.url=url;drafts.save();
+ const restored=new AttachmentDrafts(storage,'images');
+ assert.deepEqual(restored.get('one'),[pending]);
+ const captured=restored.capture('one');
+ restored.get('one')[0].name='后续名称';
+ assert.equal(captured.items[0].name,'待处理图片');
+ assert.deepEqual(captured.items[0].future,{source:'clipboard'});
+});
+
+test('attachment storage failure reports loss risk without dropping the current draft',()=>{
+ const messages=[],storage={getItem:()=>null,setItem(){throw Error('quota');}};
+ const drafts=new AttachmentDrafts(storage,'images',(...args)=>messages.push(args));
+ drafts.add('one',{id:'a',name:'图片',url});
+ assert.equal(drafts.capture('one').items[0].id,'a');
+ assert.deepEqual(messages,[['图片暂时仅保留在当前页面，刷新可能丢失，请先发送或减少图片。',true]]);
+ drafts.remove('one','a');assert.deepEqual(drafts.get('one'),[]);
+});

@@ -1,9 +1,7 @@
 import {Fragment} from 'react';
 import {createPortal,flushSync} from 'react-dom';
 import {createStore,useStore,type StoreApi} from 'zustand';
-interface Item {id:string;name:string;url?:string}
-interface View {id:string;busy:boolean;items:Item[]}
-interface Options {list:HTMLElement;preview:HTMLDialogElement;remove:(id:string,key:string)=>void}
+import type {AttachmentItem as Item,AttachmentView as View,AttachmentViewOptions as Options} from '../services/attachments';
 interface State {view:View|null;revision:number;picture:Item|null;pictureRevision:number}
 interface Instance extends Options {key:number;store:StoreApi<State>}
 const registry=createStore<{instances:Instance[]}>(()=>({instances:[]}));let sequence=0;
