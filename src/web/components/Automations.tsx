@@ -15,11 +15,14 @@ const TaskDialog=memo(function TaskDialog({dialog,view:v,edit,manage,openThread}
 export function AutomationViews(){const {lists,dialogs}=useStore(registry);return <>{lists.map(instance=><TaskList key={instance.id} {...instance}/>)}{dialogs.map(instance=><TaskDialog key={instance.id} {...instance}/>)}</>;}
 export const reactAutomationViews={
  list(options:ListOptions){const store=createStore<{rows:TaskRow[]|null;revision:number}>(()=>({rows:null,revision:0}));const instance={...options,id:++sequence,store};flushSync(()=>registry.setState({lists:[...registry.getState().lists,instance]}));return {render(rows:TaskRow[]|null){
-   const previous=store.getState().rows,list=options.list,selection=list.ownerDocument.getSelection();
+   const previous=store.getState().rows;
    const same=previous&&rows&&previous.length===rows.length&&previous.every((row,index)=>row.task===rows[index]!.task&&row.meta===rows[index]!.meta);
-   // Keep baseline resets when rebuilding would clear focus, hover, menus or selection.
-   const active=list.contains(list.ownerDocument.activeElement)||list.matches(':hover')||list.querySelector('details[open]')||(selection&&!selection.isCollapsed&&selection.rangeCount>0&&selection.getRangeAt(0).intersectsNode(list));
-   if(same&&!active)return;
+   if(same){
+    const list=options.list,selection=list.ownerDocument.getSelection();
+    // Keep baseline resets when rebuilding would clear focus, hover, menus or selection.
+    const active=list.contains(list.ownerDocument.activeElement)||list.matches(':hover')||list.querySelector('details[open]')||(selection&&!selection.isCollapsed&&selection.rangeCount>0&&selection.getRangeAt(0).intersectsNode(list));
+    if(!active)return;
+   }
    flushSync(()=>store.setState(s=>({rows,revision:s.revision+1})));
   }};},
  task(options:DialogOptions){const instance={...options,id:++sequence};flushSync(()=>registry.setState({dialogs:[...registry.getState().dialogs,instance]}));return {closeButton:options.dialog.querySelector<HTMLButtonElement>('[aria-label="关闭任务详情"]')!,dispose(){flushSync(()=>registry.setState({dialogs:registry.getState().dialogs.filter(view=>view!==instance)}));}};}
