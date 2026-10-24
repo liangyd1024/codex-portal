@@ -1,7 +1,5 @@
 import {reactAutomationViews} from './components/Automations';
 import {configureAutomationViews} from '../../public/automations.js';
-import {reactQuestionForms} from './components/QuestionForms';
-import {configureQuestionForms} from '../../public/question-form.js';
 import {installReactAttachmentView} from './components/Attachments';
 import {configureAttachmentView} from '../../public/attachments.js';
 import {installReactSidebarTree} from './components/SidebarTree';
@@ -43,7 +41,6 @@ if(!shell)throw new Error('工作台结构缺失。');
 hydrateRoot(shell,<Application/>,{onRecoverableError(error){hydrationFailure=error;console.error('工作台结构不一致',error);}});
 await ready;
 configureAutomationViews(reactAutomationViews);
-configureQuestionForms(reactQuestionForms);
 configureAttachmentView(installReactAttachmentView);
 configureGoalToolbar(installReactGoalToolbar);
 configureGoalEditor(installReactGoalEditor);

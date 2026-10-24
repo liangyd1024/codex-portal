@@ -54,7 +54,7 @@ import {sendAfterGoal} from './goal-submit.js';
 import {notificationSupport,prepareNotificationWorker,submitWorkerNotification} from './notification-platform.js';
 import {deliverNotice,submitNotification} from './notification-delivery.js';
 import {asyncQuestions,QuestionDrafts} from './questions.js';
-import {questionForm,releaseQuestionForms,restoreQuestionForm,syncQuestionForms} from './question-form.js';
+import {publishRequestCards,syncRequestCards} from '../src/web/components/RequestCards';
 import {fileLink,closeFileViewer} from './message-files.js';
 import {notifyManagerError, recoveryMessage, selectedRecoveryMessage} from './recovery-state.js';
 import {processSummary,renderProcessSummary} from './process-summary.js';
@@ -438,16 +438,7 @@ function renderControls() {
   const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '查看模式。接管后可在原会话继续工作。';
   setText('composer-hint',state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
   setText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
-  document.querySelectorAll('.request-card button,.request-card input,.request-card textarea').forEach(n => { if(n.closest('.question-form'))return;const card=n.closest('.request-card');n.disabled = state.busy.has('request:' + card.dataset.requestId) || (n.dataset.local!=='true'&&(!ready||(card.dataset.asyncQuestion==='true'&&!state.status?.controlledThreads?.includes(card.dataset.threadId)))); });
-  syncQuestionForms({ready,pending:id=>state.busy.has('request:'+id),controlledThreads:state.status?.controlledThreads});
-  document.querySelectorAll('.request-card').forEach(card => {
-    const pending = state.busy.has('request:' + card.dataset.requestId);
-    card.setAttribute('aria-busy',String(pending));
-    let feedback = card.querySelector('.request-feedback');
-    if (!feedback) { feedback = el('p','request-feedback subtle'); feedback.setAttribute('role','status'); card.append(feedback); }
-    feedback.textContent = pending ? '正在提交，请稍候…' : card.dataset.asyncQuestion==='true'&&!state.status?.controlledThreads?.includes(card.dataset.threadId) ? '查看模式，请在原操作入口回答。' : !ready ? '连接恢复后可处理此请求，已填内容会保留。' : '';
-    feedback.hidden = !feedback.textContent;
-  });
+  syncRequestCards({ready,pending:id=>state.busy.has('request:'+id),controlledThreads:state.status?.controlledThreads});
   if($('desktop-entry')){
     $('desktop-entry').hidden=newChatOpen||!state.selectedId||state.selectedArchived||own||state.desktopMode;
     $('desktop-entry').disabled=!state.transport||state.busy.size>0||Boolean(handoff&&handoff.state!=='released');
@@ -782,46 +773,21 @@ function renderRequests() {
   for(const r of list)if(r.params?.questions?.length)notifyTaskEvent('manager/request',r);
   if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();
   const saved = new Map([...document.querySelectorAll('.request-card')].map(card => [card.dataset.requestId, {fields:[...card.querySelectorAll('input,textarea')].map(f => ({name:f.name,value:f.value,checked:f.checked})),open:Boolean(card.querySelector('details[open]'))}]));
-  releaseQuestionForms();
-  const inline = clear($('conversation-requests'));if(sideChat)clear(sideChat.requestsHost);
+  const views=[];
   list.forEach(r => {
     const threadId=requestThread(r);
     if(threadId&&threadId!==state.selectedId&&threadId!==sideChat?.id)return;
-    const method = r.method || '', p = r.params || {}, question = Array.isArray(p.questions) && p.questions.length > 0;
-    const knownApproval = /requestApproval|approval|requestPermissions/i.test(method) || ['approval','commandApproval','fileApproval','command','file','permissions'].includes(r.kind);
-    const card = el('div','request-card'); card.dataset.requestId = requestPath(r);
-    const title = question ? '需要你的回答' : /commandExecution/i.test(method) ? '命令执行审批' : /fileChange/i.test(method) ? '文件修改审批' : /requestPermissions/i.test(method) ? '权限请求' : knownApproval ? '操作审批' : '工具请求待处理';
-    if(!question)card.append(el('h4','',title));
-    card.dataset.asyncQuestion=String(r.kind==='asyncQuestion');card.dataset.threadId=requestThread(r)||'';
-    if (requestThread(r)&&!question) {
-      const target = currentThread()?.id===requestThread(r)?currentThread():state.threads.find(t => t.id === requestThread(r));
-      card.append(el('p','request-origin','会话：' + (target ? threadName(target) : requestThread(r))));
-    }
-    if (p.reason) card.append(el('p','',p.reason));
-    if (p.command) card.append(el('pre','',p.command));
-    if (p.cwd) card.append(el('p','','目标机器目录：' + p.cwd));
-    if (Array.isArray(p.changes)) p.changes.forEach(c => card.append(el('p','',c.path)));
-    if (question) {
-      if(questionDrafts.get(r).skipped){
-        card.append(el('p','subtle','已跳过问题'));
-        const restore=el('button','text-button','重新回答');restore.dataset.local='true';restore.onclick=()=>{questionDrafts.set(r,{skipped:false,collapsed:false});state.requestSignature='';renderRequests();};card.append(restore);
-      }else card.append(questionForm(r,{drafts:questionDrafts,submit:answer=>respondRequest(r,answer),rerender:()=>{state.requestSignature='';renderRequests();}}));
-    } else {
-      if (!knownApproval) card.append(el('p','','此工具需要专用实现。请查看请求详情。可以取消请求，避免会话一直等待。'));
-      const detail = el('details','request-detail'); detail.append(el('summary','','请求详情'),el('pre','',pretty({method,params:p}))); card.append(detail);
-      const actions = el('div','request-actions');
-      if (knownApproval) { const available = p.availableDecisions; const accepts = !Array.isArray(available) || !available.length || available.includes('accept'); const declines = !Array.isArray(available) || !available.length || available.includes('decline'); const accept = el('button','accept','允许一次'); accept.onclick = () => respondRequest(r,{decision:'accept'}); if (accepts) actions.append(accept); if(available?.includes('acceptForSession')){const session=el('button','accept','本会话允许');session.onclick=()=>respondRequest(r,{decision:'acceptForSession'});actions.append(session);} const decline = el('button','','拒绝'); decline.onclick = () => respondRequest(r,{decision:'decline'}); if (declines) actions.append(decline); }
-      const cancel = el('button','','取消请求'); cancel.onclick = () => respondRequest(r,{decision:'cancel'}); if (!Array.isArray(p.availableDecisions) || !p.availableDecisions.length || p.availableDecisions.includes('cancel')) actions.append(cancel); card.append(actions);
-    }
-    const previous = saved.get(requestPath(r));
-    if (previous) {
-      const form=card.querySelector('.question-form');
-      if(form)restoreQuestionForm(form,previous.fields);
-      else card.querySelectorAll('input,textarea').forEach(f => { const found = previous.fields.find(x => x.name === f.name && (f.type !== 'radio' || x.value === f.value)); if (found) { if (f.type === 'radio') f.checked = found.checked; else f.value = found.value; } });
-      if (previous.open && card.querySelector('details')) card.querySelector('details').open = true;
-    }
-    if(sideChat?.id&&threadId===sideChat.id)sideChat.requestsHost.append(card);else inline.append(card);
+    const method=r.method||'',p=r.params||{},question=Array.isArray(p.questions)&&p.questions.length>0;
+    const knownApproval=/requestApproval|approval|requestPermissions/i.test(method)||['approval','commandApproval','fileApproval','command','file','permissions'].includes(r.kind);
+    const title=question?'需要你的回答':/commandExecution/i.test(method)?'命令执行审批':/fileChange/i.test(method)?'文件修改审批':/requestPermissions/i.test(method)?'权限请求':knownApproval?'操作审批':'工具请求待处理';
+    const target=threadId&&!question?(currentThread()?.id===threadId?currentThread():state.threads.find(t=>t.id===threadId)):null;
+    const rerender=()=>{state.requestSignature='';renderRequests();};
+    views.push({host:sideChat?.id&&threadId===sideChat.id?sideChat.requestsHost:$('conversation-requests'),id:requestPath(r),threadId:threadId||'',asyncQuestion:r.kind==='asyncQuestion',title,
+      origin:threadId&&!question?'会话：'+(target?threadName(target):threadId):undefined,reason:p.reason?String(p.reason):undefined,command:p.command?String(p.command):undefined,cwd:p.cwd?String(p.cwd):undefined,changes:Array.isArray(p.changes)?p.changes.map(c=>({path:c.path==null?'':String(c.path)})):undefined,
+      knownApproval,availableDecisions:p.availableDecisions,detail:pretty({method,params:p}),respond:answer=>respondRequest(r,answer),previous:saved.get(requestPath(r)),
+      question:question?{request:r,options:{drafts:questionDrafts,submit:answer=>respondRequest(r,answer),rerender},skipped:!!questionDrafts.get(r).skipped,restore:()=>{questionDrafts.set(r,{skipped:false,collapsed:false});rerender();}}:undefined});
   });
+  publishRequestCards(views);
   renderControls();
 }
 
