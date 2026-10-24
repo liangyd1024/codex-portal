@@ -14,7 +14,7 @@ const baselineRoot=path.join(evidence,'baseline');
 const files=execFileSync('git',['ls-tree','-r','--name-only',baseline,'--','public','shared'],{cwd:root,encoding:'utf8'}).trim().split('\n');
 for(const file of files){const destination=path.join(baselineRoot,file);await mkdir(path.dirname(destination),{recursive:true});await writeFile(destination,execFileSync('git',['show',baseline+':'+file],{cwd:root,maxBuffer:8*1024*1024}));}
 const fixture=await readFile(path.join(root,'test/fixtures/mobile-browser.js'),'utf8')+'\n'+await readFile(path.join(root,'test/fixtures/parity-controls.js'),'utf8');
-const extras=['mobile-settings-browser.js','queue-performance-browser.js','native-events-browser.js','history-pages-browser.js','selection-browser.js','project-failure-browser.js','account-browser.js','maintenance-browser.js','diagnostics-browser.js','performance-browser.js','goal-status-browser.js','questions-browser.js','question-attention-browser.js','desktop-mentions-browser.js','web-mentions-browser.js','turn-files-browser.js','turn-navigation-browser.js'];
+const extras=['side-expiry-browser.js','mobile-settings-browser.js','queue-performance-browser.js','native-events-browser.js','history-pages-browser.js','selection-browser.js','project-failure-browser.js','account-browser.js','maintenance-browser.js','diagnostics-browser.js','performance-browser.js','goal-status-browser.js','questions-browser.js','question-attention-browser.js','desktop-mentions-browser.js','web-mentions-browser.js','turn-files-browser.js','turn-navigation-browser.js'];
 const servers=[];
 async function serve(directory){
  const parityEvents=createParityEventHandler();

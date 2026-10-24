@@ -74,7 +74,7 @@
       if(!t)return json({error:{message:'找不到模拟会话'}},404);
       if(!action)return json(detail(id));
       if(action==='side-chat'){
-        const child=thread('qa-side','验收侧边聊天');child.ephemeral=true;
+        const child=thread(f.sideExpiry?'qa-side-'+(++f.sideSerial):'qa-side','验收侧边聊天');child.ephemeral=true;
         if(!f.threads.some(t=>t.id===child.id))f.threads.push(child);
         return json({thread:child});
       }
