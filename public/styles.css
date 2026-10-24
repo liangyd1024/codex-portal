@@ -523,11 +523,11 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 /* Keep short histories next to the composer, without artificial blank spacers. */
 .messages-scroller{display:flex;flex-direction:column}
 .messages-scroller>.messages{flex:0 0 auto;width:100%;margin-top:auto}
-.composer-queue{width:100%;max-width:var(--conversation-width);margin:0 auto 8px;max-height:180px;overflow:auto;overscroll-behavior:contain;border:1px solid var(--control-border-color);border-radius:var(--panel-radius);background:var(--control-background)}
-.composer-queue-row{display:flex;align-items:center;gap:8px;padding:4px 10px;border-bottom:1px solid var(--line)}
+.composer-queue{width:100%;max-width:var(--conversation-width);margin:0 auto 6px;max-height:180px;overflow:auto;overscroll-behavior:contain;border:1px solid var(--control-border-color);border-radius:var(--panel-radius);background:var(--control-background);color:var(--control-foreground)}
+.composer-queue-row{display:flex;align-items:center;gap:8px;padding:0 8px 0 14px;border-bottom:1px solid var(--line)}
 .composer-queue-row:last-child{border-bottom:0}
 .composer-queue-text{flex:1;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:100px;overflow:auto}
-.composer-queue-row button{flex-shrink:0;min-width:44px;min-height:44px}
+.composer-queue-row button{flex-shrink:0;min-width:44px;min-height:44px;border-radius:var(--control-radius);background:transparent;color:var(--control-foreground)}
 .conversation>.composer-region>.composer-queue{flex:0 1 auto;min-height:0;max-height:min(180px,25dvh)}
 #guide-message{min-width:44px;min-height:44px}
 
