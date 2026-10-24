@@ -868,3 +868,35 @@ test('unpaired mobile static routes expose only login assets without conditional
  }
  assert.deepEqual(outcomes[1],outcomes[0]);
 });
+
+test('repeated SSE reconnects release view retention and update subscriptions each time',{timeout:15000},async()=>{
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const subscribers=new Set(),views=new Set();let subscriptions=0,unsubscriptions=0,attachments=0,releases=0,onReleased;
+  const updater={status:async()=>({version:'fixture',state:'idle'}),subscribe(fn){subscriptions++;subscribers.add(fn);return ()=>{unsubscriptions++;subscribers.delete(fn);};}};
+  const env=await create(factory,{updater}),manager=env.managers.get('b');let disconnects=0;
+  manager.disconnect=()=>{disconnects++;};
+  manager.retention={attach(id){attachments++;views.add(id);return ()=>{releases++;views.delete(id);onReleased?.();};},view(){throw Error('closed views must never reach native retention');}};
+  const listeners=manager.listenerCount('event'),records=[];
+  try{
+   for(let i=0;i<30;i++){
+    const viewId='qa_view_'+String(i).padStart(8,'0'),abort=new AbortController();
+    const closed=new Promise(resolve=>{onReleased=resolve;});
+    try{
+     const response=await fetch(env.base+'/api/events?host=b&viewId='+viewId,{signal:abort.signal});
+     assert.equal(response.status,200);const reader=response.body.getReader(),decoder=new TextDecoder();let text='';
+     while(!text.includes('event: system/update\ndata: {"version":"fixture","state":"idle"}\n\n')){const part=await reader.read();assert.equal(part.done,false);text+=decoder.decode(part.value,{stream:true});}
+     assert.equal(views.size,1);assert.equal(subscribers.size,1);
+     abort.abort();await assert.rejects(reader.read(),{name:'AbortError'});await closed;
+     assert.equal(views.size,0);assert.equal(subscribers.size,0);assert.equal(releases,attachments);assert.equal(unsubscriptions,subscriptions);
+     assert.equal(manager.listenerCount('event'),listeners);assert.equal(disconnects,0);
+     const stale=await fetch(env.base+'/api/thread-view?host=b',{method:'POST',headers:{'x-csrf-token':env.token},body:JSON.stringify({viewId,revision:i,threadId:null})});
+     assert.equal(stale.status,409);const body=await stale.json();assert.equal(body.error.code,'VIEW_DISCONNECTED');
+     records.push({attachments,releases,subscriptions,unsubscriptions,listeners:manager.listenerCount('event'),status:stale.status,body});
+    }finally{abort.abort();}
+   }
+   assert.equal((await fetch(env.base+'/api/status?host=b').then(r=>r.json())).connection.state,'connected');outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
