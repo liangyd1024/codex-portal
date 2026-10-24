@@ -1,3 +1,4 @@
+import {createStopRequest} from '../src/web/services/stop-request';
 import {createDesktopSend} from '../src/web/services/desktop-send';
 import {publishSendActions,installSendActions} from '../src/web/components/SendActions';
 import {publishModelSelect,installModelSelectActions} from '../src/web/components/ModelSelect';
@@ -1139,25 +1140,9 @@ const sendDesktopMessage=createDesktopSend({state,input:()=>$('message-input'),
   refresh:()=>refreshSelected(),resize:()=>resizeInput(),toast:(...args)=>toast(...args)});
 const historyPagination=createHistoryPagination({state,busy:value=>$('messages-scroller').setAttribute('aria-busy',String(value)),
   action:(...args)=>action(...args),read:path=>api(path),turns,render:()=>renderThread()});
-async function interruptThread() {
-  if(state.busy.has('interrupt')||stopFeedback.has(stopContext())||!state.selectedId||newChatOpen)return;
-  const desktop=state.desktopMode,id=state.selectedId,selection=state.selectionVersion,key=stopContext();
-  const turnId=[...turns()].reverse().find(t=>['inProgress','in_progress','running'].includes(typeOf(t.status)))?.id;
-  if(desktop?!turnId:!controlled())return;
-  const current=()=>key===stopContext()&&selection===state.selectionVersion&&!newChatOpen;
-  const request=stopFeedback.begin(key,turnId,!desktop&&!running());
-  await action('interrupt',async()=>{
-    try {
-      await api((desktop?'/api/desktop/threads/':'/api/threads/')+encodeURIComponent(id)+'/interrupt',{method:'POST',...(desktop?{body:{turnId}}:{})});
-    } catch(error) {
-      stopFeedback.settle(key,request,error);
-      if(current())throw error;
-      recordError(error,'interrupt');return;
-    }
-    stopFeedback.settle(key,request);
-    if(current())await refreshSelected();
-  });
-}
+const interruptThread=createStopRequest({state,newChatOpen:()=>newChatOpen,context:stopContext,turns,kind:typeOf,
+  controlled,running,feedback:stopFeedback,action:(...args)=>action(...args),api:(...args)=>api(...args),
+  refresh:()=>refreshSelected(),recordError:(...args)=>recordError(...args)});
 async function moreHistory(options={}) { return historyPagination(options); }
 const messageInput=createMessageInput({input:()=>$('message-input'),id:inputId,suspended:()=>draftWritesSuspended,
   persist:(id,value)=>state.drafts.set(id,value),render:()=>renderControls(),send:(...args)=>sendMessage(...args),
