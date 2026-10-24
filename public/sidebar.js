@@ -63,6 +63,7 @@ export function sidebarGroups(snapshot){
 export class Sidebar {
   constructor(options){
     this.o=options;this.node=options.node;this.snapshot=null;this.pending=false;this.menu=null;this.dialog=null;this.scope=null;this.expanded=new Set();this.searchOverrides=new Map();this.searchExpanded=true;
+    this.menuView=installSidebarMenu(item=>{this.closeMenu(false);item.run?.();});
     this.toolbar=make('div','sidebar-tools');
     const archive=make('button','sidebar-view','已归档');archive.type='button';archive.onclick=()=>options.onArchiveView(!this.snapshot?.archived);this.archiveButton=archive;
     const more=make('button','icon-button','⋯');more.type='button';more.setAttribute('aria-label','侧边栏设置');more.onclick=()=>this.openMenu(more,[
@@ -202,12 +203,11 @@ export class Sidebar {
   }
   sectionMenu(s){return [this.entry('重命名分区','renameSection',()=>this.edit('renameSection',s,'重命名分区',s.name)),this.entry('删除分区','deleteSection',()=>this.confirmDelete(s))];}
   openMenu(anchor,entries){
-    this.closeMenu(false);entries=entries.filter(item=>!item.hidden);if(!entries.length)return;this.menuAnchor=anchor;const menu=make('div','sidebar-menu');menu.setAttribute('role','menu');
-    for(const [index,item] of entries.entries()){const button=make('button','',item.label);button.type='button';button.setAttribute('role','menuitem');button.disabled=!!item.disabled;if(item.reason&&item.disabled){button.title=item.reason;button.setAttribute('aria-description',item.reason);}button.onclick=()=>{this.closeMenu(false);item.run?.();};menu.append(button);if(item.reason&&item.disabled){const reason=make('span','control-reason',item.reason);reason.id='sidebar-reason-'+index;button.setAttribute('aria-describedby',reason.id);menu.append(reason);}}
-    document.body.append(menu);this.menu=menu;this.positionMenu();
-    const focus=()=>[...menu.querySelectorAll('button:not(:disabled)')];focus()[0]?.focus();menu.onkeydown=e=>{const buttons=focus(),index=buttons.indexOf(document.activeElement);if(['ArrowDown','ArrowUp','Home','End','Tab'].includes(e.key)){e.preventDefault();const n=e.key==='Home'?0:e.key==='End'?buttons.length-1:(index+(e.key==='ArrowUp'||e.shiftKey?-1:1)+buttons.length)%buttons.length;buttons[n]?.focus();}};
+    this.closeMenu(false);entries=entries.filter(item=>!item.hidden);if(!entries.length)return;this.menuAnchor=anchor;
+    const menu=this.menuView.open(entries);this.menu=menu;this.positionMenu();menu.querySelector('button:not(:disabled)')?.focus();
   }
-  closeMenu(restore=true){if(!this.menu)return;this.menu.remove();this.menu=null;if(restore)this.menuAnchor?.focus();}
+  closeMenu(restore=true){if(!this.menu)return;this.menuView.close();this.menu=null;if(restore)this.menuAnchor?.focus();}
+
   positionMenu(){
     if(!this.menu)return;
     const rect=this.menuAnchor.getBoundingClientRect(),v=window.visualViewport,top=v?.offsetTop||0,height=v?.height||innerHeight;
@@ -275,4 +275,11 @@ export class Sidebar {
     const scope=this.snapshot.accountScope;this.undoId=id;
     this.undoNode?.remove();const node=make('div','sidebar-undo');node.setAttribute('role','status');node.append(make('span','','会话已归档'));const button=make('button','','撤销');button.type='button';button.onclick=async()=>{button.disabled=true;try{const s=await this.o.api('/api/sidebar?archived=true&search=');if(s.accountScope!==scope)throw Error('目标账号已变化，请在已归档列表核对。');let t=s.data.find(t=>t.id===id),cursor=s.nextCursor;while(!t&&cursor){const p=await this.o.api('/api/sidebar?archived=true&cursor='+encodeURIComponent(cursor));t=p.data.find(t=>t.id===id);cursor=p.nextCursor;}if(!t)throw Error('归档状态已变化，请刷新列表。');await this.run('restore',t,{},true);node.remove();this.focusAnchor();}catch(e){this.o.toast(e.message,true);button.disabled=false;}};node.append(button);this.toolbar.after(node);this.undoNode=node;
   }
+}
+
+let sidebarMenuInstaller;
+export function configureSidebarMenu(installer){sidebarMenuInstaller=installer;}
+export function installSidebarMenu(select){
+  if(!sidebarMenuInstaller)throw new Error('侧栏菜单尚未初始化。');
+  return sidebarMenuInstaller(select);
 }
