@@ -1,3 +1,5 @@
+import {connectionBanner} from '../src/web/services/connection-banner';
+import {publishConnectionIndicators,publishConnectionBanner} from '../src/web/components/ConnectionIndicators';
 import {publishConnectionSettings,installConnectionActions} from '../src/web/components/ConnectionSettings';
 import {publishNotificationView,installNotificationActions,appendNotificationDiagnostic} from '../src/web/components/NotificationControls';
 import {createWorkspaceRefresh} from '../src/web/services/workspace-refresh.ts';
@@ -317,14 +319,10 @@ function renderStatus() {
   const variant = connected() && state.transport ? 'connected' : ['connecting','reconnecting'].includes(conn) ? 'connecting' : conn === 'error' || conn === 'failed' ? 'error' : '';
   const label = connected() && !state.transport ? '实时连接中断' : stages[conn] || conn;
   document.title = (currentThread() ? threadName(currentThread()) + ' · ' : '') + 'Codex 工作台';
-  setText('host-name',h.alias || '目标机器'); setText('breadcrumb-host',h.alias || '目标机器');
-  setText('host-address',h.hostname || '目标机器'); setText('connection-label',label);
+  publishConnectionIndicators({ready:true,variant,label,name:h.alias || '目标机器',address:h.hostname || '目标机器'});
   publishConnectionSettings({ready:true,variant,label,host:h.hostname || h.alias || '目标机器',user:h.user,
     version:service.version || h.version,connectedAt:dateTime(c.connectedAt),transport:state.transport ? '实时通道已连接' : '实时通道未连接',
     icon:connected()||connectionPending() ? 'close' : 'link',connectLabel:state.busy.has('disconnect') ? '正在断开…' : connectionPending()?'取消连接':connected() ? '断开本机连接' : '连接目标机器'});
-  $('machine-dot').className = 'connection-dot ' + variant;
-  $('connection-pill').className = 'connection-pill ' + variant;
-  $('connection-pill').querySelector('.connection-dot').className = 'connection-dot ' + variant;
   const welcome = $('welcome-connect'); clear(welcome); welcome.append(icon(connected() ? 'plus' : 'link'),el('span','',connectionPending() ? '正在连接…' : connected() ? '新建目标机器会话' : '连接 ' + (h.alias || '目标机器')));
   setText('welcome-footnote',connected() ? '已连接。选择左侧会话，或新建目标机器会话。' : '等待连接。此页面不包含演示会话。');
   renderControlOverview();
@@ -341,15 +339,10 @@ function renderControlOverview() {
 }
 function renderConnectionBanner() {
   const s=state.status||{}, c=s.connection||{}, service=s.service||{}, conn=c.state||'disconnected';
-  const banner = $('connection-banner');
-  const error = c.error ? messageOf(c.error) : '';
-  if (!state.transport) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '与网页服务的连接已中断，正在自动重连。已有内容和草稿保留，恢复后将自动同步。'; }
-  else if (error) { banner.hidden = false; banner.className = 'connection-banner error'; banner.textContent = error; }
-  else if (['connecting','reconnecting'].includes(conn)) { banner.hidden = false; banner.className = 'connection-banner'; banner.textContent = '正在连接目标机器。' + (c.stage ? (stages[c.stage] || c.stage) + '…' : '正在核验连接状态…'); }
-  else if(connected()&&s.loginRecovery&&!state.desktopMode){banner.hidden=false;banner.className='connection-banner error';banner.textContent=s.loginRecovery;}
-  else if(connected()&&service.protocolValidation?.status==='limited'){const names={create:'新建会话',takeover:'接管会话',message:'发送消息',steer:'补充要求',stop:'停止',queue:'排队输入',handoff:'交还桌面端',release:'释放控制'};const disabled=Object.entries(service.protocolValidation.features||{}).filter(([,v])=>!v.supported).map(([name])=>names[name]||name);banner.hidden=false;banner.className='connection-banner';banner.textContent='已连接。当前引擎暂不支持：'+(disabled.join('、')||'部分协议读取')+'。其他已核验功能仍可使用。详见连接诊断。';}
-  else if(connected()&&selectedRecoveryMessage(s.recoveryFailures,newChatOpen?null:state.selectedId)){banner.hidden=false;banner.className='connection-banner';banner.textContent=selectedRecoveryMessage(s.recoveryFailures,state.selectedId);}
-  else banner.hidden = true;
+  publishConnectionBanner(connectionBanner({transport:state.transport,error:c.error?messageOf(c.error):'',connection:conn,
+    stage:c.stage,stageLabel:stages[c.stage],connected:connected(),desktopMode:state.desktopMode,loginRecovery:s.loginRecovery,
+    limited:service.protocolValidation?.status==='limited',features:service.protocolValidation?.features,
+    recoveryMessage:()=>selectedRecoveryMessage(s.recoveryFailures,newChatOpen?null:state.selectedId)}));
 }
 function renderControls() {
   publishWorkspace(state);
@@ -1600,7 +1593,7 @@ async function init() {
   if(notification)openNotificationThread(notification);
   else if(state.selectedId)restoreDetail(state.selectedId,state.selectionVersion);
   try { const c = await api('/api/csrf'); state.csrf = c.token; await loadStatus(); if (connected()) await refreshWorkspace(false,true); else if (!connectionPending()) await connectRemote(); }
-  catch (e) { recordError(e,'init'); const n = $('connection-banner'); n.hidden = false; n.className = 'connection-banner error'; n.textContent = messageOf(e); }
+  catch (e) { recordError(e,'init'); publishConnectionBanner({hidden:false,className:'connection-banner error',text:messageOf(e)}); }
   finally{workspaceStarting=false;}
 }
 if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
