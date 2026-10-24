@@ -1,3 +1,4 @@
+import {createDesktopSend} from '../src/web/services/desktop-send';
 import {publishSendActions,installSendActions} from '../src/web/components/SendActions';
 import {publishModelSelect,installModelSelectActions} from '../src/web/components/ModelSelect';
 import {createMessageInput} from '../src/web/services/message-input';
@@ -1129,31 +1130,13 @@ async function implementPlan(id,plan){
     }
   }finally{state.busy.delete('message');renderControls();}
 }
-async function sendDesktopMessage(){
-  const annotationDraft=annotations.capture();
-  const id=state.selectedId,selection=state.selectionVersion,text=annotatedText($('message-input').value.trim(),annotationDraft.items);
-  if(!text||state.busy.has('message')||!state.detail?.desktop?.canSend)return;
-  if(desktopSends[id])return;
-  if(attachments?.has()){toast('桌面入口暂不支持草稿中的图片，请返回网页入口处理图片后再发送。',true);return;}
-  const options=composer.options();
-  if(options.skills.length||options.plugins.length){toast('桌面入口暂不支持草稿中的技能或插件引用，请删除后再发送。',true);return;}
-  const sent=state.drafts.capture(id,$('message-input').value),messageId=crypto.randomUUID();
-  desktopSends[id]={messageId,text:sent.text};saveDesktopSends();
-  await action('message',async()=>{
-    try{
-      await api('/api/desktop/threads/'+encodeURIComponent(id)+'/message',{method:'POST',body:{messageId,text,threads:options.threads}});
-      annotations.acknowledge(annotationDraft);
-      delete desktopSends[id];saveDesktopSends();
-      const cleared=state.drafts.acknowledge(sent);
-      if(id===state.selectedId&&selection===state.selectionVersion&&cleared&&$('message-input').value===sent.text){$('message-input').value='';resizeInput();}
-    }catch(error){
-      if(error.status>=400&&error.status<500&&error.code!=='OUTCOME_UNKNOWN'&&error.code!=='SEND_PENDING'){delete desktopSends[id];saveDesktopSends();}
-      throw error;
-    }finally{
-      if(id===state.selectedId&&selection===state.selectionVersion)await refreshSelected();
-    }
-  });
-}
+const sendDesktopMessage=createDesktopSend({state,input:()=>$('message-input'),
+  captureAnnotation:()=>annotations.capture(),annotatedText:(text,draft)=>annotatedText(text,draft.items),
+  acknowledgeAnnotation:draft=>annotations.acknowledge(draft),hasAttachments:()=>attachments?.has(),
+  options:()=>composer.options(),captureDraft:(id,text)=>state.drafts.capture(id,text),
+  acknowledgeDraft:sent=>state.drafts.acknowledge(sent),sends:desktopSends,saveSends:()=>saveDesktopSends(),
+  uuid:()=>crypto.randomUUID(),action:(...args)=>action(...args),post:(path,body)=>api(path,{method:'POST',body}),
+  refresh:()=>refreshSelected(),resize:()=>resizeInput(),toast:(...args)=>toast(...args)});
 const historyPagination=createHistoryPagination({state,busy:value=>$('messages-scroller').setAttribute('aria-busy',String(value)),
   action:(...args)=>action(...args),read:path=>api(path),turns,render:()=>renderThread()});
 async function interruptThread() {
