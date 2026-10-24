@@ -59,15 +59,15 @@ test('side receipt matches the server-normalized selection input before and afte
 });
 
 test('side drafts are editable during native creation, failure, expiry and disconnection; sending stays gated',()=>{
- const control=()=>({setAttribute(){}}),selected={model:'test',effort:'medium',selections:[{text:'quote'}]};
- const c=vm.createContext({selected,context:()=>({ready:true,models:[{id:'test',efforts:['medium']}]}),localContext:()=>({ready:!!selected.id&&!selected.expired}),input:{value:'草稿'},status:{},send:control(),stop:{},retry:{},unlock:{},restart:{},recovery:{},attachments:{pending:()=>false},composer:null});
- const start=source.indexOf(' function renderControls('),end=source.indexOf('  const models=context()',start);
- vm.runInContext(source.slice(start,end)+'}',c);
+ const selected={model:'test',effort:'medium',selections:[{text:'quote'}]};let controls;
+ const c=vm.createContext({selected,context:()=>({ready:true,models:[{id:'test',efforts:['medium']}]}),localContext:()=>({ready:!!selected.id&&!selected.expired}),input:{value:'草稿'},view:{renderControls:value=>{controls=value;}},attachments:{pending:()=>false,render(){}},composer:null});
+ const start=source.indexOf(' function renderControls('),end=source.indexOf(' function render()',start);
+ vm.runInContext(source.slice(start,end),c);
  for(const state of [{creating:true},{creating:false,error:'创建失败'},{id:'side-a',expired:true},{id:undefined,expired:false}]){
-  Object.assign(selected,state);c.renderControls();assert.equal(c.input.disabled,false);assert.equal(c.send.disabled,true);assert.equal(c.input.value,'草稿');
+  Object.assign(selected,state);c.renderControls();assert.equal(controls.inputDisabled,false);assert.equal(controls.sendDisabled,true);assert.equal(c.input.value,'草稿');
  }
- Object.assign(selected,{id:'side-a',expired:false,error:''});c.renderControls();assert.equal(c.send.disabled,false);
- selected.busy=true;c.renderControls();assert.equal(c.input.disabled,true);assert.equal(c.send.disabled,true);
+ Object.assign(selected,{id:'side-a',expired:false,error:''});c.renderControls();assert.equal(controls.sendDisabled,false);
+ selected.busy=true;c.renderControls();assert.equal(controls.inputDisabled,true);assert.equal(controls.sendDisabled,true);
 });
 
 test('pending native side creation is deduplicated and preserves typed drafts without sending',async()=>{
