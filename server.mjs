@@ -87,6 +87,10 @@ export function createApp({serverFactory=handler=>http.createServer(handler),pro
       if(!manager)throw new AppError('未知连接。',404,'UNKNOWN_HOST');
       if(req.method==='GET'&&p==='/api/csrf')return json(res,200,{token:csrf});
       if(req.method==='GET'&&p==='/api/events'){
+        const viewId=url.searchParams.get('viewId');
+        if(viewId&&!/^[a-zA-Z0-9_-]{16,80}$/.test(viewId))throw new AppError('页面标识无效。');
+        res.viewId=viewId;
+        const releaseView=manager.retention?.attach(viewId||res);
         res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-store','Connection':'keep-alive','X-Accel-Buffering':'no'});
         res.write(`data: ${JSON.stringify({method:'manager/status',params:manager.status()})}\n\n`);res.targetKey=targetKey;clients.add(res);
         for(const request of manager.status().pendingRequests||[])res.write(`data: ${JSON.stringify({method:'manager/request',params:request})}\n\n`);
@@ -95,7 +99,7 @@ export function createApp({serverFactory=handler=>http.createServer(handler),pro
         const sendUpdate=data=>{if(res.destroyed||res.writableEnded)return;if(res.writableLength>8*1024*1024){res.destroy();return;}res.write(`event: system/update\ndata: ${JSON.stringify(data)}\n\n`);};
         const unsubscribe=updater.subscribe?.(sendUpdate);
         void updater.status().then(sendUpdate).catch(()=>{});
-        res.once('close',()=>{clearInterval(heartbeat);unsubscribe?.();clients.delete(res);});return;
+        res.once('close',()=>{clearInterval(heartbeat);unsubscribe?.();releaseView?.();clients.delete(res);});return;
       }
       if(req.method==='GET'&&p==='/api/account/usage')return json(res,200,await readAccountUsage(manager));
       if(req.method==='GET'&&p==='/api/system/deployment-status'){if(remote)throw new AppError('仅限本机部署检查。',403);return json(res,200,await deploymentStatus(manager));}
@@ -152,6 +156,14 @@ export function createApp({serverFactory=handler=>http.createServer(handler),pro
         if(p==='/api/notices/ack')return json(res,200,manager.acknowledgeNotice(data.key));
         if(p==='/api/diagnostics/clear')return json(res,200,manager.clearDiagnosticHistory());
         if(p==='/api/disconnect')return json(res,200,manager.disconnect());
+        if(p==='/api/thread-view'){
+          if(typeof data.viewId!=='string'||!Number.isSafeInteger(data.revision)||data.revision<0||
+            (data.threadId!==null&&(typeof data.threadId!=='string'||!/^[0-9a-f-]{36}$/i.test(data.threadId))))throw new AppError('会话页面参数无效。');
+          const client=[...clients].find(c=>c.targetKey===targetKey&&c.viewId===data.viewId&&Boolean(c.mobileRequest)===remote&&(!remote||access.token(c.mobileRequest)===access.token(req)));
+          if(!client||!manager.retention)throw new AppError('页面连接已变化，请重试。',409,'VIEW_DISCONNECTED');
+          await manager.retention.view(data.viewId,data.threadId,data.revision);
+          return json(res,200,{ok:true});
+        }
         if(p==='/api/account/reload')return json(res,200,await manager.reloadLogin(data));
         if(p==='/api/service/release')return json(res,200,await manager.release(data));
         if(p==='/api/threads')return json(res,201,await manager.newThread(data));

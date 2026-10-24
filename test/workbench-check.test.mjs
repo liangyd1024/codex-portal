@@ -12,10 +12,11 @@ test('browser verdict rejects a healthy version endpoint with missing modules, s
 
 test('deployment probe leaves real reads intact and prevents native mutations',async()=>{
  const listeners={},calls=[],window={addEventListener:(name,fn)=>listeners[name]=fn,fetch:async(...args)=>{calls.push(args);return 'real response';}};
- vm.runInNewContext('('+installReadOnlyProbe.toString()+')()',{window,Request});
+ vm.runInNewContext('('+installReadOnlyProbe.toString()+')()',{window,Request,Response,URL,location:{href:"http://localhost/"}});
  assert.equal(await window.fetch('/api/connections'),'real response');
  for(const method of ['POST','PUT','PATCH','DELETE'])await assert.rejects(window.fetch('/api/connect',{method}),/不执行写入/);
  await assert.rejects(window.fetch(new Request('http://localhost/api/connect',{method:'POST'})),/不执行写入/);
+ assert.equal((await window.fetch('/api/thread-view',{method:'POST',body:'{}'})).status,200);
  assert.equal(calls.length,1);
  listeners.error({target:{tagName:'SCRIPT',src:'/missing.js'}});
  listeners.unhandledrejection({reason:Error('runtime failed')});

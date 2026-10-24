@@ -58,7 +58,7 @@ function detailFixture() {
     status:{instanceId:'one',connection:{state:'connected'},controlledThreads:[],handoffs:[]}};
   const requests=[],applied=[],cacheReads=[];
   const context=vm.createContext({state,newChatOpen:false,automations:null,desktopSends:{},performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
-    turns:()=>state.detail?.turns||[],outputBases:()=>new Map(),decodeOutputs:async x=>x,hydrateOutputs:x=>x,
+    reportThreadView:()=>null,turns:()=>state.detail?.turns||[],outputBases:()=>new Map(),decodeOutputs:async x=>x,hydrateOutputs:x=>x,
     readDetailCache:()=>new Promise(resolve=>cacheReads.push(resolve)),scheduleDetailRefresh:()=>{},
     api:path=>new Promise((resolve,reject)=>requests.push({path,resolve,reject})),
     applyDetail:data=>{state.detail=data;applied.push(data);},
@@ -81,6 +81,22 @@ test('late thread and connection replies cannot overwrite a new selection; dupli
   f.requests[3].resolve({thread:{id:'b',name:'fresh'},turns:[]});await fresh;
   f.requests[2].reject(Error('old connection failed'));await Promise.all([stale,staleDuplicate]);
   assert.equal(f.state.detail.thread.name,'fresh');
+});
+
+test('a slow runtime resume does not block the preview or overwrite a newer selection',async()=>{
+  const f=detailFixture();f.state.detail=null;let release;
+  f.context.reportThreadView=()=>new Promise(r=>release=r);
+  const read=f.read();assert.equal(f.requests.length,1);assert.match(f.requests[0].path,/preview=1/);
+  f.requests[0].resolve({thread:{id:'a'},turns:[]});await settle();assert.equal(f.applied.length,1);
+  f.state.selectedId='b';f.state.selectionVersion++;release();await read;
+  assert.equal(f.requests.length,1);assert.equal(f.applied.length,1);
+});
+
+test('failed runtime resume leaves the read-only preview and propagates the error',async()=>{
+  const f=detailFixture();f.state.detail=null;
+  f.context.reportThreadView=()=>Promise.reject(Error('resume failed'));
+  const read=f.read();f.requests[0].resolve({thread:{id:'a'},controlled:false,turns:[]});
+  await assert.rejects(read,/resume failed/);assert.equal(f.state.detail.controlled,false);
 });
 test('a reply from before handoff cannot restore control after the released status arrives',async()=>{
   const f=detailFixture();f.status({...f.state.status,controlledThreads:['a']});

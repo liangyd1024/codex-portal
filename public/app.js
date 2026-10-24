@@ -83,6 +83,19 @@ function saveView() { try { sessionStorage.setItem('rcm.view.'+targetHost,JSON.s
 function rememberHost(host) { try { localStorage.setItem('rcm.connection',host); } catch {} }
 rememberHost(targetHost);
 const targetUrl=path=>path+(path.includes('?')?'&':'?')+'host='+targetHost;
+const threadViewId=crypto.randomUUID();let threadViewRevision=0,threadViewReport=null;
+function reportThreadView(){
+  if(!state.transport)return Promise.resolve();
+  const threadId=newChatOpen||state.desktopMode||automations?.opened?null:state.selectedId||null;
+  const key=JSON.stringify([targetHost,threadId,state.status?.instanceId,state.status?.connection?.connectedAt]);
+  if(threadViewReport?.key===key)return threadViewReport.promise;
+  const report={key},version=state.detailVersion;threadViewReport=report;
+  report.promise=api('/api/thread-view',{method:'POST',body:{viewId:threadViewId,threadId,revision:++threadViewRevision}}).then(result=>{
+    if(threadViewReport===report&&threadId&&state.detailVersion!==version)scheduleDetailRefresh();
+    return result;
+  }).catch(error=>{if(threadViewReport===report)threadViewReport=null;throw error;});
+  return report.promise;
+}
 const retiredStatusInstances=new Set();
 function applyStatus(status){
   const next=selectConnectionStatus(state.status,status,retiredStatusInstances);
@@ -126,7 +139,7 @@ function closeNewChat(restore=true){
   state.drafts.set(newDraftId,$('message-input').value);newChatOpen=false;
   $('conversation').append(document.querySelector('.composer-region'));
   $('new-chat-page').hidden=true;document.querySelector('.main-panel').classList.remove('new-chat-open');document.querySelector('.main-panel').classList.toggle('desktop-chat',restore&&state.desktopMode);
-  if(restore){$('message-input').value=state.drafts.get(state.selectedId)||'';renderThread();resizeInput();}
+  if(restore){$('message-input').value=state.drafts.get(state.selectedId)||'';renderThread();resizeInput();queueMicrotask(()=>void reportThreadView().catch(e=>recordError(e,'thread')));}
 }
 function flushDrafts() {
   if (draftWritesSuspended) return;
@@ -942,7 +955,10 @@ async function selectThread(id,options={}) {
   catch (e) { if (seq !== state.selectionVersion) return; state.loadingDetail = false; state.historyError = messageOf(e); recordError(e,'thread'); renderThread(); }
 }
 async function readSelectedDetail(id,isCurrent){
+  const viewReady=reportThreadView();
+  viewReady?.catch(()=>{}); // A preview may finish after a failed view request.
   if(state.desktopMode){
+    viewReady?.catch(e=>recordError(e,'thread'));
     const data=await api('/api/desktop/threads/'+encodeURIComponent(id));if(data.thread.id!==id)throw new Error('桌面会话已变化，请重新打开。');
     const pending=desktopSends[id];
     if(pending&&data.desktop?.receipts?.[pending.messageId]?.status==='accepted'){
@@ -957,6 +973,8 @@ async function readSelectedDetail(id,isCurrent){
     if(!isCurrent())return preview;
     state.loadingDetail=false;applyDetail(preview,true);firstMs=performance.now()-started;
   }
+  if(viewReady)await viewReady;
+  if(!isCurrent())return state.detail||{};
   const bases=outputBases(turns());
   const versions=Object.fromEntries([...bases].slice(-50).map(([id,b])=>[id,b.token]));
   const encoding=(typeof DecompressionStream==='function'?'?outputEncoding=gzip-base64':'?outputEncoding=plain')+(cold?'&fast=1':'');
@@ -1198,6 +1216,7 @@ function openNewDialog(projectRoot) {
   flushDrafts();updateNewProjects(projectRoot);
   $('new-cwd').onchange=()=>{newDraft.cwd=$('new-cwd').value;rememberNewDraft();renderControls();};
   state.selectionVersion++;newChatOpen=true;$('new-chat-page').hidden=false;document.querySelector('.main-panel').classList.add('new-chat-open');
+  void reportThreadView().catch(e=>recordError(e,'thread'));
   $('new-composer-slot').append(document.querySelector('.composer-region'));
   $('message-input').value=state.drafts.get(newDraftId)||'';
   $('new-chat-error').hidden=true;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);
@@ -1459,10 +1478,12 @@ function handleEvent(event) {
   if (/updated|completed|changed/.test(method)) scheduleDetailRefresh();
 }
 function setupEvents() {
-  const es = new EventSource(targetUrl('/api/events')); state.eventSource = es;
+  const es = new EventSource(targetUrl('/api/events?viewId='+threadViewId)); state.eventSource = es;
   es.onopen = () => {
+    threadViewReport=null;
     sideChat?.reconnect();
     const restored = !state.transport; state.transport = true; renderStatus();
+    void reportThreadView().catch(e=>recordError(e,'thread'));
     if (restored) resumeWorkspace().catch(e => { recordError(e,'sync'); renderStatus(); });
   };
   es.addEventListener('system/update',event=>{if(state.eventSource===es)receiveWebUpdate(JSON.parse(event.data));});
