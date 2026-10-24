@@ -335,6 +335,43 @@ test('file client cancellation releases pending opens and active streams without
 });
 
 
+test('upstream file errors and short bodies fail the transfer and release resources',{timeout:10000},async(t)=>{
+ const outcomes=[];
+ for(const factory of [createApp,createFrameworkApp]){
+  const env=await create(factory),records=[];
+  try{
+   for(const phase of ['source-error','short-body']){
+    let body,cleaned,cancellations=0,signal,pushed=false;
+    const cleanup=new Promise(resolve=>{cleaned=resolve;});
+    env.managers.get('b').openFile=async(_thread,_item,_options,context)=>{
+     signal=context.signal;
+     body=new Readable({read(){if(!pushed){pushed=true;this.push(Buffer.from('first-part'));}}});
+     return {meta:{status:200,size:100,length:100,name:'fixture.txt',mime:'text/plain',kind:'text',etag:'"fixture"'},body,
+      cancel(){cancellations++;body.destroy();cleaned();}};
+    };
+    // Close the HTTP connection after this transfer: a short Content-Length on
+    // a keep-alive socket otherwise waits for the client's body timeout.
+    const response=await fetch(env.base+'/api/threads/qa-thread/items/qa-item/file?host=b',{signal:t.signal,headers:{connection:'close'}});
+    assert.equal(response.status,200);assert.equal(response.headers.get('content-length'),'100');
+    const reader=response.body.getReader();
+    const first=new TextDecoder().decode((await reader.read()).value);
+    assert.equal(first,'first-part');
+    // Fail only after the client has seen valid headers and a partial body.
+    const failure=assert.rejects(reader.read(),error=>error instanceof TypeError);
+    if(phase==='source-error')body.destroy(Error('synthetic upstream read failure'));
+    else body.push(null);
+    await failure;await cleanup;await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(body.destroyed,true);assert.equal(cancellations,1);
+    const status=await fetch(env.base+'/api/status?host=b');assert.equal(status.status,200);
+    assert.deepEqual((await status.json()).unknownNativeField,{keep:['all',1]});
+    records.push({phase,first,cancellations,destroyed:body.destroyed,aborted:signal.aborted});
+   }
+   outcomes.push(records);
+  }finally{await env.close();}
+ }
+ assert.deepEqual(outcomes[1],outcomes[0]);
+});
+
 test('closing one SSE client preserves other clients and never disconnects the target',{timeout:10000},async()=>{
  const outcomes=[];
  for(const factory of [createApp,createFrameworkApp]){
