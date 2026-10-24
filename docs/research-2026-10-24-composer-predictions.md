@@ -8,7 +8,7 @@
 thread/prediction/request is not implemented yet
 ```
 
-因此，当前版本不能把该请求标为可用。RCM 尚未实现或上线输入预测。本次只增加调研记录，不修改运行时代码，不部署网页，不修改或重启 Codex。
+因此，当前版本不能把该请求标为可用。桌面内部已有完整预测实现，但尚未找到 RCM 可直接调用的完整服务入口。这不是“Codex 没实现预测”，也不代表以后无法接入。RCM 尚未实现或上线输入预测。本次只增加调研记录，不修改运行时代码，不部署网页，不修改或重启 Codex。
 
 版本范围：RCM 开始核验时的 `master` 基线为 `0d9f337`；桌面应用 `26.1016.62342`（构建 `21477`）；配置所指原生引擎 `0.163.0-alpha.11.2`。这是本次实测范围，不代表其他版本也未实现。
 
@@ -22,7 +22,7 @@ thread/prediction/request is not implemented yet
 6. 核对测试会话空闲后，通过原生接口退订；随后再次核对已完成轮次并归档测试会话。未操作原业务会话。
 7. 只读检查配置中的引擎二进制，存在相同的错误字符串。现有 `scripts/output-relay.py` 没有预测方法拦截或该错误文案，错误来自原生实现。
 
-测试会话身份、临时目录和原始记录保存在仓库外。未发起第二次预测尝试，未尝试切换凭据或开启隐藏权限。
+测试会话身份、临时目录和原始记录保存在仓库外。首次验证只请求了一次预测；后续独立复核见下文。两轮均未切换凭据或开启隐藏权限。
 
 ## 协议存在不等于实现可用
 
@@ -48,7 +48,50 @@ thread/prediction/request is not implemented yet
 - 桌面通过受信任的 Electron AppHost / MessagePort RPC 调用该内部服务。现有 RCM 桌面 Unix 协调协议未核实到对应导出。
 - 桌面包未发现 `thread/prediction/request` 调用。`thread/prediction/updated` 出现在通知分类表中，不能据此认定当前界面消费它。
 
-不能将内部类名视为 RCM 可调用接口。不得通过脚本注入、伪装桌面入口、读取并改写原生数据，或自行拼接预测提示词及分叉执行来补齐功能。[项目边界](../AGENTS.md)要求业务能力使用已核实的原生接口。
+不能将内部类名视为 RCM 可调用接口。不得通过脚本注入、伪装桌面入口或改写原生数据来补齐功能。[项目边界](../AGENTS.md)要求业务能力使用已核实的原生接口。
+
+`thread/fork.experimentalPredictionMode` 与 `turn/start` 是已在桌面实现中核实的原生低层调用，不能一概称为自建引擎。但它们不会自动取得 Composer predictions 的提示词、资格及采样策略。相同的预测分叉标志也被桌面用于会话标题生成；该标志本身并不代表完整输入预测。如果由 RCM 自行定义提示词、资格和采样策略，就属于自行编排预测业务，不能声称直接复用了完整原生预测服务。
+
+## 独立复核（2026-10-24）
+
+本轮在 `4f77656` 基线上复核。桌面和引擎版本与前述范围相同。并行核对原生低层语义及桌面对外服务分发链；没有只依赖关键词搜索或接口名称推断。
+
+### 直接连接原生服务
+
+绕过 RCM 输出转发，使用标准 WebSocket 传输直连已有引擎 Unix 套接字。两次连接均以 RCM 身份成功初始化，仅改变 `experimentalApi`。使用不存在的合成会话和轮次 UUID，不恢复业务会话、不启动生成：
+
+| 初始化能力 | 原生响应 | 可得结论 |
+| --- | --- | --- |
+| `experimentalApi: false` | `-32600: thread/prediction/request requires experimentalApi capability` | 方法受实验能力门槛限制 |
+| `experimentalApi: true` | `-32601: thread/prediction/request is not implemented yet` | 开启实验能力后仍到达未实现分支 |
+
+[官方 App Server 文档](https://learn.chatgpt.com/docs/app-server)说明未开启实验能力会返回 `requires experimentalApi capability`。实测区分了能力未启用与实现缺失，也排除了 RCM 转发生成该错误的可能。合成 ID 探测不用于证明有效会话行为；前述真实已完成测试轮次补足了该项证据。
+
+辅助尝试过 `app-server proxy` 的 stdio 探测，初始化超时，未将其用作不支持预测的证据。最终结论使用初始化成功的 Unix WebSocket 直连结果。连接结束仅关闭本次入口，没有停止或重启目标引擎。
+
+### 桌面其他入口
+
+以下是当前安装包的静态分发链核验，不等同于逐个执行真实工具调用：
+
+| 候选入口 | 核实结果 |
+| --- | --- |
+| Electron AppHost / MessagePort | `cumberbatch` 已注册，但入口校验已注册 `webContents`、主 frame 和受信页面来源；不是普通外部 RPC |
+| 桌面 Unix IPC | `requestHandlers.get(method)` 和 owner/follower 有限分发，没有预测方法，也不支持转发任意 AppHost 服务 |
+| Native app-tools pipe / Desktop MCP HTTP | 工具命名空间、允许调用的工具与最终执行分支均有限制，没有通往 `cumberbatch` 的调用链 |
+| Node REPL host-service pipe | 仅处理 `ensureService`；当前注册的是受构建条件限制的 `computer-use`，不是任意主进程服务访问 |
+| Deep link | 路由提供导航、预填等操作，没有预测请求或结果读取；导航可能触发桌面自身补取，但不会向调用方返回预测 |
+| 缓存、调试记录及会话历史 | 预测查询缓存位于主进程内存，未找到外部结果读取接口；普通会话历史没有对应建议字段 |
+
+核验定位：`main-JI9qDiXp.js` 的 `createAppHost`、`M0e`、`M_e`、`N_e`、`Moe/Noe/Poe`、`O$e/D$e`、`xce/Sce`、`a2e`；`src-CsH31EEu.js` 的 `g0.handleRequest`、`T0`；`execution-46d140e96a31.js` 的动态工具执行分支。
+
+### 仍未核实的范围
+
+- 服务端预测提示词正文、当前账号配置及动态采样值未取得。因此，模型何时主动选择空建议，不能仅由客户端条件完整解释。
+- [官方更新记录](https://learn.chatgpt.com/docs/changelog)出现过 `thread/sample` 的实验请求演进，但当前二进制导出的请求协议与桌面 JS 均没有该方法。本次未确定该记录的发布版本归属，也未将其当作本机可用接口。
+- 其他版本、服务端后续开关及未来外部服务导出未验证。不能将本次结果扩大为永久无法实现。
+- [官方预测说明](https://learn.chatgpt.com/docs/features/composer-predictions)指出原生预测不消耗 Codex 用量或 credits；自行调用普通生成不能未经验证就继承相同计费声明。
+
+当前阻塞是缺少已验证可达的完整原生预测入口。后续可继续核验实现后的预测请求、新的原生采样能力，或桌面正式导出的服务；不得把组合低层调用的相似结果当作原生预测接入成功。
 
 ## 何时不生成、隐藏或取消
 
