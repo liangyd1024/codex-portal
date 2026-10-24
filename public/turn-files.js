@@ -1,3 +1,4 @@
+import {openTurnFileViewer} from './turn-file-viewer.js';
 const typeOf=value=>value?.type||value||'';
 const el=(tag,cls,text)=>{const node=document.createElement(tag);if(cls)node.className=cls;if(text)node.textContent=text;return node;};
 const icon=name=>{const node=document.createElementNS('http://www.w3.org/2000/svg','svg');node.classList.add('icon');node.setAttribute('aria-hidden','true');const use=document.createElementNS(node.namespaceURI,'use');use.setAttribute('href','#i-'+name);node.append(use);return node;};
@@ -27,7 +28,9 @@ export function renderTurnFiles(items,{turnId,cwd='',uncertain=false}={}) {
   const completed=files.every(f=>f.edits.every(e=>e.status==='completed'));
   const heading=el('summary','turn-files-heading');
   heading.append(icon('file'),el('strong','',completed?'已编辑 '+files.length+' 个文件':'文件变更 · '+files.length+' 个文件'));
-  heading.append(icon('chevron'));
+  const review=el('button','secondary-button turn-files-review','查看变更');review.type='button';
+  review.onclick=event=>{event.preventDefault();event.stopPropagation();openTurnFileViewer(files,{trigger:review,renderEdits:(body,file)=>renderFileEdits(body,file,{uncertain})});};
+  heading.append(review,icon('chevron'));
   card.append(heading);
   const list=el('div','turn-files-list');card.append(list);
   for(const file of files){
@@ -45,14 +48,18 @@ export function renderTurnFiles(items,{turnId,cwd='',uncertain=false}={}) {
     // Allocate potentially large patch text only when the user opens a file.
     row.ontoggle=()=>{
       if(!row.open||body.childNodes.length)return;
-      body.append(el('p','turn-file-full-path',file.path));
-      file.edits.forEach((edit,index)=>{
-        if(file.edits.length>1)body.append(el('p','subtle','第 '+(index+1)+' 次变更 · '+(statusNames[edit.status]||edit.status||'状态未确认')));
-        if(typeof edit.diff==='string'&&edit.diff){const pre=el('pre','turn-file-diff',edit.diff);pre.tabIndex=0;pre.setAttribute('aria-label',file.label+' 的原始变更，可横向滚动');body.append(pre);}
-        else body.append(el('p','subtle','原生记录未提供变更内容。'));
-      });
+      renderFileEdits(body,file,{uncertain});
     };
     list.append(row);
   }
   return card;
+}
+
+function renderFileEdits(body,file,{uncertain=false}={}) {
+  body.append(el('p','turn-file-full-path',file.path));
+  file.edits.forEach((edit,index)=>{
+    body.append(el('p','subtle','第 '+(index+1)+' 次变更 · '+(uncertain&&['inProgress','in_progress','running'].includes(edit.status)?'状态未确认':statusNames[edit.status]||edit.status||'状态未确认')));
+    if(typeof edit.diff==='string'&&edit.diff){const pre=el('pre','turn-file-diff',edit.diff);pre.tabIndex=0;pre.setAttribute('aria-label',file.label+' 的原始变更，可横向滚动');body.append(pre);}
+    else body.append(el('p','subtle','原生记录未提供变更内容。'));
+  });
 }
