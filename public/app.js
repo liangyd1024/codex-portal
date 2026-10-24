@@ -1,6 +1,7 @@
 import {createApiClient} from '../src/web/services/api.ts';
 import {createSidebarLoader} from '../src/web/services/sidebar-loader.ts';
 import {createCatalogReaders} from '../src/web/services/catalogs.ts';
+import {createSelectedRefresh} from '../src/web/services/selected-refresh.ts';
 import {installDeferredTool} from './deferred-tool.js';
 import {renderSelectOptions,renderDiagnosticsView,publishWorkspace,createWorkspaceState} from '../src/web/views.tsx';
 import {completedGoalPlacement,renderCompletedGoal} from './goal-toolbar.js';
@@ -939,30 +940,10 @@ async function readSelectedDetail(id,isCurrent){
   if(cold)setTimeout(()=>{if(isCurrent())scheduleDetailRefresh();},1000);
   return result;
 }
-const detailReads = new Map();
-async function refreshSelected() {
-  if (automations?.opened||newChatOpen||!state.selectedId) return;
-  const id = state.selectedId, seq = state.selectionVersion, version = state.detailVersion;
-  const key=JSON.stringify([id,seq,version]);
-  const isCurrent=()=>!newChatOpen&&id===state.selectedId&&seq===state.selectionVersion&&version===state.detailVersion;
-  if(detailReads.has(key)) return detailReads.get(key);
-  let applied=false;
-  const read=(async()=>{
-  // Recovery is optional: a slow or blocked IndexedDB read must not delay HTTP.
-  // restoreDetail only applies while this selection still has no network detail.
-  if(!state.detail)void restoreDetail(id,seq);
-  if(!isCurrent())return;
-  const resetModels=!state.detail||state.loadingDetail;
-  const data = await readSelectedDetail(id,isCurrent); if (!isCurrent()) return;
-  data.turns = mergeLiveTurns(turns(), data.turns || data.thread?.turns || []);
-  if (state.loadedOlderHistory) data.nextCursor = state.historyCursor;
-  state.loadingDetail=false;
-  applyDetail(data,resetModels);applied=true;
-  })().catch(error=>{if(isCurrent())throw error;});
-  detailReads.set(key,read);
-  try { await read; }
-  finally { if(detailReads.get(key)===read)detailReads.delete(key); if(applied&&isCurrent())turnNavigation?.update(); }
-}
+const selectedRefresh=createSelectedRefresh({state,blocked:()=>automations?.opened||newChatOpen,
+  newChatOpen:()=>newChatOpen,restore:restoreDetail,read:readSelectedDetail,turns,merge:mergeLiveTurns,
+  apply:applyDetail,updated:()=>turnNavigation?.update()});
+const refreshSelected=selectedRefresh.refresh;
 async function refreshWorkspace(forceModels = false, statusReady = false) {
   if (workspaceRefreshPromise) return workspaceRefreshPromise;
   workspaceRefreshPromise = showRefresh('工作区', async () => {
@@ -1609,7 +1590,7 @@ function wireEvents() {
   $('project-list').hidden = !readLayout('projects',true);
   $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
   mobileUI = installMobileUI({closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:mobile=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
-  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,loadDirectory:()=>api('/api/threads/'+encodeURIComponent(state.selectedId)+'/turn-directory'),onError:message=>toast(message,true),context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),ready:usable()&&!state.loadingDetail&&!state.historyError&&!state.detail?.recovering&&!detailReads.has(JSON.stringify([state.selectedId,state.selectionVersion,state.detailVersion])),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:id=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
+  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,loadDirectory:()=>api('/api/threads/'+encodeURIComponent(state.selectedId)+'/turn-directory'),onError:message=>toast(message,true),context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),ready:usable()&&!state.loadingDetail&&!state.historyError&&!state.detail?.recovering&&!selectedRefresh.pending(),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:id=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
 async function init() {

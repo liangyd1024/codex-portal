@@ -5,6 +5,10 @@ import vm from 'node:vm';
 import {installThreadSync} from '../public/thread-sync.js';
 import {mergeLiveTurns,selectConnectionStatus} from '../public/connection-state.js';
 import {Manager} from '../lib/manager.mjs';
+import ts from 'typescript';
+const refreshSource=readFileSync(new URL('../src/web/services/selected-refresh.ts',import.meta.url),'utf8');
+const refreshOutput=ts.transpileModule(refreshSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {createSelectedRefresh}=await import('data:text/javascript;base64,'+Buffer.from(refreshOutput).toString('base64'));
 
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(t,overrides={}) {
@@ -57,7 +61,7 @@ function detailFixture() {
   const state={selectedId:'a',selectionVersion:1,detailVersion:1,detail:{thread:{id:'a'},turns:[]},loadedOlderHistory:false,
     status:{instanceId:'one',connection:{state:'connected'},controlledThreads:[],handoffs:[]}};
   const requests=[],applied=[],cacheReads=[],navigationUpdates=[];
-  const context=vm.createContext({state,newChatOpen:false,automations:null,desktopSends:{},performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
+  const context=vm.createContext({createSelectedRefresh,state,newChatOpen:false,automations:null,desktopSends:{},performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
     turnNavigation:{update:()=>navigationUpdates.push(state.selectedId)},reportThreadView:()=>null,turns:()=>state.detail?.turns||[],outputBases:()=>new Map(),decodeOutputs:async x=>x,hydrateOutputs:x=>x,
     readDetailCache:()=>new Promise(resolve=>cacheReads.push(resolve)),scheduleDetailRefresh:()=>{},
     api:path=>new Promise((resolve,reject)=>requests.push({path,resolve,reject})),
