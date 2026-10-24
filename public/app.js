@@ -1,3 +1,4 @@
+import {createMessageInput} from '../src/web/services/message-input';
 import {createUpdateScheduler} from '../src/web/services/update-scheduler';
 import {createHistoryPagination} from '../src/web/services/history-pagination';
 import {createNotificationDelivery} from '../src/web/services/notification-delivery';
@@ -1171,18 +1172,10 @@ async function interruptThread() {
   });
 }
 async function moreHistory(options={}) { return historyPagination(options); }
-let inputSizeKey;
-function resizeInput() {
-  const t = $('message-input');
-  if (!t.clientWidth) return;
-  const key=JSON.stringify([t.value,t.clientWidth,getComputedStyle(t).font,getComputedStyle(t).lineHeight]);
-  if(inputSizeKey===key)return;
-  inputSizeKey=key;
-  t.style.height = '0px';
-  const height = Math.max(34,t.scrollHeight);
-  t.style.height = Math.min(160,height) + 'px';
-  t.style.overflowY = height > 160 ? 'auto' : 'hidden';
-}
+const messageInput=createMessageInput({input:()=>$('message-input'),id:inputId,suspended:()=>draftWritesSuspended,
+  persist:(id,value)=>state.drafts.set(id,value),render:()=>renderControls(),send:(...args)=>sendMessage(...args),
+  canSend:()=>!$('send-message').disabled,touch:touchInput,shouldSend:shouldSendOnEnter,now:()=>performance.now(),style:input=>getComputedStyle(input)});
+function resizeInput() { messageInput.resize(); }
 function upsertTurn(t) {
   if (!state.detail) return;
   state.detail.turns = mergeLiveTurns(turns(),[t]);
@@ -1370,12 +1363,7 @@ function wireEvents() {
   historyScroller.addEventListener('keydown',event => { if (['ArrowUp','PageUp','Home'].includes(event.key)) loadEarlierNearTop(); });
   let searchTimer; $('thread-search').oninput = e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.search = e.target.value.trim(); loadThreads(); },300); };
   const guide=el('button','text-button','引导');guide.id='guide-message';guide.type='button';guide.title='引导当前任务（⌘/Ctrl+Enter）';guide.hidden=true;guide.onclick=()=>sendMessage(undefined,true);$('interrupt').before(guide);
-  $('message-form').onsubmit = sendMessage; $('interrupt').onclick = interruptThread;
-  $('message-input').oninput = () => { if (inputId() && !draftWritesSuspended) state.drafts.set(inputId(),$('message-input').value); resizeInput(); renderControls(); };
-  let composing = false, compositionEnded = -Infinity;
-  $('message-input').addEventListener('compositionstart',() => { composing = true; });
-  $('message-input').addEventListener('compositionend',() => { composing = false; compositionEnded = performance.now(); });
-  $('message-input').onkeydown = e => { if (shouldSendOnEnter(e,{touch:touchInput(),composing,compositionEnded})) { e.preventDefault(); if (!$('send-message').disabled&&!e.repeat&&!e.altKey) sendMessage(undefined,e.metaKey||e.ctrlKey); } };
+  messageInput.bind($('message-form')); $('interrupt').onclick = interruptThread;
   $('model-select').onchange = e => { state.model = e.target.value; state.effort = defaultEffort(state.model); fillEfforts($('effort-select'),state.model,state.effort); settings.open=false;settings.querySelector('summary').focus();renderControls(); };
   $('effort-select').onchange = e => { state.effort = e.target.value;settings.open=false;settings.querySelector('summary').focus();renderControls(); };
   $('new-retry-create').onclick=()=>{newDraft.complete();$('new-chat-error').hidden=true;renderControls();$('message-input').focus();};
