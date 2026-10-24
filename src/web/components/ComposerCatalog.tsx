@@ -1,4 +1,4 @@
-import {useRef} from 'react';
+import {memo,useMemo,useRef} from 'react';
 import {createPortal,flushSync} from 'react-dom';
 import {createStore,useStore,type StoreApi} from 'zustand';
 type Kind='skills'|'plugins';
@@ -10,10 +10,14 @@ interface Row {entry:Entry;key:string;search:string;checked:boolean;description:
 interface View {kind:Kind;phase:'pending'|'ready'|'error';rows:Row[];partial:boolean;error?:string;query:string;search:(value:string)=>void;change:(index:number,checked:boolean)=>void;retry:()=>void}
 interface Instance {id:number;dialog:HTMLDialogElement;store:StoreApi<{view:View|null}>}
 const registry=createStore<{instances:Instance[]}>(()=>({instances:[]}));let sequence=0;
+const CatalogRow=memo(function CatalogRow({row,index,checked,hidden,change}:{row:Row;index:number;checked:boolean;hidden:boolean;change:View['change']}){
+ const content=useMemo(()=><><input type="checkbox" checked={checked} disabled={!row.entry.enabled&&!checked} onChange={e=>change(index,e.currentTarget.checked)}/><span><strong>{row.entry.interface?.displayName||row.entry.name}</strong><small>{row.description}</small></span></>,[row,index,checked,change]);
+ return <label className="composer-catalog-item" data-search={row.search} hidden={hidden}>{content}</label>;
+});
 function Catalog({dialog,store}:Instance){
  const v=useStore(store).view,search=useRef<HTMLInputElement>(null);if(!v)return null;
  const name=v.kind==='skills'?'技能':'插件';
- return createPortal(v.phase==='pending'?<p role="status">正在读取目标机器…</p>:v.phase==='error'?<><p role="status">{'暂时无法加载'+name+'，请重试。你的草稿已保留。'}</p><details><summary>错误详情</summary><p>{v.error}</p></details><button type="button" onClick={v.retry}>重试</button></>:<><input ref={search} type="search" placeholder="搜索" aria-label={'搜索'+name} onInput={e=>v.search(e.currentTarget.value)}/><div className="composer-catalog">{!v.rows.length&&<p>{v.kind==='skills'?'此项目暂无技能。':'目标机器暂无已安装插件。'}</p>}{v.rows.map((r,i)=><label key={i} className="composer-catalog-item" data-search={r.search} hidden={!r.search.includes(v.query)}><input type="checkbox" checked={r.checked} disabled={!r.entry.enabled&&!r.checked} onChange={e=>v.change(i,e.currentTarget.checked)}/><span><strong>{r.entry.interface?.displayName||r.entry.name}</strong><small>{r.description}</small></span></label>)}<p hidden={!v.rows.length||v.rows.some(r=>r.search.includes(v.query))} role="status">{'没有匹配的'+name+'。'}</p></div>{v.partial&&<><p role="status">部分目录未能读取，列表可能不完整。已有选择仍保留。</p><button type="button" onClick={v.retry}>重新读取</button></>}<p>选择后在下一条消息中使用。插件安装及账号授权请在 Codex 中管理。</p></>,dialog);
+ return createPortal(v.phase==='pending'?<p role="status">正在读取目标机器…</p>:v.phase==='error'?<><p role="status">{'暂时无法加载'+name+'，请重试。你的草稿已保留。'}</p><details><summary>错误详情</summary><p>{v.error}</p></details><button type="button" onClick={v.retry}>重试</button></>:<><input ref={search} type="search" placeholder="搜索" aria-label={'搜索'+name} onInput={e=>v.search(e.currentTarget.value)}/><div className="composer-catalog">{!v.rows.length&&<p>{v.kind==='skills'?'此项目暂无技能。':'目标机器暂无已安装插件。'}</p>}{v.rows.map((r,i)=><CatalogRow key={i} row={r} index={i} checked={r.checked} hidden={!r.search.includes(v.query)} change={v.change}/>)}<p hidden={!v.rows.length||v.rows.some(r=>r.search.includes(v.query))} role="status">{'没有匹配的'+name+'。'}</p></div>{v.partial&&<><p role="status">部分目录未能读取，列表可能不完整。已有选择仍保留。</p><button type="button" onClick={v.retry}>重新读取</button></>}<p>选择后在下一条消息中使用。插件安装及账号授权请在 Codex 中管理。</p></>,dialog);
 }
 export function ComposerCatalogs(){const instances=useStore(registry).instances;return <>{instances.map(instance=><Catalog key={instance.id} {...instance}/>)}</>;}
 export function installReactComposerCatalog(o:Options){
