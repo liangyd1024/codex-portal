@@ -206,16 +206,21 @@ export class Sidebar {
   sectionMenu(s){return [this.entry('重命名分区','renameSection',()=>this.edit('renameSection',s,'重命名分区',s.name)),this.entry('删除分区','deleteSection',()=>this.confirmDelete(s))];}
   openMenu(anchor,entries){
     this.closeMenu(false);entries=entries.filter(item=>!item.hidden);if(!entries.length)return;this.menuAnchor=anchor;
-    const menu=this.menuView.open(entries);this.menu=menu;this.positionMenu();menu.querySelector('button:not(:disabled)')?.focus();
+    const menu=this.menuView.open(entries);this.menu=menu;this.positionMenu(true);menu.querySelector('button:not(:disabled)')?.focus();
   }
   closeMenu(restore=true){if(!this.menu)return;this.menuView.close();this.menu=null;if(restore)this.menuAnchor?.focus();}
 
-  positionMenu(){
+  positionMenu(initial=false){
     if(!this.menu)return;
     const rect=this.menuAnchor.getBoundingClientRect(),v=window.visualViewport,top=v?.offsetTop||0,height=v?.height||innerHeight;
     this.menu.style.maxHeight=Math.max(44,height-16)+'px';
-    this.menu.style.left=Math.max(8,Math.min(rect.right-this.menu.offsetWidth,innerWidth-this.menu.offsetWidth-8))+'px';
-    this.menu.style.top=Math.max(top+8,Math.min(rect.bottom,top+height-this.menu.offsetHeight-8))+'px';
+    const width=this.menu.offsetWidth;
+    // A newly mounted menu has no left constraint. Its clamped destination
+    // keeps its measured width under the current width limits; read dimensions before
+    // positioning. Existing menus still remeasure after left changes on resize.
+    const initialHeight=initial&&!this.menu.style.left?this.menu.offsetHeight:null;
+    this.menu.style.left=Math.max(8,Math.min(rect.right-width,innerWidth-width-8))+'px';
+    this.menu.style.top=Math.max(top+8,Math.min(rect.bottom,top+height-(initialHeight??this.menu.offsetHeight)-8))+'px';
   }
   openDialog(options){
     const view=this.dialogView.open({...options,accountScope:this.snapshot.accountScope||'',closed:()=>{this.dialog=null;this.focusAnchor();}});
