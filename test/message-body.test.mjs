@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {markdown,groupTurnItems} from '../public/message-body.js';
 // Minimal DOM for semantic assertions; browser acceptance covers real layout/events.
 class Node {
-  constructor(tag='',text=''){this.tagName=tag.toUpperCase();this.children=[];this.text=text;this.style={};this.attrs={};}
+  constructor(tag='',text=''){this.tagName=tag.toUpperCase();this.children=[];this.text=text;this.style={};this.attrs={};this.dataset={};}
   append(...nodes){this.children.push(...nodes);}
   setAttribute(key,value){this.attrs[key]=value;}
   set textContent(value){this.text=value;this.children=[];}
@@ -86,4 +86,17 @@ test('native goal inputs remain visible before completed process and final answe
   assert.equal(groups[0].item,goal);
   assert.equal(groups[1].type,'process');
   assert.equal(groups[2].item.id,'answer');
+});
+
+test('Mermaid enhances only complete fences and preserves source verbatim',()=>{
+ const source='flowchart LR\n  A[开始] --> B[结束]';
+ const body=markdown('```mermaid\n'+source+'\n```');
+ assert.equal(body.children[0].dataset.mermaidSource,source);
+ assert.equal(all(body,'PRE')[0].textContent,source);
+ assert.equal(all(body,'PRE')[0].hidden,true);
+ assert.deepEqual(all(body,'BUTTON').map(n=>n.textContent),['复制代码','源码','放大','重试']);
+ for(const text of ['```mermaid\n'+source,'```javascript\n'+source+'\n```']){
+   const plain=markdown(text);assert.equal(plain.children[0].dataset.mermaidSource,undefined);
+   assert.equal(all(plain,'PRE')[0].textContent,source);assert.equal(all(plain,'BUTTON').length,1);
+ }
 });

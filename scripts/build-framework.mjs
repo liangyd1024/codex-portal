@@ -18,7 +18,8 @@ export async function buildFramework(){
   rollupOptions:{external:id=>id.includes('/lib/')&&id.endsWith('.mjs'),output:{entryFileNames:'application.mjs',paths:id=>id.includes('/lib/')?'../runtime/lib/'+id.split('/lib/').at(-1):id}}}});
  await mkdir(path.join(output,'runtime'),{recursive:true});
  for(const name of ['lib','scripts','shared','public','server.mjs','package.json'])await cp(path.join(root,name),path.join(output,'runtime',name),{recursive:true});
- for(const name of await readdir(path.join(root,'public'))){if(name.endsWith('.css')||name.endsWith('.js')||['index.html','bootstrap.js','login.html','login.js','notification-worker.js','manifest.webmanifest'].includes(name))await cp(path.join(root,'public',name),path.join(output,'public',name));}
+ for(const name of await readdir(path.join(root,'public'))){if(name.endsWith('.css')||name.endsWith('.js')||['mermaid-frame.html','index.html','bootstrap.js','login.html','login.js','notification-worker.js','manifest.webmanifest'].includes(name))await cp(path.join(root,'public',name),path.join(output,'public',name));}
+ await cp(path.join(root,'public/vendor'),path.join(output,'public/vendor'),{recursive:true});
  await cp(path.join(root,'shared'),path.join(output,'shared'),{recursive:true});
  await writeFile(path.join(output,'public/app.js'),"import './framework.js';\n");
  let html=await readFile(path.join(output,'public/index.html'),'utf8');

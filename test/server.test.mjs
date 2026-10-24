@@ -238,17 +238,7 @@ test('built browser module graph is served as JavaScript without missing imports
     updater:{status:async()=>({}),subscribe:()=>()=>{}}});
   await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
 
-test('directory and deferred tool reads are scoped to the selected target and item',async t=>{
- const {manager,request}=await fixture(t);const calls=[];
- manager.turnDirectory=id=>{calls.push(['directory',id]);return {data:[]};};
- manager.toolItem=(id,item)=>{calls.push(['item',id,item]);return {item:{id:item}};};
- manager.history=(...args)=>{calls.push(['history',...args]);return {data:[]};};
- assert.equal((await request('/api/threads/sample/turn-directory')).status,200);
- assert.equal((await request('/api/threads/sample/items/tool/detail')).status,200);
- assert.equal((await request('/api/threads/sample/history?cursor=db%3A3&lazyTools=1')).status,200);
- assert.deepEqual(calls[0],['directory','sample']);assert.deepEqual(calls[1],['item','sample','tool']);
- assert.equal(calls[2].at(-1),true);assert.equal(calls[2][2],'db:3');
-});
+
   t.after(()=>app.close());
   const request=async url=>{const r=await fetch('http://127.0.0.1:'+app.server.address().port+url);return {status:r.status,headers:Object.fromEntries(r.headers),text:await r.text()};};
   const pending = ['/bootstrap.js'], visited = new Set();
@@ -266,4 +256,29 @@ test('directory and deferred tool reads are scoped to the selected target and it
   }
   assert.ok(visited.has('/framework.js'));
   assert.ok([...visited].some(url=>url.startsWith('/chunks/app-')));
+});
+
+test('Mermaid assets are explicit, local, and isolated from workbench CSP',async t=>{
+ const {request}=await fixture(t);
+ const main=await request('/');
+ const frame=await request('/mermaid-frame.html');
+ assert.equal(frame.status,200);
+ assert.match(frame.headers['content-security-policy'],/sandbox allow-scripts/);
+ assert.match(frame.headers['content-security-policy'],/default-src 'none'/);
+ assert.doesNotMatch(frame.headers['content-security-policy'],/allow-same-origin/);
+ assert.doesNotMatch(main.headers['content-security-policy'],/unsafe-inline/);
+ for(const asset of ['/mermaid-view.js','/mermaid-frame.js','/vendor/mermaid-12.2.0.js'])assert.equal((await request(asset)).status,200);
+ assert.equal((await request('/vendor/README.md')).status,404);
+});
+
+test('directory and deferred tool reads are scoped to the selected target and item',async t=>{
+ const {manager,request}=await fixture(t);const calls=[];
+ manager.turnDirectory=id=>{calls.push(['directory',id]);return {data:[]};};
+ manager.toolItem=(id,item)=>{calls.push(['item',id,item]);return {item:{id:item}};};
+ manager.history=(...args)=>{calls.push(['history',...args]);return {data:[]};};
+ assert.equal((await request('/api/threads/sample/turn-directory')).status,200);
+ assert.equal((await request('/api/threads/sample/items/tool/detail')).status,200);
+ assert.equal((await request('/api/threads/sample/history?cursor=db%3A3&lazyTools=1')).status,200);
+ assert.deepEqual(calls[0],['directory','sample']);assert.deepEqual(calls[1],['item','sample','tool']);
+ assert.equal(calls[2].at(-1),true);assert.equal(calls[2][2],'db:3');
 });
