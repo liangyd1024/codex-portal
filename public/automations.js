@@ -1,3 +1,4 @@
+import {matchingTasks,taskRow,taskPresentation} from '../src/web/services/automation-view.ts';
 const node=(tag,cls,text)=>{const n=document.createElement(tag);n.className=cls||'';if(text!=null)n.textContent=text;return n;};
 const button=(text,fn,cls='text-button')=>{const b=node('button',cls,text);b.type='button';b.onclick=fn;return b;};
 const time=value=>value?new Date(value).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
@@ -20,6 +21,7 @@ export function installAutomations({api,onOpen,openSession,openThread,notify}){
   const search=node('input','automations-search');search.type='search';search.placeholder='搜索任务';search.setAttribute('aria-label','搜索定时任务');
   const feedback=node('p','subtle');feedback.setAttribute('role','status');
   const list=node('div','automation-list');
+  const listView=automationViews.list({list,showTask});
   let snapshot=null,seq=0,loading=false,threadId=null,filter='all',signature='',activeDialog=null;
   const manage=async(prompt='')=>{try{if(!threadId){await choose(prompt);return;}await openSession(threadId,prompt);}catch(error){notify(error.message,true);}};
   const create=button('＋ 新建任务',()=>manage('请帮我创建一个定时任务。'),'secondary-button');
@@ -33,45 +35,13 @@ export function installAutomations({api,onOpen,openSession,openThread,notify}){
     const trigger=document.activeElement?.closest('.automation-row')?.querySelector('.automation-name')||document.activeElement;
     const dialog=node('dialog','automation-task-panel');activeDialog=dialog;
     dialog.setAttribute('aria-label',task.name);
-    const heading=node('div','automation-task-heading');
-    const close=button('×',()=>dialog.close(),'icon-button');close.setAttribute('aria-label','关闭任务详情');
-    heading.append(node('h2','',task.name),close);
-    const content=node('div','automation-task-content');
-    content.append(node('p','subtle',(task.status==='PAUSED'?'已暂停':'即将执行')+' · '+scheduleLabel(task.rrule)));
-    if(mode!=='view'){
-      const editing=mode==='edit';
-      content.append(node('h3','',editing?'编辑任务':'删除任务'),node('p','subtle','网页版通过已绑定的管理会话'+(editing?'编辑':'删除')+'此任务。该会话包含历史消息，与下方执行会话可能不同；打开后只填写草稿，发送后才执行。'));
-      const prompt=editing?`请修改定时任务「${task.name}」（原生任务 ID：${task.id}）。`:`请删除定时任务「${task.name}」（原生任务 ID：${task.id}），只删除这一项。`;
-      content.append(button(editing?'前往管理会话编辑':'前往管理会话删除',()=>{dialog.close();void manage(prompt);},'secondary-button'));
-    }else content.append(button('编辑任务',()=>showTask(task,'edit'),'secondary-button'));
-    content.append(node('h3','','任务内容'),node('p','automation-prompt',task.prompt),node('h3','','运行记录'));
-    if(task.target_thread_id)content.append(button('打开执行会话',()=>{dialog.close();void openThread(task.target_thread_id);}));
-    const runs=snapshot.runs.filter(run=>run.automation_id===task.id);
-    if(task.last_run_at)content.append(node('p','subtle','最近原生触发：'+time(task.last_run_at)));
-    if(!runs.length)content.append(node('p','subtle',task.kind==='heartbeat'?'此任务在原会话运行，结果请打开执行会话查看。':'暂无原生运行记录'));
-    for(const run of runs)content.append(button(time(run.created_at)+' · '+({IN_PROGRESS:'执行中',PENDING_REVIEW:'待查看',ACCEPTED:'已查看',ARCHIVED:'已归档'}[run.status]||run.status),()=>{dialog.close();void openThread(run.thread_id);}));
-    dialog.append(heading,content);document.body.append(dialog);dialog.showModal();close.focus();
-    dialog.addEventListener('close',()=>{if(activeDialog===dialog)activeDialog=null;dialog.remove();if(!page.hidden)(trigger?.isConnected?trigger:create).focus();},{once:true});
+    const view=taskPresentation(task,mode,snapshot.runs,time,scheduleLabel);
+    const content=automationViews.task({dialog,view,edit:()=>showTask(task,'edit'),manage:()=>{dialog.close();void manage(view.managePrompt);},openThread:id=>{dialog.close();void openThread(id);}});
+    document.body.append(dialog);dialog.showModal();content.closeButton.focus();
+    dialog.addEventListener('close',()=>{if(activeDialog===dialog)activeDialog=null;content.dispose();dialog.remove();if(!page.hidden)(trigger?.isConnected?trigger:create).focus();},{once:true});
   }
   function render(){
-    list.replaceChildren();if(!snapshot)return;
-    const items=snapshot.items.filter(t=>(filter==='all'||t.status===filter)&&t.name.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase()));
-    items.sort((a,b)=>(a.next_run_at??Infinity)-(b.next_run_at??Infinity));
-    if(!items.length)list.append(node('p','subtle','没有匹配的定时任务。'));
-    for(const task of items){
-      const card=node('article','automation-row');card.dataset.id=task.id;
-      const title=button(task.name,()=>showTask(task), 'automation-name');
-      const meta=node('p','subtle',(task.status==='PAUSED'?'已暂停':task.next_run_at?'下次 '+time(task.next_run_at):'等待原生调度更新')+' · '+scheduleLabel(task.rrule));
-      const actions=node('details','automation-actions');
-      const toggle=node('summary','','⋯');toggle.setAttribute('aria-label',task.name+'的操作');
-      const menu=node('div','automation-menu');
-      menu.append(button('编辑',()=>{actions.open=false;showTask(task,'edit');}),button('删除',()=>{actions.open=false;showTask(task,'delete');},'text-button danger'));
-      actions.append(toggle,menu);
-      actions.addEventListener('toggle',()=>{if(actions.open)for(const other of list.querySelectorAll('details[open]'))if(other!==actions)other.open=false;});
-      actions.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();actions.open=false;toggle.focus();}});
-      actions.addEventListener('focusout',event=>{if(!actions.contains(event.relatedTarget))actions.open=false;});
-      card.append(title,meta,actions);list.append(card);
-    }
+    listView.render(snapshot?matchingTasks(snapshot.items,filter,search.value).map(task=>taskRow(task,time,scheduleLabel)):null);
   }
   async function load(){
     if(loading)return;loading=true;const version=++seq;refresh.disabled=true;feedback.textContent='正在同步原生定时任务…';
@@ -101,3 +71,6 @@ export function installAutomations({api,onOpen,openSession,openThread,notify}){
     open(){onOpen();page.hidden=false;document.querySelector('.main-panel').classList.add('automations-open');void load();},
     close(){activeDialog?.close();page.hidden=true;document.querySelector('.main-panel').classList.remove('automations-open');},refresh:load};
 }
+
+let automationViews;
+export function configureAutomationViews(renderer){automationViews=renderer;}
