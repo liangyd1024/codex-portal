@@ -1,14 +1,41 @@
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';
+import ts from 'typescript';
+const loaderSource=readFileSync(new URL('../src/web/services/sidebar-loader.ts',import.meta.url),'utf8');
+const output=ts.transpileModule(loaderSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {createSidebarLoader}=await import('data:text/javascript;base64,'+Buffer.from(output).toString('base64'));
 const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 const gate=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {resolve,reject,promise};};
 const tick=()=>new Promise(r=>setImmediate(r));
-function loader(readThreads){const state={status:{instanceId:'one',connection:{connectedAt:1}},search:'',selectedId:'a'};const c=vm.createContext({state,readThreads});vm.runInContext(source.slice(source.indexOf('let listRead;'),source.indexOf('async function readThreads(')),c);return {state,load:(...args)=>c.loadThreads(...args)};}
+function loader(readThreads){const state={status:{instanceId:'one',connection:{connectedAt:1}},search:'',selectedId:'a'};return {state,load:createSidebarLoader({key:append=>JSON.stringify([state.status.instanceId,state.status.connection.connectedAt,state.search,state.selectedId,append]),read:readThreads})};}
 test('same sidebar reads share work while explicit refresh queues a fresh read',async()=>{
  const d=gate();let calls=0;const f=loader(()=>++calls===1?d.promise:Promise.resolve());const a=f.load(),b=f.load(),fresh=f.load(false,true,true);assert.equal(calls,1);d.resolve();await Promise.all([a,b,fresh]);assert.equal(calls,2);
  const d2=gate(),g=loader(()=>d2.promise);const silent=g.load(),visible=g.load(false,true);d2.reject(Error('unavailable'));await silent;await assert.rejects(visible,/unavailable/);
 });
 test('sidebar search and connection changes never share an old pending read',async()=>{
  let calls=0;const d=gate(),f=loader(()=>{calls++;return d.promise;});const a=f.load();f.state.search='new';const b=f.load();f.state.status.connection.connectedAt=2;const c=f.load();assert.equal(calls,3);d.resolve();await Promise.all([a,b,c]);
+});
+test('older sidebar completion cannot clear a newer pending read',async()=>{
+ const old=gate(),current=gate();let calls=0;
+ const f=loader(()=>++calls===1?old.promise:current.promise);
+ const a=f.load(false,true);f.state.search='new';const b=f.load(false,true);
+ old.resolve();await a;
+ assert.equal(f.load(false,true),b);assert.equal(calls,2);
+ current.resolve();await b;
+});
+test('fresh sidebar refresh rechecks current selection after failure and coalesces queued refreshes',async()=>{
+ const old=gate(),next=gate(),seen=[];
+ const f=loader(append=>{seen.push({selected:f.state.selectedId,append});return seen.length===1?old.promise:next.promise;});
+ const initial=f.load(),one=f.load(false,true,true),two=f.load(false,true,true);
+ f.state.selectedId='b';old.reject(Error('old read failed'));
+ await initial;await tick();assert.deepEqual(seen,[{selected:'a',append:false},{selected:'b',append:false}]);
+ next.resolve();await Promise.all([one,two]);
+});
+test('append sidebar reads remain distinct and subsequent reads retry after failure',async()=>{
+ const first=gate(),second=gate();let calls=0;const args=[];
+ const f=loader(append=>{args.push(append);return ++calls===1?first.promise:second.promise;});
+ const a=f.load(false,true),b=f.load(true,true);assert.equal(calls,2);
+ first.resolve();second.reject(Error('append failed'));await a;await assert.rejects(b,/append failed/);
+ await assert.rejects(f.load(true,true),/append failed/);assert.deepEqual(args,[false,true,true]);
 });
 test('late activity is ignored after a new snapshot, account, disconnect or connection generation',async()=>{
  for(const change of ['snapshot','account','disconnect','connection','none']){

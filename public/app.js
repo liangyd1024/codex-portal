@@ -1,4 +1,5 @@
 import {createApiClient} from '../src/web/services/api.ts';
+import {createSidebarLoader} from '../src/web/services/sidebar-loader.ts';
 import {installDeferredTool} from './deferred-tool.js';
 import {renderSelectOptions,renderDiagnosticsView,publishWorkspace,createWorkspaceState} from '../src/web/views.tsx';
 import {completedGoalPlacement,renderCompletedGoal} from './goal-toolbar.js';
@@ -830,17 +831,10 @@ async function loadProjects() {
 }
 const createdThreads = new Map();
 let threadSearch = '';
-let listRead;
-function loadThreads(append = false, reportFailure = false, fresh = false) {
-  const key=JSON.stringify([state.status?.instanceId,state.status?.connection?.connectedAt,state.search,state.sidebarArchived,state.selectedId,append?state.threadCursor:null,append]);
-  if(listRead?.key===key){
-    if(fresh)return listRead.promise.catch(()=>{}).then(()=>loadThreads(append,reportFailure));
-    return reportFailure?listRead.promise:listRead.promise.catch(()=>{});
-  }
-  const record={key};
-  record.promise=readThreads(append,true).finally(()=>{if(listRead===record)listRead=null;});
-  listRead=record;return reportFailure?record.promise:record.promise.catch(()=>{});
-}
+const loadThreads = createSidebarLoader({
+  key:append=>JSON.stringify([state.status?.instanceId,state.status?.connection?.connectedAt,state.search,state.sidebarArchived,state.selectedId,append?state.threadCursor:null,append]),
+  read:append=>readThreads(append,true),
+});
 async function readThreads(append = false, reportFailure = false) {
   if (!connected() || (append && (state.loadingThreads || !state.threadCursor))) return;
   // Restore project metadata before grouping the cross-project thread list.
