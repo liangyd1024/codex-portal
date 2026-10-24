@@ -7,27 +7,15 @@ export const WEB_ACCESS='full';
 export function installComposer({host,api,context,refresh,notify,implementPlan,input=document.getElementById('message-input'),images=document.getElementById('add-images'),prefix=''}) {
   if(!document.querySelector('link[href="/composer.css"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/composer.css';document.head.append(link);}
   const bar=document.createElement('div');bar.className='composer-tools';
-  const tools=document.createElement('details');tools.className='composer-options';
-  const summary=document.createElement('summary');summary.textContent='＋';summary.setAttribute('aria-label','更多输入工具');const panel=document.createElement('div');panel.className='composer-options-panel';
-  tools.append(summary,panel);
-  const badges=document.createElement('div');badges.className='composer-mode-badges';bar.append(tools,badges);
-  const position=()=>{if(!tools.open)return;const v=window.visualViewport,top=v?.offsetTop||0,left=v?.offsetLeft||0,height=v?.height||innerHeight,width=v?.width||innerWidth;panel.style.maxHeight=Math.max(44,height-24)+'px';panel.style.maxWidth=Math.max(0,width-16)+'px';panel.style.right='auto';panel.style.left=Math.max(left+8,Math.min(summary.getBoundingClientRect().left,left+width-panel.offsetWidth-8))+'px';panel.style.top=Math.max(top+8,Math.min(summary.getBoundingClientRect().top-panel.offsetHeight-8,top+height-panel.offsetHeight-8))+'px';};
-  tools.addEventListener('toggle',()=>{summary.setAttribute('aria-expanded',String(tools.open));position();});window.visualViewport?.addEventListener('resize',position);window.visualViewport?.addEventListener('scroll',position);window.addEventListener('resize',position);window.addEventListener('scroll',position,true);
-  tools.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();tools.open=false;summary.focus();}});
-  document.addEventListener('pointerdown',e=>{if(!tools.contains(e.target))tools.open=false;});
   input.form.querySelector('.composer-bottom').prepend(bar);
-  images.classList.remove('icon-button');images.textContent='添加图片';panel.prepend(images);images.addEventListener('click',()=>{tools.open=false;});
-  panel.addEventListener('keydown',e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key)||e.target.tagName==='SELECT')return;const items=[...panel.querySelectorAll('button:not(:disabled):not([hidden]),select:not(:disabled)')];const i=items.indexOf(document.activeElement);e.preventDefault();items[e.key==='Home'?0:e.key==='End'?items.length-1:(i+(e.key==='ArrowDown'?1:-1)+items.length)%items.length]?.focus();});
-  summary.addEventListener('click',e=>{e.preventDefault();if(summary.getAttribute('aria-disabled')==='true')return;tools.open=!tools.open;summary.setAttribute('aria-expanded',String(tools.open));position();});
-  summary.addEventListener('keydown',e=>{if(summary.getAttribute('aria-disabled')==='true'){e.preventDefault();return;}if(e.key==='ArrowDown'){e.preventDefault();tools.open=true;summary.setAttribute('aria-expanded','true');position();panel.querySelector('button:not(:disabled)')?.focus();}});
   const selectionKey='rcm.composer.'+host;let savedSelections;try{savedSelections=JSON.parse(sessionStorage.getItem(selectionKey)||'[]');}catch{}
   const selections=new Map(Array.isArray(savedSelections)?savedSelections.filter(v=>Array.isArray(v)&&typeof v[0]==='string'&&['default','plan'].includes(v[1]?.mode)&&Array.isArray(v[1]?.skills)&&Array.isArray(v[1]?.plugins)):[]);let selected,loading=false;
   const save=()=>{try{sessionStorage.setItem(selectionKey,JSON.stringify([...selections]));}catch{notify('输入工具选择暂未保存，刷新后请重新核对。',true);}};
   const choice=()=>{const id=context().id;if(!selections.has(id))selections.set(id,{mode:'default',skills:[],plugins:[]});return selections.get(id);};
-  const controls=installComposerControls({bar,panel,badges,prefix,actions:{
-    mode:()=>{choice().mode=choice().mode==='plan'?'default':'plan';choice().goalPending=false;save();render();tools.open=false;summary.focus();},
-    cancelPlan:()=>{choice().mode='default';save();render();summary.focus();},
-    cancelGoal:()=>{choice().goalPending=false;save();render();summary.focus();},
+  const controls=installComposerControls({bar,images,prefix,actions:{
+    mode:()=>{choice().mode=choice().mode==='plan'?'default':'plan';choice().goalPending=false;save();render();controls.closeMenu();controls.focusMenu();},
+    cancelPlan:()=>{choice().mode='default';save();render();controls.focusMenu();},
+    cancelGoal:()=>{choice().goalPending=false;save();render();controls.focusMenu();},
     goal:()=>selectGoal(),pick:(kind,button)=>void picker(kind,button)
   }});
   const references=()=>Array.isArray(choice().references)?choice().references.filter(r=>r&&['skills','plugins','threads'].includes(r.kind)&&typeof r.key==='string'&&typeof r.token==='string'&&r.token.length>1):[];
@@ -49,7 +37,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
   dialog.addEventListener('click',e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
   dialog.addEventListener('close',()=>{if(!dialog.open&&document.activeElement!==input)opener?.focus();});
   function open(title,button){
-    dialogVersion++;goalEditor?.clear();catalog?.clear();opener=button.closest('details')?.querySelector('summary')||button;tools.open=false;dialog.replaceChildren();
+    dialogVersion++;goalEditor?.clear();catalog?.clear();opener=button.closest('details')?.querySelector('summary')||button;controls.closeMenu();dialog.replaceChildren();
     const heading=document.createElement('h2');heading.textContent=title;
     const close=document.createElement('button');close.type='button';close.textContent='关闭';close.className='composer-dialog-close';close.onclick=()=>dialog.close();
     dialog.append(heading,close);dialog.showModal();return context();
@@ -65,7 +53,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
     const next=!choice().goalPending;
     choice().goalPending=next;
     if(next){choice().mode='default';delete choice().goalUncertain;}
-    save();render();tools.open=false;input.focus();
+    save();render();controls.closeMenu();input.focus();
   }
   let goalUpdating=false;
   goalEditor=installGoalEditor({dialog,input,context,api,open,version:()=>dialogVersion,opener:()=>opener,choice,save,render,refresh,notify,updating:{get:()=>goalUpdating,set:value=>{goalUpdating=value;}}});
@@ -80,15 +68,13 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
     reconcileGoalSelection(choice(),c,save);
     syncReferences();mirror.render();
     const currentGoal=Boolean(c.goal),disabled=!c.ready||c.busy||goalUpdating;
-    controls.render({plan:choice().mode==='plan',goalPending:Boolean(choice().goalPending),currentGoal,ephemeral:Boolean(c.ephemeral),disabled,active:Boolean(c.active),status:[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ')});
-    summary.textContent='＋';summary.title='添加图片、技能和工具';summary.dataset.mode=choice().mode;summary.setAttribute('aria-label',choice().mode==='plan'?'更多输入工具，计划模式':'更多输入工具');
+    controls.render({plan:choice().mode==='plan',goalPending:Boolean(choice().goalPending),currentGoal,ephemeral:Boolean(c.ephemeral),disabled,menuDisabled:Boolean(!c.ready||c.busy),active:Boolean(c.active),status:[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ')});
     // Attachments can accompany a native turn/steer while the current turn runs.
     images.disabled=disabled;
-    summary.setAttribute('aria-disabled',String(!c.ready||c.busy));if(!c.ready||c.busy)tools.open=false;
 
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
-  return {render,dismiss:()=>{suggestions.close();tools.open=false;if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending&&!context().goal),validateSend:(text,active)=>validateGoalDraft(choice(),text,active,context().goal),prepareSend:async(id,text,active)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,goal:context().id===id?context().goal:null,api,save}):false;render();return started;},moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();return {mode,skills:[...skills],plugins:[...plugins],threads:[...threads],access:WEB_ACCESS};},isLoading:()=>loading};
+  return {render,dismiss:()=>{suggestions.close();controls.closeMenu();if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending&&!context().goal),validateSend:(text,active)=>validateGoalDraft(choice(),text,active,context().goal),prepareSend:async(id,text,active)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,goal:context().id===id?context().goal:null,api,save}):false;render();return started;},moveDraft:(from,to)=>{if(selections.has(from)){selections.set(to,selections.get(from));selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();return {mode,skills:[...skills],plugins:[...plugins],threads:[...threads],access:WEB_ACCESS};},isLoading:()=>loading};
 }
 
 // Match the desktop's completed native plan item, never infer plans from prose.
