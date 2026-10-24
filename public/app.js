@@ -49,7 +49,7 @@ import {createHandoffControls} from './thread-handoff.js';
 let handoffControls;
 import {installBrowserBackup} from './browser-backup.js';
 import {installComposer, WEB_ACCESS,implementationText,completedPlan} from './composer.js';
-import {installMobile} from './mobile.js';
+import {installMobile,showMobileError} from '../src/web/components/MobileAccess.tsx';
 let composer;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from './detail-cache.js';
 import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
@@ -1638,7 +1638,7 @@ function wireEvents() {
 async function init() {
   let systemUpdate=null,mobileInstalled=false;
   const loadSettings=()=>{systemUpdate??=installSystemUpdate({api,flush:flushDrafts,resetCsrf:()=>{state.csrf='';}});void systemUpdate.open();};
-  const loadMobile=()=>{if(mobileInstalled)return;mobileInstalled=true;installMobile(api).catch(e=>{$('mobile-access-body').textContent=messageOf(e);});};
+  const loadMobile=()=>{if(mobileInstalled)return;mobileInstalled=true;installMobile(api).catch(showMobileError);};
   refreshAccountUsage=installAccountUsage({node:$('account-usage'),identityNode:$('account-identity'),api,connected,context:()=>targetHost+':'+state.status?.instanceId+':'+state.status?.connection?.connectedAt});
   $('account-usage').addEventListener('click',()=>toast($('account-usage').title,false,3000,'account-usage',{information:true}));
   void refreshAccountUsage();
