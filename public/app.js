@@ -27,7 +27,7 @@ import {installCapacityRetry} from './capacity-retry.js';
 let capacityRetry;
 import {createVersionSync} from './system-update.js';
 import {installSystemUpdate} from '../src/web/components/SystemUpdate';
-import {installAccountUsage} from './account-usage.js';
+import {installAccountUsage} from '../src/web/components/AccountUsage';
 let refreshAccountUsage;
 import {sendAfterGoal} from './goal-submit.js';
 import {notificationSupport,prepareNotificationWorker,submitWorkerNotification} from './notification-platform.js';
@@ -1562,8 +1562,7 @@ async function init() {
   let systemUpdate=null,mobileInstalled=false;
   const loadSettings=()=>{systemUpdate??=installSystemUpdate({api,flush:flushDrafts,resetCsrf:()=>{state.csrf='';}});void systemUpdate.open();};
   const loadMobile=()=>{if(mobileInstalled)return;mobileInstalled=true;installMobile(api).catch(showMobileError);};
-  refreshAccountUsage=installAccountUsage({node:$('account-usage'),identityNode:$('account-identity'),api,connected,context:()=>targetHost+':'+state.status?.instanceId+':'+state.status?.connection?.connectedAt});
-  $('account-usage').addEventListener('click',()=>toast($('account-usage').title,false,3000,'account-usage',{information:true}));
+  refreshAccountUsage=installAccountUsage({details:text=>toast(text,false,3000,'account-usage',{information:true}),api,connected,context:()=>targetHost+':'+state.status?.instanceId+':'+state.status?.connection?.connectedAt});
   void refreshAccountUsage();
   setInterval(()=>{if(!document.hidden)void refreshAccountUsage();},15000);
   setInterval(()=>{if(document.hidden)return;renderControls();if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();},5000);
