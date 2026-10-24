@@ -55,7 +55,8 @@ export function installSideChat({api,context,renderItem,notify,selectionChanged=
   const raw=override??input.value,parts=plan?[]:s.selections.slice(),pictures=plan?{items:[]}:attachments.capture();if(!raw.trim()&&!parts.length&&!pictures.items.length)return;
   const options=plan?{mode:'default',access:'full'}:composer.options();
   if(s.active&&options.threads?.length){notify('请在当前轮次结束后发送会话引用，草稿已保留。',true);return;}
-  const active=s.active,text=annotatedText(raw,[],parts);
+  // Match the server input normalization so native echoes retire the receipt.
+  const active=s.active,text=annotatedText(raw,[],parts).trim();
   const content=[...(text?[{type:'text',text}]:[]),...pictures.items.map(i=>({type:'image',url:i.url}))];
   const receipt=sendReceipts.begin(s,content,s.turns);s.busy=true;s.error='';render();
   try{
