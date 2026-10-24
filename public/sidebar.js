@@ -63,6 +63,7 @@ export function sidebarGroups(snapshot){
 export class Sidebar {
   constructor(options){
     this.o=options;this.node=options.node;this.snapshot=null;this.pending=false;this.menu=null;this.dialog=null;this.scope=null;this.expanded=new Set();this.searchOverrides=new Map();this.searchExpanded=true;
+    this.dialogView=installSidebarDialog();
     this.menuView=installSidebarMenu(item=>{this.closeMenu(false);item.run?.();});
     this.toolbar=make('div','sidebar-tools');
     const archive=make('button','sidebar-view','已归档');archive.type='button';archive.onclick=()=>options.onArchiveView(!this.snapshot?.archived);this.archiveButton=archive;
@@ -215,23 +216,18 @@ export class Sidebar {
     this.menu.style.left=Math.max(8,Math.min(rect.right-this.menu.offsetWidth,innerWidth-this.menu.offsetWidth-8))+'px';
     this.menu.style.top=Math.max(top+8,Math.min(rect.bottom,top+height-this.menu.offsetHeight-8))+'px';
   }
-  modal(title){
-    const dialog=make('dialog','sidebar-dialog'),form=make('form');form.onsubmit=e=>e.preventDefault();form.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.isComposing||e.keyCode===229))e.preventDefault();});const h=make('h2','',title);h.id='sidebar-dialog-title';dialog.setAttribute('aria-labelledby',h.id);form.append(h);dialog.append(form);document.body.append(dialog);
-    const actions=make('div','sidebar-dialog-actions'),cancel=make('button','secondary-button','取消'),submit=make('button','primary-button','保存');cancel.type='button';submit.type='submit';actions.append(cancel,submit);const error=make('p','sidebar-dialog-error');error.setAttribute('role','alert');
-    const close=()=>{dialog.close();dialog.remove();this.dialog=null;this.focusAnchor();};cancel.onclick=close;dialog.oncancel=e=>{if(dialog.dataset.busy==='true')e.preventDefault();};dialog.addEventListener('close',()=>{if(dialog.isConnected){dialog.remove();this.dialog=null;this.focusAnchor();}});this.dialog=dialog;dialog.dataset.accountScope=this.snapshot.accountScope||'';
-    dialog.addEventListener('click',e=>{if(e.target!==dialog||dialog.dataset.busy==='true')return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close();});
-    return {dialog,form,actions,submit,cancel,error,close,finish:()=>{form.append(error,actions);dialog.showModal();form.querySelector('input,select,button')?.focus();}};
+  openDialog(options){
+    const view=this.dialogView.open({...options,accountScope:this.snapshot.accountScope||'',closed:()=>{this.dialog=null;this.focusAnchor();}});
+    this.dialog=view.dialog;view.show();
   }
   edit(action,target,title,value=''){
-    const m=this.modal(title),label=make('label','',title),input=make('input');input.value=value||'';input.required=true;input.maxLength=200;label.append(input);m.form.append(label);
-    m.form.onsubmit=async e=>{e.preventDefault();if(m.submit.disabled)return;const label=m.submit.textContent;m.submit.textContent='正在处理…';m.submit.disabled=m.cancel.disabled=true;try{await this.run(action,target,{name:input.value},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.textContent=label;m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();input.select();
+    this.openDialog({title,field:{kind:'text',label:title,value:value||''},execute:name=>this.run(action,target,{name},true)});
   }
   choose(action,target){
-    const project=action==='moveProject',m=this.modal(project?'移动到项目':'移动到分区'),label=make('label','',project?'项目':'分区'),select=make('select');select.append(new Option(project?'不关联项目':'移出分区',''));
-    for(const item of project?this.snapshot.projects:this.snapshot.sections)select.append(new Option(item.name,item.id));select.value=(project?target.projectId:target.sectionId)||'';label.append(select);m.form.append(label);
-    m.form.onsubmit=async e=>{e.preventDefault();if(m.submit.disabled)return;const label=m.submit.textContent;m.submit.textContent='正在处理…';m.submit.disabled=m.cancel.disabled=true;try{await this.run(action,target,{[project?'projectId':'sectionId']:select.value||null},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.textContent=label;m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();
+    const project=action==='moveProject';
+    this.openDialog({title:project?'移动到项目':'移动到分区',field:{kind:'select',label:project?'项目':'分区',value:(project?target.projectId:target.sectionId)||'',options:[{name:project?'不关联项目':'移出分区',id:''},...(project?this.snapshot.projects:this.snapshot.sections)]},execute:value=>this.run(action,target,{[project?'projectId':'sectionId']:value||null},true)});
   }
-  confirmDelete(section){const m=this.modal('删除分区');m.form.append(make('p','','删除“'+section.name+'”分区，其中的会话和项目会保留。'));m.submit.textContent='删除分区';m.form.onsubmit=async e=>{e.preventDefault();if(m.submit.disabled)return;const label=m.submit.textContent;m.submit.textContent='正在处理…';m.submit.disabled=m.cancel.disabled=true;try{await this.run('deleteSection',section,{},true);m.close();}catch(error){m.error.textContent=error.message;}finally{m.submit.textContent=label;m.submit.disabled=m.cancel.disabled=false;if(m.dialog.isConnected)m.form.querySelector('input,select,button')?.focus();}};m.finish();}
+  confirmDelete(section){this.openDialog({title:'删除分区',field:{kind:'message',text:'删除“'+section.name+'”分区，其中的会话和项目会保留。'},submitLabel:'删除分区',execute:()=>this.run('deleteSection',section,{},true)});}
   focusAnchor(){const key=this.menuAnchor?.dataset.focusKey;[...this.node.querySelectorAll('[data-focus-key]')].find(n=>n.dataset.focusKey===key)?.focus({preventScroll:true});if(!document.activeElement||document.activeElement===document.body)this.node.querySelector('button')?.focus({preventScroll:true});}
   async run(action,target,extra={},propagate=false){
     const scope=this.snapshot.accountScope,key=scope+':'+(target?.id||action);
@@ -282,4 +278,11 @@ export function configureSidebarMenu(installer){sidebarMenuInstaller=installer;}
 export function installSidebarMenu(select){
   if(!sidebarMenuInstaller)throw new Error('侧栏菜单尚未初始化。');
   return sidebarMenuInstaller(select);
+}
+
+let sidebarDialogInstaller;
+export function configureSidebarDialog(installer){sidebarDialogInstaller=installer;}
+export function installSidebarDialog(){
+  if(!sidebarDialogInstaller)throw new Error('侧栏弹窗尚未初始化。');
+  return sidebarDialogInstaller();
 }
