@@ -1,3 +1,4 @@
+import {createDetailRecovery} from '../src/web/services/detail-recovery';
 import {createLayoutController} from '../src/web/services/layout';
 import {connectionBanner} from '../src/web/services/connection-banner';
 import {publishConnectionIndicators,publishConnectionBanner} from '../src/web/components/ConnectionIndicators';
@@ -861,28 +862,7 @@ function loadVisibleThreads() {
   const list = $('project-list');
   if (list.clientHeight > 0 && list.scrollHeight - list.scrollTop - list.clientHeight < 120) loadThreads(true);
 }
-let cacheSaveTimer,cacheWritePending=false,lastCacheStamp='';
-function saveDetailSoon(){
-  if(cacheSaveTimer||cacheWritePending)return;
-  cacheSaveTimer=setTimeout(async()=>{
-    cacheSaveTimer=null;
-    const detail=state.detail,id=state.selectedId;
-    if(!detail||detail.recovering||detail.outputPreview)return;
-    // Large snapshots use structured cloning. Avoid copying tens of MB every
-    // SSE refresh, and never queue multiple writes behind a slow browser.
-    const stamp=JSON.stringify([id,detail.thread,detail.turns],(key,value)=>['aggregatedOutput','outputCompressed'].includes(key)?undefined:value);
-    if(stamp===lastCacheStamp)return;
-    cacheWritePending=true;
-    try{await writeDetailCache(targetHost,id,detail);lastCacheStamp=stamp;}
-    finally{cacheWritePending=false;}
-  },5000);
-}
-async function restoreDetail(id,seq){
-  const version=state.detailVersion;
-  const cached=await readDetailCache(targetHost,id);
-  if(!cached||id!==state.selectedId||seq!==state.selectionVersion||version!==state.detailVersion||state.detail||state.historyError)return;
-  state.loadingDetail=false;applyDetail(cached,true);
-}
+const {saveSoon:saveDetailSoon,restore:restoreDetail,cancelScheduled:cancelDetailSave}=createDetailRecovery({state,host:targetHost,read:readDetailCache,write:writeDetailCache,apply:applyDetail});
 function applyDetail(data, resetModels = false) {
   if(data.goalError&&state.detail?.thread?.id===data.thread?.id)data.goal=state.detail.goal;
   state.detail = {...data, turns:data.turns || data.thread?.turns || []};
@@ -1538,5 +1518,5 @@ $('connection-select').onchange=()=>{if(state.busy.has('create'))return;remember
 
 const clearRecovery=el('button','text-button','清除日志缓存并重新加载');
 clearRecovery.type='button';
-clearRecovery.onclick=async()=>{flushDrafts();clearRecovery.disabled=true;clearTimeout(cacheSaveTimer);try{await clearDetailCache();location.reload();}catch(e){clearRecovery.disabled=false;toast('无法清除日志缓存：'+messageOf(e),true);}};
+clearRecovery.onclick=async()=>{flushDrafts();clearRecovery.disabled=true;cancelDetailSave();try{await clearDetailCache();location.reload();}catch(e){clearRecovery.disabled=false;toast('无法清除日志缓存：'+messageOf(e),true);}};
 $('diagnostics').append(clearRecovery);

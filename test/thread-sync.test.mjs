@@ -14,6 +14,10 @@ const detailReaderSource=readFileSync(new URL('../src/web/services/detail-reader
 const detailReaderOutput=ts.transpileModule(detailReaderSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const {createDetailReader}=await import('data:text/javascript;base64,'+Buffer.from(detailReaderOutput).toString('base64'));
 
+const recoverySource=readFileSync(new URL('../src/web/services/detail-recovery.ts',import.meta.url),'utf8');
+const recoveryOutput=ts.transpileModule(recoverySource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {createDetailRecovery}=await import('data:text/javascript;base64,'+Buffer.from(recoveryOutput).toString('base64'));
+
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(t,overrides={}) {
   t.mock.timers.enable({apis:['setTimeout']});
@@ -71,7 +75,7 @@ function detailFixture() {
     api:path=>new Promise((resolve,reject)=>requests.push({path,resolve,reject})),
     applyDetail:data=>{state.detail=data;applied.push(data);},
   });
-  vm.runInContext(source.slice(source.indexOf('async function restoreDetail('),source.indexOf('function applyDetail(')),context);
+  context.restoreDetail=createDetailRecovery({state,host:'test',read:context.readDetailCache,write:async()=>{},apply:context.applyDetail}).restore;
   vm.runInContext(source.slice(source.indexOf('const readSelectedDetail='),source.indexOf('async function refreshWorkspace('))+'\nglobalThis.read=refreshSelected;',context);
   vm.runInContext(source.slice(source.indexOf('function applyStatus('),source.indexOf('\nconst $'))+'\nglobalThis.status=applyStatus;',context);
   return {state,requests,applied,cacheReads,navigationUpdates,context,read:context.read,status:context.status};
@@ -310,4 +314,33 @@ test('detail reader preserves the last fifty output bases and unknown native fie
   assert.deepEqual(JSON.parse(calls[0].options.headers['X-Output-Versions']),Object.fromEntries([...bases].slice(10).map(([id,b])=>[id,b.token])));
   assert.deepEqual(raw.unknown,{keep:['中文',1]});
  }
+});
+
+test('detail cache scheduling coalesces slow writes and preserves snapshot identity and signature rules',async()=>{
+ const state={selectedId:'a',selectionVersion:1,detailVersion:1,loadingDetail:false,detail:{thread:{id:'a'},turns:[]}};
+ const scheduled=[],writes=[];let release;
+ const recovery=createDetailRecovery({state,host:'fixture',read:async()=>null,apply:()=>{},defer:(run,delay)=>{scheduled.push({run,delay});return scheduled.length;},write:async(...args)=>{writes.push(args);await new Promise(resolve=>release=resolve);}});
+ recovery.saveSoon();recovery.saveSoon();assert.equal(scheduled.length,1);assert.equal(scheduled[0].delay,5000);
+ state.selectedId='b';state.detail={thread:{id:'b'},turns:[{id:'turn',items:[{id:'item',text:'original',aggregatedOutput:'large'}]}],unknownNative:{kept:true}};
+ const first=scheduled.shift().run();assert.equal(writes.length,1);assert.equal(writes[0][0],'fixture');assert.equal(writes[0][1],'b');assert.strictEqual(writes[0][2],state.detail);
+ recovery.saveSoon();assert.equal(scheduled.length,0);release();await first;
+ state.detail.turns[0].items[0].aggregatedOutput='changed large output';state.detail.turns[0].items[0].outputCompressed={data:'ignored'};
+ recovery.saveSoon();await scheduled.shift().run();assert.equal(writes.length,1);
+ state.detail.turns[0].items[0].text='new message';recovery.saveSoon();const second=scheduled.shift().run();assert.equal(writes.length,2);release();await second;
+});
+test('detail cache skips transient views and permits retry after a failed writer',async()=>{
+ const state={selectedId:'a',selectionVersion:1,detailVersion:1,loadingDetail:false,detail:null};const scheduled=[];let writes=0,fail=true;
+ const recovery=createDetailRecovery({state,host:'fixture',read:async()=>null,apply:()=>{},defer:run=>{scheduled.push(run);return 1;},write:async()=>{writes++;if(fail)throw Error('fixture write failure');}});
+ for(const detail of [null,{recovering:true},{outputPreview:true}]){state.detail=detail;recovery.saveSoon();await scheduled.shift()();}assert.equal(writes,0);
+ state.detail={thread:{id:'a'},turns:[]};recovery.saveSoon();await assert.rejects(scheduled.shift()(),/fixture write failure/);fail=false;
+ recovery.saveSoon();await scheduled.shift()();assert.equal(writes,2);recovery.saveSoon();await scheduled.shift()();assert.equal(writes,2);
+});
+
+
+test('clearing recovery cancels the queued save without rescheduling it after a failed clear',()=>{
+ const state={selectedId:'a',selectionVersion:1,detailVersion:1,loadingDetail:false,detail:{thread:{id:'a'},turns:[]}};
+ const handle={fixtureTimer:true},scheduled=[],cancelled=[];
+ const recovery=createDetailRecovery({state,host:'fixture',read:async()=>null,write:async()=>{},apply:()=>{},defer:run=>{scheduled.push(run);return handle;},cancel:id=>cancelled.push(id)});
+ recovery.saveSoon();recovery.cancelScheduled();assert.strictEqual(cancelled[0],handle);
+ recovery.saveSoon();assert.equal(scheduled.length,1);
 });
