@@ -5,7 +5,7 @@
 
 ## 当前验收状态
 
-- 最新核验正式网页为 `0a643b4`，master 为 `4f77656`，独立预览为 `a30afe1`，干净产物资源摘要 `1717abd3`。已同步 master 的 Mermaid 图表与排队输入样式；两项功能及图表错误恢复、流式节点保留、手机三视口已完成限定对照。最近完整回归为 738 项 Node、72 项 Python、类型检查和构建通过。正式网页未更新，master 新增功能的证据与 4317 基准分开记录。具体范围及历史版本见[同步记录](verification-framework-thread-presence.md)。
+- 最新核验正式网页为 `0a643b4`，master 为 `1c7496f`（相对固定对照 `4f77656` 仅更新调研文档），独立预览为 `a30afe1`，干净产物资源摘要 `1717abd3`。已同步 master 的 Mermaid 图表与排队输入样式；两项功能及图表错误恢复、流式节点保留、手机三视口已完成限定对照。最近完整回归为 738 项 Node、72 项 Python、类型检查和构建通过。正式网页未更新，master 新增功能的证据与 4317 基准分开记录。具体范围及历史版本见[同步记录](verification-framework-thread-presence.md)。
 - 后续修复、桌面与 Chrome iPhone 模式逐项对照、性能样本及未通过项，统一见[持续验证报告](verification-framework-parity.md)。本文件下方的初次检查点和初始缺口保留为历史，不替代该报告的最新矩阵。
 - 主控制器 React/TypeScript 迁移、DOM 所有权收敛及服务端应用服务拆分仍未完成；验收覆盖增加不能替代这些实现工作。
 
