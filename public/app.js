@@ -10,6 +10,7 @@ import {createSidebarReader} from '../src/web/services/sidebar-reader';
 import {createModelSelection} from '../src/web/services/model-selection';
 import {createLiveTurns} from '../src/web/services/live-turns';
 import {createEventHandler} from '../src/web/services/events';
+import {createEventConnection} from '../src/web/services/event-connection';
 import {applyControllerStatus} from '../src/web/services/connection-status';
 import {createThreadViewReporter} from '../src/web/services/thread-view';
 import {controllerElement as $,el,icon,clear,setText} from '../src/web/controller-dom';
@@ -809,20 +810,9 @@ const handleEvent=createEventHandler({state,sideChat:()=>sideChat,accountVersion
   renderThreads,renderProjects,renderModels,refreshAccountUsage:force=>refreshAccountUsage?.(force),catalogs,loadThreads,loadModels,loadProjects,connected,recordError,
   scheduleListRefresh,scheduleDetailRefresh,scheduleStreamRender,authRecoveryMessage,notifyTaskEvent,applyStatus,renderStatus,renderRequests,renderThread,resumeWorkspace,
   notifyManagerError,toast,messageOf,requestKey,updateExtensionNotice,upsertTurn,upsertItem,ensureTurn,turns});
-function setupEvents() {
-  const es = new EventSource(targetUrl('/api/events?viewId='+threadViewId)); state.eventSource = es;
-  es.onopen = () => {
-    threadViewReporter.reset();
-    sideChat?.reconnect();
-    const restored = !state.transport; state.transport = true; renderStatus();
-    void reportThreadView().catch(e=>recordError(e,'thread'));
-    if (restored) resumeWorkspace().catch(e => { recordError(e,'sync'); renderStatus(); });
-  };
-  es.addEventListener('system/update',event=>{if(state.eventSource===es)receiveWebUpdate(JSON.parse(event.data));});
-  es.onmessage = handleEvent;
-  ['manager/status','manager/error','manager/request','manager/requestResolved'].forEach(name => es.addEventListener(name,handleEvent));
-  es.onerror = () => { state.transport = false; renderStatus(); };
-}
+const setupEvents=createEventConnection({state,url:()=>targetUrl('/api/events?viewId='+threadViewId),createSource:url=>new EventSource(url),
+  resetThreadView:()=>threadViewReporter.reset(),reconnectSideChat:()=>sideChat?.reconnect(),renderStatus,
+  reportThreadView,resumeWorkspace,recordError,receiveWebUpdate,handleEvent});
 const {saveLayout,readLayout,setupResizableLayout,toggleSidebar,toggleInspector}=createLayoutController({element:$,compact:compactLayout});
 function wireEvents() {
   automations=installAutomations({api,onOpen:()=>{flushDrafts();closeNewChat();state.selectionVersion++;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);queueMicrotask(renderControls);},
