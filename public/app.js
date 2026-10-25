@@ -1,3 +1,4 @@
+import {createNewChatPage} from '../src/web/services/new-chat-page';
 import {createActionRunner} from '../src/web/services/action-runner';
 import {createRequestResponder,requestKey,requestPath} from '../src/web/services/request-response';
 import {createThreadSelection} from '../src/web/services/thread-selection';
@@ -146,14 +147,11 @@ const newDraft=new NewChatDraft(sessionStorage,'rcm.new-chat.'+targetHost);
 let newChatOpen=false;
 const inputId=()=>newChatOpen?newDraftId:state.selectedId;
 const inputReady=()=>state.desktopMode&&!newChatOpen?Boolean(state.transport&&state.detail?.desktop?.available):newChatOpen?usable()&&Boolean(newDraft.cwd):usable()&&controlled()&&!state.selectedArchived;
-function rememberNewDraft(){try{newDraft.save();}catch{toast('新会话草稿设置暂未保存，请保留当前页面。',true);}}
-function closeNewChat(restore=true){
-  if(!newChatOpen)return;
-  state.drafts.set(newDraftId,$('message-input').value);newChatOpen=false;
-  $('conversation').append(document.querySelector('.composer-region'));
-  $('new-chat-page').hidden=true;document.querySelector('.main-panel').classList.remove('new-chat-open');document.querySelector('.main-panel').classList.toggle('desktop-chat',restore&&state.desktopMode);
-  if(restore){$('message-input').value=state.drafts.get(state.selectedId)||'';renderThread();resizeInput();queueMicrotask(()=>void reportThreadView().catch(e=>recordError(e,'thread')));}
-}
+const {rememberNewDraft,closeNewChat,updateNewProjects,openNewDialog}=createNewChatPage({state,newDraft,newDraftId,
+  opened:{get:()=>newChatOpen,set:value=>{newChatOpen=value;}},element:$,document,toast,renderThread,resizeInput,queueMicrotask,reportThreadView,recordError,
+  currentThread,projectFolderOptions,publishProjectPicker,automations:()=>automations,flushDrafts,installProjectPickerActions,renderControls,publishNewChatControls,
+  toggleInspector:open=>toggleInspector(open),compactLayout,toggleSidebar:(...args)=>toggleSidebar(...args),renderModels:()=>renderModels(),mobileUI:()=>mobileUI});
+
 function flushDrafts() {
   if (draftWritesSuspended) return;
   if (inputId()) state.drafts.set(inputId(),$('message-input').value);
@@ -814,24 +812,7 @@ async function releaseService() {
   });
 }
 const respondRequest=createRequestResponder({state,action,api,questionDrafts,document,element:$,sideChat:()=>sideChat,renderRequests,loadStatus});
-function updateNewProjects(projectRoot) {
-  const preferred=(typeof projectRoot==='string'?projectRoot:null)||newDraft.cwd||state.projects.find(p=>p.id===state.projectId)?.roots?.[0]||currentThread()?.cwd;
-  const options=projectFolderOptions(state.projects);
-  const value=options.some(p=>p.root===preferred)?preferred:(options[0]?.root||'');
-  publishProjectPicker({options,value});newDraft.cwd=value;rememberNewDraft();
-}
-function openNewDialog(projectRoot) {
-  if(state.busy.has('create'))return;
-  automations?.close();document.querySelector('.main-panel').classList.remove('desktop-chat');
-  flushDrafts();updateNewProjects(projectRoot);
-  installProjectPickerActions({change:value=>{newDraft.cwd=value;rememberNewDraft();renderControls();}});
-  state.selectionVersion++;newChatOpen=true;$('new-chat-page').hidden=false;document.querySelector('.main-panel').classList.add('new-chat-open');
-  void reportThreadView().catch(e=>recordError(e,'thread'));
-  $('new-composer-slot').append(document.querySelector('.composer-region'));
-  $('message-input').value=state.drafts.get(newDraftId)||'';
-  publishNewChatControls({errorHidden:true});toggleInspector(false);if(compactLayout())toggleSidebar(false,false);
-  renderModels();renderControls();resizeInput();mobileUI?.syncDrawers();$('message-input').focus();
-}
+
 const createThreadFromDraft=createThreadSubmit({state,draft:newDraft,draftId:newDraftId,access:WEB_ACCESS,createdThreads,
   input:()=>$('message-input'),hasAttachments:()=>attachments.has(),attachmentsPending:()=>attachments.pending(),validate:(...args)=>composer.validateSend(...args),toast,
   hideError:()=>{publishNewChatControls({errorHidden:true});},showError:error=>{publishNewChatControls({error:messageOf(error),errorHidden:false});},recordError,action,
