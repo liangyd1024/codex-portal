@@ -77,7 +77,10 @@ function detailFixture() {
   });
   context.restoreDetail=createDetailRecovery({state,host:'test',read:context.readDetailCache,write:async()=>{},apply:context.applyDetail}).restore;
   vm.runInContext(source.slice(source.indexOf('const readSelectedDetail='),source.indexOf('async function refreshWorkspace('))+'\nglobalThis.read=refreshSelected;',context);
-  vm.runInContext(source.slice(source.indexOf('function applyStatus('),source.indexOf('\nconst $'))+'\nglobalThis.status=applyStatus;',context);
+  const ast=ts.createSourceFile('app.js',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+  const applyStatus=ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='applyStatus');
+  assert.ok(applyStatus,'status controller exists');
+  vm.runInContext(applyStatus.getText(ast)+'\nglobalThis.status=applyStatus;',context);
   return {state,requests,applied,cacheReads,navigationUpdates,context,read:context.read,status:context.status};
 }
 test('late thread and connection replies cannot overwrite a new selection; duplicate reads coalesce',async()=>{

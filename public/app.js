@@ -1,3 +1,4 @@
+import {controllerElement as $,el,icon,clear,setText} from '../src/web/controller-dom';
 import {createControllerState} from '../src/web/controller-state';
 import {createConnectionActions} from '../src/web/services/connection-actions';
 import {publishWelcome,setWelcomeDisabled,installWelcomeAction,installClearRecovery} from '../src/web/components/WorkspaceActions';
@@ -156,7 +157,6 @@ function applyStatus(status){
   state.status=next;
 }
 
-const $ = id => document.getElementById(id);
 const state = createControllerState({
   desktopMode:Boolean(savedView().desktopMode),selectedId:savedView().selectedId||null,projectId:savedView().projectId||null,
   drafts:new DraftStore({storage:()=>sessionStorage,host:targetHost,onError:()=>toast('浏览器无法保存草稿，请先复制重要内容。',true)}),
@@ -196,22 +196,6 @@ const effortNames = {none:'无', minimal:'最低', low:'低', medium:'中', high
 const statusNames = {unknown:'状态未确认',notLoaded:'尚未加载', idle:'就绪', active:'执行中', inProgress:'执行中', in_progress:'执行中', running:'执行中', completed:'已完成', interrupted:'已停止', failed:'失败', systemError:'服务错误', pending:'等待中', declined:'已拒绝', stopped:'已停止', success:'成功'};
 const stages = {ssh:'SSH 连接', identity:'身份核验', service:'目标机器服务', protocol:'协议连接', initialize:'协议初始化', models:'模型目录', threads:'会话列表', connected:'已连接', connecting:'正在连接', disconnected:'未连接', reconnecting:'正在重连', error:'连接失败', ready:'已连接'};
 
-function el(tag, className, content) {
-  const n = document.createElement(tag);
-  if (className) n.className = className;
-  if (content != null) n.textContent = String(content);
-  return n;
-}
-function icon(name, extra = '') {
-  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  s.setAttribute('class', 'icon' + (extra ? ' ' + extra : ''));
-  s.setAttribute('aria-hidden', 'true');
-  const u = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-  u.setAttribute('href', '#i-' + name);
-  s.append(u); return s;
-}
-function clear(n) { n.replaceChildren(); return n; }
-function setText(id, value) { const node=$(id),text=value == null || value === '' ? '—' : String(value);if(node.textContent!==text||node.childElementCount)node.textContent=text; }
 function pretty(value) { try { return JSON.stringify(value, null, 2); } catch { return String(value); } }
 function messageOf(value) {
   const message=typeof value === 'string' ? value : value?.message || pretty(value);
