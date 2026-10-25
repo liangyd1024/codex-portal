@@ -39,7 +39,11 @@ function RequestCard({card:c}:{card:Card}){
  </div>;
 }
 export function RequestCards(){const cards=useStore(registry).cards;return <>{cards.map(card=>createPortal(<RequestCard card={card}/>,card.host,String(card.key)))}</>;}
-export function publishRequestCards(views:CardView[]){flushSync(()=>registry.setState({cards:views.map(view=>({...view,key:++sequence,controls:createStore<Controls>(()=>({pending:false,unavailable:false,feedback:''}))}))}));}
+export function publishRequestCards(views:CardView[]){
+ // An already empty registry has no portals or effects to update. Keep nonempty
+ // publications intact: rebuilding a card preserves the baseline focus semantics.
+ if(!views.length&&!registry.getState().cards.length)return;
+ flushSync(()=>registry.setState({cards:views.map(view=>({...view,key:++sequence,controls:createStore<Controls>(()=>({pending:false,unavailable:false,feedback:''}))}))}));}
 export function clearRequestCards(host:HTMLElement){const cards=registry.getState().cards;if(cards.some(c=>c.host===host))flushSync(()=>registry.setState({cards:cards.filter(c=>c.host!==host)}));}
 export function syncRequestCards({ready,pending,controlledThreads}:Availability){
  for(const c of registry.getState().cards){
