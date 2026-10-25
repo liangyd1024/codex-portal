@@ -1,3 +1,4 @@
+import {createThreadSelection} from '../src/web/services/thread-selection';
 import {createSidebarReader} from '../src/web/services/sidebar-reader';
 import {createModelSelection} from '../src/web/services/model-selection';
 import {createLiveTurns} from '../src/web/services/live-turns';
@@ -734,27 +735,8 @@ const loadThreads = createSidebarLoader({
   read:append=>readThreads(append,true),
 });
 const {readThreads,loadSidebarActivity,loadVisibleThreads}=createSidebarReader({state,createdThreads,connected,loadProjects,threadName,element:$,renderThreads,renderControls,api,loadThreads,recordError,toast,messageOf,requestAnimationFrame});
+const {applyDetail,selectThread}=createThreadSelection({state,location,history,document,closeNewChat,automations:()=>automations,toggleInspector:open=>toggleInspector(open),element:$,inputId,saveView,resizeInput,renderModels,renderThread,renderThreads,renderRequests,saveDetailSoon:()=>saveDetailSoon(),compactLayout,toggleSidebar:(...args)=>toggleSidebar(...args),refreshSelected:()=>refreshSelected(),scrollFollow:()=>scrollFollow,messageOf,recordError});
 const {saveSoon:saveDetailSoon,restore:restoreDetail,cancelScheduled:cancelDetailSave}=createDetailRecovery({state,host:targetHost,read:readDetailCache,write:writeDetailCache,apply:applyDetail});
-function applyDetail(data, resetModels = false) {
-  if(data.goalError&&state.detail?.thread?.id===data.thread?.id)data.goal=state.detail.goal;
-  state.detail = {...data, turns:data.turns || data.thread?.turns || []};
-  state.historyCursor = data.nextCursor || data.historyCursor || null; state.historyError = '';
-  if (resetModels) renderModels(true); renderThread(); renderRequests(); if(!data.recovering)saveDetailSoon();
-}
-async function selectThread(id,options={}) {
-  if(state.busy.has('create'))return;
-  const url=new URL(location.href);url.searchParams.delete('thread');history.replaceState(null,'',url);
-  closeNewChat();
-  automations?.close();state.desktopMode=Boolean(options.desktop||id===automations?.threadId);
-  document.querySelector('.main-panel').classList.toggle('desktop-chat',state.desktopMode);
-  toggleInspector(false);
-  $('messages').style.paddingBottom = '';
-  if (inputId()) state.drafts.set(inputId(),$('message-input').value);
-  const seq = ++state.selectionVersion; state.selectedId = id; state.detail = null; state.historyCursor = null; state.loadedOlderHistory = false; state.loadingDetail = true; state.historyError = ''; saveView();
-  $('message-input').value = state.drafts.get(id) || ''; resizeInput(); renderThread(); renderThreads(); if (compactLayout()) toggleSidebar(false, false);
-  try { await refreshSelected(); if (seq !== state.selectionVersion) return; scrollFollow?.schedule(); }
-  catch (e) { if (seq !== state.selectionVersion) return; state.loadingDetail = false; state.historyError = messageOf(e); recordError(e,'thread'); renderThread(); }
-}
 const readSelectedDetail=createDetailReader({state,sends:desktopSends,
   reportView:()=>reportThreadView(),recordError:error=>recordError(error,'thread'),request:(...args)=>api(...args),
   input:()=>$('message-input'),resizeInput:()=>resizeInput(),saveSends:()=>saveDesktopSends(),
