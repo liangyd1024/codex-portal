@@ -18,8 +18,8 @@
 
 ## 技术栈与结构
 
-- 服务端使用 Node.js 22+、ES Modules 和原生 HTTP/HTTPS。入口为 [server.mjs](server.mjs)，业务适配模块放在 `lib/`。
-- 前端使用原生 HTML、CSS 和 JavaScript ES Modules，文件放在 `public/`。布局使用 CSS Grid 和 Flexbox。当前无前端框架、组件库或构建步骤，不为局部修改引入这些依赖。
+- 服务端使用 Node.js 22+、TypeScript、ES Modules 和 Fastify。兼容入口为 [server.mjs](server.mjs)，应用路由与服务放在 `src/server/`，原生适配模块保留在 `lib/`。
+- 前端使用 React、TypeScript、Zustand 和 Vite，应用代码放在 `src/web/`。沿用 `public/` 原 CSS 和浏览器底层算法，布局使用 CSS Grid 和 Flexbox；不引入新的样式框架或组件库。类型检查和构建命令见 package.json。
 - Python 3 脚本放在 `scripts/`，负责数据读取、输出采集、备份和维护。RCM 自有状态使用 JSON 和 SQLite；Codex 原生数据只读，业务变更仍走原生接口。
 - 浏览器通过 HTTP/JSON 和 SSE 连接网页服务。目标连接使用 WebSocket RPC、桌面 IPC 和 SSH 适配。新增能力优先复用这些适配。
 - 本机部署使用 macOS `launchd`，备份加密使用 `age`。测试使用 Node.js 内置测试运行器和 Python `unittest`。命令见 [package.json](package.json)及 README。
