@@ -1,5 +1,8 @@
 # master 一比一还原验证报告（进行中）
 
+侧栏快照、活动读取与自动补页已迁入严格 TypeScript，提交 `7bfe94e`／干净资源 `72168314`。四视口 40 对搜索迟到、失败重试和分页比较一致，848 Node／74 Python、类型检查及构建通过。性能波动与桌面差异继续保留；预览本机连接有待处理请求，本轮未更新服务，仍为 `b1ee37f`。见[侧栏读取报告](verification-framework-sidebar-reader.md)。
+
+
 模型与推理档位选择已迁入严格 TypeScript，提交 `b1ee37f`／干净资源 `89bd3b88` 已更新独立预览。四视口 56 对模型、新建草稿与目录恢复比较一致，845 Node／74 Python、类型检查、构建和八个真实启动样本通过。性能首轮手机高值及反向加长复测均保留，整体验收仍未完成。见[模型选择报告](verification-framework-model-selection.md)。
 
 
