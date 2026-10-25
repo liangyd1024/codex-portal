@@ -78,7 +78,12 @@ test('goal preparation failure keeps draft and marks provisional receipt failed 
  const f=fixture();f.context.composer.prepareSend=async()=>{throw Error('目标尚未确认');};
  await assert.rejects(f.send(),/目标尚未确认/);assert.deepEqual(f.calls,[]);assert.equal(f.input.value,'中文草稿');assert.equal(f.state.busy.size,0);assert.equal(f.context.sendReceipts.view('local:a',[])[0].status,'failed');
 });
-test('thread references remain rejected for active turns and pending goals before creating receipts',async()=>{
- for(const active of [true,false]){const f=fixture();f.context.running=()=>active;f.context.composer.isGoalPending=()=>!active;f.context.composer.options=()=>({threads:[{id:'reference'}]});
- await assert.rejects(f.send(),/单独发送会话引用/);assert.deepEqual(f.calls,[]);assert.deepEqual(f.context.sendReceipts.view('local:a',[]),[]);assert.equal(f.input.value,'中文草稿');assert.equal(f.state.busy.size,0);}
+test('queue references and idle goal references retain drafts before creating receipts',async()=>{
+ for(const active of [true,false]){const f=fixture();f.context.running=()=>active;f.context.followUpAction=()=>active?'queue':null;f.context.composer.isGoalPending=()=>!active;f.context.composer.options=()=>({threads:['reference']});
+ await assert.rejects(f.send(),active?/排队暂不支持会话引用/:/暂不能同时启动目标/);assert.deepEqual(f.calls,[]);assert.deepEqual(f.context.sendReceipts.view('local:a',[]),[]);assert.equal(f.input.value,'中文草稿');assert.equal(f.state.busy.size,0);}
+});
+test('running reference steering retains IDs and does not block on stale goal intent',async()=>{
+ const f=fixture();f.context.running=()=>true;f.context.followUpAction=()=> 'steer';f.context.composer.isGoalPending=()=>true;f.context.composer.options=()=>({threads:['reference']});
+ let submission;f.context.sendAfterGoal=async args=>{submission=args;return {turn:{id:'running'}};};
+ await f.send();assert.equal(submission.active,true);assert.deepEqual(submission.payload.threads,['reference']);assert.equal(submission.payload.text,'中文草稿');assert.equal(f.input.value,'');f.history.resolve();
 });

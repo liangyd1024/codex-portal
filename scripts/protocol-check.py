@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 13
+PROTOCOL_POLICY = 14
 REQUEST_FIELDS = {
     'thread/fork': {'threadId','ephemeral','excludeTurns','developerInstructions','approvalPolicy','sandbox','model','config'},
     'thread/items/list': {'threadId','limit','sortDirection','cursor'},
@@ -113,6 +113,8 @@ def validate_request_schema(schema):
         features[feature] = {'supported': not reasons, 'reason': '；'.join(reasons)}
     if 'config' not in methods.get('thread/resume', {}).get('properties', {}) or 'additionalContext' not in methods.get('turn/start', {}).get('properties', {}):
         features['threadReferences'] = {'supported': False, 'reason': 'thread/resume 缺少会话配置参数'}
+    reference_steer = features['threadReferences']['supported'] and 'turn/steer' not in failures and 'additionalContext' in methods.get('turn/steer', {}).get('properties', {})
+    features['threadReferenceSteer'] = {'supported': reference_steer, 'reason': '' if reference_steer else '需要原生引导引用上下文支持'}
     retry_fields = {'clientUserMessageId', 'turnTrigger'}
     if not retry_fields.issubset(methods.get('turn/start', {}).get('properties', {})):
         features['capacityRetry'] = {'supported': False, 'reason': 'turn/start 缺少原生重试标识参数'}

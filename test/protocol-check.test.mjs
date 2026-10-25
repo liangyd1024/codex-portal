@@ -57,3 +57,12 @@ schema['oneOf']=[entry for entry in schema['oneOf'] if 'initialize' not in entry
 try: m['validate_request_schema'](schema);raise AssertionError('missing initialization accepted')
 except RuntimeError as e: assert 'initialize' in str(e)
 `));
+test('reference steering requires native additional context without disabling ordinary steering',()=>check(`
+assert m['validate_request_schema'](schema)['features']['threadReferenceSteer']['supported']
+entry=next(e for e in schema['oneOf'] if 'turn/steer' in e['properties']['method']['enum'])
+m['dereference'](schema,entry['properties']['params'])['properties'].pop('additionalContext')
+result=m['validate_request_schema'](schema)
+assert not result['features']['threadReferenceSteer']['supported']
+assert result['features']['steer']['supported']
+assert result['features']['threadReferences']['supported']
+`));

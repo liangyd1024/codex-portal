@@ -91,3 +91,8 @@ test('confirmed existing goal clears only stale intent, not uncertain receipts o
    assert.equal(goal.objective,'保持原目标');
   }
  });
+test('running follow-up forwards conversation IDs with original text',async()=>{
+ const payload={text:'补充 @会话',images:[],threads:['reference-id']};let call;
+ await sendAfterGoal({goalStarted:false,id:'test',active:true,payload,api:async(...args)=>{call=args;}});
+ assert.equal(call[0],'/api/threads/test/steer');assert.deepEqual(call[1].body,payload);
+});
