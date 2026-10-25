@@ -2270,3 +2270,8 @@ ego-lite 在同一空间和页面执行。桌面 1480×747、DPR 2；iPhone 12 �
 ## 操作协调器类型迁移
 
 `d0d78a1` 保持 action 运行 token 一致，迁入严格 TypeScript 服务。类型检查与完整 862 Node／74 Python 回归通过。对照 `227dbfe`，桌面及 iPhone 三种视口的异步问题 48 对状态、维护四对流程一致。详见[专项报告](verification-framework-action-runner.md)。全量迁移和整体性能仍未完成。
+
+
+## 新建会话页面协调迁移
+
+`21a545a` 将新建草稿设置保存、项目选择和页面开关迁入严格 TypeScript。对照 `227dbfe`，桌面及 iPhone 三种视口共 68 对状态一致，覆盖节点复用、草稿和模型往返、带附件失败与结果未知恢复。类型检查、867 Node／74 Python 和干净构建通过。详见[专项报告](verification-framework-new-chat-page.md)，整份迁移与性能门槛仍未完成。
