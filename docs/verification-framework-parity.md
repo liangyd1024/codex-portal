@@ -1,5 +1,7 @@
 # master 一比一还原验证报告（进行中）
 
+侧聊生命周期与输入协调已迁入严格 TypeScript，提交 `2733e3d`／资源 `1e746526` 已更新独立预览。运行语法树与原实现一致，实际加载的前端脚本逐字节一致；834 Node／74 Python、类型检查、构建及八个真实启动样本通过。见[侧聊类型迁移报告](verification-framework-side-chat.md#侧聊生命周期与输入协调类型迁移)。整体迁移与验收仍未完成。
+
 主控制器 DOM 查询与节点辅助函数已迁入严格 TypeScript，提交 `ae9a995`／干净资源 `fb290ad3` 已更新独立预览。45 个固定节点标签契约、四视口 67 对功能比较、834 Node／74 Python、类型检查和构建通过；八个真实启动样本正常。最终性能重复组未见本次稳定增量，整体性能差距及剩余迁移仍未关闭。见[DOM 契约报告](verification-framework-controller-dom.md)。
 
 主控制器状态初始化已迁入严格 TypeScript，提交 `f1bd552`／干净资源 `f33496d2` 已更新独立预览。输入与新建共 67 对比较一致，831 Node／74 Python 和真实入口八样本通过。完整控制器迁移及整体首屏性能仍未完成，见[状态契约报告](verification-framework-controller-state.md)。
