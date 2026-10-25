@@ -14,6 +14,10 @@ const store = createStore<State>(() => ({views: {
 }, actions: {}}));
 export function publishModelSelect(id: ModelSelectId, patch: Partial<View>) {
   const previous = store.getState().views[id];
+  if (patch.options && patch.options.length === previous.options.length && patch.options.every((option, index) => {
+    const old = previous.options[index];
+    return option.value === old.value && option.label === old.label && option.title === old.title;
+  })) patch = {...patch, options: previous.options};
   if (Object.entries(patch).every(([key, value]) => Object.is(previous[key as keyof View], value))) return;
   flushSync(() => store.setState(state => ({views: {...state.views, [id]: {...state.views[id], ...patch}}})));
 }
