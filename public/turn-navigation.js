@@ -116,11 +116,12 @@ export function installTurnNavigation({scroller,content,entryHost,context,follow
     }catch{if(isCurrent())report('加载失败，请重试。');}
     finally{if(isCurrent()){loading=false;context().renderHistory?.();syncLoad();update();}}
   }
+  const setLabel=(node,value)=>{if(node.textContent!==value)node.textContent=value;};
   function syncLoad(){
-    const c=context(),pending=pendingHistory(c);if(!pending&&!loading){loadMessage='';feedback.textContent='';}older.hidden=more.hidden=!pending;older.disabled=loading||c.loading;more.disabled=!loading&&c.loading;
+    const c=context(),pending=pendingHistory(c);if(!pending&&!loading){loadMessage='';setLabel(feedback,'');}older.hidden=more.hidden=!pending;older.disabled=loading||c.loading;more.disabled=!loading&&c.loading;
     older.title=loading?'正在加载全部轮次…':'加载全部轮次';
-    more.textContent=loading?'取消加载':loadMessage?'继续加载全部轮次':'加载全部轮次';
-    const label=turnCountLabel({...c,hasEarlier:pendingHistory(c),loading,loadMessage},rows.length);count.textContent=label?(loadMessage?'重试':rows.length+'轮'):'';entry.textContent=label?'轮次 · '+label:'轮次';title.textContent=label?'对话轮次 · '+label:'对话轮次';
+    setLabel(more,loading?'取消加载':loadMessage?'继续加载全部轮次':'加载全部轮次');
+    const label=turnCountLabel({...c,hasEarlier:pendingHistory(c),loading,loadMessage},rows.length);setLabel(count,label?(loadMessage?'重试':rows.length+'轮'):'');setLabel(entry,label?'轮次 · '+label:'轮次');setLabel(title,label?'对话轮次 · '+label:'对话轮次');
     ticks.hidden=loading||pending;list.hidden=loading||pending;
     if(!label){rail.hidden=true;entry.hidden=true;hide();}schedule();
     count.title=loading?'正在加载全部轮次，点击取消':loadMessage||(label?label+'，显示全部轮次':'显示全部轮次');
