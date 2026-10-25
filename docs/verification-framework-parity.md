@@ -1,5 +1,7 @@
 # master 一比一还原验证报告（进行中）
 
+主控制器 DOM 查询与节点辅助函数已迁入严格 TypeScript，提交 `ae9a995`／干净资源 `fb290ad3` 已更新独立预览。45 个固定节点标签契约、四视口 67 对功能比较、834 Node／74 Python、类型检查和构建通过；八个真实启动样本正常。最终性能重复组未见本次稳定增量，整体性能差距及剩余迁移仍未关闭。见[DOM 契约报告](verification-framework-controller-dom.md)。
+
 主控制器状态初始化已迁入严格 TypeScript，提交 `f1bd552`／干净资源 `f33496d2` 已更新独立预览。输入与新建共 67 对比较一致，831 Node／74 Python 和真实入口八样本通过。完整控制器迁移及整体首屏性能仍未完成，见[状态契约报告](verification-framework-controller-state.md)。
 
 管理会话选择器优化 `55f85ec`／干净资源 `c8be4bf5` 已更新独立预览。四视口 120 对功能比较一致，828 Node／74 Python 通过；480 个性能样本显示小列表改善，首轮长列表高值及加长重测均保留。真实入口八样本正常，整体性能及剩余迁移未全部完成，详见[选择器复验](verification-framework-automations.md#候选选项独立订阅优化与复验)。
