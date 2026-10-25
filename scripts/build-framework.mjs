@@ -21,7 +21,7 @@ export async function buildFramework(){
  for(const name of await readdir(path.join(root,'public'))){if(name.endsWith('.css')||name.endsWith('.js')||['mermaid-frame.html','index.html','bootstrap.js','login.html','login.js','notification-worker.js','manifest.webmanifest'].includes(name))await cp(path.join(root,'public',name),path.join(output,'public',name));}
  // Pairing is reachable before authentication. Keep it a self-contained classic
  // script: unauthenticated clients cannot fetch workspace chunks.
- await build({configFile:false,root,publicDir:false,plugins:[react()],build:{target:['es2022','safari16'],outDir:path.join(output,'public'),emptyOutDir:false,minify:true,
+ await build({configFile:false,root,publicDir:false,define:{'process.env.NODE_ENV':JSON.stringify('production')},plugins:[react()],build:{target:['es2022','safari16'],outDir:path.join(output,'public'),emptyOutDir:false,minify:true,
   lib:{entry:path.join(root,'src/web/pairing-entry.tsx'),formats:['iife'],name:'RCMPairing',fileName:()=> 'login.js'},rollupOptions:{output:{inlineDynamicImports:true}}}});
  await mkdir(path.join(output,'public/vendor'),{recursive:true});
  await cp(path.join(root,'public/vendor/mermaid-12.2.0.js'),path.join(output,'public/vendor/mermaid-12.2.0.js'));
