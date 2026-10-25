@@ -11,8 +11,16 @@ export async function buildFramework(){
  if(typecheck({root})!==0)throw Error('类型检查未通过。');
  const parent=path.join(root,'.framework-build');await mkdir(parent,{recursive:true});
  const output=await mkdtemp(path.join(parent,'release-'));
- await build({configFile:false,root,publicDir:false,plugins:[{name:'rcm-shared',resolveId(id,importer){if(id.startsWith('./shared/')&&importer?.startsWith(path.join(root,'public')))return path.join(root,id.slice(2));}},react()],build:{target:['es2022','safari16'],outDir:path.join(output,'public'),emptyOutDir:false,minify:true,
+ const webBuild=await build({configFile:false,root,publicDir:false,plugins:[{name:'rcm-shared',resolveId(id,importer){if(id.startsWith('./shared/')&&importer?.startsWith(path.join(root,'public')))return path.join(root,id.slice(2));}},react()],build:{target:['es2022','safari16'],outDir:path.join(output,'public'),emptyOutDir:false,minify:true,
   rollupOptions:{input:path.join(root,'src/web/entry.tsx'),output:{entryFileNames:'framework.js',chunkFileNames:'chunks/[name]-[hash].js',assetFileNames:'assets/[name]-[hash][extname]'}}}});
+ // The entry intentionally starts the controller only after hydration. Preload
+ // its bytes and shared imports without evaluating it or changing that order.
+ const webChunks=(Array.isArray(webBuild)?webBuild:[webBuild]).flatMap(result=>result.output).filter(item=>item.type==='chunk');
+ const chunkByName=new Map(webChunks.map(chunk=>[chunk.fileName,chunk]));
+ const preloadNames=new Set();
+ function preload(chunk){if(!chunk||preloadNames.has(chunk.fileName))return;preloadNames.add(chunk.fileName);for(const name of chunk.imports)preload(chunkByName.get(name));}
+ for(const chunk of webChunks)if(chunk.isEntry||chunk.facadeModuleId===path.join(root,'src/web/controller.ts'))preload(chunk);
+ preloadNames.delete('framework.js');
  // Build the typed server without bundling Node libraries or native adapters.
  await build({configFile:false,root,publicDir:false,build:{ssr:path.join(root,'src/server/application.ts'),target:'node22',outDir:path.join(output,'server'),emptyOutDir:false,minify:false,
   rollupOptions:{external:id=>id.includes('/lib/')&&id.endsWith('.mjs'),output:{entryFileNames:'application.mjs',paths:id=>id.includes('/lib/')?'../runtime/lib/'+id.split('/lib/').at(-1):id}}}});
@@ -29,6 +37,7 @@ export async function buildFramework(){
  await writeFile(path.join(output,'public/app.js'),"import './framework.js';\n");
  let html=await readFile(path.join(output,'public/index.html'),'utf8');
  html=html.replace('href="/app.js"','href="/framework.js"').replace('<script type="module" src="/project-picker.js"></script>','');
+ html=html.replace('<link rel="modulepreload" href="/framework.js">',tag=>tag+[...preloadNames].map(name=>'\n  <link rel="modulepreload" href="/'+name+'">').join(''));
  await writeFile(path.join(output,'public/index.html'),html);
  const bootstrap=(await readFile(path.join(root,'public/bootstrap.js'),'utf8')).replace("import('./app.js')","import('./framework.js')");
  await writeFile(path.join(output,'public/bootstrap.js'),bootstrap);
