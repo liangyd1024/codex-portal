@@ -25,7 +25,7 @@ export async function buildFramework(){
  await build({configFile:false,root,publicDir:false,build:{ssr:path.join(root,'src/server/application.ts'),target:'node22',outDir:path.join(output,'server'),emptyOutDir:false,minify:false,
   rollupOptions:{external:id=>id.includes('/lib/')&&id.endsWith('.mjs'),output:{entryFileNames:'application.mjs',paths:id=>id.includes('/lib/')?'../runtime/lib/'+id.split('/lib/').at(-1):id}}}});
  await mkdir(path.join(output,'runtime'),{recursive:true});
- for(const name of ['lib','scripts','shared','public','server.mjs','package.json'])await cp(path.join(root,name),path.join(output,'runtime',name),{recursive:true});
+ for(const name of ['lib','scripts','shared','public','server.mjs','package.json'])await cp(path.join(root,name),path.join(output,'runtime',name),{recursive:true,filter:source=>!source.split(path.sep).some(part=>part==='__pycache__'||part==='.DS_Store'||part.endsWith('.pyc'))});
  for(const name of await readdir(path.join(root,'public'))){if(name.endsWith('.css')||name.endsWith('.js')||['mermaid-frame.html','index.html','bootstrap.js','login.html','login.js','notification-worker.js','manifest.webmanifest'].includes(name))await cp(path.join(root,'public',name),path.join(output,'public',name));}
  // Pairing is reachable before authentication. Keep it a self-contained classic
  // script: unauthenticated clients cannot fetch workspace chunks.

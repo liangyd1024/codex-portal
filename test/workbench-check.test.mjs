@@ -67,7 +67,7 @@ test('installer rolls back a live web service when browser loading fails despite
   deploymentLock:async()=>({release:async()=>calls.push('unlock')}),checkDeploymentEntrance:async()=>{},
   mkdir:async()=>{},chmod:async()=>{},stat:async()=>({}),writeFile:async(file,data)=>{files.set(file,data);},
   readFile:async file=>file.endsWith('VERSION')?version:'old plist',
-  spawnSync:(_cmd,args)=>({status:0,stdout:args.includes('--porcelain')?'':version}),
+  spawnSync:(_cmd,args)=>({status:0,stdout:args.includes('--porcelain')?'':args.includes('show')?'{}':version}),
   fetch:async()=>({ok:true,json:async()=>({version})}),
   prepareWorkbenchCheck:async()=>{calls.push('prepare');return {check:async()=>{calls.push('browser');throw Error('module 404');},close:async()=>calls.push('close')};},
   console:{log(){},error(){}},AbortSignal,setTimeout,
