@@ -1,3 +1,4 @@
+import {createWorkspaceStartup} from '../src/web/services/workspace-startup';
 import {createNewChatPage} from '../src/web/services/new-chat-page';
 import {createActionRunner} from '../src/web/services/action-runner';
 import {createRequestResponder,requestKey,requestPath} from '../src/web/services/request-response';
@@ -973,48 +974,14 @@ function wireEvents() {
   turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,loadDirectory:()=>api('/api/threads/'+encodeURIComponent(state.selectedId)+'/turn-directory'),onError:message=>toast(message,true),context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),ready:usable()&&!state.loadingDetail&&!state.historyError&&!state.detail?.recovering&&!selectedRefresh.pending(),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:id=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
   window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
 }
-async function init() {
-  let systemUpdate=null,mobileInstalled=false;
-  const loadSettings=()=>{systemUpdate??=installSystemUpdate({api,flush:flushDrafts,resetCsrf:()=>{state.csrf='';}});void systemUpdate.open();};
-  const loadMobile=()=>{if(mobileInstalled)return;mobileInstalled=true;installMobile(api).catch(showMobileError);};
-  refreshAccountUsage=installAccountUsage({details:text=>toast(text,false,3000,'account-usage',{information:true}),api,connected,context:()=>targetHost+':'+state.status?.instanceId+':'+state.status?.connection?.connectedAt});
-  void refreshAccountUsage();
-  setInterval(()=>{if(!document.hidden)void refreshAccountUsage();},15000);
-  setInterval(()=>{if(document.hidden)return;renderControls();if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();},5000);
-  setInterval(()=>{if(connected()&&!state.loadingThreads&&!sidebar.pending&&!sidebar.drag&&!sidebar.menu&&!sidebar.dialog&&!document.hidden)loadThreads();},15000);
-  $('messages').addEventListener('click',e=>{
-    const summary=e.target.closest('summary');if(!summary)return;
-    const detail=summary.closest('details[data-item-id]');if(!detail)return;
-    const ids=new Set([...$('messages').querySelectorAll('details[open][data-item-id]')].map(n=>n.dataset.itemId));
-    if(detail.open)ids.delete(detail.dataset.itemId);else ids.add(detail.dataset.itemId);
-    try{sessionStorage.setItem('rcm.openDetails.'+targetHost+'.'+state.selectedId,JSON.stringify([...ids]));}catch{}
-  });
-  installBrowserBackup(connectionConfig,flushDrafts,()=>{draftWritesSuspended=true;});
-  const inspector=$('inspector');
-  const selectInspectorView=installInspectorNavigation(showInspectorView);
-  const groups=[...inspector.querySelectorAll(':scope > details')];
-  const category=group=>group.id==='mobile-access'?'mobile':'settings';
-  groups.forEach(group=>{group.open=group.id!=='diagnostics'&&group.id!=='browser-backup'&&!group.classList.contains('connection-section');});
-  function showInspectorView(view){
-    if(view==='settings'&&!$('app-shell').classList.contains('inspector-hidden'))loadSettings();
-    if(view==='mobile')loadMobile();
-    groups.forEach(group=>{group.dataset.viewHidden=String(category(group)!==view);group.hidden=group.dataset.viewHidden==='true'||group.dataset.empty==='true';});
-    selectInspectorView(view);
-    inspector.scrollTop = 0;
-  }
-  showInspectorView('settings');
-  wireEvents(); renderStatus(); renderThread(); renderThreads(); setupEvents();
-  window.dispatchEvent(new Event('rcm-ready'));
-  notificationNavigationReady=true;
-  const linkedThread=new URL(location.href).searchParams.get('thread');
-  const notification=pendingNotification || (linkedThread && requestedHost===targetHost?{host:targetHost,threadId:linkedThread}:null);
-  pendingNotification=null;
-  if(notification)openNotificationThread(notification);
-  else if(state.selectedId)restoreDetail(state.selectedId,state.selectionVersion);
-  try { const c = await api('/api/csrf'); state.csrf = c.token; await loadStatus(); if (connected()) await refreshWorkspace(false,true); else if (!connectionPending()) await connectRemote(); }
-  catch (e) { recordError(e,'init'); publishConnectionBanner({hidden:false,className:'connection-banner error',text:messageOf(e)}); }
-  finally{workspaceStarting=false;}
-}
+const init=createWorkspaceStartup({state,sidebar,document,location,sessionStorage,element:$,setInterval,targetHost,requestedHost,
+  installSettings:()=>installSystemUpdate({api,flush:flushDrafts,resetCsrf:()=>{state.csrf='';}}),installAccess:()=>installMobile(api),showMobileError,
+  installUsage:options=>refreshAccountUsage=installAccountUsage({details:options.details,api,connected,context:options.context}),showUsageDetails:text=>toast(text,false,3000,'account-usage',{information:true}),
+  installBackup:imported=>installBrowserBackup(connectionConfig,flushDrafts,imported),suspendDraftWrites:()=>{draftWritesSuspended=true;},installNavigation:installInspectorNavigation,
+  renderControls,renderThreads,renderStatus,renderThread,connected,connectionPending,loadThreads,wireEvents,setupEvents,dispatchReady:()=>window.dispatchEvent(new Event('rcm-ready')),
+  setNavigationReady:()=>{notificationNavigationReady=true;},pendingNotification:()=>pendingNotification,clearPendingNotification:()=>{pendingNotification=null;},
+  openNotificationThread,restoreDetail,readCsrf:()=>api('/api/csrf'),loadStatus,refreshWorkspace,connectRemote,recordError,messageOf,publishConnectionBanner,finishStarting:()=>{workspaceStarting=false;}});
+
 if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
 await init();
 
