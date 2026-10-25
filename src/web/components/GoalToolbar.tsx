@@ -11,10 +11,15 @@ function Icon({kind}:{kind:'goal'|'clear'|'paused'|'active'}){
  return <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">{kind==='goal'?<><circle cx="11" cy="13" r="8"/><circle cx="11" cy="13" r="4"/><path d="m11 13 9-9m-5 0h5v5"/></>:kind==='clear'?<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7m4-7v7"/>:<><circle cx="12" cy="12" r="9"/><path d={kind==='paused'?'M10 8v8m4-8v8':'m10 8 6 4-6 4Z'}/></>}</svg>;
 }
 function Toolbar({bar,store,edit,mutate}:{bar:HTMLElement;store:StoreApi<{view:View|null}>;edit:Options['edit'];mutate:(clear:boolean)=>Promise<void>}){
- const v=useStore(store).view,name=v?.action==='paused'?'暂停目标':'继续目标';
- // This component alone owns the existing section and its children; no wrapper changes layout.
- useLayoutEffect(()=>{if(v){bar.hidden=v.hidden;bar.setAttribute('aria-busy',String(v.pending));}},[bar,v]);
- return <><button type="button" className="goal-edit" aria-label="编辑目标" title="编辑目标" disabled={v?.disabled} onClick={e=>{if(!e.currentTarget.disabled)edit(e.currentTarget);}}><Icon kind="goal"/><span className="goal-toolbar-info"><strong title={v?.objective}>{v?.label}</strong><span className="goal-toolbar-usage">{v?.duration}</span></span></button><button type="button" className="goal-clear" aria-label="删除目标" title="删除目标" disabled={v?.disabled} onClick={()=>void mutate(true)}><Icon kind="clear"/></button><button type="button" className="goal-toggle" hidden={v?!v.action:undefined} disabled={v?.toggleDisabled} title={v?name:undefined} aria-label={v?name:undefined} data-action={v?v.action||'':undefined} onClick={()=>void mutate(false)}>{v&&<Icon kind={v.action==='paused'?'paused':'active'}/>}</button><span className="goal-toolbar-feedback" role="status">{v?.feedback}</span></>;
+ const action=useStore(store,state=>state.view?.action);
+ // React owns the nodes and icon; this subscription alone owns changing text
+ // and availability properties, preserving transient disabled/focus behavior.
+ useLayoutEffect(()=>{
+  const editButton=bar.querySelector<HTMLButtonElement>('.goal-edit')!,clear=bar.querySelector<HTMLButtonElement>('.goal-clear')!,toggle=bar.querySelector<HTMLButtonElement>('.goal-toggle')!,label=bar.querySelector<HTMLElement>('strong')!,duration=bar.querySelector<HTMLElement>('.goal-toolbar-usage')!,feedback=bar.querySelector<HTMLElement>('.goal-toolbar-feedback')!;
+  const apply=()=>{const v=store.getState().view;if(!v)return;bar.hidden=v.hidden;bar.setAttribute('aria-busy',String(v.pending));editButton.disabled=clear.disabled=v.disabled;toggle.disabled=v.toggleDisabled;toggle.hidden=!v.action;toggle.title=v.action==='paused'?'暂停目标':'继续目标';toggle.setAttribute('aria-label',toggle.title);toggle.dataset.action=v.action||'';label.title=v.objective;label.textContent=v.label;duration.textContent=v.duration;feedback.textContent=v.feedback;};
+  apply();return store.subscribe(apply);
+ },[bar,store]);
+ return <><button type="button" className="goal-edit" aria-label="编辑目标" title="编辑目标" onClick={e=>{if(!e.currentTarget.disabled)edit(e.currentTarget);}}><Icon kind="goal"/><span className="goal-toolbar-info"><strong></strong><span className="goal-toolbar-usage"></span></span></button><button type="button" className="goal-clear" aria-label="删除目标" title="删除目标" onClick={()=>void mutate(true)}><Icon kind="clear"/></button><button type="button" className="goal-toggle" onClick={()=>void mutate(false)}>{action!==undefined&&<Icon kind={action==='paused'?'paused':'active'}/>}</button><span className="goal-toolbar-feedback" role="status"></span></>;
 }
 export function installReactGoalToolbar({input,context,api,refresh,edit}:Options){
  const bar=document.createElement('section');bar.className='goal-toolbar';bar.hidden=true;bar.setAttribute('aria-label','会话目标');input.form!.before(bar);
