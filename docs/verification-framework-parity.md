@@ -1,5 +1,8 @@
 # master 一比一还原验证报告（进行中）
 
+模型与推理档位选择已迁入严格 TypeScript，提交 `b1ee37f`／干净资源 `89bd3b88` 已更新独立预览。四视口 56 对模型、新建草稿与目录恢复比较一致，845 Node／74 Python、类型检查、构建和八个真实启动样本通过。性能首轮手机高值及反向加长复测均保留，整体验收仍未完成。见[模型选择报告](verification-framework-model-selection.md)。
+
+
 流式轮次与消息合并已迁入严格 TypeScript，提交 `64b8467`／资源 `7de3e030` 已更新独立预览，并包含前轮 SSE 迁移。三个函数运行语法树一致，32 对四视口行为比较、844 Node／74 Python、类型检查、构建和八个真实启动样本通过。性能样本及维护检查范围修正见[流式合并报告](verification-framework-live-turns.md)，整体任务仍未完成。
 
 SSE 事件分发已迁入严格 TypeScript，候选提交 `b5e134b`／资源 `4ee67231`。32 对事件渲染和 12 对真实 EventSource 重连比较一致，840 Node／74 Python、类型检查和构建通过。性能小幅差异保留；正式入口有待回答请求，本轮尚未更新预览，预览仍为 `e90de91`。见[事件分发报告](verification-framework-events.md)。
