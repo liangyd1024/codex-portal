@@ -13,6 +13,12 @@ function Mirror({mirror,store}:Instance){
 }
 export function InlineMentions(){const instances=useStore(registry).instances;return <>{instances.map(instance=><Mirror key={instance.id} {...instance}/>)}</>;}
 export function installReactInlineMentionView(mirror:HTMLElement){
- const store=createStore<{view:View|null}>(()=>({view:null}));flushSync(()=>registry.setState({instances:[...registry.getState().instances,{id:++sequence,mirror,store}]}));
- return {render:(text:string,ranges:Range[])=>flushSync(()=>store.setState({view:{text,ranges}}))};
+ const store=createStore<{view:View|null}>(()=>({view:null}));
+ const instance={id:++sequence,mirror,store};let registered=false;
+ // Before the first render this portal has no content or DOM-dependent setup.
+ // Register with its initial value in one commit; later renders stay synchronous.
+ return {render:(text:string,ranges:Range[])=>flushSync(()=>{
+  store.setState({view:{text,ranges}});
+  if(!registered){registered=true;registry.setState({instances:[...registry.getState().instances,instance]});}
+ })};
 }
