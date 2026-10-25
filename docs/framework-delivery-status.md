@@ -36,13 +36,13 @@
 | 原文、流式、历史前插、锚点、选区、迟到响应、恢复 | 流式、侧聊、历史、SSE、草稿专项；[当前侧聊复核](verification-framework-side-chat-current.md)补充四视口草稿、附件、发送与迟到响应，以及桌面鼠标附件共 102 组对照 | 有限定通过结果；[当前候选恢复复核](verification-framework-recovery-current.md)确认原生 SSE 断流重连一致，模拟离线的输入停滞和惯性前插跳动仍为两版共有问题；其余集成范围继续复核 |
 | 本机／SSH、项目／目标／问题／任务／文件／通知／配对／维护 | 协议差分、隔离 UI 与限定本机真实会话 | 原生定时任务管理执行、持续 SSH、实体手机等不能凭模拟或只读结果标为完成 |
 | 性能与 CPU／内存／磁盘资源 | 输入、列表、流式、首屏及 Fastify 专项样本 | 未通过整体门槛；存在波动、历史稳定差异及资源成本缺口；[当前首屏资源测量](verification-framework-startup-resources.md)记录候选脚本 CPU 和静态体积增加，并在 `8362c3d` 复测定位普通首次 pageshow 可能触发的共同重复恢复读取；[连接设置优化](verification-framework-connection-settings-batch.md)已减少每次状态切换的一次 React 提交，[账号标签优化](verification-framework-account-publication.md)减少启动样本三次无变化提交，[模型选项优化](verification-framework-model-publication.md)另减少模型发布三次提交；[连接摘要同步提交合并](verification-framework-connection-summary.md)在同一会话的校准样本中通常再减少一次提交，同步耗时未稳定改善；[模型禁用状态合并](verification-framework-model-availability-batch.md)减少连接变化时的一次提交，跨设备耗时仍未稳定改善；此前 `accb11f` 首屏复测仍显示桌面及手机脚本计数偏高：中位数分别为基准 68.19／67.43 ms、候选 82.61／82.02 ms；等请求数样本差距仍存在，当前记录到 72 次启动提交，但未证明整体性能通过，禁止宣称整体提速 |
-| 类型检查、完整 npm test、构建产物验证、报告 | 最近完整回归：896 Node／74 Python；应用代码的 typecheck、构建通过，干净资源与候选一致 | 当前回归通过；不替代迁移完整性及全量验收 |
+| 类型检查、完整 npm test、构建产物验证、报告 | 最近完整回归：902 Node／74 Python；应用代码的 typecheck、构建通过，干净资源与候选一致 | 当前回归通过；不替代迁移完整性及全量验收 |
 
 ## 尚需完成的实现
 
 | 工作项 | 当前源码证据 | 完成条件 |
 | --- | --- | --- |
-| 主控制器类型化 | entry.tsx 最后仍导入 public/app.js；app.js 921 行，仍包含 UI 事件装配及渲染协调；会话选择与详情应用已迁入 thread-selection.ts，请求回答已迁入 request-response.ts，操作去重和失败协调已迁入 action-runner.ts，新建页打开／关闭及项目选择已迁入 new-chat-page.ts，工作台 init 已迁入 workspace-startup.ts，会话控制状态已迁入 session-context.ts，连接启动读取已迁入 connection-bootstrap.ts，请求卡片投影已迁入 request-renderer.ts，SSE 连接装配已迁入 event-connection.ts | 相应应用协调迁入严格 TS；原算法、存储与请求顺序保留；不以关闭检查或宽泛类型掩盖诊断 |
+| 主控制器类型化 | entry.tsx 最后仍导入 public/app.js；app.js 914 行，仍包含 UI 事件装配及渲染协调；会话选择与详情应用已迁入 thread-selection.ts，请求回答已迁入 request-response.ts，操作去重和失败协调已迁入 action-runner.ts，新建页打开／关闭及项目选择已迁入 new-chat-page.ts，工作台 init 已迁入 workspace-startup.ts，会话控制状态已迁入 session-context.ts，连接启动读取已迁入 connection-bootstrap.ts，请求卡片投影已迁入 request-renderer.ts，SSE 连接装配已迁入 event-connection.ts，页面生命周期与离线草稿保护已迁入 workspace-lifecycle.ts | 相应应用协调迁入严格 TS；原算法、存储与请求顺序保留；不以关闭检查或宽泛类型掩盖诊断 |
 | 剩余 UI 控制器边界 | public/sidebar.js、composer.js、goal-toolbar.js、mobile-ui.js、turn-navigation.js 仍含控制逻辑；多个 React 视图已安装，但控制器语言和所有权并未全部收敛 | 区分应用协调与确需保留的 DOM／浏览器适配；逐模块提供类型契约并验证行为，不能仅按扩展名宣称完成 |
 | Shell 静态节点与运行属性 | Shell.tsx 创建搜索框、更多会话按钮、会话标题、控制说明、输入框等，app.js 仍直接修改相关内容／属性 | 明确每个节点的唯一运行期所有者；迁移时保留 IME、焦点、选区、触控、滚动和事件顺序 |
 | 正文算法稳定容器 | 原解析、缓存与协调算法保留，主控制器仍协调消息区域 | 将协调边界类型化并保持稳定容器；不为迁移重建正文或改变原文 |
@@ -77,3 +77,5 @@
 审计本身不替代应用验证。应用改动与验证范围以对应专项报告为准；本页依据当前源码、回归日志、Git／构建状态及版本接口更新。
 
 本轮另完成 [SSE 连接协调类型迁移](verification-framework-event-connection.md)：正式原函数和新模块各通过五项行为断言，最新构建完成四视口 12 组断流恢复对照（共 24 次恢复），完整状态一致；完整回归 896 Node／74 Python 通过。当前正式基准未变化。SSH 最新重试再次超时，历史成功不代表当前可用。提交 `5315953` 的干净资源已更新独立预览，重新检查待处理请求为零后执行；真实本机入口的八个启动样本及两种 390px 抽屉触控通过。首轮默认恢复 SSH 导致等待连接超时，单独保留为受限结果。整体性能与迁移完整性仍未收口。
+
+本轮另完成 [页面生命周期类型迁移](verification-framework-workspace-lifecycle.md)：迁移前装配块及新模块各通过六项行为断言；最新构建的四视口 24 组生命周期状态、四组离线流程对照一致。两版共有的离线输入停滞仍保留。完整回归 902 Node／74 Python 通过；本次新资源尚待更新真实预览，未宣称整体性能通过。

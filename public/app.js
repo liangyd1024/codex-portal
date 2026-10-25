@@ -11,6 +11,7 @@ import {createModelSelection} from '../src/web/services/model-selection';
 import {createLiveTurns} from '../src/web/services/live-turns';
 import {createEventHandler} from '../src/web/services/events';
 import {createEventConnection} from '../src/web/services/event-connection';
+import {installWorkspaceLifecycle,installOfflineDraftGuard} from '../src/web/services/workspace-lifecycle';
 import {applyControllerStatus} from '../src/web/services/connection-status';
 import {createThreadViewReporter} from '../src/web/services/thread-view';
 import {controllerElement as $,el,icon,clear,setText} from '../src/web/controller-dom';
@@ -843,17 +844,9 @@ function wireEvents() {
   setupResizableLayout();
   notificationPreferences.sync();
   installNotificationActions({change:setTaskNotifications,test:() => { if (notificationPreferences.enabled() && Notification.permission === 'granted') sendTaskNotification('Codex · 测试通知','浏览器通知已接入。请检查设备通知中心。','codex-test'); }});
-  const syncNotificationPreference=notificationPreferences.sync;
-  window.addEventListener('focus',syncNotificationPreference);
-  window.addEventListener('storage',event=>{if(event.key==='rcm.taskNotifications.'+targetHost)syncNotificationPreference();});
-
-  let autoRefresh = false;
-  try { autoRefresh = localStorage.getItem('rcm.autoRefresh.' + targetHost) === 'true'; } catch {}
-  setAutoRefresh(autoRefresh);
-  $('auto-refresh').onchange = event => setAutoRefresh(event.target.checked);
-  window.addEventListener('pagehide', () => { flushDrafts(); autoRefreshController.stop(); });
-  window.addEventListener('pageshow', event => { if (event.persisted) setAutoRefresh($('auto-refresh').checked); });
-  document.addEventListener('visibilitychange',() => { if (document.hidden) flushDrafts(); });
+  installWorkspaceLifecycle({window,document,host:targetHost,syncNotificationPreference:notificationPreferences.sync,
+    readPreference:key=>localStorage.getItem(key),autoRefreshInput:()=>$('auto-refresh'),setAutoRefresh,
+    stopAutoRefresh:()=>autoRefreshController.stop(),flushDrafts});
   installThreadSync({window,document,
     canSync:()=>!automations?.opened&&!newChatOpen&&(state.desktopMode?state.transport:connected())&&!state.status?.service?.releasing&&!!state.selectedId&&!state.busy.has('handoff:'+state.selectedId),
     refresh:refreshSelected,resume:resumeWorkspace,
@@ -902,7 +895,7 @@ function wireEvents() {
   $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
   mobileUI = installMobileUI({closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:mobile=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
   turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,loadDirectory:()=>api('/api/threads/'+encodeURIComponent(state.selectedId)+'/turn-directory'),onError:message=>toast(message,true),context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),ready:usable()&&!state.loadingDetail&&!state.historyError&&!state.detail?.recovering&&!selectedRefresh.pending(),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:id=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
-  window.addEventListener('offline',() => {  flushDrafts(); state.transport=false; renderStatus(); renderControls(); });
+  installOfflineDraftGuard({window,state,flushDrafts,renderStatus,renderControls});
 }
 const init=createWorkspaceStartup({state,sidebar,document,location,sessionStorage,element:$,setInterval,targetHost,requestedHost,
   installSettings:()=>installSystemUpdate({api,flush:flushDrafts,resetCsrf:()=>{state.csrf='';}}),installAccess:()=>installMobile(api),showMobileError,
