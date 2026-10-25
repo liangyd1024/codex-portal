@@ -29,6 +29,7 @@ function Undo({instance}:{instance:Instance}){const view=useStore(instance.store
 export function SidebarUndos(){const instances=useStore(registry).instances;return <>{instances.map(instance=><Undo key={instance.key} instance={instance}/>)}</>;}
 export function installReactSidebarUndo(options:Options){
  const instance:Instance={...options,key:++sequence,store:createStore<{view:View|null}>(()=>({view:null}))};let serial=0;
- flushSync(()=>registry.setState({instances:[...registry.getState().instances,instance]}));
- return {show(id:string,scope:string){flushSync(()=>instance.store.setState({view:{id,scope,serial:++serial,pending:false}}));},hide(){hide(instance);}};
+ let registered=false;
+ const register=()=>{if(!registered){registered=true;registry.setState({instances:[...registry.getState().instances,instance]});}};
+ return {show(id:string,scope:string){flushSync(()=>{instance.store.setState({view:{id,scope,serial:++serial,pending:false}});register();});},hide(){hide(instance);}};
 }

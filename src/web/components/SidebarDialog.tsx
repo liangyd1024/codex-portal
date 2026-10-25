@@ -36,6 +36,7 @@ function Dialog({instance}:{instance:Instance}){const view=useStore(instance.sto
 export function SidebarDialogs(){const instances=useStore(registry).instances;return <>{instances.map(instance=><Dialog key={instance.id} instance={instance}/>)}</>;}
 export function installReactSidebarDialog(){
  const instance:Instance={id:++sequence,store:createStore<{view:View|null}>(()=>({view:null})),node:null};let serial=0;
- flushSync(()=>registry.setState({instances:[...registry.getState().instances,instance]}));
- return {open(options:Options){flushSync(()=>instance.store.setState({view:{...options,serial:++serial,pending:false,error:''}}));const dialog=instance.node!;return {dialog,show(){dialog.showModal();dialog.querySelector<HTMLElement>('input,select,button')?.focus();if(options.field.kind==='text')dialog.querySelector('input')!.select();}};}};
+ let registered=false;
+ const register=()=>{if(!registered){registered=true;registry.setState({instances:[...registry.getState().instances,instance]});}};
+ return {open(options:Options){flushSync(()=>{instance.store.setState({view:{...options,serial:++serial,pending:false,error:''}});register();});const dialog=instance.node!;return {dialog,show(){dialog.showModal();dialog.querySelector<HTMLElement>('input,select,button')?.focus();if(options.field.kind==='text')dialog.querySelector('input')!.select();}};}};
 }

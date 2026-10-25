@@ -15,6 +15,7 @@ function Menu({instance}:{instance:Instance}){
 export function SidebarMenus(){const instances=useStore(registry).instances;return <>{instances.map(instance=><Menu key={instance.id} instance={instance}/>)}</>;}
 export function installReactSidebarMenu(select:Instance['select']){
  const instance:Instance={id:++sequence,store:createStore<{view:View|null}>(()=>({view:null})),node:null,select};let revision=0;
- flushSync(()=>registry.setState({instances:[...registry.getState().instances,instance]}));
- return {open(entries:Entry[]){flushSync(()=>instance.store.setState({view:{entries,revision:++revision}}));return instance.node!;},close(){flushSync(()=>instance.store.setState({view:null}));}};
+ let registered=false;
+ const register=()=>{if(!registered){registered=true;registry.setState({instances:[...registry.getState().instances,instance]});}};
+ return {open(entries:Entry[]){flushSync(()=>{instance.store.setState({view:{entries,revision:++revision}});register();});return instance.node!;},close(){flushSync(()=>instance.store.setState({view:null}));}};
 }
