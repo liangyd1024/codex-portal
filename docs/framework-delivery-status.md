@@ -28,7 +28,7 @@
 | Node + TypeScript + Fastify，路由及应用服务拆分 | src/server/application.ts、core.ts、http.ts、routes、services | 结构已实现；不再笼统列为“尚未拆分服务端” |
 | HTTP／JSON／SSE、鉴权顺序、文件流与错误契约保持 |test/framework-http.test.mjs 的连接、会话、工作区、文件、媒体、桌面、访问、系统、请求与静态资源差分；[原始正式源码接口复核](verification-framework-original-baseline-http.md)另对实际 `227dbfe` 导出源码与 `accb11f` 指定构建运行 30 项检查 | 模拟协议覆盖已建立；[当前真实服务复核](verification-framework-live-boundaries.md)已在 `41605a7` 复验只读 HTTP、安全边界、SSE 客户端隔离及手机未配对 HTTPS，共 17 组 HTTP／HTTPS 对照及六个 SSE 测试客户端；不等于真实业务全部完成 |
 | 禁止框架默认解析、类型转换、填默认值及裁剪字段 | http.ts 在 onRequest 接入兼容分发；关闭转换并拒绝意外 Schema 编译 | 代码与回归具备证据；保留公共协议层 |
-| 复用 RPC、IPC、SSH、Python；不替代原生执行语义 | core 与 services 调用既有 lib 适配器，原生 payload 保持透传 | 边界保持；正式与预览配置及运行时公开字段一致，本轮严格 SSH 身份检查、预览连接及模型／项目／侧栏真实读取已通过，远端进程未重启；完整远程操作链路仍未通过 |
+| 复用 RPC、IPC、SSH、Python；不替代原生执行语义 | core 与 services 调用既有 lib 适配器，原生 payload 保持透传 | 边界保持；正式与预览配置及运行时公开字段一致，严格 SSH 身份检查及真实读取已通过；[真实单轮往返](verification-framework-ssh-native-roundtrip.md)补齐创建、发送、事件回传、历史、四视口展示及交还，远端引擎未重启；远程排队、目标、文件等完整范围仍未验 |
 | 原文、未知字段、连接 ID、存储键和草稿兼容 | API、事件、合并、草稿及各服务回归；未做数据格式迁移 | 有限定行为证据；还需最终集成检查，不能泛化为所有原生能力已验 |
 | 4327／4338／4339 与正式环境隔离 | preview-mobile、Cookie 隔离、真实接口安全对照；独立状态、证书、日志和配对目录 | 已运行；最新候选已进入真实预览；Tailscale 系统转发在预览中明确受限 |
 | 网页功能和 iPhone 竖屏／横屏／短高度一比一 | 各专项报告分别列明基准、资源、尺寸、触控及样本 | 已覆盖大量流程，但版本和范围分散，未完成最新候选全量集成收口 |
