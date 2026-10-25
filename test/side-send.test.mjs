@@ -1,18 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import ts from 'typescript';
 import {readFileSync} from 'node:fs';
 import {createSendReceipts} from '../public/connection-state.js';
 import {applySideEvent} from '../shared/side-chat-events.js';
 import {messageInput} from '../lib/message-input.mjs';
 import {annotatedText} from '../public/response-annotations.js';
-const source=readFileSync(new URL('../public/side-chat.js',import.meta.url),'utf8');
+const source=readFileSync(new URL('../src/web/services/side-chat.ts',import.meta.url),'utf8');
+const parsed=ts.createSourceFile('side-chat.ts',source,ts.ScriptTarget.Latest,true);
+function functionCode(name){let found;const visit=node=>{if(ts.isFunctionDeclaration(node)&&node.name?.text===name)found=node;else ts.forEachChild(node,visit);};visit(parsed);assert.ok(found,'missing side function '+name);return ts.transpileModule(found.getText(parsed),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;}
+
 function fixture(active=false){
  const selected={id:'side-a',draft:'中文请求',selections:[{text:'选文'}],turns:[],active,model:'test',effort:'medium'};
  const receipts=createSendReceipts(),calls=[];let resolve,reject,view=[];
  const c=vm.createContext({selected,input:{value:selected.draft},localContext:()=>({ready:true}),attachments:{pending:()=>false,capture:()=>({items:[]}),acknowledge:()=>{}},composer:{options:()=>({})},notify:()=>{},annotatedText,sendReceipts:receipts,applySideEvent,stateOf:t=>t?.status?.type||t?.status,
   api:(path,options)=>{calls.push({path,options});return new Promise((ok,fail)=>{resolve=ok;reject=fail;});},render:()=>{view=receipts.view(c.selected,c.selected.turns);}});
- vm.runInContext(source.slice(source.indexOf(' async function submit('),source.indexOf(' function renderControls(')),c);
+ vm.runInContext(functionCode('submit'),c);
  return {c,selected,calls,receipts,view:()=>view,resolve:v=>resolve(v),reject:e=>reject(e)};
 }
 test('side submission renders before HTTP settles, blocks duplicates and acknowledges turnId',async()=>{
@@ -42,7 +46,7 @@ test('late side acknowledgement cannot replace the newly selected chat draft',as
  assert.equal(f.receipts.view(f.selected,[])[0].status,'accepted');
 });
 
-test('replacing an expired side chat preserves unsent text and attachments but does not replay history',async()=>{const old={id:'expired',expired:true,parent:'parent',draft:'保留草稿',selections:[{text:'选文'}],turns:[{id:'old-turn'}]},moves=[],created=[];const c=vm.createContext({selected:old,chats:new Map(),input:{value:old.draft},crypto:{randomUUID:()=> 'new-request'},attachments:{moveDraft:(...args)=>moves.push(args)},render(){},create:async s=>created.push(s)});vm.runInContext(source.slice(source.indexOf(' async function restartExpired('),source.indexOf(' async function create(')),c);await c.restartExpired();assert.equal(c.selected.parent,'parent');assert.equal(c.selected.draft,old.draft);assert.equal(c.selected.turns.length,0);assert.equal(c.selected.selections[0].text,'选文');assert.deepEqual(moves,[['expired','new-request']]);assert.equal(created.length,1);assert.equal(old.turns.length,1);});
+test('replacing an expired side chat preserves unsent text and attachments but does not replay history',async()=>{const old={id:'expired',expired:true,parent:'parent',draft:'保留草稿',selections:[{text:'选文'}],turns:[{id:'old-turn'}]},moves=[],created=[];const c=vm.createContext({selected:old,chats:new Map(),input:{value:old.draft},crypto:{randomUUID:()=> 'new-request'},attachments:{moveDraft:(...args)=>moves.push(args)},render(){},create:async s=>created.push(s)});vm.runInContext(functionCode('restartExpired'),c);await c.restartExpired();assert.equal(c.selected.parent,'parent');assert.equal(c.selected.draft,old.draft);assert.equal(c.selected.turns.length,0);assert.equal(c.selected.selections[0].text,'选文');assert.deepEqual(moves,[['expired','new-request']]);assert.equal(created.length,1);assert.equal(old.turns.length,1);});
 
 test('side receipt matches the server-normalized selection input before and after HTTP acknowledgement',async()=>{
  for(const active of [false,true])for(const eventFirst of [false,true]){
@@ -61,8 +65,7 @@ test('side receipt matches the server-normalized selection input before and afte
 test('side drafts are editable during native creation, failure, expiry and disconnection; sending stays gated',()=>{
  const selected={model:'test',effort:'medium',selections:[{text:'quote'}]};let controls;
  const c=vm.createContext({selected,context:()=>({ready:true,models:[{id:'test',efforts:['medium']}]}),localContext:()=>({ready:!!selected.id&&!selected.expired}),input:{value:'草稿'},view:{renderControls:value=>{controls=value;}},attachments:{pending:()=>false,render(){}},composer:null});
- const start=source.indexOf(' function renderControls('),end=source.indexOf(' function render()',start);
- vm.runInContext(source.slice(start,end),c);
+ vm.runInContext(functionCode('renderControls'),c);
  for(const state of [{creating:true},{creating:false,error:'创建失败'},{id:'side-a',expired:true},{id:undefined,expired:false}]){
   Object.assign(selected,state);c.renderControls();assert.equal(controls.inputDisabled,false);assert.equal(controls.sendDisabled,true);assert.equal(c.input.value,'草稿');
  }
@@ -73,7 +76,7 @@ test('side drafts are editable during native creation, failure, expiry and disco
 test('pending native side creation is deduplicated and preserves typed drafts without sending',async()=>{
  const selected={parent:'parent',requestId:'request',draft:''},calls=[];let resolve;
  const c=vm.createContext({selected,attachments:{moveDraft(){}},render(){},requestsChanged(){},notify(){},api:(path)=>{calls.push(path);return new Promise(r=>resolve=r);}});
- vm.runInContext(source.slice(source.indexOf(' async function create('),source.indexOf(' return {\n  requestsHost')),c);
+ vm.runInContext(functionCode('create'),c);
  const pending=c.create(selected);await c.create(selected);selected.draft='等待期间输入';
  resolve({thread:{id:'side-a'}});await pending;assert.equal(selected.draft,'等待期间输入');assert.equal(selected.id,'side-a');assert.equal(selected.creating,false);assert.deepEqual(calls,['/api/threads/parent/side-chat']);
 });
