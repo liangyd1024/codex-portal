@@ -1,3 +1,4 @@
+import {createActionRunner} from '../src/web/services/action-runner';
 import {createRequestResponder,requestKey,requestPath} from '../src/web/services/request-response';
 import {createThreadSelection} from '../src/web/services/thread-selection';
 import {createSidebarReader} from '../src/web/services/sidebar-reader';
@@ -279,16 +280,7 @@ function toast(...args) { return (toast.presenter??=createToasts({region:$('toas
 
 const api=createApiClient({targetUrl,csrf:{get:()=>state.csrf,set:token=>{state.csrf=token;}},flushDrafts,reload:()=>location.reload()});
 
-async function action(key, fn) {
-  if (state.busy.has(key)) return;
-  state.busy.add(key); renderControls();
-  try { return await fn(); }
-  catch (e) {
-    if(key.startsWith('request:')){state.busy.delete(key);syncRequestCards({ready:usable(),pending:id=>state.busy.has('request:'+id),controlledThreads:state.status?.controlledThreads});}
-    recordError(e,key); toast(messageOf(e),true,11000);
-  }
-  finally { state.busy.delete(key); if(['connect','disconnect','release'].includes(key))renderStatus();else renderControls(); }
-}
+const action=createActionRunner({state,renderControls,renderStatus,usable,syncRequestCards,recordError,messageOf,toast});
 
 function renderStatus() {
   void refreshAccountUsage?.();
