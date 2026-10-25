@@ -52,6 +52,13 @@ test('window focus and bfcache return refresh immediately; pagehide and disposal
   f.window.dispatchEvent(new Event('pageshow'));await settle();assert.equal(f.calls.length,2);
   f.stop();f.window.dispatchEvent(new Event('focus'));t.mock.timers.tick(10000);await settle();assert.equal(f.calls.length,2);
 });
+test('initial pageshow does not repeat startup reads; persisted restoration still resumes',async t=>{
+  const f=fixture(t);
+  f.window.dispatchEvent(new Event('pageshow'));await settle();assert.deepEqual(f.calls,[]);
+  t.mock.timers.tick(5000);await settle();assert.deepEqual(f.calls,['read']);
+  const restored=new Event('pageshow');Object.defineProperty(restored,'persisted',{value:true});
+  f.window.dispatchEvent(restored);await settle();assert.deepEqual(f.calls,['read','resume']);
+});
 test('slow reads do not overlap; foreground queues one fresh read after the old snapshot',async t=>{
   let finish,reads=0;
   const f=fixture(t,{refresh:()=>{reads++;return new Promise(resolve=>finish=resolve);}});

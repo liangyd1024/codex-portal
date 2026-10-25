@@ -6,7 +6,7 @@ import {publishWorkspaceControl,setWorkspaceControlAction,prepareWorkspaceContro
 import {setWorkspaceText,publishWorkspaceLabel} from './components/WorkspaceLabels';
 import type {NativeConnectionStatus,NativeRequest,NativeThread,NativeItem,NativeTurn} from '../contracts/native';
 import {createRequestRenderer} from './services/request-renderer';
-import {createConnectionBootstrap} from './services/connection-bootstrap';
+import {readInitialConnections as readConnections,selectInitialTarget as selectTarget} from './startup-connections';
 import {createSessionContext} from './services/session-context';
 import {createWorkspaceStartup} from './services/workspace-startup';
 import {createNewChatPage} from './services/new-chat-page';
@@ -119,7 +119,6 @@ let composer: ReturnType<typeof installComposer> | undefined;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from '../../public/detail-cache.js';
 import {outputWindow, OUTPUT_WINDOW_SIZE} from '../../public/output-window.js';
 import {updateExtensionNotice, renderExtensionNotice, mergeLiveTurns, taskNotice, backgroundActivity} from '../../public/connection-state.js';
-const {readConnections,selectTarget}=createConnectionBootstrap({storage:()=>localStorage,reload:()=>location.reload(),fetch:(...args)=>fetch(...args),setTimeout,clearTimeout});
 const requestedHost = new URL(location.href).searchParams.get('host');
 let pendingNotification: {host?:string;threadId:string} | null = null, notificationNavigationReady=false;
 navigator.serviceWorker?.addEventListener('message',event=>{

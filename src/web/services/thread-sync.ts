@@ -34,7 +34,13 @@ export function installThreadSync({window, document, canSync, refresh, resume, o
   const foreground = () => run(true);
   const visibility = () => { if (visible()) foreground(); else clearTimeout(timer); };
   const hide = () => { stopped = true; clearTimeout(timer); };
-  const show = () => { stopped = false; foreground(); };
+  const show = (event: PageTransitionEvent) => {
+    // Initial loading already reads the workspace. Bundled startup can install
+    // this listener before the first pageshow; that is not a page restoration.
+    if (!stopped && !event.persisted) return;
+    stopped = false;
+    foreground();
+  };
   document.addEventListener('visibilitychange', visibility);
   window.addEventListener('focus', foreground);
   window.addEventListener('online', foreground);

@@ -36,7 +36,7 @@ export function AutomationViews(){const {lists,dialogs,controls,pickers}=useStor
 export const reactAutomationViews:AutomationViewsRenderer={
  picker(options){const store=createStore<PickerState>(()=>({busy:false,confirmDisabled:false,error:'',candidates:[],preferredId:null,revision:0}));const instance={...options,id:++sequence,store};flushSync(()=>registry.setState({pickers:[...registry.getState().pickers,instance]}));return {query:options.dialog.querySelector<HTMLInputElement>('input')!,choices:options.dialog.querySelector<HTMLSelectElement>('select')!,setState(update){if(Object.entries(update).every(([key,value])=>Object.is(store.getState()[key as keyof AutomationPickerState],value)))return;store.setState(update);},setCandidates(candidates,preferredId){store.setState(s=>({candidates,preferredId,revision:s.revision+1}));},dispose(){flushSync(()=>registry.setState({pickers:registry.getState().pickers.filter(view=>view!==instance)}));}};},
  controls(options){const store=createStore<AutomationControlsState>(()=>({loading:false,feedback:''}));const instance={...options,id:++sequence,store};flushSync(()=>registry.setState({controls:[...registry.getState().controls,instance]}));return {search:options.toolbar.querySelector<HTMLInputElement>('input')!,createButton:options.toolbar.querySelector<HTMLButtonElement>('button')!,setState(update){if(Object.entries(update).every(([key,value])=>Object.is(store.getState()[key as keyof AutomationControlsState],value)))return;store.setState(update);}};},
- list(options:AutomationListOptions){const store=createStore<{rows:TaskRow[]|null;revision:number}>(()=>({rows:null,revision:0}));const instance={...options,id:++sequence,store};flushSync(()=>registry.setState({lists:[...registry.getState().lists,instance]}));return {render(rows:TaskRow[]|null){
+ list(options:AutomationListOptions){const store=createStore<{rows:TaskRow[]|null;revision:number}>(()=>({rows:null,revision:0}));const instance={...options,id:++sequence,store};let registered=false;return {render(rows:TaskRow[]|null){
    const previous=store.getState().rows;
    const same=previous&&rows&&previous.length===rows.length&&previous.every((row,index)=>row.task===rows[index]!.task&&row.meta===rows[index]!.meta);
    const list=options.list,selection=list.ownerDocument.getSelection();
@@ -44,7 +44,7 @@ export const reactAutomationViews:AutomationViewsRenderer={
    const active=list.contains(list.ownerDocument.activeElement)||list.matches(':hover')||list.querySelector('details[open]')||list.ownerDocument.querySelector('.automation-task-panel[open],.automation-picker[open]')||(selection&&!selection.isCollapsed&&selection.rangeCount>0&&selection.getRangeAt(0).intersectsNode(list));
    if(same&&!active)return;
    const reset=!!active||!!list.closest('.automations-page')?.scrollTop;
-   flushSync(()=>store.setState(s=>({rows,revision:s.revision+(reset?1:0)})));
+   flushSync(()=>{store.setState(s=>({rows,revision:s.revision+(reset?1:0)}));if(!registered){registered=true;registry.setState({lists:[...registry.getState().lists,instance]});}});
   }};},
  task(options:AutomationDialogOptions){const instance={...options,id:++sequence};flushSync(()=>registry.setState({dialogs:[...registry.getState().dialogs,instance]}));return {closeButton:options.dialog.querySelector<HTMLButtonElement>('[aria-label="关闭任务详情"]')!,dispose(){flushSync(()=>registry.setState({dialogs:registry.getState().dialogs.filter(view=>view!==instance)}));}};}
 };

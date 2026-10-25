@@ -45,7 +45,10 @@ function QueueEditor({store}:{store:StoreApi<Editor>}){
 export function installQueuedInputs({host,context,api,refresh,onError}:QueueOptions) {
  const list=document.createElement('div');list.className='composer-queue';list.setAttribute('aria-label','排队消息');list.hidden=true;host.querySelector('form.composer')!.before(list);
  const dialog=document.createElement('dialog');dialog.className='composer-dialog queue-edit-dialog';dialog.setAttribute('aria-label','编辑排队消息');document.body.append(dialog);
- const store=createStore<QueueView>(()=>({signature:'',items:[],context:context(),busy:new Set()})),root=createRoot(list),editorRoot=createRoot(dialog);
+ const store=createStore<QueueView>(()=>({signature:'',items:[],context:context(),busy:new Set()}));
+ // Empty hosts need neither React roots nor delegated event listeners. Mount
+ // synchronously on first use, before exposing rows or focusing the editor.
+ let root:ReturnType<typeof createRoot>|undefined,editorRoot:ReturnType<typeof createRoot>|undefined;
  let mounted=false,signature='',serial=0,editing:{scope:string;id:string}|null=null,editorSerial=0;
  const busy=new Set<string>(),versions=new WeakMap<QueueItem,number>(),drafts=new Map<string,{base:string;text:string}>();
  const version=(item:QueueItem)=>{if(!versions.has(item))versions.set(item,++serial);return versions.get(item);};
@@ -82,13 +85,15 @@ export function installQueuedInputs({host,context,api,refresh,onError}:QueueOpti
    catch(error){if(same())update({feedback:message(error)});}
    finally{busy.delete(key);if(same())update({disabled:false,busy:false});signature='';render();}
   }
-  flushSync(()=>editorRoot.render(<QueueEditor key={++editorSerial} store={editor}/>));dialog.showModal();dialog.querySelector('textarea')!.focus();
+  flushSync(()=>(editorRoot??=createRoot(dialog)).render(<QueueEditor key={++editorSerial} store={editor}/>));dialog.showModal();dialog.querySelector('textarea')!.focus();
  }
  function render(){
   const c=context();if(editing&&(!c.visible||editing.scope!==contextKey(c)))dialog.close();
   const items=c.visible?(c.queue?.data||[]):[],next=JSON.stringify([contextKey(c),items.map(version),c.ready,c.running,c.supported,c.editable,[...busy]]);
   if(next===signature)return;signature=next;list.hidden=!items.length;
-  flushSync(()=>{store.setState({signature:next,items,context:c,busy:new Set(busy)});if(!mounted){root.render(<QueueRows store={store} act={act} edit={edit}/>);mounted=true;}});
+  const view={signature:next,items,context:c,busy:new Set(busy)};
+  if(!mounted&&!items.length){store.setState(view);return;}
+  flushSync(()=>{store.setState(view);if(!mounted){(root??=createRoot(list)).render(<QueueRows store={store} act={act} edit={edit}/>);mounted=true;}});
  }
  return {render};
 }

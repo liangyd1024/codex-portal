@@ -39,6 +39,7 @@ import {installReactGoalToolbar} from './components/GoalToolbar';
 import { hydrateRoot } from 'react-dom/client';
 import { useLayoutEffect } from 'react';
 import { WorkspaceShell } from './components/Shell';
+import {readInitialConnections} from './startup-connections';
 let mounted!: () => void;
 let hydrationFailure: unknown;
 const ready = new Promise<void>((resolve,reject) => {
@@ -50,6 +51,9 @@ function Application() {
 }
 const shell=document.getElementById('app-shell');
 if(!shell)throw new Error('工作台结构缺失。');
+// Configuration is independent of DOM hydration. Observe an early rejection;
+// the controller awaits this same promise and reports the original error.
+void readInitialConnections().catch(()=>{});
 hydrateRoot(shell,<Application/>,{onRecoverableError(error){hydrationFailure=error;console.error('工作台结构不一致',error);}});
 await ready;
 configureTurnNavigationView(installReactTurnNavigation);
