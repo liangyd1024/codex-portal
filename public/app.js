@@ -1,3 +1,5 @@
+import {applyControllerStatus} from '../src/web/services/connection-status';
+import {createThreadViewReporter} from '../src/web/services/thread-view';
 import {controllerElement as $,el,icon,clear,setText} from '../src/web/controller-dom';
 import {createControllerState} from '../src/web/controller-state';
 import {createConnectionActions} from '../src/web/services/connection-actions';
@@ -90,7 +92,7 @@ import {installMobile,showMobileError} from '../src/web/components/MobileAccess.
 let composer;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from './detail-cache.js';
 import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
-import {updateExtensionNotice, renderExtensionNotice, selectConnectionStatus, userContentKey, mergeLiveTurns, taskNotice, backgroundActivity} from './connection-state.js';
+import {updateExtensionNotice, renderExtensionNotice, userContentKey, mergeLiveTurns, taskNotice, backgroundActivity} from './connection-state.js';
 function savedHost() { try { return localStorage.getItem('rcm.connection'); } catch { return null; } }
 const requestedHost = new URL(location.href).searchParams.get('host');
 let pendingNotification=null, notificationNavigationReady=false;
@@ -120,42 +122,11 @@ function saveView() { try { sessionStorage.setItem('rcm.view.'+targetHost,JSON.s
 function rememberHost(host) { try { localStorage.setItem('rcm.connection',host); } catch {} }
 rememberHost(targetHost);
 const targetUrl=path=>path+(path.includes('?')?'&':'?')+'host='+targetHost;
-const threadViewId=crypto.randomUUID();let threadViewRevision=0,threadViewReport=null;
-function reportThreadView(){
-  if(!state.transport)return Promise.resolve();
-  const threadId=newChatOpen||state.desktopMode||automations?.opened?null:state.selectedId||null;
-  const sideThreadId=sideChat?.visibleId||null;
-  const key=JSON.stringify([targetHost,threadId,sideThreadId,state.status?.instanceId,state.status?.connection?.connectedAt]);
-  if(threadViewReport?.key===key)return threadViewReport.promise;
-  const report={key},version=state.detailVersion;threadViewReport=report;
-  report.promise=api('/api/thread-view',{method:'POST',body:{viewId:threadViewId,threadId,sideThreadId,revision:++threadViewRevision}}).then(result=>{
-    if(threadViewReport===report&&threadId&&state.detailVersion!==version)scheduleDetailRefresh();
-    return result;
-  }).catch(error=>{if(threadViewReport===report)threadViewReport=null;throw error;});
-  return report.promise;
-}
+const threadViewId=crypto.randomUUID();
+const threadViewReporter=createThreadViewReporter({viewId:threadViewId,host:targetHost,context:()=>({state,newChatOpen,automations,sideChat}),request:(...args)=>api(...args),refresh:()=>scheduleDetailRefresh()});
+const reportThreadView=threadViewReporter.report;
 const retiredStatusInstances=new Set();
-function applyStatus(status){
-  const next=selectConnectionStatus(state.status,status,retiredStatusInstances);
-  const previous=state.status;
-  const connectionChanged=previous&&(previous.instanceId!==next.instanceId||previous.connection?.state!==next.connection?.state||previous.connection?.connectedAt!==next.connection?.connectedAt);
-  if(connectionChanged){
-    state.listVersion++;state.loadingThreads=false;
-    for(const thread of state.threads||[]){delete thread.activity;thread.status={type:'unknown'};}
-    if(state.detail){
-      state.detail.backgroundTerminals={error:'连接已变化，正在重新核对后台命令。'};
-      if(state.detail.thread){delete state.detail.thread.activity;state.detail.thread.status={type:'unknown'};}
-    }
-  }
-  if(previous&&(connectionChanged||
-    previous.controlledThreads?.includes(state.selectedId)!==next.controlledThreads?.includes(state.selectedId)||
-    Boolean(previous.handoffs?.some(h=>h.threadId===state.selectedId))!==Boolean(next.handoffs?.some(h=>h.threadId===state.selectedId))))state.detailVersion++;
-  if(state.status?.instanceId&&next.instanceId!==state.status.instanceId){
-    state.csrf='';state.localRequests=[];
-    if(state.detail){state.detail.controlled=false;state.detail.controlState='viewing';state.detail.pendingRequests=[];}
-  }
-  state.status=next;
-}
+function applyStatus(status){applyControllerStatus(state,status,retiredStatusInstances);}
 
 const state = createControllerState({
   desktopMode:Boolean(savedView().desktopMode),selectedId:savedView().selectedId||null,projectId:savedView().projectId||null,
@@ -1114,7 +1085,7 @@ function handleEvent(event) {
 function setupEvents() {
   const es = new EventSource(targetUrl('/api/events?viewId='+threadViewId)); state.eventSource = es;
   es.onopen = () => {
-    threadViewReport=null;
+    threadViewReporter.reset();
     sideChat?.reconnect();
     const restored = !state.transport; state.transport = true; renderStatus();
     void reportThreadView().catch(e=>recordError(e,'thread'));

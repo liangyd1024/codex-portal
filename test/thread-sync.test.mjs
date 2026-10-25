@@ -18,6 +18,13 @@ const recoverySource=readFileSync(new URL('../src/web/services/detail-recovery.t
 const recoveryOutput=ts.transpileModule(recoverySource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const {createDetailRecovery}=await import('data:text/javascript;base64,'+Buffer.from(recoveryOutput).toString('base64'));
 
+const viewSource=readFileSync(new URL('../src/web/services/thread-view.ts',import.meta.url),'utf8');
+const viewOutput=ts.transpileModule(viewSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {createThreadViewReporter}=await import('data:text/javascript;base64,'+Buffer.from(viewOutput).toString('base64'));
+const statusSource=readFileSync(new URL('../src/web/services/connection-status.ts',import.meta.url),'utf8');
+const statusOutput=ts.transpileModule(statusSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText.replace('../../../public/connection-state.js',new URL('../public/connection-state.js',import.meta.url).href);
+const {applyControllerStatus}=await import('data:text/javascript;base64,'+Buffer.from(statusOutput).toString('base64'));
+
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(t,overrides={}) {
   t.mock.timers.enable({apis:['setTimeout']});
@@ -69,7 +76,7 @@ function detailFixture() {
   const state={selectedId:'a',selectionVersion:1,detailVersion:1,detail:{thread:{id:'a'},turns:[]},loadedOlderHistory:false,
     status:{instanceId:'one',connection:{state:'connected'},controlledThreads:[],handoffs:[]}};
   const requests=[],applied=[],cacheReads=[],navigationUpdates=[];
-  const context=vm.createContext({createDetailReader,createSelectedRefresh,state,newChatOpen:false,automations:null,desktopSends:{},performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
+  const context=vm.createContext({createDetailReader,createSelectedRefresh,applyControllerStatus,state,newChatOpen:false,automations:null,desktopSends:{},performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
     turnNavigation:{update:()=>navigationUpdates.push(state.selectedId)},reportThreadView:()=>null,turns:()=>state.detail?.turns||[],outputBases:()=>new Map(),decodeOutputs:async x=>x,hydrateOutputs:x=>x,
     readDetailCache:()=>new Promise(resolve=>cacheReads.push(resolve)),scheduleDetailRefresh:()=>{},
     api:path=>new Promise((resolve,reject)=>requests.push({path,resolve,reject})),
@@ -242,15 +249,12 @@ test('native metadata repairs missed running notifications without overriding ne
 });
 
 function viewReportFixture(){
- const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
- const start=source.indexOf('const threadViewId='),end=source.indexOf('const retiredStatusInstances=',start);
- assert.ok(start>=0&&end>start);
  const requests=[],refreshes=[];
  const state={transport:true,desktopMode:false,selectedId:'a',detailVersion:1,status:{instanceId:'engine-1',connection:{connectedAt:'time-1'}}};
- const context=vm.createContext({state,newChatOpen:false,automations:null,sideChat:null,targetHost:'local',crypto:{randomUUID:()=> 'fixture-page-0001'},
-  api:(path,options)=>new Promise((resolve,reject)=>requests.push({path,body:structuredClone(options.body),resolve,reject})),scheduleDetailRefresh:()=>refreshes.push('refresh')});
- vm.runInContext(source.slice(start,end),context);
- return {state,context,requests,refreshes,report:()=>context.reportThreadView(),reconnect:()=>vm.runInContext('threadViewReport=null',context)};
+ const context={state,newChatOpen:false,automations:null,sideChat:null};
+ const reporter=createThreadViewReporter({viewId:'fixture-page-0001',host:'local',context:()=>context,
+  request:(path,options)=>new Promise((resolve,reject)=>requests.push({path,body:structuredClone(options.body),resolve,reject})),refresh:()=>refreshes.push('refresh')});
+ return {state,context,requests,refreshes,report:reporter.report,reconnect:reporter.reset};
 }
 test('page presence merges duplicate reads and preserves a stable view id across reconnect',async()=>{
  const f=viewReportFixture();const first=f.report(),duplicate=f.report();assert.equal(first,duplicate);assert.equal(f.requests.length,1);
@@ -269,7 +273,7 @@ test('late presence failure cannot discard a newer selection; current failure re
  const f=viewReportFixture(),old=f.report();const rejected=assert.rejects(old,/old failure/);
  f.state.selectedId='b';const current=f.report();f.requests[0].reject(Error('old failure'));await rejected;assert.equal(f.report(),current);
  f.requests[1].resolve({ok:true});await current;assert.deepEqual(f.refreshes,[]);
- f.context.targetHost='remote';const failed=f.report();const failure=assert.rejects(failed,/current failure/);f.requests[2].reject(Error('current failure'));await failure;
+ f.state.status.connection.connectedAt='time-2';const failed=f.report();const failure=assert.rejects(failed,/current failure/);f.requests[2].reject(Error('current failure'));await failure;
  const retry=f.report();assert.equal(f.requests[3].body.revision,4);f.requests[3].resolve({ok:true});await retry;
 });
 test('only the current presence response schedules a detail refresh after runtime restoration',async()=>{
@@ -346,4 +350,13 @@ test('clearing recovery cancels the queued save without rescheduling it after a 
  const recovery=createDetailRecovery({state,host:'fixture',read:async()=>null,write:async()=>{},apply:()=>{},defer:run=>{scheduled.push(run);return handle;},cancel:id=>cancelled.push(id)});
  recovery.saveSoon();recovery.cancelScheduled();assert.strictEqual(cancelled[0],handle);
  recovery.saveSoon();assert.equal(scheduled.length,1);
+});
+
+test('status migration preserves native unknown fields and ignores an older revision without cloning',()=>{
+ const opaque={future:['原始字段',{value:7}]},incoming={instanceId:'same',revision:3,connection:{state:'connected',connectedAt:'time'},controlledThreads:[],handoffs:[],opaque};
+ const state={status:null,selectedId:'a',listVersion:0,loadingThreads:false,threads:[],detailVersion:0,csrf:'token',localRequests:[],detail:null};
+ const retired=new Set();applyControllerStatus(state,incoming,retired);
+ assert.equal(state.status,incoming);assert.equal(state.status.opaque,opaque);
+ applyControllerStatus(state,{...incoming,revision:2,opaque:{incorrect:true}},retired);
+ assert.equal(state.status,incoming);assert.equal(state.detailVersion,0);assert.equal(state.csrf,'token');
 });
