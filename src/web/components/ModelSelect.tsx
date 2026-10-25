@@ -12,14 +12,21 @@ const store = createStore<State>(() => ({views: {
   'model-select': {options: [{value: '', label: '等待模型目录'}], disabled: true},
   'effort-select': {options: [{value: '', label: '思考档位'}], disabled: true},
 }, actions: {}}));
-export function publishModelSelect(id: ModelSelectId, patch: Partial<View>) {
+export function publishModelSelect(id: ModelSelectId, patch: Partial<View>, commit: (update: () => void) => void = flushSync) {
   const previous = store.getState().views[id];
   if (patch.options && patch.options.length === previous.options.length && patch.options.every((option, index) => {
     const old = previous.options[index];
     return option.value === old.value && option.label === old.label && option.title === old.title;
   })) patch = {...patch, options: previous.options};
   if (Object.entries(patch).every(([key, value]) => Object.is(previous[key as keyof View], value))) return;
-  flushSync(() => store.setState(state => ({views: {...state.views, [id]: {...state.views[id], ...patch}}})));
+  commit(() => store.setState(state => ({views: {...state.views, [id]: {...state.views[id], ...patch}}})));
+}
+export function publishModelSelectAvailability(modelDisabled: boolean, effortDisabled: boolean) {
+  const updates: (() => void)[] = [];
+  const collect = (update: () => void) => { updates.push(update); };
+  publishModelSelect('model-select', {disabled: modelDisabled}, collect);
+  publishModelSelect('effort-select', {disabled: effortDisabled}, collect);
+  if (updates.length) flushSync(() => { for (const update of updates) update(); });
 }
 export function installModelSelectActions(actions: State['actions']) { store.setState({actions}); }
 export function ModelSelect({id}: {id: ModelSelectId}) {

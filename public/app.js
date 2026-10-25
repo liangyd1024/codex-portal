@@ -26,7 +26,7 @@ import {createPlanSubmit} from '../src/web/services/plan-submit';
 import {createStopRequest} from '../src/web/services/stop-request';
 import {createDesktopSend} from '../src/web/services/desktop-send';
 import {publishSendActions,installSendActions} from '../src/web/components/SendActions';
-import {publishModelSelect,installModelSelectActions} from '../src/web/components/ModelSelect';
+import {publishModelSelectAvailability,installModelSelectActions} from '../src/web/components/ModelSelect';
 import {createMessageInput} from '../src/web/services/message-input';
 import {createUpdateScheduler} from '../src/web/services/update-scheduler';
 import {createHistoryPagination} from '../src/web/services/history-pagination';
@@ -306,8 +306,8 @@ function renderControls() {
     releaseReason:!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。'});
   $('refresh-projects').disabled = !ready || state.refreshing; $('refresh-all').disabled = state.refreshing || state.busy.has('refresh');
   $('thread-search').disabled = !connected();
-  publishModelSelect('model-select',{disabled:!ready || !state.models.length || state.loadingModels});
-  publishModelSelect('effort-select',{disabled:!ready || !state.model || !effortsFor(state.model).length || state.loadingModels});
+  publishModelSelectAvailability(!ready || !state.models.length || state.loadingModels,
+    !ready || !state.model || !effortsFor(state.model).length || state.loadingModels);
   const input = $('message-input'); input.disabled = !ready || !own || posting || handing;
   const followUp=followUpAction({active,touch:touchInput()});
   input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? (followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…') : '发送消息…';
