@@ -2255,3 +2255,8 @@ ego-lite 在同一空间和页面执行。桌面 1480×747、DPR 2；iPhone 12 �
 ## 请求回答协调与独立预览更新
 
 `67a8c4c`：请求回答迁入严格 TS 服务。857 项 Node／74 项 Python 测试及类型检查通过；桌面和 iPhone 三种视口的问题流程 56 样本、28 对状态一致。独立预览维护检查通过后，4327／4338／4339 更新到该候选，真实四视口启动与抽屉检查通过。正式服务仍为 `227dbfe`。详见[专项报告](verification-framework-request-response.md)。整体迁移与全量验收仍未完成。
+
+
+## 同候选异步问题与资源补测
+
+基准 `227dbfe`、候选 `67a8c4c`。异步问题四视口追加 96 个样本、48 对状态一致，覆盖必填、草稿、自定义回答、跳过恢复、组合输入保护、失败与重试。详情见[请求回答报告](verification-framework-request-response.md)。[首屏资源报告](verification-framework-startup-resources.md)记录了额外脚本 CPU 与 159,138 字节静态体积成本，性能门槛仍未通过。没有修改产品或重启服务。
