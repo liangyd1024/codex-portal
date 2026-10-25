@@ -2275,3 +2275,8 @@ ego-lite 在同一空间和页面执行。桌面 1480×747、DPR 2；iPhone 12 �
 ## 新建会话页面协调迁移
 
 `21a545a` 将新建草稿设置保存、项目选择和页面开关迁入严格 TypeScript。对照 `227dbfe`，桌面及 iPhone 三种视口共 68 对状态一致，覆盖节点复用、草稿和模型往返、带附件失败与结果未知恢复。类型检查、867 Node／74 Python 和干净构建通过。详见[专项报告](verification-framework-new-chat-page.md)，整份迁移与性能门槛仍未完成。
+
+
+## 工作台启动协调迁移
+
+`dc4bba1` 将工作台 init 迁入严格 TypeScript，保留刷新间隔、门控条件、延迟安装和通知优先级。对照 `227dbfe`，桌面及 iPhone 三种视口的六类启动场景共 144 样本、72 对状态一致。类型检查、873 Node／74 Python 和干净构建通过。详见[专项报告](verification-framework-workspace-startup.md)，全量迁移与性能门槛仍未完成。
