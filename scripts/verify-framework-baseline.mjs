@@ -31,7 +31,7 @@ export async function verifyFrameworkBaseline({revision,buildDir}){
   source=replaceOnce(source,"import {createApp} from './fixtures/legacy-server.mjs';",`import {createApp} from ${JSON.stringify(pathToFileURL(path.join(baseline,'server.mjs')).href)};`);
   source=replaceOnce(source,"import {MobileAccess} from '../lib/mobile-access.mjs';",`import {MobileAccess} from ${JSON.stringify(pathToFileURL(path.join(baseline,'lib/mobile-access.mjs')).href)};`);
   if(name==='framework-http.test.mjs'){
-   source=replaceOnce(source,"const root=path.resolve(import.meta.dirname,'..');",`const root=${JSON.stringify(root)};`);
+   source=replaceOnce(source,"const root=path.resolve(import.meta.dirname,'..');",`const root=${JSON.stringify(baseline)};`);
    source=replaceOnce(source,"path.join(root,'.framework-build/latest.json')",JSON.stringify(path.join(buildDir,'manifest.json')));
   }else source=replaceOnce(source,"new URL('../.framework-build/latest.json',import.meta.url)",JSON.stringify(path.join(buildDir,'manifest.json')));
   const file=path.join(evidence,name);await writeFile(file,source);tests.push(file);
