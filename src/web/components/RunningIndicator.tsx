@@ -2,7 +2,15 @@ import {flushSync} from 'react-dom';
 import {createStore,useStore} from 'zustand';
 interface Activity {kind:string;source?:string|null;label:string;detail:string;terminals?:Array<{processId?:unknown;command?:string}>}
 const store=createStore<{activity:Activity|null}>(()=>({activity:null}));
-export function publishConversationActivity(activity:Activity|null){flushSync(()=>store.setState({activity}));}
+export function publishConversationActivity(activity:Activity|null){
+ const old=store.getState().activity;
+ if(old===activity)return;
+ if(old&&activity&&old.kind===activity.kind&&old.source===activity.source&&old.label===activity.label&&old.detail===activity.detail){
+  const previous=old.terminals??[],next=activity.terminals??[];
+  if(previous.length===next.length&&previous.every((terminal,index)=>terminal.processId===next[index]?.processId&&terminal.command===next[index]?.command))return;
+ }
+ flushSync(()=>store.setState({activity}));
+}
 const Icon=({name}:{name:string})=><svg className="icon" aria-hidden="true"><use href={'#i-'+name}/></svg>;
 export function RunningIndicator(){
  const a=useStore(store,s=>s.activity);

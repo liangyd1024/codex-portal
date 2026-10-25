@@ -16,5 +16,12 @@ export function AnnotationFloating(){const i=useStore(registry,s=>s.instance);re
 export function installReactAnnotations(actions:AnnotationActions):AnnotationView{
  const i:Instance={actions,menu:createRef(),editor:createRef(),comment:createRef(),chip:createRef(),details:createRef(),store:createStore<State>(()=>({menuHidden:true,editorHidden:true,chipHidden:true,chipText:'',detailsHidden:true,expanded:false,excerpt:'',drafts:[],draftRevision:0,markers:[],markerRevision:0}))};
  flushSync(()=>registry.setState({instance:i}));
- return {menu:i.menu.current!,editor:i.editor.current!,comment:i.comment.current!,chip:i.chip.current!,details:i.details.current!,patch:patch=>flushSync(()=>i.store.setState(patch)),drafts:drafts=>flushSync(()=>i.store.setState(s=>({drafts,draftRevision:s.draftRevision+1}))),markers:markers=>flushSync(()=>i.store.setState(s=>({markers,markerRevision:s.markerRevision+1})))};
+ return {menu:i.menu.current!,editor:i.editor.current!,comment:i.comment.current!,chip:i.chip.current!,details:i.details.current!,patch:patch=>{
+  const old=i.store.getState();
+  if(Object.entries(patch).every(([key,value])=>old[key as keyof AnnotationViewState]===value))return;
+  flushSync(()=>i.store.setState(patch));
+ },drafts:drafts=>flushSync(()=>i.store.setState(s=>({drafts,draftRevision:s.draftRevision+1}))),markers:markers=>{
+  if(!markers.length&&!i.store.getState().markers.length)return;
+  flushSync(()=>i.store.setState(s=>({markers,markerRevision:s.markerRevision+1})));
+ }};
 }

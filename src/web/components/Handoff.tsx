@@ -12,6 +12,10 @@ export function HandoffBanner(){
 }
 export function installReactHandoff({endUse}:{endUse:()=>unknown}){
  if(!document.querySelector('link[href="/handoff.css"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/handoff.css';document.head.append(link);}
- const controller=createHandoffController({endUse,publish:view=>flushSync(()=>store.setState({view})),focus:banner=>document.getElementById(banner?'handoff-status':'handoff-thread')!.focus(),restoreFocus:()=>{const button=document.getElementById('handoff-thread')!;if(!button.hidden&&button.checkVisibility?.())button.focus();else document.getElementById('message-input')!.focus();}});
+ const controller=createHandoffController({endUse,publish:view=>{
+  const old=store.getState().view;
+  if(old&&Object.entries(view).every(([key,value])=>old[key as keyof HandoffView]===value))return;
+  flushSync(()=>store.setState({view}));
+ },focus:banner=>document.getElementById(banner?'handoff-status':'handoff-thread')!.focus(),restoreFocus:()=>{const button=document.getElementById('handoff-thread')!;if(!button.hidden&&button.checkVisibility?.())button.focus();else document.getElementById('message-input')!.focus();}});
  flushSync(()=>store.setState({controller}));return controller;
 }
