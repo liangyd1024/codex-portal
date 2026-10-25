@@ -1,5 +1,7 @@
 # 框架迁移：实现与验收记录
 
+当前资源 `fb290ad3` 在正常 React 调试回调环境下补验计划跨会话迟到回执：桌面与 iPhone 三视口 64 样本／32 对一致，发送次数、草稿和终态独立断言通过。无产品改动，见[补验记录](verification-framework-parity.md#当前-dom-契约构建的计划跨会话回执补验)。
+
 主控制器 DOM 查询与节点辅助函数已迁入严格 TypeScript，提交 `ae9a995`／干净资源 `fb290ad3` 已更新独立预览。45 个固定节点标签契约、四视口 67 对功能比较、834 Node／74 Python、类型检查和构建通过；八个真实启动样本正常。最终性能重复组未见本次稳定增量，整体性能差距及剩余迁移仍未关闭。见[DOM 契约报告](verification-framework-controller-dom.md)。
 
 主控制器状态初始化已迁入严格 TypeScript，提交 `f1bd552`／干净资源 `f33496d2` 已更新独立预览。输入与新建共 67 对比较一致，831 Node／74 Python 和真实入口八样本通过。完整控制器迁移及整体首屏性能仍未完成，见[状态契约报告](verification-framework-controller-state.md)。
