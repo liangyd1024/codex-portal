@@ -29,11 +29,17 @@ function QueueRows({store,act,edit}:{store:StoreApi<QueueView>;act:(item:QueueIt
 }
 interface Editor {text:string;revision:number;feedback:string;disabled:boolean;busy?:boolean;input:(text:string)=>void;submit:()=>void;reload:()=>void;cancel:()=>void;composition:(value:boolean)=>void}
 function QueueEditor({store}:{store:StoreApi<Editor>}){
- const v=useStore(store),area=useRef<HTMLTextAreaElement>(null),composing=useRef(false);
- useLayoutEffect(()=>{if(area.current)area.current.value=v.text;},[v.revision]);
- return <><h2>编辑排队消息</h2><form className="composer-goal" aria-busy={v.busy} onSubmit={e=>{e.preventDefault();v.submit();}} onKeyDown={e=>{if(e.key==='Enter'&&(composing.current||e.nativeEvent.isComposing||e.keyCode===229))e.stopPropagation();}}>
- <label>消息内容<textarea ref={area} rows={7} maxLength={100000} readOnly={v.disabled} onInput={e=>v.input(e.currentTarget.value)} onCompositionStart={()=>{composing.current=true;v.composition(true);}} onCompositionEnd={()=>{composing.current=false;v.composition(false);}}/></label>
- <p role="status">{v.feedback}</p><div className="goal-edit-actions"><button type="button" disabled={v.disabled} onClick={v.reload}>重新读取消息</button><button type="button" onClick={v.cancel}>取消</button><button type="submit" disabled={v.disabled}>保存</button></div>
+ const v=store.getState(),area=useRef<HTMLTextAreaElement>(null),form=useRef<HTMLFormElement>(null),feedback=useRef<HTMLParagraphElement>(null),reload=useRef<HTMLButtonElement>(null),submit=useRef<HTMLButtonElement>(null),composing=useRef(false);
+ useLayoutEffect(()=>{
+  // React owns the nodes; this subscription alone owns their changing properties.
+  // Native updates retain the baseline's transient disabled/focus behavior.
+  let revision=-1;
+  const apply=()=>{const state=store.getState();if(revision!==state.revision){area.current!.value=state.text;revision=state.revision;}area.current!.readOnly=state.disabled;reload.current!.disabled=submit.current!.disabled=state.disabled;feedback.current!.textContent=state.feedback;if(state.busy===undefined)form.current!.removeAttribute('aria-busy');else form.current!.setAttribute('aria-busy',String(state.busy));};
+  apply();return store.subscribe(apply);
+ },[store]);
+ return <><h2>编辑排队消息</h2><form ref={form} className="composer-goal" onSubmit={e=>{e.preventDefault();v.submit();}} onKeyDown={e=>{if(e.key==='Enter'&&(composing.current||e.nativeEvent.isComposing||e.keyCode===229))e.stopPropagation();}}>
+ <label>消息内容<textarea ref={area} rows={7} maxLength={100000} onInput={e=>v.input(e.currentTarget.value)} onCompositionStart={()=>{composing.current=true;v.composition(true);}} onCompositionEnd={()=>{composing.current=false;v.composition(false);}}/></label>
+ <p ref={feedback} role="status"></p><div className="goal-edit-actions"><button ref={reload} type="button" onClick={v.reload}>重新读取消息</button><button type="button" onClick={v.cancel}>取消</button><button ref={submit} type="submit">保存</button></div>
  </form></>;
 }
 export function installQueuedInputs({host,context,api,refresh,onError}:QueueOptions) {
@@ -58,7 +64,7 @@ export function installQueuedInputs({host,context,api,refresh,onError}:QueueOpti
   const same=()=>editing===session&&contextKey(context())===contextKey(c)&&dialog.open;
   let composing=false,reloading=false;
   const editor=createStore<Editor>(()=>({text:draft.text,revision:0,feedback:'',disabled:false,input:text=>{draft.text=text;},composition:value=>{composing=value;},cancel:()=>dialog.close(),reload:()=>void reload(),submit:()=>void submit()}));
-  const update=(value:Partial<Editor>)=>flushSync(()=>editor.setState(value));
+  const update=(value:Partial<Editor>)=>editor.setState(value);
   async function reload(){
    if(busy.has(key)||reloading)return;reloading=true;update({disabled:true});
    try{await refresh();if(!same())return;const latest=context().queue?.data?.find(q=>q.id===item.id);if(!latest)throw Error('消息已离开队列，草稿已保留。');draft.base=content(latest);draft.text=draft.base;update({text:draft.text,revision:editor.getState().revision+1,feedback:'已读取当前消息。'});}
@@ -69,7 +75,9 @@ export function installQueuedInputs({host,context,api,refresh,onError}:QueueOpti
    if(composing||reloading||!same()||busy.has(key))return;
    const now=context();if(!now.ready||!now.editable){update({feedback:'连接尚未恢复，草稿已保留。'});return;}
    if(draft.text===draft.base){drafts.delete(key);dialog.close();return;}
-   busy.add(key);update({disabled:true,feedback:'正在保存…',busy:true});render();
+   // Finish the row commit before disabling the focused editor control.
+   // Both updates remain synchronous and precede the request.
+   busy.add(key);render();update({disabled:true,feedback:'正在保存…',busy:true});
    try{await api('/api/threads/'+encodeURIComponent(String(c.id))+'/queue-update',{method:'POST',body:{queuedSubmissionId:item.id,text:draft.text,expectedText:draft.base}});drafts.delete(key);if(same())dialog.close();if(contextKey(context())===contextKey(c))await refresh();}
    catch(error){if(same())update({feedback:message(error)});}
    finally{busy.delete(key);if(same())update({disabled:false,busy:false});signature='';render();}
