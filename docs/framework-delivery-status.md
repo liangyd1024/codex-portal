@@ -36,13 +36,13 @@
 | 原文、流式、历史前插、锚点、选区、迟到响应、恢复 | 流式、侧聊、历史、SSE、草稿专项 | 有限定通过结果；[当前候选恢复复核](verification-framework-recovery-current.md)确认原生 SSE 断流重连一致，模拟离线的输入停滞和惯性前插跳动仍为两版共有问题；其余集成范围继续复核 |
 | 本机／SSH、项目／目标／问题／任务／文件／通知／配对／维护 | 协议差分、隔离 UI 与限定本机真实会话 | 原生定时任务管理执行、持续 SSH、实体手机等不能凭模拟或只读结果标为完成 |
 | 性能与 CPU／内存／磁盘资源 | 输入、列表、流式、首屏及 Fastify 专项样本 | 未通过整体门槛；存在波动、历史稳定差异及资源成本缺口；[当前首屏资源测量](verification-framework-startup-resources.md)记录候选脚本 CPU 和静态体积增加；[连接设置优化](verification-framework-connection-settings-batch.md)已减少每次状态切换的一次 React 提交，[账号标签优化](verification-framework-account-publication.md)减少启动样本三次无变化提交，[模型选项优化](verification-framework-model-publication.md)另减少模型发布三次提交；但未证明整体性能通过，禁止宣称整体提速 |
-| 类型检查、完整 npm test、构建产物验证、报告 | 最近应用代码：873 Node／74 Python、typecheck、构建通过；干净资源与候选一致 | 当前回归通过；不替代迁移完整性、真实预览更新及全量验收 |
+| 类型检查、完整 npm test、构建产物验证、报告 | 最近应用代码：878 Node／74 Python、typecheck、构建通过；干净资源与候选一致 | 当前回归通过；不替代迁移完整性、真实预览更新及全量验收 |
 
 ## 尚需完成的实现
 
 | 工作项 | 当前源码证据 | 完成条件 |
 | --- | --- | --- |
-| 主控制器类型化 | entry.tsx 最后仍导入 public/app.js；app.js 991 行，仍包含连接配置读取、控制状态及事件装配；会话选择与详情应用已迁入 thread-selection.ts，请求回答已迁入 request-response.ts，操作去重和失败协调已迁入 action-runner.ts，新建页打开／关闭及项目选择已迁入 new-chat-page.ts，工作台 init 已迁入 workspace-startup.ts | 相应应用协调迁入严格 TS；原算法、存储与请求顺序保留；不以关闭检查或宽泛类型掩盖诊断 |
+| 主控制器类型化 | entry.tsx 最后仍导入 public/app.js；app.js 961 行，仍包含连接配置读取及事件装配；会话选择与详情应用已迁入 thread-selection.ts，请求回答已迁入 request-response.ts，操作去重和失败协调已迁入 action-runner.ts，新建页打开／关闭及项目选择已迁入 new-chat-page.ts，工作台 init 已迁入 workspace-startup.ts，会话控制状态已迁入 session-context.ts | 相应应用协调迁入严格 TS；原算法、存储与请求顺序保留；不以关闭检查或宽泛类型掩盖诊断 |
 | 剩余 UI 控制器边界 | public/sidebar.js、composer.js、goal-toolbar.js、mobile-ui.js、turn-navigation.js 仍含控制逻辑；多个 React 视图已安装，但控制器语言和所有权并未全部收敛 | 区分应用协调与确需保留的 DOM／浏览器适配；逐模块提供类型契约并验证行为，不能仅按扩展名宣称完成 |
 | Shell 静态节点与运行属性 | Shell.tsx 创建搜索框、更多会话按钮、会话标题、控制说明、输入框等，app.js 仍直接修改相关内容／属性 | 明确每个节点的唯一运行期所有者；迁移时保留 IME、焦点、选区、触控、滚动和事件顺序 |
 | 正文算法稳定容器 | 原解析、缓存与协调算法保留，主控制器仍协调消息区域 | 将协调边界类型化并保持稳定容器；不为迁移重建正文或改变原文 |
@@ -52,7 +52,7 @@
 
 ## 后续收口顺序
 
-1. 会话选择与详情应用已经完成专项迁移，见[报告](verification-framework-thread-selection.md)。请求回答协调也已完成专项迁移，见[报告](verification-framework-request-response.md)。工作台 init 也已完成[专项迁移](verification-framework-workspace-startup.md)。继续完成主控制器的连接配置读取、控制状态与事件装配边界，同时逐项收敛 Shell 运行属性；每次迁移对照相应旧版流程。
+1. 会话选择与详情应用已经完成专项迁移，见[报告](verification-framework-thread-selection.md)。请求回答协调也已完成专项迁移，见[报告](verification-framework-request-response.md)。工作台 init 也已完成[专项迁移](verification-framework-workspace-startup.md)。会话控制状态已完成[类型迁移](verification-framework-session-context.md)，继续完成主控制器的连接配置读取与事件装配边界，同时逐项收敛 Shell 运行属性；每次迁移对照相应旧版流程。
 2. 保留原生正文算法和独立启动恢复入口，核实其稳定容器及适配契约。服务端后续重点转为真实行为和资源验收，不重复进行已经完成的路由拆分。
 3. 本轮已在待处理请求为零时更新独立预览，桌面和手机模式启动检查通过。后续每次更新仍须重新检查，不得靠回答不属于本任务的请求或打断会话解除限制。
 4. 在同一最终候选上收口功能、视觉、输入、滚动、断线恢复、SSH 与手机验证。`dc4bba1` 已完成[限定集成对照](verification-framework-candidate-integration.md)，后续 `ca2864a` 与 `9e7e5d9` 分别补做账号、模型专项和真实入口检查；仍须在最终候选上完成全量对照，首屏复测未通过性能门槛。历史证据可作为回归依据，不能把不同基准的结果拼成一次全量通过。

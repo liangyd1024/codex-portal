@@ -1,3 +1,4 @@
+import {createSessionContext} from '../src/web/services/session-context';
 import {createWorkspaceStartup} from '../src/web/services/workspace-startup';
 import {createNewChatPage} from '../src/web/services/new-chat-page';
 import {createActionRunner} from '../src/web/services/action-runner';
@@ -137,10 +138,12 @@ const reportThreadView=threadViewReporter.report;
 const retiredStatusInstances=new Set();
 function applyStatus(status){applyControllerStatus(state,status,retiredStatusInstances);}
 
+const statusNames = {unknown:'状态未确认',notLoaded:'尚未加载', idle:'就绪', active:'执行中', inProgress:'执行中', in_progress:'执行中', running:'执行中', completed:'已完成', interrupted:'已停止', failed:'失败', systemError:'服务错误', pending:'等待中', declined:'已拒绝', stopped:'已停止', success:'成功'};
 const state = createControllerState({
   desktopMode:Boolean(savedView().desktopMode),selectedId:savedView().selectedId||null,projectId:savedView().projectId||null,
   drafts:new DraftStore({storage:()=>sessionStorage,host:targetHost,onError:()=>toast('浏览器无法保存草稿，请先复制重要内容。',true)}),
 });
+const {typeOf,currentThread,turns,connected,connectionPending,featureReady,sessionLabel,usable,controlled,currentHandoff,snapshotHistory,uncertainHistory,running}=createSessionContext({state,statusNames});
 const {upsertTurn,ensureTurn,upsertItem}=createLiveTurns({state,turns});
 const questionDrafts=new QuestionDrafts(sessionStorage,targetHost,()=>toast('问题草稿暂未保存，请先复制回答。',true));
 const newDraftId='local:new-chat-draft';
@@ -171,7 +174,6 @@ const resumeWorkspace = coalesceRefresh(async () => {
   }
 });
 const effortNames = {none:'无', minimal:'最低', low:'低', medium:'中', high:'高', xhigh:'超高', max:'最高', ultra:'极高'};
-const statusNames = {unknown:'状态未确认',notLoaded:'尚未加载', idle:'就绪', active:'执行中', inProgress:'执行中', in_progress:'执行中', running:'执行中', completed:'已完成', interrupted:'已停止', failed:'失败', systemError:'服务错误', pending:'等待中', declined:'已拒绝', stopped:'已停止', success:'成功'};
 const stages = {ssh:'SSH 连接', identity:'身份核验', service:'目标机器服务', protocol:'协议连接', initialize:'协议初始化', models:'模型目录', threads:'会话列表', connected:'已连接', connecting:'正在连接', disconnected:'未连接', reconnecting:'正在重连', error:'连接失败', ready:'已连接'};
 
 function pretty(value) { try { return JSON.stringify(value, null, 2); } catch { return String(value); } }
@@ -180,38 +182,6 @@ function messageOf(value) {
   if(value?.code==='RPC_TIMEOUT'||/timed out after \d+ ms/.test(message)) return value?.readOnly?'读取目标机器超时，已有内容和草稿保留，请重试刷新。':'目标机器响应超时，操作结果尚未确认。请先核对会话记录，避免重复创建或发送。';
   if(/ssh: connect to host .*Operation timed out/i.test(message)) return '无法连接目标机器。请确认目标机器在线且网络可达，然后重新连接。';
   return message;
-}
-function typeOf(value) { return typeof value === 'string' ? value : value?.type || ''; }
-function currentThread() { return state.detail?.thread; }
-function turns() { return state.detail?.turns || currentThread()?.turns || []; }
-function connected() { return ['connected','ready'].includes(state.status?.connection?.state); }
-function connectionPending() {return ['connecting','reconnecting'].includes(state.status?.connection?.state);}
-function featureReady(name) {return state.status?.service?.protocolValidation?.features?.[name]?.supported!==false;}
-function sessionLabel(session) {
-  if(!usable()||!session||typeOf(session.status)==='unknown')return '状态未确认';
-  if(session.pendingRequests)return '待处理';
-  if(typeOf(session.status)==='active')return '执行中';
-  if(session.lastTurnStatus==='failed')return '失败';
-  if(session.lastTurnStatus==='completed')return '已完成';
-  if(session.lastTurnStatus==='interrupted')return '已停止';
-  return statusNames[typeOf(session.status)]||'状态未确认';
-}
-function usable() { return connected() && state.transport && !state.status?.service?.releasing; }
-function controlled() {
-  if (!state.detail || !state.selectedId || state.detail.recovering) return false;
-  if(state.busy.has('handoff:'+state.selectedId)||currentHandoff())return false;
-  return Boolean(state.detail.controlled || state.status?.controlledThreads?.includes(state.selectedId));
-}
-function currentHandoff() {
-  if(Array.isArray(state.status?.handoffs))return state.status.handoffs.find(v=>v.threadId===state.selectedId)||null;
-  return state.detail?.handoff||null;
-}
-function snapshotHistory() { return state.detail?.historySource === 'snapshot' || currentThread()?.historySource === 'snapshot'; }
-function uncertainHistory() { return snapshotHistory() && !controlled() && !state.desktopMode; }
-function running() {
-  if(state.desktopMode)return typeOf(currentThread()?.status)==='active';
-  if (uncertainHistory()) return false;
-  return turns().some(t => ['inProgress','in_progress','running'].includes(typeOf(t.status))) || typeOf(currentThread()?.status) === 'active';
 }
 function requestThread(r) { return r.threadId || r.params?.threadId; }
 function requests() {
