@@ -1,3 +1,4 @@
+import {createRequestResponder,requestKey,requestPath} from '../src/web/services/request-response';
 import {createThreadSelection} from '../src/web/services/thread-selection';
 import {createSidebarReader} from '../src/web/services/sidebar-reader';
 import {createModelSelection} from '../src/web/services/model-selection';
@@ -196,8 +197,6 @@ function sessionLabel(session) {
   return statusNames[typeOf(session.status)]||'状态未确认';
 }
 function usable() { return connected() && state.transport && !state.status?.service?.releasing; }
-function requestKey(r) { return r.key ?? (typeof r.id + ':' + String(r.id)); }
-function requestPath(r) { return String(r.key ?? r.id); }
 function controlled() {
   if (!state.detail || !state.selectedId || state.detail.recovering) return false;
   if(state.busy.has('handoff:'+state.selectedId)||currentHandoff())return false;
@@ -822,18 +821,7 @@ async function releaseService() {
     catch (e) { if (e.status === 409) { const blockers = Array.isArray(e.details) ? e.details.map(b => (state.threads.find(t=>t.id===b.threadId)?.name || b.threadId) + '：' + b.reason).join('\n') : e.details ? pretty(e.details) : ''; throw new Error(messageOf(e) + (blockers ? '\n' + blockers : '') + '\n请先结束相关任务，再释放控制。'); } throw e; }
   });
 }
-async function respondRequest(r, answer) {
-  await action('request:' + requestPath(r), async () => {
-    const instance=state.status?.instanceId,returnFocus=document.activeElement?.closest('.request-card')?.dataset.requestId===requestPath(r);
-    if(r.kind==='asyncQuestion')await api('/api/threads/'+encodeURIComponent(r.threadId)+'/question-answer',{method:'POST',body:{...answer,turnId:r.params.turnId,itemId:r.params.itemId}});
-    else await api('/api/requests/' + encodeURIComponent(requestPath(r)) + '/respond',{method:'POST',body:answer});
-    questionDrafts.clear(r);if(r.kind==='asyncQuestion')questionDrafts.set(r,{sent:true});
-    if(instance!==state.status?.instanceId)return;
-    const remove = list => (list || []).filter(x => requestKey(x) !== requestKey(r));
-    state.localRequests = remove(state.localRequests); if (state.status) state.status.pendingRequests = remove(state.status.pendingRequests); if (state.detail) state.detail.pendingRequests = remove(state.detail.pendingRequests);
-    renderRequests();if(returnFocus){if(state.selectedId===requestThread(r))$('message-input').focus();else if(sideChat?.id===requestThread(r))document.querySelector('.side-chat-panel .composer textarea')?.focus();}await loadStatus();
-  });
-}
+const respondRequest=createRequestResponder({state,action,api,questionDrafts,document,element:$,sideChat:()=>sideChat,renderRequests,loadStatus});
 function updateNewProjects(projectRoot) {
   const preferred=(typeof projectRoot==='string'?projectRoot:null)||newDraft.cwd||state.projects.find(p=>p.id===state.projectId)?.roots?.[0]||currentThread()?.cwd;
   const options=projectFolderOptions(state.projects);
