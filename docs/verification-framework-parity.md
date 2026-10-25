@@ -2260,3 +2260,8 @@ ego-lite 在同一空间和页面执行。桌面 1480×747、DPR 2；iPhone 12 �
 ## 同候选异步问题与资源补测
 
 基准 `227dbfe`、候选 `67a8c4c`。异步问题四视口追加 96 个样本、48 对状态一致，覆盖必填、草稿、自定义回答、跳过恢复、组合输入保护、失败与重试。详情见[请求回答报告](verification-framework-request-response.md)。[首屏资源报告](verification-framework-startup-resources.md)记录了额外脚本 CPU 与 159,138 字节静态体积成本，性能门槛仍未通过。没有修改产品或重启服务。
+
+
+## 连接设置同步更新合并
+
+`ddfd731` 将同一控件刷新内的三次连接设置发布合并为一次。正式基准 `227dbfe`；桌面和 iPhone 三种视口维护流程四对结果一致。完整 857 Node／74 Python 与类型检查通过。320 个状态切换样本每次均减少一次 React 提交。详见[专项报告](verification-framework-connection-settings-batch.md)，不据此宣称整体性能完成。
