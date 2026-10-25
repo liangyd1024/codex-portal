@@ -3,7 +3,7 @@ import ts from 'typescript';
 const loaderSource=readFileSync(new URL('../src/web/services/sidebar-loader.ts',import.meta.url),'utf8');
 const output=ts.transpileModule(loaderSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const {createSidebarLoader}=await import('data:text/javascript;base64,'+Buffer.from(output).toString('base64'));
-const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+const source=readFileSync(new URL('../src/web/controller.ts',import.meta.url),'utf8');
 const readerSource=readFileSync(new URL('../src/web/services/sidebar-reader.ts',import.meta.url),'utf8');
 const readerOutput=ts.transpileModule(readerSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const {createSidebarReader}=await import('data:text/javascript;base64,'+Buffer.from(readerOutput).toString('base64'));
@@ -69,7 +69,7 @@ test('late activity is ignored after a new snapshot, account, disconnect or conn
 test('manual refresh clears progress on success without a success timer; errors remain visible',async()=>{
  const state={},frames=[],timers=[],errors=[];
  const c=vm.createContext({state,Date,refreshNoticeTimer:null,clearTimeout(){},setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},renderRefresh:()=>frames.push({...state}),recordError:e=>errors.push(e)});
- vm.runInContext(source.slice(source.indexOf('async function showRefresh('),source.indexOf('function recordError(')),c);
+ runController(source.slice(source.indexOf('async function showRefresh('),source.indexOf('function recordError(')),c);
  const d=gate(),pending=c.showRefresh('项目',()=>d.promise);
  assert.equal(state.refreshing,true);assert.match(state.refreshMessage,/正在刷新/);
  d.resolve();await pending;
@@ -110,3 +110,5 @@ test('activity batches keep raw extension fields and remove an explicitly absent
  await f.loadSidebarActivity(snapshot,1);
  assert.equal(paths.length,2);assert.deepEqual(paths.map(path=>JSON.parse(new URL(path,'http://test').searchParams.get('ids')).length),[200,1]);assert.equal('activity' in ids[0],false);assert.equal(ids[200].activity,activity);assert.equal(ids[1].activity.future.text,'原始字段');
 });
+
+function runController(code,context){return vm.runInContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,context);}

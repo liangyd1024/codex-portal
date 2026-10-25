@@ -15,7 +15,7 @@ export async function prepareNotificationWorker(nav=navigator) {
   finally { clearTimeout(timer); }
 }
 
-export async function submitWorkerNotification(registration,title,options,{submitted=()=>{},failed=()=>{}}={}) {
+export async function submitWorkerNotification(registration,title,options,{submitted=()=>{},failed=/** @type {(message:string)=>void} */(()=>{})}={}) {
   try { await registration.showNotification(title,options);submitted();return true; }
   catch(error){failed(error.message);return false;}
 }

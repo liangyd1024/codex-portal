@@ -7,7 +7,7 @@ test('controller tag contracts match the unchanged shell and cover literal contr
  const expected=new Map(contract.members.map(m=>[m.name.text,m.type.literal.text])),actual=new Map();
  function walk(n){const id=n.attrs?.find(a=>a.name==='id')?.value;if(id)actual.set(id,n.tagName);for(const c of n.childNodes||[])walk(c);}walk(parse(readFileSync(new URL('../public/index.html',import.meta.url),'utf8')));
  for(const [id,tag]of expected)assert.equal(actual.get(id),tag,id);
- const controller=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');for(const m of controller.matchAll(/(?:\$|setText)\(['"]([^'"]+)['"]/g))if(m[1]!=='reason-')assert.ok(expected.has(m[1]),m[1]);
+ const controller=readFileSync(new URL('../src/web/controller.ts',import.meta.url),'utf8');for(const m of controller.matchAll(/(?:\$|setText)\(['"]([^'"]+)['"]/g))if(m[1]!=='reason-')assert.ok(expected.has(m[1]),m[1]);
 });
 test('lookups do not cache replaced nodes and leave missing dynamic feedback nullable',()=>{
  const before=globalThis.document,first={},second={};let current=first;

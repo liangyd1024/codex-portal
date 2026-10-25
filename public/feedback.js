@@ -48,7 +48,7 @@ export function createStopFeedback() {
       if(error?.status>=400&&error.status<500&&!['OUTCOME_UNKNOWN','RPC_TIMEOUT'].includes(error.code))pending.delete(key);
       else request.requesting=false;
     },
-    observe(key,{confirmed,turns=[],status,background}){
+    observe(key,{confirmed,turns=/** @type {import('../src/contracts/native').NativeTurn[]} */([]),status,background}){
       const request=pending.get(key);
       if(!request||request.requesting||!confirmed)return Boolean(request);
       const turn=turns.find(t=>t.id===request.turnId);

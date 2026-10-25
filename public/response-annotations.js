@@ -5,7 +5,7 @@ export function annotatedText(text,annotations=[],selections=[]){
  if(selections.length)context+='\n# Selected text:\n'+selections.map((s,i)=>'\n## Selection '+(i+1)+'\n'+s.text+'\n').join('');
  return context?context+'\n## My request:\n'+text+'\n':text;
 }
-export function installResponseAnnotations({context,host,onSideChat,sideSelections=()=>[],changed,notify}){
+export function installResponseAnnotations({context,host,onSideChat,sideSelections=/** @type {()=>import('../src/web/services/side-chat').SideFragment[]} */(()=>[]),changed,notify}){
  const input=document.getElementById('message-input'),messages=document.getElementById('messages');
  const key='rcm.annotations.'+host;let drafts={};try{drafts=JSON.parse(sessionStorage.getItem(key)||'{}');}catch{}
  const current=()=>Array.isArray(drafts[context().id])?drafts[context().id]:[];

@@ -1,6 +1,7 @@
-type Status = string | {type?:string;[field:string]:unknown} | null | undefined;
-interface Turn {status?:Status;[field:string]:unknown}
-interface Session {status?:Status;pendingRequests?:unknown;lastTurnStatus?:string;turns?:Turn[];historySource?:string;[field:string]:unknown}
+import type {NativeStatus,NativeTurn,NativeThread} from '../../contracts/native';
+type Status = NativeStatus | undefined;
+type Turn = NativeTurn;
+type Session = NativeThread;
 interface Handoff {threadId?:string;[field:string]:unknown}
 interface State {
  detail?:{thread?:Session;turns?:Turn[];controlled?:unknown;recovering?:unknown;historySource?:string;handoff?:Handoff|null;[field:string]:unknown}|null;

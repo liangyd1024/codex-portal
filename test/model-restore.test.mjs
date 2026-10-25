@@ -25,7 +25,7 @@ test('thread preferences survive history arriving before the model catalog',()=>
 
 
 test('sidebar snapshot restores projects and chats without filtering to the selected project',async()=>{
- const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+ const source=readFileSync(new URL('../src/web/controller.ts',import.meta.url),'utf8');
  const snapshot={accountScope:'test',projects:[{id:'one'},{id:'two'}],data:[{id:'a',projectId:'one'},{id:'b',projectId:'two'}]};
  const state={selectedId:null,projectId:'one',projects:[],listVersion:0,threads:[],search:''},requests=[];
  const ctx=vm.createContext({state,threadSearch:'',createdThreads:new Map(),URLSearchParams,
@@ -49,3 +49,5 @@ test('model aliases and mixed effort entries retain native fields and choose onl
  c.renderModels();assert.equal(state.model,'native-model');assert.equal(state.effort,'high');assert.equal(options.at(-1).value,'high');assert.deepEqual(native.future,{keep:true});
  state.models=[{id:'replacement',supportedReasoningEfforts:[]}];c.renderModels();assert.equal(state.model,'replacement');assert.equal(state.effort,'');assert.deepEqual(options.at(-1).entries,[{value:'',label:'无可用档位'}]);
 });
+
+function runController(code,context){return vm.runInContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,context);}

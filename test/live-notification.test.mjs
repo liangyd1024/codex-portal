@@ -8,8 +8,8 @@ const {createTaskNotifications}=await import('data:text/javascript;base64,'+Buff
 const eventSource=readFileSync(new URL('../src/web/services/events.ts',import.meta.url),'utf8');
 const eventOutput=ts.transpileModule(eventSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const {createEventHandler}=await import('data:text/javascript;base64,'+Buffer.from(eventOutput).toString('base64'));
-const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
-const ast=ts.createSourceFile('app.js',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+const source=readFileSync(new URL('../src/web/controller.ts',import.meta.url),'utf8');
+const ast=ts.createSourceFile('controller.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
 const notificationSetup=ast.statements.find(node=>ts.isVariableStatement(node)&&node.declarationList.declarations.some(d=>ts.isIdentifier(d.name)&&d.name.text==='notifyTaskEvent'));
 assert.ok(notificationSetup,'notification controller initialization exists');
 function fixture(success=true){
@@ -17,7 +17,7 @@ function fixture(success=true){
  const storage={getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)};
  const c=vm.createContext({createTaskNotifications,sideChat:null,authRecoveryMessage,taskNotificationsEnabled:true,window:{Notification:{}},Notification:{permission:'granted'},targetHost:'local',state:{threads:[{id:'a'}],status:{},selectedId:null,detail:null},currentThread:()=>null,threadName:()=> 'test',taskNotice,deliverNotice,localStorage:storage,navigator:{locks:{request:(_key,work)=>{const next=lock.then(work);lock=next.catch(()=>{});return next;}}},sendTaskNotification:async(...args)=>{sent.push(args);return success;},api:async(path,options)=>acks.push({path,options}),notificationDiagnostic(){},recordError(){},scheduleListRefresh(){}});
  c.notificationPreferences={enabled:()=>c.taskNotificationsEnabled};
- vm.runInContext(notificationSetup.getText(ast)+'\nglobalThis.notifyTaskEvent=notifyTaskEvent;',c);
+ runController(notificationSetup.getText(ast)+'\nglobalThis.notifyTaskEvent=notifyTaskEvent;',c);
  c.handleEvent=createEventHandler({...c,sideChat:()=>c.sideChat,workspaceStarting:()=>true,refreshAccountUsage:()=>{}});
  return {c,sent,acks,values,emit:(id)=>c.notifyTaskEvent('turn/completed',{threadId:'a',turn:{id,status:'completed'}})};
 }
@@ -62,3 +62,5 @@ test('opening SSE never transmits stored historical task notifications',async()=
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const controller=new AbortController();
  try{const response=await fetch('http://127.0.0.1:'+server.address().port+'/api/events',{signal:controller.signal});const {value}=await response.body.getReader().read();const text=new TextDecoder().decode(value);assert.match(text,/manager\/status/);assert.doesNotMatch(text,/manager\/taskNotice|old/);}finally{controller.abort();server.closeAllConnections();await new Promise(r=>server.close(r));}
 });
+
+function runController(code,context){return vm.runInContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,context);}

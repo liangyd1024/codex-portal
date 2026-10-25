@@ -1,14 +1,16 @@
 import {createWorkspaceState} from './state';
+import type {Model} from './services/model-selection';
 import type {NativeRecord,WorkspaceIdentity} from '../contracts/view';
+import type {NativeConnectionStatus,NativeProject,NativeThread,NativeDetail,NativeRequest} from '../contracts/native';
 
 /** Controller-owned coordination only. Native records remain open and lossless. */
 export interface ControllerState<Drafts extends Map<string,string>> extends WorkspaceIdentity {
- status:NativeRecord|null;models:NativeRecord[];projects:NativeRecord[];threads:NativeRecord[];detail:NativeRecord|null;
+ status:NativeConnectionStatus|null;models:Model[];projects:NativeProject[];threads:NativeThread[];detail:NativeDetail|null;
  sidebar:NativeRecord|null;sidebarArchived:boolean;selectedArchived:boolean;projectId:string|null;search:string;
  threadCursor:string|null;historyCursor:string|null;loadedOlderHistory:boolean;
- model:string;effort:string;csrf:string;busy:Set<string>;loadingThreads:boolean;loadingModels:boolean;loadingProjects:boolean;threadListSource:unknown;
+ model:string;effort:string;csrf:string;busy:Set<string>;loadingThreads:boolean;loadingModels:boolean;loadingProjects:boolean;threadListSource:string|null;
  runtimeNotices:Map<string,Map<string,NativeRecord>>;loadingDetail:boolean;
- errors:{message:string;stage:string;time:number}[];localRequests:NativeRecord[];drafts:Drafts;selectionVersion:number;
+ errors:{message:string;stage:string;time:number}[];localRequests:NativeRequest[];drafts:Drafts;selectionVersion:number;
  listVersion:number;detailVersion:number;threadPageError:boolean;historyError:string;eventSource:EventSource|null;
  lastSync:Date|null;refreshScope:string;refreshMessage:string;refreshing:boolean;streamRender:boolean;requestSignature:string;
 }

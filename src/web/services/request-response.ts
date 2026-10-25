@@ -1,5 +1,5 @@
 export interface Request {
-  key?: string; id?: string | number; kind?: string; threadId?: string;
+  key?: string; id?: unknown; kind?: string; threadId?: string;
   params?: {threadId?: string; turnId?: unknown; itemId?: unknown; [key: string]: unknown};
   [key: string]: unknown;
 }

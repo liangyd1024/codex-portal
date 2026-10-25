@@ -8,7 +8,7 @@ export async function deliverNotice(storage,key,send) {
   return true;
 }
 
-export function submitNotification(create,{shown=()=>{},failed=()=>{},timeoutMs=10000}={}) {
+export function submitNotification(create,{shown=()=>{},failed=/** @type {(message:string)=>void} */(()=>{}),timeoutMs=10000}={}) {
   return new Promise(resolve=>{
     let settled=false,timer;
     const finish=success=>{if(settled)return;settled=true;clearTimeout(timer);resolve(success);};

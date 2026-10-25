@@ -4,7 +4,7 @@ export interface StreamItem {id?:string;type:string;text?:string;aggregatedOutpu
 export interface StreamTurn {id?:string;items:StreamItem[];error?:unknown;[field:string]:unknown}
 export interface EventParams extends Request {threadId?:string;thread?:{id?:string};turnId?:string;turn?:StreamTurn;item?:StreamItem;itemId?:string;request?:Request;requestId?:unknown;status?:ConnectionStatus;message?:unknown;error?:unknown;stage?:string;threadName?:string;name?:string;delta?:string;summaryIndex?:number}
 interface Envelope {method?:string;params?:EventParams;replayed?:boolean;[field:string]:unknown}
-interface EventState {selectedId:string|null;listVersion:number;sidebar:unknown;threads:unknown[];projects:unknown[];models:unknown[];threadCursor:string|null;localRequests:Request[];status:(ConnectionStatus&{pendingRequests?:Request[];service?:{outputJournal?:unknown;[field:string]:unknown}})|null;detail:({thread:{status?:unknown;name?:string;[field:string]:unknown};pendingRequests?:Request[];[field:string]:unknown})|null;runtimeNotices:Map<string,Map<string,Record<string,unknown>>>}
+interface EventState {selectedId:string|null;listVersion:number;sidebar:unknown;threads:unknown[];projects:unknown[];models:unknown[];threadCursor:string|null;localRequests:Request[];status:(ConnectionStatus&{pendingRequests?:Request[];service?:{outputJournal?:unknown;[field:string]:unknown}})|null;detail:({thread?:{status?:unknown;name?:string;[field:string]:unknown};pendingRequests?:Request[];[field:string]:unknown})|null;runtimeNotices:Map<string,Map<string,Record<string,unknown>>>}
 export interface EventDependencies {
  state:EventState;sideChat:()=>{event:(method:string,params:EventParams)=>void}|null|undefined;
  accountVersion:{next:()=>number;get:()=>number};createdThreads:{clear:()=>void};workspaceStarting:()=>boolean;
@@ -69,11 +69,11 @@ return function handleEvent(event:{data:string;type?:string}) {
   if (method === 'thread/tokenUsage/updated' || method === 'turn/moderationMetadata') return;
   if (method === 'thread/goal/cleared') { scheduleDetailRefresh(); return; }
   if (method === 'thread/queue/changed') { scheduleDetailRefresh(); return; }
-  if (method === 'thread/status/changed') { state.detail.thread.status = p.status; scheduleStreamRender(); return; }
-  if (method === 'thread/name/updated') { state.detail.thread.name = p.threadName || p.name; renderThread(); return; }
+  if (method === 'thread/status/changed') { state.detail.thread!.status = p.status; scheduleStreamRender(); return; }
+  if (method === 'thread/name/updated') { state.detail.thread!.name = p.threadName || p.name; renderThread(); return; }
   if (method === 'turn/started' || method === 'turn/completed') {
-    if (p.turn) upsertTurn(p.turn); if (method === 'turn/completed') { state.detail.thread.status = {type:'idle'}; scheduleDetailRefresh(); }
-    else state.detail.thread.status = {type:'active',activeFlags:[]}; scheduleStreamRender(); return;
+    if (p.turn) upsertTurn(p.turn); if (method === 'turn/completed') { state.detail.thread!.status = {type:'idle'}; scheduleDetailRefresh(); }
+    else state.detail.thread!.status = {type:'active',activeFlags:[]}; scheduleStreamRender(); return;
   }
   if (method === 'item/started' || method === 'item/completed') { if (p.item) upsertItem(p.turnId,p.item); scheduleStreamRender(); return; }
   if (method === 'item/agentMessage/delta' || method === 'item/plan/delta') {

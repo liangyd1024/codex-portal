@@ -56,4 +56,4 @@ configureSidebarUndo(installReactSidebarUndo);
 configureSidebarToolbar(installReactSidebarToolbar);
 configureSidebarTree(installReactSidebarTree);
 // Commands remain event-driven; mounting components never sends native commands.
-await import('../../public/app.js');
+await import('./controller');

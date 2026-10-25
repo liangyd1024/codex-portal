@@ -53,7 +53,7 @@ export function turnCountLabel({turns=[],hasEarlier,loading=false,loadMessage=''
   return '共 '+count+' 轮';
 }
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
-export function installTurnNavigation({scroller,content,entryHost,context,follow,loadEarlier,loadDirectory,onError=()=>{}}) {
+export function installTurnNavigation({scroller,content,entryHost,context,follow,loadEarlier,loadDirectory,onError=/** @type {(message:string)=>void} */(()=>{})}) {
   const rail=el('nav','turn-navigation');rail.setAttribute('aria-label','对话轮次');
   const ticks=el('div','turn-navigation-ticks'),older=el('button','turn-navigation-older','↑');older.type='button';older.setAttribute('aria-label','加载全部轮次');const count=el('button','turn-navigation-count');count.type='button';count.setAttribute('aria-label','加载并显示全部轮次');rail.append(count,older,ticks);document.body.append(rail);
   const preview=el('div','turn-preview');preview.hidden=true;preview.id='turn-preview';document.body.append(preview);

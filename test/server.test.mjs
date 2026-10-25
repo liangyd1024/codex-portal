@@ -267,7 +267,7 @@ test('built browser module graph is served as JavaScript without missing imports
     }
   }
   assert.ok(visited.has('/framework.js'));
-  assert.ok([...visited].some(url=>url.startsWith('/chunks/app-')));
+  assert.ok([...visited].some(url=>url.startsWith('/chunks/')&&url.endsWith('.js')),'entry must load its built JavaScript chunks');
 });
 
 test('Mermaid assets are explicit, local, and isolated from workbench CSP',async t=>{

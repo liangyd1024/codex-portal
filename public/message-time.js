@@ -28,6 +28,8 @@ export function turnDurationLabel(turn) {
 
 // Put the whole-turn duration beside the last process disclosure before the
 // answer. Never repeat that total on each tool group or move original messages.
+/** @param {import('../src/contracts/native').NativeTurn} turn
+ * @returns {import('../src/contracts/native').NativeTurnGroup[]} */
 export function timedTurnGroups(turn) {
   const groups = groupTurnItems(turn), label = turnDurationLabel(turn);
   if (!label) return groups;

@@ -1,5 +1,6 @@
 export interface ConnectionConfig {
- data:{id:string;host:{alias:string;[field:string]:unknown};[field:string]:unknown}[];
+ machineId:string;
+ data:{id:string;host:{alias:string;machineId:string;home:string;user:string;[field:string]:unknown};[field:string]:unknown}[];
  defaultConnection:string;
  [field:string]:unknown;
 }

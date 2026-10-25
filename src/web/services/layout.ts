@@ -6,7 +6,7 @@ interface LayoutDependencies {
 /** Own only shell layout attributes and inline width; preserve the baseline events and storage. */
 export function createLayoutController({element: $, compact: compactLayout}: LayoutDependencies) {
 function saveLayout(key: string, value: unknown) { try { localStorage.setItem('rcm.layout.'+key, JSON.stringify(value)); } catch {} }
-function readLayout(key: string, fallback: unknown): unknown { try { const raw = localStorage.getItem('rcm.layout.'+key); return raw === null ? fallback : JSON.parse(raw); } catch { return fallback; } }
+function readLayout<T>(key: string, fallback: T): T { try { const raw = localStorage.getItem('rcm.layout.'+key); return raw === null ? fallback : JSON.parse(raw); } catch { return fallback; } }
 function setupResizableLayout() {
   const shell = $('app-shell'), panes = $('sidebar-sections');
   const widthHandle = $('sidebar-resizer');

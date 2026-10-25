@@ -72,7 +72,7 @@ test('temporary failures retry, and disconnected selections do not poll',async t
 
 // Execute the actual browser detail reader with deferred HTTP responses.
 function detailFixture() {
-  const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+  const source=readFileSync(new URL('../src/web/controller.ts',import.meta.url),'utf8');
   const state={selectedId:'a',selectionVersion:1,detailVersion:1,detail:{thread:{id:'a'},turns:[]},loadedOlderHistory:false,
     status:{instanceId:'one',connection:{state:'connected'},controlledThreads:[],handoffs:[]}};
   const requests=[],applied=[],cacheReads=[],navigationUpdates=[];
@@ -83,11 +83,11 @@ function detailFixture() {
     applyDetail:data=>{state.detail=data;applied.push(data);},
   });
   context.restoreDetail=createDetailRecovery({state,host:'test',read:context.readDetailCache,write:async()=>{},apply:context.applyDetail}).restore;
-  vm.runInContext(source.slice(source.indexOf('const readSelectedDetail='),source.indexOf('async function refreshWorkspace('))+'\nglobalThis.read=refreshSelected;',context);
-  const ast=ts.createSourceFile('app.js',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+  runController(source.slice(source.indexOf('const readSelectedDetail='),source.indexOf('async function refreshWorkspace('))+'\nglobalThis.read=refreshSelected;',context);
+  const ast=ts.createSourceFile('controller.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
   const applyStatus=ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='applyStatus');
   assert.ok(applyStatus,'status controller exists');
-  vm.runInContext(applyStatus.getText(ast)+'\nglobalThis.status=applyStatus;',context);
+  runController(applyStatus.getText(ast)+'\nglobalThis.status=applyStatus;',context);
   return {state,requests,applied,cacheReads,navigationUpdates,context,read:context.read,status:context.status};
 }
 test('late thread and connection replies cannot overwrite a new selection; duplicate reads coalesce',async()=>{
@@ -360,3 +360,5 @@ test('status migration preserves native unknown fields and ignores an older revi
  applyControllerStatus(state,{...incoming,revision:2,opaque:{incorrect:true}},retired);
  assert.equal(state.status,incoming);assert.equal(state.detailVersion,0);assert.equal(state.csrf,'token');
 });
+
+function runController(code,context){return vm.runInContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,context);}

@@ -19,6 +19,8 @@ export function turnFiles(items,cwd='') {
   return [...files.values()];
 }
 
+/** @param {import('../src/contracts/native').NativeItem[]} items
+ * @param {{turnId?:string,cwd?:string,uncertain?:boolean}} [options] */
 export function renderTurnFiles(items,{turnId,cwd='',uncertain=false}={}) {
   const files=turnFiles(items,cwd);
   if(!files.length)return null;

@@ -1,4 +1,4 @@
-interface Turn {id: string}
+interface Turn {id?: string}
 interface Detail<T> {turns?: T[]; historySource?: string}
 interface State<T> {
   historyCursor: string | null;
@@ -33,7 +33,7 @@ export function createHistoryPagination<T extends Turn>({state, busy, action, re
       }
       if (id !== state.selectedId || version !== state.selectionVersion) return;
       const old = new Map(turns().map(turn => [turn.id, turn]));
-      const all = [...[...(data.data || [])].reverse(), ...turns()], seen = new Set<string>();
+      const all = [...[...(data.data || [])].reverse(), ...turns()], seen = new Set<string|undefined>();
       state.detail!.turns = all.filter(turn => !seen.has(turn.id) && seen.add(turn.id)).map(turn => old.get(turn.id) || turn);
       state.historyCursor = data.nextCursor || null;
       state.loadedOlderHistory = true;

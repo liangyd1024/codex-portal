@@ -1,9 +1,10 @@
+import type {NativeStatus} from '../../contracts/native';
 interface Dependencies<Request> {
   state: {busy: Set<string>; desktopMode: boolean; selectedId: string | null; selectionVersion: number};
   newChatOpen: () => boolean;
   context: () => string;
-  turns: () => {id: string; status: unknown}[];
-  kind: (status: unknown) => string;
+  turns: () => {id?: string; status?: NativeStatus}[];
+  kind: (status: NativeStatus|undefined) => string;
   controlled: () => boolean;
   running: () => boolean;
   feedback: {
