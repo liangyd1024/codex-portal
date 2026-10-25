@@ -1,5 +1,7 @@
 # 框架迁移：实现与验收记录
 
+主控制器状态初始化已迁入严格 TypeScript，提交 `f1bd552`／干净资源 `f33496d2` 已更新独立预览。输入与新建共 67 对比较一致，831 Node／74 Python 和真实入口八样本通过。完整控制器迁移及整体首屏性能仍未完成，见[状态契约报告](verification-framework-controller-state.md)。
+
 管理会话选择器优化 `55f85ec`／干净资源 `c8be4bf5` 已更新独立预览。四视口 120 对功能比较一致，828 Node／74 Python 通过；480 个性能样本显示小列表改善，首轮长列表高值及加长重测均保留。真实入口八样本正常，整体性能及剩余迁移未全部完成，详见[选择器复验](verification-framework-automations.md#候选选项独立订阅优化与复验)。
 
 连接、普通断开、接管和交还已迁入严格 TypeScript 服务，产品提交 `6953d05`；独立预览为干净构建 `bcd522f`／资源 `a3479e70`。四视口连接维护流程及 20 对接管／交还比较一致，828 Node／74 Python 和八个真实启动样本通过。详见[连接流程验收](verification-framework-connection-actions.md)。整体迁移与验收仍未完成。
