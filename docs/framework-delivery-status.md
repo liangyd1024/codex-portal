@@ -26,7 +26,7 @@
 | DOM 子树由一个渲染器管理，保留消息解析和节点协调 | 已有组件通过独立 store 或组件内原生适配控制；消息算法仍保留 | 部分实现；Shell 内若干静态节点仍由 app.js 写属性或内容，需要明确组件边界并收敛 |
 | 原 CSS、加载顺序、类名、变量和媒体查询不变 | framework-http 的构建 CSS 字节与顺序测试；专项样式比较 | CSS 契约已检查；全功能所有视觉状态不能仅据此判为通过 |
 | Node + TypeScript + Fastify，路由及应用服务拆分 | src/server/application.ts、core.ts、http.ts、routes、services | 结构已实现；不再笼统列为“尚未拆分服务端” |
-| HTTP／JSON／SSE、鉴权顺序、文件流与错误契约保持 | test/framework-http.test.mjs 的连接、会话、工作区、文件、媒体、桌面、访问、系统、请求与静态资源差分 | 模拟协议覆盖已建立；[当前真实服务复核](verification-framework-live-boundaries.md)已在 `41605a7` 复验只读 HTTP、安全边界、SSE 客户端隔离及手机未配对 HTTPS，共 17 组 HTTP／HTTPS 对照及六个 SSE 测试客户端；不等于真实业务全部完成 |
+| HTTP／JSON／SSE、鉴权顺序、文件流与错误契约保持 |test/framework-http.test.mjs 的连接、会话、工作区、文件、媒体、桌面、访问、系统、请求与静态资源差分；[原始正式源码接口复核](verification-framework-original-baseline-http.md)另对实际 `227dbfe` 导出源码与 `accb11f` 指定构建运行 30 项检查 | 模拟协议覆盖已建立；[当前真实服务复核](verification-framework-live-boundaries.md)已在 `41605a7` 复验只读 HTTP、安全边界、SSE 客户端隔离及手机未配对 HTTPS，共 17 组 HTTP／HTTPS 对照及六个 SSE 测试客户端；不等于真实业务全部完成 |
 | 禁止框架默认解析、类型转换、填默认值及裁剪字段 | http.ts 在 onRequest 接入兼容分发；关闭转换并拒绝意外 Schema 编译 | 代码与回归具备证据；保留公共协议层 |
 | 复用 RPC、IPC、SSH、Python；不替代原生执行语义 | core 与 services 调用既有 lib 适配器，原生 payload 保持透传 | 边界保持；正式与预览配置及运行时公开字段一致，本轮严格 SSH 身份检查、预览连接及模型／项目／侧栏真实读取已通过，远端进程未重启；完整远程操作链路仍未通过 |
 | 原文、未知字段、连接 ID、存储键和草稿兼容 | API、事件、合并、草稿及各服务回归；未做数据格式迁移 | 有限定行为证据；还需最终集成检查，不能泛化为所有原生能力已验 |

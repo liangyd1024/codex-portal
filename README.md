@@ -270,6 +270,14 @@ python3 -m unittest discover -s test -p 'test_*.py'
 
 参考：[SQLite Online Backup API](https://www.sqlite.org/backup.html)、[age](https://github.com/FiloSottile/age)、[GitHub 大文件说明](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github)。
 
+框架迁移可对指定原始提交和指定构建目录运行接口差分。构建目录须为绝对路径，且包含构建生成的 `manifest.json`：
+
+```sh
+node scripts/verify-framework-baseline.mjs <基准提交> /absolute/path/to/build
+```
+
+该命令验证构建资源摘要，将基准提交导出到全新临时目录，使用模拟目标运行 HTTP 与页面占用测试。仅将临时基准的 VERSION 设为测试值；不改基准应用源码，不操作正式服务，不自动清理目录。结果及日志保存在命令输出的临时目录。它不替代浏览器或真实原生接口验收。
+
 项目验证范围和历史结果见 [验证文档](docs/README.md)。公开记录中的环境信息均使用通用标识，不提供个人部署入口或备份位置。
 
 测试入口 `npm test` 与网页更新共用 `scripts/run-tests.mjs`。网页更新直接使用服务的 Node 路径，不依赖后台 PATH 中存在 npm。Node 测试的保留目录等诊断信息使用 `t.diagnostic()`，避免旧 Node 测试运行器混合解析中文 stdout 时的序列化缺陷；不要以跳过测试或失败自动重跑代替修复。
