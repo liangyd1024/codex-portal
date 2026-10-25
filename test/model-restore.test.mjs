@@ -6,6 +6,10 @@ import ts from 'typescript';
 const modelSource=readFileSync(new URL('../src/web/services/model-selection.ts',import.meta.url),'utf8');
 const modelOutput=ts.transpileModule(modelSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const {createModelSelection}=await import('data:text/javascript;base64,'+Buffer.from(modelOutput).toString('base64'));
+const readerSource=readFileSync(new URL('../src/web/services/sidebar-reader.ts',import.meta.url),'utf8');
+const readerOutput=ts.transpileModule(readerSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {createSidebarReader}=await import('data:text/javascript;base64,'+Buffer.from(readerOutput).toString('base64'));
+
 
 
 test('thread preferences survive history arriving before the model catalog',()=>{
@@ -27,10 +31,10 @@ test('sidebar snapshot restores projects and chats without filtering to the sele
  const ctx=vm.createContext({state,threadSearch:'',createdThreads:new Map(),URLSearchParams,
   loadProjects:async()=>{state.projects=snapshot.projects;},connected:()=>true,usable:()=>true,$:()=>({scrollTop:0}),renderThreads(){},renderControls(){},
   requestAnimationFrame(){},loadVisibleThreads(){},loadSidebarActivity(){},
-  api:async url=>{requests.push(url);return snapshot;},recordError:e=>{throw e;},toast(){},messageOf:String});
- vm.runInContext(source.slice(source.indexOf('async function readThreads('),source.indexOf('async function loadSidebarActivity(')),ctx);
+  api:async url=>{requests.push(url);return url.startsWith('/api/sidebar/activity?')?{accountScope:'test',data:[]}:snapshot;},recordError:e=>{throw e;},toast(){},messageOf:String});
+ Object.assign(ctx,createSidebarReader({...ctx,element:ctx.$}));
  await ctx.readThreads();
- assert.equal(requests.length,1);
+ assert.equal(requests.length,2);
  const url=new URL(requests[0],'http://test');assert.equal(url.pathname,'/api/sidebar');
  assert.equal(url.searchParams.has('cwd'),false);assert.equal(url.searchParams.has('projectId'),false);
  assert.deepEqual(state.projects,snapshot.projects);assert.deepEqual(Array.from(state.threads,t=>t.id),['a','b']);

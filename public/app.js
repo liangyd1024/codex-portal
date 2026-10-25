@@ -1,3 +1,4 @@
+import {createSidebarReader} from '../src/web/services/sidebar-reader';
 import {createModelSelection} from '../src/web/services/model-selection';
 import {createLiveTurns} from '../src/web/services/live-turns';
 import {createEventHandler} from '../src/web/services/events';
@@ -728,60 +729,11 @@ const catalogs=createCatalogReaders({state,version:()=>accountViewVersion,modelI
   readModels:path=>api(path),readProjects:()=>api('/api/projects'),renderModels,renderProjects});
 const {loadModels,loadProjects}=catalogs;
 const createdThreads = new Map();
-let threadSearch = '';
 const loadThreads = createSidebarLoader({
   key:append=>JSON.stringify([state.status?.instanceId,state.status?.connection?.connectedAt,state.search,state.sidebarArchived,state.selectedId,append?state.threadCursor:null,append]),
   read:append=>readThreads(append,true),
 });
-async function readThreads(append = false, reportFailure = false) {
-  if (!connected() || (append && (state.loadingThreads || !state.threadCursor))) return;
-  // Restore project metadata before grouping the cross-project thread list.
-  if (state.projectId && !state.projects.length) await loadProjects();
-  const seq = ++state.listVersion; state.loadingThreads = true; state.threadPageError = false;
-  if (!append) {
-    if (threadSearch !== state.search) {
-      state.threads = [...createdThreads.values()].filter(t => !state.search || threadName(t).includes(state.search));
-      $('project-list').scrollTop = 0;
-    }
-    threadSearch = state.search; state.threadCursor = null;
-  }
-  renderThreads();
-  const q = new URLSearchParams({activity:'deferred'}); if (state.search) q.set('search',state.search); if(state.selectedId)q.set('selectedId',state.selectedId);
-  if (append && state.threadCursor) q.set('cursor',state.threadCursor);
-  try {
-    if(state.sidebarArchived)q.set('archived','true');
-    const d = await api('/api/sidebar?' + q); if (seq !== state.listVersion) return;
-    if(state.sidebar?.accountScope===d.accountScope){const previous=new Map(state.threads.map(t=>[t.id,t.activity]));for(const t of d.data||[])if(!t.activity&&previous.has(t.id))t.activity=previous.get(t.id);}
-    const accountChanged=state.sidebar&&state.sidebar.accountScope!==d.accountScope;
-    if(accountChanged){createdThreads.clear();if(append){void loadThreads(false,false,true);return;}}
-    state.sidebar=d;state.projects=d.projects||[];if(d.selectedThread?.id===state.selectedId)state.selectedArchived=!!d.selectedThread.archived;
-    state.threadListSource = d.historySource || null;
-    for (const thread of d.data || []) createdThreads.delete(thread.id);
-    const pending = state.sidebarArchived?[]:[...createdThreads.values()].filter(t => !state.search || threadName(t).includes(state.search));
-    const all = append ? [...state.threads,...(d.data || [])] : [...pending,...(d.data || [])];
-    const seen = new Set(); state.threads = all.filter(t => !seen.has(t.id) && seen.add(t.id)); state.threadCursor = d.nextCursor || null;
-    void loadSidebarActivity(d,seq);
-  } catch (e) { if (seq === state.listVersion) { state.threadPageError = true; recordError(e,'threads'); toast(messageOf(e),true); } if (reportFailure) throw e; }
-  finally { if (seq === state.listVersion) { state.loadingThreads = false; renderThreads(); renderControls(); if (!state.threadPageError) requestAnimationFrame(loadVisibleThreads); } }
-}
-async function loadSidebarActivity(snapshot,seq){
-  const instance=state.status?.instanceId,connection=state.status?.connection?.connectedAt;
-  const current=()=>seq===state.listVersion&&state.sidebar===snapshot&&connected()&&state.status?.instanceId===instance&&state.status?.connection?.connectedAt===connection;
-  const ids=(snapshot.data||[]).map(t=>t.id);
-  for(let offset=0;offset<ids.length&&current();offset+=200){
-    try{
-      const data=await api('/api/sidebar/activity?'+new URLSearchParams({ids:JSON.stringify(ids.slice(offset,offset+200))}));
-      if(!current()||data.accountScope!==snapshot.accountScope)return;
-      const activity=new Map((data.data||[]).map(t=>[t.id,t.activity]));
-      for(const t of state.threads)if(activity.has(t.id)){if(activity.get(t.id))t.activity=activity.get(t.id);else delete t.activity;}
-      renderThreads();
-    }catch(error){if(current())recordError(error,'sidebar-activity');return;}
-  }
-}
-function loadVisibleThreads() {
-  const list = $('project-list');
-  if (list.clientHeight > 0 && list.scrollHeight - list.scrollTop - list.clientHeight < 120) loadThreads(true);
-}
+const {readThreads,loadSidebarActivity,loadVisibleThreads}=createSidebarReader({state,createdThreads,connected,loadProjects,threadName,element:$,renderThreads,renderControls,api,loadThreads,recordError,toast,messageOf,requestAnimationFrame});
 const {saveSoon:saveDetailSoon,restore:restoreDetail,cancelScheduled:cancelDetailSave}=createDetailRecovery({state,host:targetHost,read:readDetailCache,write:writeDetailCache,apply:applyDetail});
 function applyDetail(data, resetModels = false) {
   if(data.goalError&&state.detail?.thread?.id===data.thread?.id)data.goal=state.detail.goal;
