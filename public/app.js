@@ -345,11 +345,12 @@ function renderControls() {
   const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
   publishConnectionSelect({disabled:creating});
   $('new-thread').disabled = !!state.status?.loginRecovery || !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels;
-  publishConnectionSettings({connectDisabled:state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release')});
   setWelcomeDisabled(connectionPending() || state.busy.has('connect') || state.busy.has('disconnect') || (connected() && (!ready || !state.models.length||!featureReady('create'))));
-  publishConnectionSettings({reloadDisabled:!ready||!featureReady('release')||state.busy.has('release'),
+  publishConnectionSettings({connectDisabled:state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release'),
+    reloadDisabled:!ready||!featureReady('release')||state.busy.has('release'),
     releaseDisabled:!ready || !featureReady('release') || !state.status?.service?.running || state.busy.has('release'),
-    releaseLabel:state.busy.has('release') ? '正在检查并释放…' : '停止目标服务（影响所有入口）'});
+    releaseLabel:state.busy.has('release') ? '正在检查并释放…' : '停止目标服务（影响所有入口）',
+    releaseReason:!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。'});
   $('refresh-projects').disabled = !ready || state.refreshing; $('refresh-all').disabled = state.refreshing || state.busy.has('refresh');
   $('thread-search').disabled = !connected();
   publishModelSelect('model-select',{disabled:!ready || !state.models.length || state.loadingModels});
@@ -374,7 +375,6 @@ function renderControls() {
   $('new-thread').setAttribute('aria-description',!ready ? '连接恢复后可新建会话。' : !state.models.length ? '正在等待目标机器模型目录。' : creating ? '正在创建，请稍候。' : '');
   controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
   controlReason('takeover',!ready ? '连接恢复后可接管。' : switching ? '正在接管，请稍候。' : handing ? '交还状态正在确认，请稍候。' : '当前引擎暂不支持接管。');
-  publishConnectionSettings({releaseReason:!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。'});
   buttonView.stop.text=stopLabel;
   buttonView.stop.title=stopping?'停止请求已发出，等待目标确认。':active?'停止当前轮次':'停止后台命令';
   buttonView.stop.label=stopping?stopLabel:buttonView.stop.title;
