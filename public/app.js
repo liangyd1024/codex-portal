@@ -1,3 +1,4 @@
+import {createModelSelection} from '../src/web/services/model-selection';
 import {createLiveTurns} from '../src/web/services/live-turns';
 import {createEventHandler} from '../src/web/services/events';
 import {applyControllerStatus} from '../src/web/services/connection-status';
@@ -446,36 +447,7 @@ function renderThreads() {
   $('more-threads').disabled=state.loadingThreads;
   $('more-threads').onclick=()=>loadThreads(Boolean(state.threadCursor));
 }
-function modelId(m) { return m.model || m.id; }
-function modelFor(id) { return state.models.find(m => modelId(m) === id || m.id === id); }
-function effortsFor(id) {
-  const m = modelFor(id); return (m?.supportedReasoningEfforts || []).map(e => typeof e === 'string' ? {value:e,label:effortNames[e] || e,description:''} : {value:e.reasoningEffort || e.effort,label:effortNames[e.reasoningEffort || e.effort] || e.reasoningEffort || e.effort,description:e.description || ''}).filter(e => e.value);
-}
-function defaultEffort(id) { const m = modelFor(id), opts = effortsFor(id); return opts.some(e => e.value === m?.defaultReasoningEffort) ? m.defaultReasoningEffort : opts[0]?.value || ''; }
-function fillModels(select, selected) {
-  const options=state.models.length?state.models.map(m=>({value:modelId(m),label:m.displayName||modelId(m),title:m.description||''})):[{value:'',label:state.loadingModels?'正在读取模型…':'等待模型目录'}];
-  const value=state.models.some(m=>modelId(m)===selected)?selected:state.models.length?modelId(state.models.find(m=>m.isDefault)||state.models[0]):'';
-  renderSelectOptions(select,options,value);
-}
-function fillEfforts(select, model, effort) {
-  const opts=effortsFor(model);
-  renderSelectOptions(select,opts.length?opts.map(e=>({value:e.value,label:e.label,title:e.description})):[{value:'',label:'无可用档位'}],opts.some(e=>e.value===effort)?effort:defaultEffort(model));
-}
-function renderModels(preferThread = false) {
-  const t = currentThread();
-  if (preferThread && !newChatOpen && t?.model) state.model = modelFor(t.model) ? modelId(modelFor(t.model)) : t.model;
-  if (preferThread && !newChatOpen && t?.reasoningEffort) state.effort = t.reasoningEffort;
-  // Preserve restored preferences until the model catalog arrives.
-  if (!state.models.length) {
-    fillModels($('model-select'),state.model); fillEfforts($('effort-select'),state.model,state.effort);
-    renderControls(); return;
-  }
-  state.model = modelId(modelFor(state.model) || state.models.find(m => m.isDefault) || state.models[0]);
-  if (preferThread && !newChatOpen && t?.reasoningEffort) state.effort = t.reasoningEffort;
-  if (!effortsFor(state.model).some(e => e.value === state.effort)) state.effort = defaultEffort(state.model);
-  fillModels($('model-select'),state.model); fillEfforts($('effort-select'),state.model,state.effort);
-  renderControls();
-}
+const {modelId,modelFor,effortsFor,defaultEffort,fillModels,fillEfforts,renderModels}=createModelSelection({state,effortNames,newChatOpen:()=>newChatOpen,currentThread,element:$,renderSelectOptions,renderControls});
 
 function toolDetails(item, title, iconName = 'terminal') {
   const d = el('details','tool-block'); d.dataset.itemId = item.id || title; d.dataset.running = String(['inProgress','in_progress','running'].includes(typeOf(item.status)));

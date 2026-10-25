@@ -2,18 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import ts from 'typescript';
+const modelSource=readFileSync(new URL('../src/web/services/model-selection.ts',import.meta.url),'utf8');
+const modelOutput=ts.transpileModule(modelSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {createModelSelection}=await import('data:text/javascript;base64,'+Buffer.from(modelOutput).toString('base64'));
+
 
 test('thread preferences survive history arriving before the model catalog',()=>{
- const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
- const fn=source.slice(source.indexOf('function renderModels('),source.indexOf('\n}\n',source.indexOf('function renderModels('))+3);
- const state={models:[],model:'',effort:''};
- const ctx={newChatOpen:false,state,currentThread:()=>({model:'saved',reasoningEffort:'high'}),modelFor:id=>state.models.find(m=>m.model===id),modelId:m=>m.model,effortsFor:id=>state.models.find(m=>m.model===id)?.efforts||[],defaultEffort:()=> 'low',$:()=>({}),fillModels:()=>{},fillEfforts:()=>{},renderControls:()=>{}};
- vm.createContext(ctx);vm.runInContext(fn+';renderModels(true)',ctx);
+ const state={models:[],model:'',effort:'',loadingModels:false};
+ const selection=createModelSelection({state,effortNames:{},newChatOpen:()=>false,currentThread:()=>({model:'saved',reasoningEffort:'high'}),element:()=>({}),renderSelectOptions(){},renderControls(){}});
+ selection.renderModels(true);
  assert.equal(state.model,'saved');assert.equal(state.effort,'high');
- state.models=[{model:'default',isDefault:true,efforts:[{value:'low'}]},{model:'saved',efforts:[{value:'low'},{value:'high'}]}];
- vm.runInContext('renderModels()',ctx);
+ state.models=[{id:'default',model:'default',isDefault:true,supportedReasoningEfforts:['low']},{id:'saved',model:'saved',supportedReasoningEfforts:['low','high']}];
+ selection.renderModels();
  assert.equal(state.model,'saved');assert.equal(state.effort,'high');
- state.effort='low';vm.runInContext('renderModels()',ctx);assert.equal(state.effort,'low');
+ state.effort='low';selection.renderModels();assert.equal(state.effort,'low');
 });
 
 
@@ -31,4 +34,14 @@ test('sidebar snapshot restores projects and chats without filtering to the sele
  const url=new URL(requests[0],'http://test');assert.equal(url.pathname,'/api/sidebar');
  assert.equal(url.searchParams.has('cwd'),false);assert.equal(url.searchParams.has('projectId'),false);
  assert.deepEqual(state.projects,snapshot.projects);assert.deepEqual(Array.from(state.threads,t=>t.id),['a','b']);
+});
+
+test('model aliases and mixed effort entries retain native fields and choose only advertised efforts',()=>{
+ const native={id:'alias',model:'native-model',defaultReasoningEffort:'high',future:{keep:true},supportedReasoningEfforts:['custom',{reasoningEffort:'medium',description:'说明',future:true},{effort:'high'},{description:'无值不显示'}]};
+ const state={models:[native],model:'alias',effort:'missing',loadingModels:false},options=[];
+ const c=createModelSelection({state,effortNames:{medium:'中',high:'高'},newChatOpen:()=>false,currentThread:()=>null,element:id=>({id}),renderSelectOptions:(node,entries,value)=>options.push({node,entries,value}),renderControls(){}});
+ assert.equal(c.modelFor('alias'),native);assert.equal(c.modelFor('native-model'),native);
+ assert.deepEqual(c.effortsFor('alias'),[{value:'custom',label:'custom',description:''},{value:'medium',label:'中',description:'说明'},{value:'high',label:'高',description:''}]);
+ c.renderModels();assert.equal(state.model,'native-model');assert.equal(state.effort,'high');assert.equal(options.at(-1).value,'high');assert.deepEqual(native.future,{keep:true});
+ state.models=[{id:'replacement',supportedReasoningEfforts:[]}];c.renderModels();assert.equal(state.model,'replacement');assert.equal(state.effort,'');assert.deepEqual(options.at(-1).entries,[{value:'',label:'无可用档位'}]);
 });

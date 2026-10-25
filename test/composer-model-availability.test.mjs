@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import ts from 'typescript';
+const modelSource=readFileSync(new URL('../src/web/services/model-selection.ts',import.meta.url),'utf8');
+const modelOutput=ts.transpileModule(modelSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {createModelSelection}=await import('data:text/javascript;base64,'+Buffer.from(modelOutput).toString('base64'));
+
 const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 const catalog=[{id:'catalog-alias',model:'test-model',displayName:'Test Model',supportedReasoningEfforts:['medium'],defaultReasoningEffort:'medium'}];
 function fixture({active=false,models=catalog,model='test-model',effort='medium',ready=true,featureReady=()=>true}={}) {
@@ -9,7 +14,7 @@ function fixture({active=false,models=catalog,model='test-model',effort='medium'
   const state={models,model,effort,status:{},busy:new Set()};
   const c=vm.createContext({state,$,input:$('message-input'),active,ready,own:true,posting:false,handing:false,stopping:false,background:{state:'idle'},switching:false,handoff:null,followUp:'queue',attachments:null,annotations:null,touchInput:()=>false,featureReady,effortNames:{},newChatOpen:false,currentThread:()=>null,renderControls(){},renderSelectOptions:(select,options,value)=>{select.options=options;select.value=value;},clear:n=>{n.children=[];},el:()=>({}),});
   for(const id of ['model-select','effort-select'])$(id).append=function(child){this.children.push(child);};
-  vm.runInContext(source.slice(source.indexOf('function modelId('),source.indexOf('\nfunction toolDetails(')),c);
+  Object.assign(c,createModelSelection({state,effortNames:{},newChatOpen:()=>c.newChatOpen,currentThread:c.currentThread,element:$,renderSelectOptions:c.renderSelectOptions,renderControls:c.renderControls}));
   const render=()=>vm.runInContext('{'+source.slice(source.indexOf('  const hasModel ='),source.indexOf("  $('new-thread').setAttribute('aria-description'"))+'globalThis.buttonView=buttonView;}',c);
   return {state,$,render,view:()=>c.buttonView,setActive:value=>{c.active=value;},renderModels:()=>c.renderModels()};
 }
