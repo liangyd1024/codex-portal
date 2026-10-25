@@ -1,3 +1,4 @@
+import {createLiveTurns} from '../src/web/services/live-turns';
 import {createEventHandler} from '../src/web/services/events';
 import {applyControllerStatus} from '../src/web/services/connection-status';
 import {createThreadViewReporter} from '../src/web/services/thread-view';
@@ -93,7 +94,7 @@ import {installMobile,showMobileError} from '../src/web/components/MobileAccess.
 let composer;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from './detail-cache.js';
 import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
-import {updateExtensionNotice, renderExtensionNotice, userContentKey, mergeLiveTurns, taskNotice, backgroundActivity} from './connection-state.js';
+import {updateExtensionNotice, renderExtensionNotice, mergeLiveTurns, taskNotice, backgroundActivity} from './connection-state.js';
 function savedHost() { try { return localStorage.getItem('rcm.connection'); } catch { return null; } }
 const requestedHost = new URL(location.href).searchParams.get('host');
 let pendingNotification=null, notificationNavigationReady=false;
@@ -133,6 +134,7 @@ const state = createControllerState({
   desktopMode:Boolean(savedView().desktopMode),selectedId:savedView().selectedId||null,projectId:savedView().projectId||null,
   drafts:new DraftStore({storage:()=>sessionStorage,host:targetHost,onError:()=>toast('浏览器无法保存草稿，请先复制重要内容。',true)}),
 });
+const {upsertTurn,ensureTurn,upsertItem}=createLiveTurns({state,turns});
 const questionDrafts=new QuestionDrafts(sessionStorage,targetHost,()=>toast('问题草稿暂未保存，请先复制回答。',true));
 const newDraftId='local:new-chat-draft';
 const newDraft=new NewChatDraft(sessionStorage,'rcm.new-chat.'+targetHost);
@@ -981,17 +983,6 @@ const messageInput=createMessageInput({input:()=>$('message-input'),id:inputId,s
   persist:(id,value)=>state.drafts.set(id,value),render:()=>renderControls(),send:(...args)=>sendMessage(...args),
   canSend:()=>!$('send-message').disabled,touch:touchInput,shouldSend:shouldSendOnEnter,now:()=>performance.now(),style:input=>getComputedStyle(input)});
 function resizeInput() { messageInput.resize(); }
-function upsertTurn(t) {
-  if (!state.detail) return;
-  state.detail.turns = mergeLiveTurns(turns(),[t]);
-}
-function ensureTurn(id) {
-  if (!state.detail) return null;
-  let t = turns().find(t => t.id === id);
-  if (!t) { t = {id:id || 'live',status:'inProgress',items:[]}; state.detail.turns = [...turns(),t]; }
-  return t;
-}
-function upsertItem(turnId,item) { const t = ensureTurn(turnId); if (!t) return; if (item.type === 'userMessage') t.items = t.items.filter(old => !old.localAccepted || userContentKey(old.content) !== userContentKey(item.content)); const i = t.items.findIndex(x => x.id === item.id); if (i >= 0) t.items[i] = mergeLiveTurns([{id:turnId,items:[t.items[i]]}],[{id:turnId,items:[item]}])[0].items[0]; else t.items.push(item); }
 const updateScheduler=createUpdateScheduler({state,defer:(run,delay)=>window.setTimeout(run,delay),cancel:timer=>window.clearTimeout(timer),usable,
   renderMessages:()=>renderMessages(),renderRequests:()=>renderRequests(),renderControls:()=>renderControls(),
   refreshSelected:()=>refreshSelected(),refreshList:()=>loadThreads(false,false,true),report:error=>recordError(error,'thread')});
