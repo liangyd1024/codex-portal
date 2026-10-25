@@ -1,21 +1,12 @@
 import {creationSource} from '../../../public/activity.js';
-export interface Thread {id:string;name?:string;originator?:string;isUnread?:boolean;isPinned?:boolean;sectionId?:string|null;recencyAt?:number;updatedAt?:number;[field:string]:unknown}
-export interface Project {id:string;name:string;roots:string[];[field:string]:unknown}
-export interface Section {id:string;name:string;[field:string]:unknown}
+import type {Sidebar,SidebarThread,SidebarProject,SidebarSection} from './sidebar';
+export type Thread=SidebarThread;
+export type Project=SidebarProject;
+export type Section=SidebarSection;
 export interface MenuEntry {label:string;hidden?:boolean;disabled?:boolean;reason?:string;run?:()=>unknown}
 export type Item={kind:'thread';value:Thread}|{kind:'project';value:Project;children:Item[]};
 export interface Group {id:string;name:string;section?:Section;items:Item[]}
-export interface Controller {
- node:HTMLElement;pending:boolean;drag:Thread|null;
- snapshot:{accountScope:string;archived?:boolean;preferences:{pinned?:string};capabilities:{reorderThread:{supported:boolean}}};
- view:{search?:string;loading?:boolean};operations?:Map<string,unknown>;
- o:{selectedId:()=>string|null;connected:()=>boolean;threadName:(thread:Thread)=>string;relativeTime:(time:number|undefined)=>string;needsAnswer?:(id:string)=>boolean;select:(thread:Thread)=>unknown;newThread:(root:string)=>unknown};
- isExpanded:(key:string)=>boolean;toggle:(key:string)=>void;source:(thread:Thread)=>string|null;
- threadMenu:(thread:Thread)=>MenuEntry[];sectionMenu:(section:Section)=>MenuEntry[];
- openMenu:(anchor:HTMLButtonElement,entries:MenuEntry[])=>void;closeMenu:(restore?:boolean)=>void;
- run:(action:string,target:Thread,extra:Record<string,unknown>)=>unknown;
- render:(snapshot:Controller['snapshot'],view:Controller['view'])=>void;
-}
+export type Controller=Sidebar;
 export interface Badge {className:string;title:string;icon?:string;count?:number}
 export function activitySummary(items:Item[],source:(thread:Thread)=>string|null,needsAnswer?:(id:string)=>boolean):Badge[]{
  const counts=new Map<string,number>();let waiting=0;
@@ -39,7 +30,7 @@ export function treePresentation(groups:Group[],c:Controller):GroupView[]{
  const itemView=(item:Item):ItemView=>{
   if(item.kind==='project')return {kind:'project',raw:item.value,expanded:c.isExpanded('project:'+item.value.id),badges:summary(item.children),children:item.children.map(itemView),createDisabled:!c.o.connected()||!item.value.roots[0]};
   const t=item.value;
-  return {kind:'thread',raw:t,name:c.o.threadName(t),time:c.o.relativeTime(t.recencyAt||t.updatedAt),selected:c.o.selectedId()===t.id,unread:!!t.isUnread,badge:threadBadge(t,c.source(t),!!c.o.needsAnswer?.(t.id)),menu:c.threadMenu(t).some(e=>!e.hidden),draggable:!!(t.isPinned&&c.snapshot.preferences.pinned==='manual'&&c.snapshot.capabilities.reorderThread.supported&&!c.snapshot.archived)};
+  return {kind:'thread',raw:t,name:c.o.threadName(t),time:c.o.relativeTime(t.recencyAt||t.updatedAt),selected:c.o.selectedId()===t.id,unread:!!t.isUnread,badge:threadBadge(t,c.source(t),!!c.o.needsAnswer?.(t.id)),menu:c.threadMenu(t).some(e=>!e.hidden),draggable:!!(t.isPinned&&c.snapshot!.preferences.pinned==='manual'&&c.snapshot!.capabilities.reorderThread.supported&&!c.snapshot!.archived)};
  };
- return groups.flatMap(group=>{const items=group.items.filter(i=>!c.view.search||i.kind==='thread'||i.children.length);if(c.view.search&&!items.length)return[];const badges=summary(group.items);return[{id:group.id,name:group.name,section:group.section,expanded:c.isExpanded('section:'+group.id),badges,items:items.map(itemView),menu:!!group.section&&c.sectionMenu(group.section).some(e=>!e.hidden),menuLabel:group.name+badges.map(b=>b.count??'').join('')}];});
+ return groups.flatMap(group=>{const items=group.items.filter(i=>!c.view!.search||i.kind==='thread'||i.children.length);if(c.view!.search&&!items.length)return[];const badges=summary(group.items);return[{id:group.id,name:group.name,section:group.section,expanded:c.isExpanded('section:'+group.id),badges,items:items.map(itemView),menu:!!group.section&&c.sectionMenu(group.section).some(e=>!e.hidden),menuLabel:group.name+badges.map(b=>b.count??'').join('')}];});
 }

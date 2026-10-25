@@ -392,14 +392,14 @@ function controlReason(id:'new-thread'|'takeover', text:string) {
   note.hidden = hidden;
   if (compact) button.title = hidden ? '新建会话（⌘/Ctrl+N）' : text;
 }
-const sidebar: Sidebar & {drag?:NativeThread|null} = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadName,relativeTime,api,toast,
+const sidebar: Sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadName,relativeTime,api,toast,
   needsAnswer,
   activitySource:(t:NativeThread)=>activitySource(t,{connected:usable(),webActive:(((state.status?.controlledSessions||[]).find(s=>s.id===t.id)?.status||t.status) as {type?:string}|undefined)?.type==='active'}),
   connected:usable,selectedId:()=>state.selectedId,newThread:openNewDialog,
   select:(t:NativeThread)=>{state.projectId=t.projectId!;state.selectedArchived=!!t.archived;saveView();selectThread(t.id);},
   onArchiveView:(archived:boolean)=>{state.sidebarArchived=archived;state.threadCursor=null;state.threads=[];loadThreads();},
   refresh:()=>loadThreads(false,true),
-  changed:async(action:string,t:NativeThread)=>{if(t?.id===state.selectedId&&['archive','restore'].includes(action))state.selectedArchived=action==='archive';await Promise.all([loadThreads(false,true,true),loadStatus()]);if(t?.id===state.selectedId)await refreshSelected();renderControls();},
+  changed:async(action:string,t:import('./services/sidebar').SidebarThread|import('./services/sidebar').SidebarSection|null)=>{if(t?.id===state.selectedId&&['archive','restore'].includes(action))state.selectedArchived=action==='archive';await Promise.all([loadThreads(false,true,true),loadStatus()]);if(t?.id===state.selectedId)await refreshSelected();renderControls();},
 });
 function renderProjects() { renderThreads(); if(newChatOpen&&!state.busy.has('create')){updateNewProjects();renderControls();} }
 function renderThreads() {

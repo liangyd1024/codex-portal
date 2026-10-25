@@ -1,3 +1,4 @@
+import type {SidebarSnapshot} from './services/sidebar';
 import {createWorkspaceState} from './state';
 import type {Model} from './services/model-selection';
 import type {NativeRecord,WorkspaceIdentity} from '../contracts/view';
@@ -6,7 +7,7 @@ import type {NativeConnectionStatus,NativeProject,NativeThread,NativeDetail,Nati
 /** Controller-owned coordination only. Native records remain open and lossless. */
 export interface ControllerState<Drafts extends Map<string,string>> extends WorkspaceIdentity {
  status:NativeConnectionStatus|null;models:Model[];projects:NativeProject[];threads:NativeThread[];detail:NativeDetail|null;
- sidebar:NativeRecord|null;sidebarArchived:boolean;selectedArchived:boolean;projectId:string|null;search:string;
+ sidebar:SidebarSnapshot|null;sidebarArchived:boolean;selectedArchived:boolean;projectId:string|null;search:string;
  threadCursor:string|null;historyCursor:string|null;loadedOlderHistory:boolean;
  model:string;effort:string;csrf:string;busy:Set<string>;loadingThreads:boolean;loadingModels:boolean;loadingProjects:boolean;threadListSource:string|null;
  runtimeNotices:Map<string,Map<string,NativeRecord>>;loadingDetail:boolean;

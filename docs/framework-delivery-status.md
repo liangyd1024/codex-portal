@@ -43,7 +43,7 @@
 | 工作项 | 当前源码证据 | 完成条件 |
 | --- | --- | --- |
 | 主控制器类型化 | entry.tsx 加载 src/web/controller.ts；public/app.js 保留 JS 导入入口；native 已知字段及未知字段契约纳入严格检查 | 本轮完成主控制器类型化，60 项相关及完整 902／74 项回归通过；24 组生命周期和 27 组输入对照一致，见[报告](verification-framework-controller-types.md)；实际预览已更新到 eb1eb6e，并通过四视口真实入口启动检查 |
-| 剩余 UI 控制器边界 | public/sidebar.js、composer.js、goal-toolbar.js、mobile-ui.js、turn-navigation.js 仍含控制逻辑；多个 React 视图已安装，但控制器语言和所有权并未全部收敛 | 区分应用协调与确需保留的 DOM／浏览器适配；逐模块提供类型契约并验证行为，不能仅按扩展名宣称完成 |
+| 剩余 UI 控制器边界 | public/sidebar.js 已保留为类型化侧栏服务的导出入口；composer.js、goal-toolbar.js、mobile-ui.js、turn-navigation.js 仍含控制逻辑；多个 React 视图已安装，但控制器语言和所有权并未全部收敛 | 区分应用协调与确需保留的 DOM／浏览器适配；逐模块提供类型契约并验证行为，不能仅按扩展名宣称完成 |
 | Shell 静态节点与运行属性 | Shell.tsx 创建搜索框、更多会话按钮、会话标题、控制说明、输入框等，controller.ts 仍直接修改相关内容／属性 | 明确每个节点的唯一运行期所有者；迁移时保留 IME、焦点、选区、触控、滚动和事件顺序 |
 | 正文算法稳定容器 | 原解析、缓存与协调算法保留，主控制器仍协调消息区域 | 将协调边界类型化并保持稳定容器；不为迁移重建正文或改变原文 |
 | 启动失败恢复边界 | public/bootstrap.js 在应用模块加载前提供超时、重试和网络恢复；test/bootstrap.test.mjs 覆盖该阶段 | 保留不依赖 React 成功加载的恢复能力；不能机械地把此入口搬进尚未加载的组件 |
@@ -83,3 +83,5 @@
 另完成 [三类空视图延迟注册试验](verification-framework-empty-portal-experiment.md)：八个诊断样本的启动提交从 72 次降为 66 次，但 16 次首屏样本没有测得耗时收益；八个首次显示流程只有限定结构与焦点检查，不能作为全功能通过。试验代码已撤回，恢复后的资源与实际 2dd1d23 一致，未更新服务。
 
 本轮另完成[主控制器 TypeScript 迁移](verification-framework-controller-types.md)。新构建资源为 `d182128aa18aae911a16bb16036da6c137d38246cd698aea1f3f8c91bff5d72e`，提交 eb1eb6e 后已核对干净构建指纹并更新真实预览，四视口八个真实启动样本通过。当前 SSH 重试仍超时，不能标为通过。
+
+本轮继续完成[侧栏控制器类型迁移](verification-framework-sidebar-controller.md)，严格类型检查、57 项相关回归和完整 902／74 项测试通过；重命名归档与分区操作各 28 组、弹窗输入 20 组四视口对照一致；启动采样未证明提速。该侧栏构建尚未更新真实预览，后续验证范围见专项报告。
