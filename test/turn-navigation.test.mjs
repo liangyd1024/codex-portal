@@ -104,3 +104,26 @@ test('jump reads only until the requested original turn and rejects stale comple
  state.turns=[];options.loadEarlier=async()=>{current=false;state.turns=[{id:'target'}];return true;};
  assert.equal(await loadTurnUntil('target',options),false);
 });
+
+test('targeted history waits for the current page and stops after it contains the requested turn',async()=>{
+ const {loadTurnUntil}=await import('../public/turn-navigation.js');
+ const state={turns:[],hasEarlier:true,cursor:'existing-page',loading:true};let waits=0,reads=0;
+ const found=await loadTurnUntil('wanted',{context:()=>state,isCurrent:()=>true,wait:async()=>{waits++;state.loading=false;state.turns=[{id:'wanted'}];},loadEarlier:async()=>{reads++;return true;}});
+ assert.equal(found,true);assert.equal(waits,1);assert.equal(reads,0);
+});
+test('targeted history cancellation during another pending page never starts a new read',async()=>{
+ const {loadTurnUntil}=await import('../public/turn-navigation.js');
+ const state={turns:[],hasEarlier:true,cursor:'existing-page',loading:true};let current=true,reads=0;
+ const found=await loadTurnUntil('wanted',{context:()=>state,isCurrent:()=>current,wait:async()=>{current=false;state.loading=false;},loadEarlier:async()=>{reads++;return true;}});
+ assert.equal(found,false);assert.equal(reads,0);
+});
+test('targeted history terminates on failed or stationary pages and propagates a transport error',async()=>{
+ const {loadTurnUntil}=await import('../public/turn-navigation.js');
+ for(const outcome of ['failed','stationary','error']){
+  const state={turns:[],hasEarlier:true,cursor:'unchanged',loading:false};let reads=0;
+  const error=new Error('fixture history unavailable');
+  const result=loadTurnUntil('wanted',{context:()=>state,isCurrent:()=>true,loadEarlier:async options=>{assert.deepEqual(options,{deferRender:true});reads++;if(outcome==='error')throw error;return outcome==='stationary';}});
+  if(outcome==='error')await assert.rejects(result,e=>e===error);else assert.equal(await result,false);
+  assert.equal(reads,1);assert.deepEqual(state,{turns:[],hasEarlier:true,cursor:'unchanged',loading:false});
+ }
+});
