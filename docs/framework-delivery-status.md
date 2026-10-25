@@ -9,9 +9,9 @@
 | 重构分支 | `refactor/framework-migration`，独立 worktree；本次审计前工作区干净 |
 | 正式网页 4317 | `227dbfe93ee88718c2437f7b7c7b119570a720a6`，版本接口 200 |
 | 最新 origin/master | `0a3ee2ac8c97cafa89870d78323cf0dfc2f3692e`；已重新 fetch，相对 4317 只有部署记录的四行文档差异 |
-| 独立预览 4327 | `710803f3d53f6ef7eb9ca2ad267df5f2c1c96e7c`，版本接口 200；手机沿用 4338／4339 |
-| 最新已构建候选 | `710803f`，dirty=false，资源 `94c31623e05f4f2b7e8d94c3ef370008a49ca10bb4dd12312e6b9bdeb94c1dda` |
-| 本轮预览更新 | 已包含侧栏读取、轮次文字优化、会话选择与详情应用、请求回答协调迁移，以及连接设置同步发布合并和操作协调器、新建页和工作台启动协调类型迁移，以及账号标签和模型选项重复发布优化、会话控制上下文和连接启动类型迁移，以及连接摘要同步提交合并、排队编辑瞬时禁用后的焦点修复，以及目标工具栏快速失败后的焦点修复；四种视口的真实入口启动与抽屉检查通过，尚非全功能集成验收 |
+| 独立预览 4327 | `41605a7075e216ec7a743ab6605cb10a138d34ff`，版本接口 200；手机沿用 4338／4339 |
+| 最新已构建候选 | `41605a7`，dirty=false，资源 `ec11c5735025907428ff45249d6f1eea683c5fc5ae740c174e3787bd02bae65b` |
+| 本轮预览更新 | 已包含侧栏读取、轮次文字优化、会话选择与详情应用、请求回答协调迁移，以及连接设置同步发布合并和操作协调器、新建页和工作台启动协调类型迁移，以及账号标签和模型选项重复发布优化、会话控制上下文和连接启动类型迁移，以及连接摘要同步提交合并、排队编辑瞬时禁用后的焦点修复，以及目标工具栏快速失败后的焦点修复，以及模型与思考档位禁用状态同步提交合并；四种视口的真实入口启动与抽屉检查通过，尚非全功能集成验收 |
 | 更新限制 | 本轮独立预览所有连接的待处理请求为零，维护检查通过后更新；没有豁免请求或停止原生会话 |
 
 构建 manifest 的 baseline 字段仍记录分支起点 `1a149a7`，不代表本轮对照版本。正式 4317／4318／4319、本地 master 及原生引擎均未因本轮审计修改。
@@ -35,7 +35,7 @@
 | 输入、中文组合、快捷键、剪切粘贴、撤销、附件、误发送 | 输入与附件专项、Node 行为回归和设备模拟；[当前候选集成复核](verification-framework-input-attachments-current.md)补充 83 组输入、键盘草稿及附件四视口对照 | 模拟验证不能替代实体候选窗、系统选区和剪贴板；真实设备项仍缺证据 |
 | 原文、流式、历史前插、锚点、选区、迟到响应、恢复 | 流式、侧聊、历史、SSE、草稿专项；[当前侧聊复核](verification-framework-side-chat-current.md)补充四视口草稿、附件、发送与迟到响应，以及桌面鼠标附件共 102 组对照 | 有限定通过结果；[当前候选恢复复核](verification-framework-recovery-current.md)确认原生 SSE 断流重连一致，模拟离线的输入停滞和惯性前插跳动仍为两版共有问题；其余集成范围继续复核 |
 | 本机／SSH、项目／目标／问题／任务／文件／通知／配对／维护 | 协议差分、隔离 UI 与限定本机真实会话 | 原生定时任务管理执行、持续 SSH、实体手机等不能凭模拟或只读结果标为完成 |
-| 性能与 CPU／内存／磁盘资源 | 输入、列表、流式、首屏及 Fastify 专项样本 | 未通过整体门槛；存在波动、历史稳定差异及资源成本缺口；[当前首屏资源测量](verification-framework-startup-resources.md)记录候选脚本 CPU 和静态体积增加，并在 `8362c3d` 复测定位普通首次 pageshow 可能触发的共同重复恢复读取；[连接设置优化](verification-framework-connection-settings-batch.md)已减少每次状态切换的一次 React 提交，[账号标签优化](verification-framework-account-publication.md)减少启动样本三次无变化提交，[模型选项优化](verification-framework-model-publication.md)另减少模型发布三次提交；[连接摘要同步提交合并](verification-framework-connection-summary.md)在同一会话的校准样本中通常再减少一次提交，同步耗时未稳定改善；但未证明整体性能通过，禁止宣称整体提速 |
+| 性能与 CPU／内存／磁盘资源 | 输入、列表、流式、首屏及 Fastify 专项样本 | 未通过整体门槛；存在波动、历史稳定差异及资源成本缺口；[当前首屏资源测量](verification-framework-startup-resources.md)记录候选脚本 CPU 和静态体积增加，并在 `8362c3d` 复测定位普通首次 pageshow 可能触发的共同重复恢复读取；[连接设置优化](verification-framework-connection-settings-batch.md)已减少每次状态切换的一次 React 提交，[账号标签优化](verification-framework-account-publication.md)减少启动样本三次无变化提交，[模型选项优化](verification-framework-model-publication.md)另减少模型发布三次提交；[连接摘要同步提交合并](verification-framework-connection-summary.md)在同一会话的校准样本中通常再减少一次提交，同步耗时未稳定改善；[模型禁用状态合并](verification-framework-model-availability-batch.md)减少连接变化时的一次提交，跨设备耗时仍未稳定改善；但未证明整体性能通过，禁止宣称整体提速 |
 | 类型检查、完整 npm test、构建产物验证、报告 | 最近应用代码：884 Node／74 Python、typecheck、构建通过；干净资源与候选一致 | 当前回归通过；不替代迁移完整性、真实预览更新及全量验收 |
 
 ## 尚需完成的实现
@@ -55,7 +55,7 @@
 1. 会话选择与详情应用已经完成专项迁移，见[报告](verification-framework-thread-selection.md)。请求回答协调也已完成专项迁移，见[报告](verification-framework-request-response.md)。工作台 init 也已完成[专项迁移](verification-framework-workspace-startup.md)。会话控制状态已完成[类型迁移](verification-framework-session-context.md)，连接配置启动读取已完成[类型迁移](verification-framework-connection-bootstrap.md)，继续完成主控制器事件装配边界，同时逐项收敛 Shell 运行属性；每次迁移对照相应旧版流程。
 2. 保留原生正文算法和独立启动恢复入口，核实其稳定容器及适配契约。服务端后续重点转为真实行为和资源验收，不重复进行已经完成的路由拆分。
 3. 本轮已在待处理请求为零时更新独立预览，桌面和手机模式启动检查通过。后续每次更新仍须重新检查，不得靠回答不属于本任务的请求或打断会话解除限制。
-4. 在同一最终候选上收口功能、视觉、输入、滚动、断线恢复、SSH 与手机验证。`dc4bba1` 已完成[限定集成对照](verification-framework-candidate-integration.md)，后续 `ca2864a` 与 `9e7e5d9` 分别补做账号、模型专项和真实入口检查，`3e37b0b` 补做会话状态及维护流程四视口对照和真实入口检查，`8362c3d` 补做连接选择与启动失败恢复四视口对照和真实入口检查，`7eb6eb3` 补做连接摘要、维护和状态四视口对照及真实入口检查，并完成当前输入、键盘草稿和附件集成复核，以及侧聊控制、主侧同时带图发送隔离和迟到刷新复核；[当前问题回答复核](verification-framework-questions-current.md)继续补齐原生问题与异步问题四视口集成对照；[当前审批卡片复核](verification-framework-approvals-current.md)补齐决策分支、断线与等待状态；`17a7dd4` [修复排队编辑焦点](verification-framework-queue-editor-focus.md)，并在正常调试环境复验四视口编辑、迟到响应和发送路径，保留共有刷新失焦及时序差异记录；`710803f` [修复目标工具栏清除失败焦点](verification-framework-goal-controls-current.md)，并补验目标编辑、状态、无变化保存及跨会话迟到响应；同一候选的[正文文件与通知复核](verification-framework-files-notifications-current.md)补充四视口共 88 组文件清单、通知设置及模拟自动通知对照；[文件预览与输出下载复核](verification-framework-file-viewer-current.md)另补充 32 组预览状态和 4 组真实浏览器完整输出下载对照；[媒体预览复核](verification-framework-media-preview-current.md)补齐 44 组图片、音视频、PDF 及损坏文件状态对照与 16 组真实媒体下载；仍须在最终候选上完成全量对照，首屏复测未通过性能门槛。历史证据可作为回归依据，不能把不同基准的结果拼成一次全量通过。
+4. 在同一最终候选上收口功能、视觉、输入、滚动、断线恢复、SSH 与手机验证。`dc4bba1` 已完成[限定集成对照](verification-framework-candidate-integration.md)，后续 `ca2864a` 与 `9e7e5d9` 分别补做账号、模型专项和真实入口检查，`3e37b0b` 补做会话状态及维护流程四视口对照和真实入口检查，`8362c3d` 补做连接选择与启动失败恢复四视口对照和真实入口检查，`7eb6eb3` 补做连接摘要、维护和状态四视口对照及真实入口检查，并完成当前输入、键盘草稿和附件集成复核，以及侧聊控制、主侧同时带图发送隔离和迟到刷新复核；[当前问题回答复核](verification-framework-questions-current.md)继续补齐原生问题与异步问题四视口集成对照；[当前审批卡片复核](verification-framework-approvals-current.md)补齐决策分支、断线与等待状态；`17a7dd4` [修复排队编辑焦点](verification-framework-queue-editor-focus.md)，并在正常调试环境复验四视口编辑、迟到响应和发送路径，保留共有刷新失焦及时序差异记录；`710803f` [修复目标工具栏清除失败焦点](verification-framework-goal-controls-current.md)，并补验目标编辑、状态、无变化保存及跨会话迟到响应；同一候选的[正文文件与通知复核](verification-framework-files-notifications-current.md)补充四视口共 88 组文件清单、通知设置及模拟自动通知对照；[文件预览与输出下载复核](verification-framework-file-viewer-current.md)另补充 32 组预览状态和 4 组真实浏览器完整输出下载对照；[媒体预览复核](verification-framework-media-preview-current.md)补齐 44 组图片、音视频、PDF 及损坏文件状态对照与 16 组真实媒体下载；`41605a7` [合并模型禁用状态提交](verification-framework-model-availability-batch.md)，完成 40 组四视口模型行为对照和真实入口启动检查；仍须在最终候选上完成全量对照，首屏复测未通过性能门槛。历史证据可作为回归依据，不能把不同基准的结果拼成一次全量通过。
 5. 解决稳定性能退化并补齐资源测量，记录剩余外部限制。只有全部原计划门槛有对应证据，才能标记本轮交付完成；合并 master 和正式上线仍不在本轮范围。
 
 审计本身不替代应用验证。应用改动与验证范围以对应专项报告为准；本页依据当前源码、回归日志、Git／构建状态及版本接口更新。
