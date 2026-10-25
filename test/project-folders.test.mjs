@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {browseFolders,createFolder,openFolderProject} from '../lib/project-folders.mjs';
+import {browseFolders,createFolder,openFolderProject} from '../src/server/services/project-folders.ts';
 const key='b734c8aa-79f5-46ba-b3eb-bf61c6418f97';
 function fixture(handler){
  const calls=[];const m={host:{home:'/target/home',alias:'目标'},service:{protocolValidation:{features:{projectFolders:{supported:true}}}},generation:1,projects:[],requireConnected(){if(!this.rpc.connected)throw Error('disconnected');},requireWritable(){this.requireConnected();},withMutation:fn=>fn(),publish(){},rpc:{connected:true,async request(method,params){calls.push({method,params});return handler?.(method,params)??(method==='fs/getMetadata'?{isDirectory:true}:method==='project/list'?{data:[]}:{entries:[]});}}};return {m,calls};
@@ -36,7 +36,7 @@ test('concurrent project mutations are blocked and lock clears on failure',async
 test('project and directory HTTP mutations retain target routing, Origin and CSRF protection',async()=>{
  const {EventEmitter}=await import('node:events');const {createApp}=await import('../server.mjs');
  const a=fixture(),b=fixture();for(const [id,f] of [['a',a],['b',b]]){Object.setPrototypeOf(f.m,EventEmitter.prototype);EventEmitter.call(f.m);Object.assign(f.m,{host:{id,home:'/'+id,alias:id},connection:{state:'connected'},status:()=>({}),disconnect(){}});}
- const {server}=createApp({config:{machineId:'a',defaultConnection:'a',connections:[]},managers:new Map([['a',a.m],['b',b.m]])});await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
+ const {server}=await createApp({config:{machineId:'a',defaultConnection:'a',connections:[]},managers:new Map([['a',a.m],['b',b.m]])});await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
  try{
   const read=await fetch(base+'/api/project-folders?host=b').then(r=>r.json());assert.equal(read.path,'/b');assert.equal(a.calls.length,0);
   const payload=JSON.stringify({parent:'/b',name:'new'});

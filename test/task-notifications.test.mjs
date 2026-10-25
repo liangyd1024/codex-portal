@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {taskNotice,claimNotice} from '../public/connection-state.js';
-import {Manager} from '../lib/manager.mjs';
+import {WorkspaceManager as Manager} from '../src/server/services/workspace-manager.ts';
 const context={host:'test',known:true};
 const event=(id,status)=>({threadId:'chat',turn:{id,status,completedAt:110}});
 test('every terminal turn notifies once, with independent sessions and turns',()=>{

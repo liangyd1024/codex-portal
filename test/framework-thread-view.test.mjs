@@ -4,7 +4,7 @@ import {EventEmitter} from 'node:events';
 import {request} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
-import {createApp} from '../server.mjs';
+import {createApp} from './fixtures/legacy-server.mjs';
 import {MobileAccess} from '../lib/mobile-access.mjs';
 const manifest=JSON.parse(await readFile(new URL('../.framework-build/latest.json',import.meta.url),'utf8'));
 const {createFrameworkApp}=await import(pathToFileURL(manifest.output+'/server/application.mjs'));

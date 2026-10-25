@@ -1,21 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import vm from 'node:vm';
+import {composerSendView} from '../src/web/services/composer-send-view.ts';
 import ts from 'typescript';
 const modelSource=readFileSync(new URL('../src/web/services/model-selection.ts',import.meta.url),'utf8');
 const modelOutput=ts.transpileModule(modelSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const {createModelSelection}=await import('data:text/javascript;base64,'+Buffer.from(modelOutput).toString('base64'));
 
-const source=readFileSync(new URL('../src/web/controller.ts',import.meta.url),'utf8');
+
 const catalog=[{id:'catalog-alias',model:'test-model',displayName:'Test Model',supportedReasoningEfforts:['medium'],defaultReasoningEffort:'medium'}];
 function fixture({active=false,models=catalog,model='test-model',effort='medium',ready=true,featureReady=()=>true}={}) {
   const nodes=new Map();const $=id=>{if(!nodes.has(id))nodes.set(id,{value:'补充要求',hidden:false,setAttribute(){},querySelector(){return this;}});return nodes.get(id);};
   const state={models,model,effort,status:{},busy:new Set()};
-  const c=vm.createContext({state,$,input:$('message-input'),active,ready,own:true,posting:false,handing:false,stopping:false,background:{state:'idle'},switching:false,handoff:null,followUp:'queue',attachments:null,annotations:null,touchInput:()=>false,featureReady,effortNames:{},newChatOpen:false,currentThread:()=>null,renderControls(){},renderSelectOptions:(select,options,value)=>{select.options=options;select.value=value;},clear:n=>{n.children=[];},el:()=>({}),});
+  const c=({state,$,input:$('message-input'),active,ready,own:true,posting:false,handing:false,stopping:false,background:{state:'idle'},switching:false,handoff:null,followUp:'queue',attachments:null,annotations:null,touchInput:()=>false,featureReady,effortNames:{},newChatOpen:false,currentThread:()=>null,renderControls(){},renderSelectOptions:(select,options,value)=>{select.options=options;select.value=value;},clear:n=>{n.children=[];},el:()=>({}),});
   for(const id of ['model-select','effort-select'])$(id).append=function(child){this.children.push(child);};
   Object.assign(c,createModelSelection({state,effortNames:{},newChatOpen:()=>c.newChatOpen,currentThread:c.currentThread,element:$,renderSelectOptions:c.renderSelectOptions,renderControls:c.renderControls}));
-  const render=()=>runController('{'+source.slice(source.indexOf('  const hasModel ='),source.indexOf("  $('new-thread').setAttribute('aria-description'"))+'globalThis.buttonView=buttonView;}',c);
+  const render=()=>{const {buttonView,unavailable}=composerSendView({active:c.active,ready,own:true,posting:false,handing:false,stopping:false,loginRecovery:false,desktopMode:false,interrupting:false,archived:false,touch:false,backgroundState:'idle',followUp:'queue',text:$('message-input').value,hasModel:Boolean(c.modelFor(state.model)),hasEffort:c.effortsFor(state.model).some(e=>e.value===state.effort),featureReady});c.buttonView=buttonView;Object.assign($('composer-availability'),{textContent:unavailable,hidden:!unavailable});};
   return {state,$,render,view:()=>c.buttonView,setActive:value=>{c.active=value;},renderModels:()=>c.renderModels()};
 }
 test('running follow-ups need no next-turn model catalog or effort; idle turns still do',()=>{
@@ -39,5 +39,3 @@ test('run completion and catalog recovery update the notice without losing the d
   f.setActive(false);f.render();assert.equal(f.$('composer-availability').hidden,false);assert.equal(f.view().send.disabled,true);
   f.state.models=catalog;f.renderModels();f.render();assert.equal(f.$('composer-availability').hidden,true);assert.equal(f.view().send.disabled,false);assert.equal(f.$('message-input').value,'补充要求');
 });
-
-function runController(code,context){return vm.runInContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,context);}

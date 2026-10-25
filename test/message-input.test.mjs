@@ -26,7 +26,7 @@ test('images reach both idle turn/start and running turn/steer without filesyste
 test('image-sized HTTP bodies are accepted only on message routes after CSRF validation',async()=>{
  const {createApp}=await import('../server.mjs');const {EventEmitter}=await import('node:events');
  class Fake extends EventEmitter {host={id:'local'};disconnect(){} message(id,data){return {size:data.images[0].url.length};}}
- const app=createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
+ const app=await createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
  try{const {token}=await fetch(base+'/api/csrf').then(r=>r.json());const body=JSON.stringify({images:[{url:'x'.repeat(1100000)}]});const post=(path,csrf)=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json','x-csrf-token':csrf},body});
  assert.equal((await post('/api/threads/test/message','')).status,403);assert.equal((await post('/api/threads',token)).status,413);
  const accepted=await post('/api/threads/test/message',token);assert.equal(accepted.status,200);assert.equal((await accepted.json()).size,1100000);

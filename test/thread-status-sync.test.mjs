@@ -45,7 +45,7 @@ test('unsupported or malformed native state is unknown, never inferred completio
 });
 
 test('sidebar activity refresh corrects an unopened thread and publishes the existing SSE status',async()=>{
- const {readSidebarActivity}=await import('../lib/sidebar.mjs');
+ const {readSidebarActivity}=await import('../src/server/services/sidebar.ts');
  const f=fixture();f.add('unopened');const requests=[];
  f.m.rpc.request=async(method,params)=>{requests.push(method);return method==='account/read'?{workspaceRouting:{chatgptAccountId:'test-account'}}:{thread:{id:params.threadId,status:{type:'idle'}}};};
  f.m.passive=async(action)=>{assert.equal(action,'sidebarActivity');return {accountScope:'test-account',data:[{id:'unopened'}]};};

@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {readSidebar,sidebarAction,sidebarCapabilities,PINNED_SECTION} from '../lib/sidebar.mjs';
+import {readSidebar,sidebarAction,sidebarCapabilities,PINNED_SECTION} from '../src/server/services/sidebar.ts';
 import {Sidebar,sidebarGroups} from '../public/sidebar.js';
 import {ArchiveSync} from '../lib/archive-sync.mjs';
 function fixture(){

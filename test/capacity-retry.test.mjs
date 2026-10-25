@@ -45,7 +45,7 @@ test('initial loading does not permanently cancel the first countdown',()=>{
 });
 test('retry HTTP route requires CSRF and returns the native turn',async()=>{
  const {createApp}=await import('../server.mjs'),{m,calls}=fixture();
- const app=createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',m]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
+ const app=await createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',m]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
  try{const {token}=await fetch(base+'/api/csrf').then(r=>r.json());const post=csrf=>fetch(base+'/api/threads/thread/retry-capacity',{method:'POST',headers:{'Content-Type':'application/json','x-csrf-token':csrf},body:JSON.stringify({turnId:'failed'})});assert.equal((await post('')).status,403);const response=await post(token);assert.equal(response.status,200);assert.equal((await response.json()).turn.id,'retry');assert.equal(calls.filter(c=>c.method==='turn/start').length,1);}finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));}
 });
 

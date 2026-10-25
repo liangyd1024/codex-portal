@@ -1,6 +1,6 @@
 import type {Manager} from '../../../lib/manager.mjs';
-import {browseFolders,createFolder,openFolderProject} from '../../../lib/project-folders.mjs';
-import {readSidebar,readSidebarActivity,sidebarAction} from '../../../lib/sidebar.mjs';
+import {browseFolders,createFolder,openFolderProject} from './project-folders';
+import {readSidebar,readSidebarActivity,sidebarAction} from './sidebar';
 import {composerCatalog} from '../../../lib/composer.mjs';
 
 export function createWorkspaceService(manager:Manager) {

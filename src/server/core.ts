@@ -1,15 +1,16 @@
+import {WorkspaceManager} from './services/workspace-manager';
 import {createDispatcher} from './routes/dispatch';
 import type {ServerOptions} from 'node:https';
 import type {Response,MobileConfig,Host} from './types';
 import type {ApplicationOptions} from './types';
 import {createStaticResponse} from '../../lib/http/static-response.mjs';
-import {WebUpdate} from '../../lib/web-update.mjs';
+import {WebUpdate} from './services/web-update';
 import {supportDir} from '../../lib/config.mjs';
 import {homedir} from 'node:os';
 import http from 'node:http';
 import {json} from './protocol';
 import https from 'node:https';
-import {MobileAccess} from '../../lib/mobile-access.mjs';
+import {MobileAccess} from './services/mobile-access';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {readFile} from 'node:fs/promises';
@@ -24,7 +25,7 @@ const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 let BUILD_VERSION='development';try{BUILD_VERSION=(await readFile(path.join(ROOT,'VERSION'),'utf8')).trim();}catch{}
 export function createApp({serverFactory=handler=>http.createServer(handler),proxyFactory=handler=>http.createServer(handler),secureFactory=(options,handler)=>https.createServer(options,handler),staticRoot=path.join(ROOT,'public'),extraAssets={},buildVersion=BUILD_VERSION,mobileConfig=null,setupMobile=null,access=new MobileAccess(null),config=loadConfig(),stateDir=process.env.RCM_STATE_DIR||path.join(homedir(),'.codex/remote-codex-manager'),managers:providedManagers,updater=new WebUpdate({supportDir,root:ROOT,version:BUILD_VERSION})}: ApplicationOptions={}) {
  const enableAccountRecovery=buildVersion!=='development'&&stateDir===path.join(homedir(),'.codex/remote-codex-manager')&&Number(process.env.RCM_PORT||4317)===4317;
- const managers=providedManagers||new Map(config.connections.map((host:Host)=>[host.id,new Manager({enableAccountRecovery,titleStore:path.join(stateDir,`web-titles-${host.id}.json`),host:publicHost(host),...(host.kind==='local'?createLocalTransport(host):createSshTransport(host))})]));
+ const managers=providedManagers||new Map(config.connections.map((host:Host)=>[host.id,new WorkspaceManager({enableAccountRecovery,titleStore:path.join(stateDir,`web-titles-${host.id}.json`),host:publicHost(host),...(host.kind==='local'?createLocalTransport(host):createSshTransport(host))})]));
  const manager=managers.get(config.defaultConnection);
  const automations=new Map([...managers].map(([id,m])=>[id,new NativeAutomations(m)]));
  const desktopSessions=new Map<string,NativeAutomations>();

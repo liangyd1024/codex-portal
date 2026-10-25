@@ -28,7 +28,7 @@ export async function verifyFrameworkBaseline({revision,buildDir}){
  const tests=[];
  for(const name of ['framework-http.test.mjs','framework-thread-view.test.mjs']){
   let source=await readFile(path.join(root,'test',name),'utf8');
-  source=replaceOnce(source,"import {createApp} from '../server.mjs';",`import {createApp} from ${JSON.stringify(pathToFileURL(path.join(baseline,'server.mjs')).href)};`);
+  source=replaceOnce(source,"import {createApp} from './fixtures/legacy-server.mjs';",`import {createApp} from ${JSON.stringify(pathToFileURL(path.join(baseline,'server.mjs')).href)};`);
   source=replaceOnce(source,"import {MobileAccess} from '../lib/mobile-access.mjs';",`import {MobileAccess} from ${JSON.stringify(pathToFileURL(path.join(baseline,'lib/mobile-access.mjs')).href)};`);
   if(name==='framework-http.test.mjs'){
    source=replaceOnce(source,"const root=path.resolve(import.meta.dirname,'..');",`const root=${JSON.stringify(root)};`);

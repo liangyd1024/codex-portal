@@ -1,4 +1,4 @@
-type NativeNotice = Pick<Notification, 'onclose' | 'onclick' | 'close'>;
+type NativeNotice = Pick<Notification, 'onclose' | 'onclick' | 'close' | 'onshow' | 'onerror'>;
 interface Dependencies<W, N extends NativeNotice> {
   host: () => string;
   worker: () => boolean | undefined;

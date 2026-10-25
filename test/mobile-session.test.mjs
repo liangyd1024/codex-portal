@@ -11,7 +11,7 @@ import {createApp} from '../server.mjs';
 async function entrance(file,run){
   class Manager extends EventEmitter {host={id:'local'};disconnect(){}}
   const access=new MobileAccess(file);
-  const app=createApp({access,mobileConfig:{origins:['https://phone.test']},config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Manager()]])});
+  const app=await createApp({access,mobileConfig:{origins:['https://phone.test']},config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Manager()]])});
   await new Promise(resolve=>app.proxyServer.listen(0,'127.0.0.1',resolve));
   const request=(url,{method='GET',cookie='',csrf='',body={}}={})=>new Promise((resolve,reject)=>{
     const req=http.request({hostname:'127.0.0.1',port:app.proxyServer.address().port,path:url,method,headers:{host:'phone.test',origin:'https://phone.test',cookie,'x-csrf-token':csrf}},res=>{

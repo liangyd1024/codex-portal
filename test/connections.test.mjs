@@ -12,7 +12,7 @@ test('disconnect closes only this entrance and never invokes service release',()
 test('service release requires explicit all-entrance confirmation',async()=>{const m=new Manager({host:sample().connections[0]});await assert.rejects(m.release(),e=>e.code==='MAINTENANCE_CONFIRMATION_REQUIRED');});
 class Fake extends EventEmitter{constructor(host){super();this.host=host;this.connection={state:'disconnected'};}status(){return {host:this.host,connection:this.connection};}disconnect(){return this.status();}}
 test('HTTP routing separates configurable hosts, hides SSH identity, and rejects unknown hosts',async()=>{
- const config=validateConfig(sample(),{checkLocal:false}),managers=new Map(config.connections.map(h=>[h.id,new Fake(h)]));const {server}=createApp({config,managers});
+ const config=validateConfig(sample(),{checkLocal:false}),managers=new Map(config.connections.map(h=>[h.id,new Fake(h)]));const {server}=await createApp({config,managers});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const base='http://127.0.0.1:'+server.address().port;
  try{
   const list=await fetch(base+'/api/connections?host=obsolete').then(r=>r.json());assert.equal(list.machineId,'a');assert.deepEqual(list.data.map(c=>c.id),['local','custom-peer']);assert.equal(list.data[1].host.identityFile,undefined);

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
-import { Manager, AppError, validateSelection } from '../lib/manager.mjs';
+import { AppError, validateSelection } from '../lib/manager.mjs';
+import {WorkspaceManager as Manager} from '../src/server/services/workspace-manager.ts';
 
 const models = [
   { id: 'catalog-a', model: 'model-a', supportedReasoningEfforts: [{ reasoningEffort: 'low' }, { reasoningEffort: 'high' }] },

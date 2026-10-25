@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,readFile} from 'node:fs/promises';import {tmpdir} from 'node:os';import path from 'node:path';
-import {updateWorkflow} from '../lib/update-workflow.mjs';import {deploymentLock} from '../lib/deployment-lock.mjs';import {WebUpdate,writeUpdate} from '../lib/web-update.mjs';
+import {updateWorkflow} from '../lib/update-workflow.mjs';import {deploymentLock} from '../lib/deployment-lock.mjs';import {WebUpdate,writeUpdate} from '../src/server/services/web-update.ts';
 const target='b'.repeat(40),baseline='a'.repeat(40);
 function fixture(change={}){
  const calls=[],stages=[];let cleanReads=0;

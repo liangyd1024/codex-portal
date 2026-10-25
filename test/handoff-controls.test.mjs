@@ -1,31 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createHandoffControls} from '../public/thread-handoff.js';
-// Each test restores the global even when an assertion fails.
-function controlsFixture(t){
- const previous=Object.getOwnPropertyDescriptor(globalThis,'document');
- const nodes=new Map();
- const make=()=>({children:[],attrs:{},hidden:false,classList:{toggle(){}},set id(v){this._id=v;nodes.set(v,this);},get id(){return this._id;},append(...xs){this.children.push(...xs);},after(n){this.afterNode=n;},setAttribute(k,v){this.attrs[k]=v;},focus(){},checkVisibility(){return !this.hidden;}});
- const document={querySelector:()=>null,head:make(),createElement:make,getElementById:id=>nodes.get(id)};
- for(const id of ['takeover','connection-banner','message-input']){const n=make();n.id=id;}
- Object.defineProperty(globalThis,'document',{value:document,configurable:true});t.after(()=>{if(previous)Object.defineProperty(globalThis,'document',previous);else delete globalThis.document;});
- let calls=0;const controls=createHandoffControls({endUse:()=>calls++}),state={id:'a',context:'host:a:1',owned:true,connected:true,supported:true,running:true};
- controls.render(state);return {controls,state,nodes,calls:()=>calls};
+import {createHandoffController} from '../src/web/services/thread-handoff.ts';
+function controlsFixture(){
+ let calls=0,view,restored=0,focused;
+ const controls=createHandoffController({endUse:()=>calls++,publish:value=>{view=value;},focus:banner=>{focused=banner;},restoreFocus:()=>restored++});
+ const state={id:'a',context:'host:a:1',owned:true,connected:true,supported:true,running:true};
+ controls.render(state);return {controls,state,view:()=>view,calls:()=>calls,restored:()=>restored,focused:()=>focused};
 }
-test('running handoff explains at the top without sending, stacking or changing drafts',t=>{
- const f=controlsFixture(t),banner=f.nodes.get('handoff-status'),button=f.nodes.get('handoff-thread');
- assert.equal(f.nodes.get('connection-banner').afterNode,banner);
- button.onclick();button.onclick();assert.equal(f.calls(),0);assert.equal(banner.hidden,false);assert.match(banner.children[0].textContent,/任务结束后/);assert.equal(banner.children.length,3);
- banner.children[2].onclick();assert.equal(banner.hidden,true);
- button.onclick();f.controls.render({...f.state,running:false});assert.equal(banner.hidden,true);button.onclick();assert.equal(f.calls(),1);
+test('running handoff explains without sending or stacking; dismiss restores focus',()=>{
+ const f=controlsFixture();
+ f.controls.run();f.controls.run();assert.equal(f.calls(),0);assert.equal(f.view().bannerHidden,false);assert.match(f.view().message,/任务结束后/);
+ f.controls.focus();assert.equal(f.focused(),true);
+ f.controls.dismiss();assert.equal(f.view().bannerHidden,true);assert.equal(f.restored(),1);
+ f.controls.run();f.controls.render({...f.state,running:false});assert.equal(f.view().bannerHidden,true);f.controls.run();assert.equal(f.calls(),1);
 });
-test('errors expose retry and disappear across selection context changes',t=>{
- const f=controlsFixture(t),banner=f.nodes.get('handoff-status');f.controls.render({...f.state,running:false});
- f.controls.showError('交还结果未确认');assert.equal(banner.hidden,false);assert.equal(banner.children[1].hidden,false);assert.equal(banner.children[1].disabled,false);
- f.controls.render({...f.state,context:'host:b:2',id:'b'});assert.equal(banner.hidden,true);
+test('errors expose retry and disappear across selection context changes',()=>{
+ const f=controlsFixture();f.controls.render({...f.state,running:false});
+ f.controls.showError('交还结果未确认');assert.equal(f.view().bannerHidden,false);assert.equal(f.view().retryHidden,false);assert.equal(f.view().retryDisabled,false);
+ f.controls.render({...f.state,context:'host:b:2',id:'b'});assert.equal(f.view().bannerHidden,true);
 });
-test('takeover conflict never creates a permanent handoff warning',t=>{
- const f=controlsFixture(t),banner=f.nodes.get('handoff-status');
- f.controls.render({...f.state,owned:false,running:false,conflict:true});assert.equal(banner.hidden,true);assert.equal(banner.children[0].textContent,'');
- f.controls.render({...f.state,owned:false,running:false,conflict:true,handoff:{state:'waiting'}});assert.equal(banner.hidden,false);assert.match(banner.children[0].textContent,/等待引擎释放/);
+test('takeover conflict never creates a permanent handoff warning',()=>{
+ const f=controlsFixture();
+ f.controls.render({...f.state,owned:false,running:false,conflict:true});assert.equal(f.view().bannerHidden,true);assert.equal(f.view().message,'');
+ f.controls.render({...f.state,owned:false,running:false,conflict:true,handoff:{state:'waiting'}});assert.equal(f.view().bannerHidden,false);assert.match(f.view().message,/等待引擎释放/);
 });

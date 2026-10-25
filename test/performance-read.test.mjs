@@ -6,7 +6,7 @@ import path from 'node:path';
 import {gunzipSync} from 'node:zlib';
 import {createStaticResponse,acceptsGzip} from '../lib/http/static-response.mjs';
 import {shareRead} from '../lib/core/pending-read.mjs';
-import {readSidebar,readSidebarActivity} from '../lib/sidebar.mjs';
+import {readSidebar,readSidebarActivity} from '../src/server/services/sidebar.ts';
 import {sshArgs} from '../lib/transports/ssh-options.mjs';
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 test('static representations preserve bytes, negotiate compression, revalidate and notice edits',async()=>{

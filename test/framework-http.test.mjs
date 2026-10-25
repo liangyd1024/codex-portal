@@ -5,7 +5,7 @@ import {Readable} from 'node:stream';
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import path from 'node:path';
-import {createApp} from '../server.mjs';
+import {createApp} from './fixtures/legacy-server.mjs';
 import {MobileAccess} from '../lib/mobile-access.mjs';
 const root=path.resolve(import.meta.dirname,'..');
 const manifest=JSON.parse(await readFile(path.join(root,'.framework-build/latest.json'),'utf8'));

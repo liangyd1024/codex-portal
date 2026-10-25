@@ -4,7 +4,7 @@ function fetch(url,options={}) {return new Promise((resolve,reject)=>{const req=
 class Fake extends EventEmitter{status(){return {connection:{state:'connected'},pendingRequests:[]};}disconnect(){} }
 test('remote ingress requires pairing, exact origin and CSRF; revocation closes SSE',{timeout:5000},async t=>{
  let sendUpdate;
- const a=new MobileAccess(null),fake=new Fake();const {server,proxyServer}=createApp({config:{defaultConnection:"test",connections:[]},managers:new Map([["test",fake]]),updater:{status:async()=>({}),subscribe:fn=>{sendUpdate=fn;return ()=>{};}},access:a,mobileConfig:{origins:['https://phone.test']}});
+ const a=new MobileAccess(null),fake=new Fake();const {server,proxyServer}=await createApp({config:{defaultConnection:"test",connections:[]},managers:new Map([["test",fake]]),updater:{status:async()=>({}),subscribe:fn=>{sendUpdate=fn;return ()=>{};}},access:a,mobileConfig:{origins:['https://phone.test']}});
  server.listen(0,'127.0.0.1');proxyServer.listen(0,'127.0.0.1');await Promise.all([once(server,'listening'),once(proxyServer,'listening')]);
  t.after(()=>{server.closeAllConnections();proxyServer.closeAllConnections();server.close();proxyServer.close();});
  const local='http://127.0.0.1:'+server.address().port,remote='http://127.0.0.1:'+proxyServer.address().port;

@@ -1,5 +1,5 @@
 import type {IncomingMessage} from 'node:http';
-import type {MobileAccess} from '../../../lib/mobile-access.mjs';
+import type {MobileAccess} from './mobile-access';
 import {AppError} from '../../../lib/manager.mjs';
 import {tailscaleHealth} from '../../../lib/tailscale-serve.mjs';
 import type {ApplicationOptions,MobileConfig,Response} from '../types';

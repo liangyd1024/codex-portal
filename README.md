@@ -6,7 +6,7 @@
 
 ## 配置与运行
 
-需要 macOS、Node.js 22+、Python 3、Git、age。上传和下载 Release 附件还需要已登录的 GitHub CLI (`gh`)。从官方发行渠道安装工具。
+需要 macOS、Node.js 22.12+、Python 3、Git、age。上传和下载 Release 附件还需要已登录的 GitHub CLI (`gh`)。从官方发行渠道安装工具。
 
 将 `config/connections.example.json` 按本机情况填写为：
 
@@ -18,19 +18,24 @@
 
 每个连接需设置真实用户名、HOME、Codex 二进制路径；SSH 连接另需地址、端口和本机私钥路径。私钥不复制到另一台机器、不进入备份。双方主机公钥必须事先核验。SSH 强制使用配置的密钥和严格主机校验。
 
-开发运行：
+本分支是框架迁移验收分支。准备依赖必须禁用安装脚本，避免触发现有正式安装入口。使用锁定版本构建：
 
 ```sh
-node server.mjs
+npm ci --ignore-scripts
+npm run typecheck
+npm run build
+RCM_PREVIEW_ROOT=/absolute/new/preview-state node server.mjs
 ```
+
+`server.mjs` 保留 JavaScript 入口，运行构建后的 Fastify 应用。修改源码后重新构建才会进入预览。独立状态根目录必须使用新的绝对路径；已有验收目录只有含本分支所有权标记时才能复用。
 
 本机正式网页固定为 `http://127.0.0.1:4317`。手机本地代理使用 `4318`，手机局域网 HTTPS 使用 `4319`。开发预览固定使用 `4327`。未经用户明确要求不得改动这些端口。端口占用时先查原因，不自动换端口。
 
-开发预览使用 `RCM_PORT=4327 RCM_MOBILE=0 RCM_STATE_DIR=/absolute/new/preview-state node server.mjs`，独立保存网页状态且不绑定手机端口，避免恢复既有订阅。仍连接同一目标引擎，请仅操作独立测试会话。
+本分支预览固定使用 4327，默认不绑定手机端口。已授权的手机验收使用 `RCM_PREVIEW_ROOT=/absolute/new/preview-state node scripts/start-preview.mjs --mobile`，绑定独立的 4338／4339，证书、配对、维护状态与日志均位于该状态根目录。正式 4317／4318／4319 不变。预览仍连接同一目标引擎，只操作专用测试会话；本轮不合并 master 或执行正式安装。
 
 ## 源码边界与页面性能
 
-`public/` 是原生浏览器模块，`lib/` 是服务端适配，`scripts/` 是读取与维护入口。`shared/` 只放前后端共用的纯数据逻辑。`lib/core/` 放通用错误与在途读取合并，`lib/http/` 放 HTTP 响应，`lib/transports/` 放传输基础约定。保留现有入口和功能目录，逐步拆分职责，不引入前端框架或构建依赖。
+`src/web/` 使用 React、TypeScript 和 Zustand，Vite 输出浏览器产物。`src/server/` 使用 TypeScript 和 Fastify，路由与应用服务分开；`WorkspaceManager` 承担 RCM 展示及持久化策略。`public/` 保留原 CSS、兼容导出入口和已验证的正文／浏览器底层算法。`lib/` 保留原生 RPC、IPC、SSH 与系统适配，`scripts/` 保留 JavaScript/Python 启动、读取及维护入口。`shared/` 只放前后端共用的纯数据逻辑。旧 HTTP 实现仅在 `test/fixtures/legacy-server.mjs` 中作为差分测试对照；普通服务测试通过 JavaScript 入口加载构建后的 Fastify 应用。构建使用全新的输出目录，不清空已有目录。
 
 静态资源根据客户端能力使用 gzip，并用 ETag 校验缓存；资源变化后重新传输。侧栏先展示列表，再异步补齐桌面活动状态。设置与手机访问面板在首次打开时初始化。流式输出复用未变化的消息节点，保留完整原文和命令输出。
 

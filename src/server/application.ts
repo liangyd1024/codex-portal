@@ -1,3 +1,5 @@
+export {WorkspaceManager} from './services/workspace-manager';
+export {WebUpdate} from './services/web-update';
 export {PreviewMobileAccess} from './preview-access';
 import {createApp} from './core';
 import {createHttpFramework, type HttpFramework} from './http';

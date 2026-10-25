@@ -1,9 +1,10 @@
+import type {ReceiptTurn} from './send-receipts';
 import type {createSendReceipts} from '../../../public/connection-state.js';
 interface Options {threads: unknown[]; skills?: unknown[]; plugins?: unknown[]; [key: string]: unknown}
 interface Queued {id: string; [key: string]: unknown}
 interface Result<Turn> {queuedSubmission?: Queued; turn?: Turn; [key: string]: unknown}
 interface Payload {text: string; images: {url: string}[]; [key: string]: unknown}
-interface Dependencies<Annotation, Draft extends {text: string}, Pictures extends {items: {url: string}[]}, Turn> {
+interface Dependencies<Annotation, Draft extends {text: string}, Pictures extends {items: {url: string}[]}, Turn extends ReceiptTurn> {
  state: {selectedId: string | null; selectionVersion: number; desktopMode: boolean; busy: Set<string>; model: string; effort: string; detail: {queue?: {data?: Queued[]; [key: string]: unknown}} | null};
  input: () => Pick<HTMLTextAreaElement, 'value'>;
  disabled: () => boolean;
@@ -43,7 +44,7 @@ interface Dependencies<Annotation, Draft extends {text: string}, Pictures extend
  recordError: (error: unknown, stage: string) => void;
  toast: (message: string, error: boolean) => void;
 }
-export function createMessageSend<Annotation, Draft extends {text: string}, Pictures extends {items: {url: string}[]}, Turn>(d: Dependencies<Annotation, Draft, Pictures, Turn>) {
+export function createMessageSend<Annotation, Draft extends {text: string}, Pictures extends {items: {url: string}[]}, Turn extends ReceiptTurn>(d: Dependencies<Annotation, Draft, Pictures, Turn>) {
  const {state} = d;
  return async function sendMessage(event?: Pick<Event, 'preventDefault'>, alternate=false) {
   event?.preventDefault();

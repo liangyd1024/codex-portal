@@ -58,7 +58,7 @@ test('failed-attempt eviction keeps the original 1000-key limit and permits the 
 test('opening SSE never transmits stored historical task notifications',async()=>{
  const {EventEmitter}=await import('node:events'),{createApp}=await import('../server.mjs');
  const m=Object.assign(new EventEmitter(),{host:{id:'local',alias:'test'},connection:{state:'disconnected'},status:()=>({pendingRequests:[]}),disconnect(){},replayNotices:()=>[{method:'manager/taskNotice',params:{key:'old'}}]});
- const {server}=createApp({config:{machineId:'test',defaultConnection:'local',connections:[]},managers:new Map([['local',m]])});
+ const {server}=await createApp({config:{machineId:'test',defaultConnection:'local',connections:[]},managers:new Map([['local',m]])});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const controller=new AbortController();
  try{const response=await fetch('http://127.0.0.1:'+server.address().port+'/api/events',{signal:controller.signal});const {value}=await response.body.getReader().read();const text=new TextDecoder().decode(value);assert.match(text,/manager\/status/);assert.doesNotMatch(text,/manager\/taskNotice|old/);}finally{controller.abort();server.closeAllConnections();await new Promise(r=>server.close(r));}
 });

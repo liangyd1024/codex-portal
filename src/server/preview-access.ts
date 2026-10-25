@@ -1,4 +1,4 @@
-import {MobileAccess} from '../../lib/mobile-access.mjs';
+import {MobileAccess} from './services/mobile-access';
 /** Cookies are scoped by host, not by port. The preview must never overwrite the
  * production phone session when both HTTPS entrances share a LAN hostname. */
 export class PreviewMobileAccess extends MobileAccess {

@@ -57,7 +57,7 @@ test('candidate identities distinguish equal titles and exclude current, archive
 test('desktop routes enforce CSRF, Origin and selected-host scope',async()=>{
  const {Manager}=await import('../lib/manager.mjs'),{createApp}=await import('../server.mjs');
  const calls=[];const make=host=>{const m=new Manager({host:{id:host,kind:'local'},remote:async()=>{calls.push(host);return {available:true,threadReferencesSupported:true};}});m.passive=async(action)=>action==='history'?{data:[]}:{thread:{id,activity:{state:'idle'}}};return m;};
- const {server}=createApp({config:{defaultConnection:'one'},managers:new Map([['one',make('one')],['two',make('two')]])});
+ const {server}=await createApp({config:{defaultConnection:'one'},managers:new Map([['one',make('one')],['two',make('two')]])});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
  try{
   const url=base+'/api/desktop/threads/'+id+'/message?host=two',body=JSON.stringify({messageId:mid,text:'test'});

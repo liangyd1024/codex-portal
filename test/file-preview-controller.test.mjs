@@ -1,0 +1,35 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createFilePreview} from '../src/web/services/file-preview.ts';
+function fixture(t,read){
+ const original=Object.getOwnPropertyDescriptor(globalThis,'document');
+ const make=tag=>({tag,children:[],events:{},paused:0,loads:0,setAttribute(k,v){this[k]=v;},removeAttribute(k){delete this[k];},addEventListener(k,fn){this.events[k]=fn;},pause(){this.paused++;},load(){this.loads++;},append(n){this.children.push(n);},replaceChildren(){this.children=[];},querySelectorAll(){return this.children.filter(n=>['video','audio'].includes(n.tag));}});
+ Object.defineProperty(globalThis,'document',{configurable:true,value:{createElement:make}});
+ t.after(()=>{if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;});
+ t.mock.method(globalThis,'fetch',read);
+ const content=make('div'),view={},updates=[];
+ const controller=createFilePreview({content,label:'test',url:mode=>mode,publish:patch=>{updates.push(patch);Object.assign(view,patch);}});
+ return {content,view,updates,controller};
+}
+const json=data=>new Response(JSON.stringify(data));
+test('closing a preview aborts its read and ignores late metadata',async t=>{
+ let finish,signal;const f=fixture(t,(_url,options)=>{signal=options.signal;return new Promise(resolve=>finish=resolve);});
+ const loading=f.controller.load();f.controller.close();const count=f.updates.length;
+ finish(json({name:'sample.txt',size:20,kind:'text'}));await loading;
+ assert.equal(signal.aborted,true);assert.equal(f.updates.length,count);assert.equal(f.content.children.length,0);
+});
+test('retry disposes media before replacing it; old events cannot change the new read',async t=>{
+ const f=fixture(t,async()=>json({name:'sample.mp4',size:2000,kind:'video'}));
+ await f.controller.load();const first=f.content.children[0];assert.equal(first.controls,true);assert.equal(first.playsinline,'');
+ first.events.waiting();assert.match(f.view.status,/正在缓冲/);
+ first.events.stalled();assert.equal(f.view.retryHidden,false);
+ await f.controller.load();assert.equal(first.paused,1);assert.equal(first.loads,1);assert.equal(first.src,undefined);
+ const status=f.view.status;first.events.error();assert.equal(f.view.status,status);assert.equal(f.view.retryHidden,true);
+ const current=f.content.children[0];f.controller.close();assert.equal(current.paused,1);assert.equal(current.loads,1);assert.equal(f.content.children.length,0);
+});
+test('text response keeps complete preview bytes and truncation notice; failures remain retryable',async t=>{
+ let fail=false;const f=fixture(t,async mode=>{if(fail)throw Error('offline');return mode==='meta'?json({name:'sample.txt',size:1048577,kind:'text'}):json({text:'原始\n正文\t<code>',truncated:true});});
+ await f.controller.load();assert.equal(f.content.children[0].textContent,'原始\n正文\t<code>');assert.equal(f.content.children[0].tabIndex,0);assert.match(f.view.status,/仅预览前 1 MiB/);
+ fail=true;await f.controller.load();assert.equal(f.view.retryHidden,false);
+ assert.equal(f.view.status,'offline');assert.equal(f.content.children.length,0);
+});

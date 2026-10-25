@@ -3,7 +3,7 @@ import {createApp} from '../server.mjs';
 test('sidebar routes use target identity and require the existing origin and CSRF guards',async()=>{
  const calls=[];
  const create=id=>Object.assign(new EventEmitter(),{host:{id,alias:id},connection:{state:'connected'},controlled:new Map(),service:{protocolValidation:{policy:4,unsupportedMethods:[]}},requireConnected(){},requireWritable(){},status(){return {}},disconnect(){},rpc:{request:async()=>({workspaceRouting:{chatgptAccountId:id}})},passive:async(action,params)=>{calls.push({id,action,params});return {data:[],projects:[],sections:[],accountScope:id,accountLayoutAvailable:true};}});
- const config={machineId:'a',defaultConnection:'a',connections:[]},managers=new Map([['a',create('a')],['b',create('b')]]),{server}=createApp({config,managers});
+ const config={machineId:'a',defaultConnection:'a',connections:[]},managers=new Map([['a',create('a')],['b',create('b')]]),{server}=await createApp({config,managers});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
  try{
   const r=await fetch(base+'/api/sidebar?host=b&accountId=spoof').then(r=>r.json());assert.equal(r.accountScope,'b');assert.equal(calls[0].params.accountId,'b');

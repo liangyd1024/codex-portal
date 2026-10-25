@@ -3,7 +3,6 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {loadConfig} from '../lib/config.mjs';
-import {WebUpdate} from '../lib/web-update.mjs';
 import {createPreviewMobileSetup} from '../lib/preview-mobile.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const build=JSON.parse(await readFile(path.join(root,'.framework-build/latest.json'),'utf8'));
@@ -18,7 +17,7 @@ await mkdir(path.join(stateRoot,'logs'),{recursive:true,mode:0o700});
 const {createWriteStream}=await import('node:fs');
 const log=createWriteStream(path.join(stateRoot,'logs','preview-'+Date.now()+'.log'),{flags:'a',mode:0o600});
 for(const output of [process.stdout,process.stderr]){const write=output.write.bind(output);output.write=(chunk,...args)=>{log.write(chunk);return write(chunk,...args);};}
-const {createFrameworkApp,PreviewMobileAccess}=await import(pathToFileURL(path.join(build.output,'server/application.mjs')).href);
+const {createFrameworkApp,PreviewMobileAccess,WebUpdate}=await import(pathToFileURL(path.join(build.output,'server/application.mjs')).href);
 const staticRoot=path.join(build.output,'public'),extraAssets={};
 async function assets(directory,prefix=''){for(const entry of await readdir(directory,{withFileTypes:true})){const relative=prefix+entry.name;if(entry.isDirectory())await assets(path.join(directory,entry.name),relative+'/');else extraAssets['/'+relative]=relative;}}
 await assets(staticRoot);

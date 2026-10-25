@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {MobileAccess} from '../lib/mobile-access.mjs';
+import {MobileAccess} from '../src/server/services/mobile-access.ts';
 const request=token=>({headers:{cookie:'rcm_mobile='+token}});
 test('pair codes expire, are single-use, and sessions expire or revoke',()=>{let now=1000;const a=new MobileAccess(null,()=>now);const old=a.createCode();now+=3600001;assert.throws(()=>a.login(old.code));const code=a.createCode();const token=a.login(code.code);assert(a.valid(request(token)));assert.throws(()=>a.login(code.code));now+=7*86400000;assert(!a.valid(request(token)));const token2=a.login(a.createCode().code);a.revoke();assert(!a.valid(request(token2)));});
 test('five invalid attempts throttle even a correct code; logout clears session',()=>{let now=0;const a=new MobileAccess(null,()=>now);const code=a.createCode().code;for(let i=0;i<5;i++)assert.throws(()=>a.login('wrong'));assert.throws(()=>a.login(code),e=>e.status===429);now=900001;const token=a.login(a.createCode().code);a.logout(request(token));assert(!a.valid(request(token)));assert.match(a.cookie(token),/HttpOnly; Secure; SameSite=Strict/);});

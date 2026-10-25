@@ -1,12 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createToasts,confirmAction,createStopFeedback,copyText} from '../public/feedback.js';
+import {createToasts,confirmAction,createStopFeedback,copyText,configureFeedbackViews} from '../public/feedback.js';
 function dom(){
  const make=(tag,cls='',text='')=>({tag,className:cls,textContent:text,children:[],attrs:{},isConnected:false,
  append(...xs){for(const x of xs){x.parent=this;x.isConnected=true;this.children.push(x);}},
  setAttribute(k,v){this.attrs[k]=v;},querySelector(tag){return this.children.find(n=>n.tag===tag);},
  remove(){this.isConnected=false;if(this.parent)this.parent.children=this.parent.children.filter(n=>n!==this);},
  focus(){this.focused=true;},showModal(){this.open=true;},close(){this.open=false;this.onclose?.();}});
+ configureFeedbackViews({
+  toast(region,{message,error,dismiss}){const node=make('div','toast'+(error?' error':'')),text=make('p','',message),close=make('button');close.onclick=dismiss;node.append(make('svg'),text,close);region.append(node);return {node,update:value=>{text.textContent=value;},remove:()=>node.remove()};},
+  confirm({message,title,accept,danger,finish}){const dialog=make('dialog'),actions=make('div'),cancel=make('button'),ok=make('button');cancel.onclick=()=>finish(false);ok.onclick=()=>finish(true);actions.append(cancel,ok);dialog.append(make('h2','',title),make('p','',message),actions);dialog.oncancel=e=>{e.preventDefault();finish(false);};dialog.onclose=()=>finish(false);document.body.append(dialog);dialog.showModal();cancel.focus();return {close(){dialog.close();dialog.remove();}};}
+ });
  return {make,region:make('div')};
 }
 test('duplicate alerts reuse one card, renew expiry, and can be closed',()=>{

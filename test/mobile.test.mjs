@@ -6,7 +6,7 @@ import {EventEmitter} from 'node:events';
 import {createApp} from '../server.mjs';
 class Fake extends EventEmitter {host={id:'local'};disconnect(){} }
 async function fixture(options,fn){
- const app=createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]]),...options});
+ const app=await createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]]),...options});
  await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
  const base='http://127.0.0.1:'+app.server.address().port;
  const {token}=await fetch(base+'/api/csrf').then(r=>r.json());
@@ -45,7 +45,7 @@ test('macOS LAN setup creates trusted TLS and usable QR without Tailscale or Pyt
  const config=JSON.parse(await readFile(path.join(home,'Library/Application Support/RemoteCodexManager/mobile/config.json'),'utf8'));
  const ca=await readFile(config.ca),qr=await readFile(path.join(path.dirname(config.ca),'lan.png'));assert.equal(qr.subarray(1,4).toString(),'PNG');
  await fixture({mobileConfig:config},async(base,post,app)=>{
-  const tls=app.createSecureServer({key:await readFile(config.key),cert:await readFile(config.cert)});await new Promise(r=>tls.listen(0,config.lanIP,r));
+  const tls=app.createSecureServer({key:await readFile(config.key),cert:await readFile(config.cert)});await app.ready();await new Promise(r=>tls.listen(0,config.lanIP,r));
   const origin=config.origins[0];
   const request=(pathname,{method='GET',cookie,body,headers={}}={})=>new Promise((resolve,reject)=>{
    const req=https.request({host:config.lanIP,port:tls.address().port,path:pathname,ca,method,headers:{host:new URL(origin).host,origin,...(cookie?{cookie}:{}),...headers}},res=>{let text='';res.on('data',c=>text+=c);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,text}));});req.on('error',reject);req.end(body&&JSON.stringify(body));

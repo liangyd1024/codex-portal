@@ -19,7 +19,7 @@ test('preflight retries connection recovery, uses only one status read per stabl
 test('local deployment endpoint returns web connection state without opening a target',async()=>{
  const {EventEmitter}=await import('node:events');const {createApp}=await import('../server.mjs');
  const manager=Object.assign(new EventEmitter(),{host:{id:'local'},status:()=>structuredClone(snapshot),disconnect(){},connect(){assert.fail('must not connect');},rpc:{request:async()=>({thread:{status:{type:'idle'},name:'已完成'}})}});
- const app=createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',manager]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+ const app=await createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',manager]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
  try{const r=await fetch('http://127.0.0.1:'+app.server.address().port+'/api/system/deployment-status');assert.equal(r.status,200);assert.equal((await r.json()).controlledSessions[0].status.type,'active');}finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));}
 });
 

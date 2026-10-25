@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Manager} from '../lib/manager.mjs';
 import {RpcClient} from '../lib/rpc-client.mjs';
-import {readSidebar} from '../lib/sidebar.mjs';
+import {readSidebar} from '../src/server/services/sidebar.ts';
 import {readLiveStatus} from '../lib/status-read.mjs';
 import {backgroundActivity} from '../public/connection-state.js';
 

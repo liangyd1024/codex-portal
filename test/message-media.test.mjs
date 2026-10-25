@@ -28,7 +28,7 @@ test('duplicate envelope paths cannot hide metadata for a different attachment',
 test('image endpoint preserves security checks and forwards only scoped selectors',async()=>{
  const {createApp}=await import('../server.mjs');const {EventEmitter}=await import('node:events');const calls=[];
  class Fake extends EventEmitter {disconnect(){} async image(thread,item,options){calls.push({thread,item,options});return {data:'iVBORw0KGgo=',mime:'image/png',extension:'png'};}}
- const app=createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
+ const app=await createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
  try{
   const route='/api/threads/t/items/i/image?part=1&path=/not-authorized';
   const result=await fetch(base+route);assert.equal(result.status,200);assert.equal(result.headers.get('content-type'),'image/png');assert.equal(result.headers.get('x-content-type-options'),'nosniff');

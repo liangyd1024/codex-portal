@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import {Eve
 test('system update requires CSRF, rejects caller-supplied execution parameters and returns progress',async()=>{
  class Fake extends EventEmitter{host={id:'local'};disconnect(){}}
  let starts=0;const updater={status:async()=>({available:true,job:null}),start:async()=>{starts++;return {available:true,job:{phase:'queued'}};}};
- const app=createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]]),updater});
+ const app=await createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]]),updater});
  await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
  try{
   assert.equal((await fetch(base+'/api/system/update').then(r=>r.json())).available,true);
@@ -17,7 +17,7 @@ test('existing SSE sends machine-wide update events to both entries and unsubscr
  class Fake extends EventEmitter{host={id:'local'};status(){return {pendingRequests:[]};}disconnect(){}}
  const listeners=new Set();let checks=0;
  const updater={status:async()=>({version:'a',job:null}),checkLatest:async()=>{checks++;},subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);}};
- const app=createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]]),updater});
+ const app=await createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]]),updater});
  await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
  const controllers=[new AbortController(),new AbortController()];
  try{

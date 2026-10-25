@@ -55,7 +55,7 @@ test('native HTTP routes keep CSRF, Origin and host isolation',async()=>{
  const {Manager}=await import('../lib/manager.mjs');const {createApp}=await import('../server.mjs');
  const calls=[];const make=host=>new Manager({host:{id:host,kind:'local'},remote:async()=>{calls.push(host);return {available:true};}});
  const one=make('one'),two=make('two');for(const m of [one,two])m.passive=async()=>({thread:{id,archived:false}});
- const {server}=createApp({config:{defaultConnection:'one'},managers:new Map([['one',one],['two',two]])});
+ const {server}=await createApp({config:{defaultConnection:'one'},managers:new Map([['one',one],['two',two]])});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
  try{
   const url=base+'/api/automations/binding?host=two',body=JSON.stringify({threadId:id});

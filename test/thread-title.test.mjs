@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {summarizeTitle} from '../lib/thread-title.mjs';
 import {setGoal} from '../lib/composer.mjs';
-import {Manager} from '../lib/manager.mjs';
+import {WorkspaceManager as Manager} from '../src/server/services/workspace-manager.ts';
 
 function setup({titleStore=null,read,write,send,goal}={}) {
   const calls=[];

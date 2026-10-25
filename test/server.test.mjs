@@ -34,7 +34,7 @@ class FakeManager extends EventEmitter {
 
 async function fixture(t) {
   const manager = new FakeManager();
-  const { server } = createApp({ manager });
+  const { server } = await createApp({ manager });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(() => new Promise((resolve, reject) => { server.close((error) => error ? reject(error) : resolve()); server.closeAllConnections(); }));
@@ -167,7 +167,7 @@ test('local responses disable sniffing and cross-origin framing', async (t) => {
 
 test('connection routing isolates local actions from remote actions',async t=>{
  const remote=new FakeManager(),local=new FakeManager();
- const {server}=createApp({manager:remote,localManager:local});
+ const {server}=await createApp({manager:remote,localManager:local});
  server.listen(0,'127.0.0.1');await once(server,'listening');
  t.after(()=>new Promise(resolve=>{server.close(resolve);server.closeAllConnections();}));
  const base=`http://127.0.0.1:${server.address().port}`;
@@ -180,7 +180,7 @@ test('connection routing isolates local actions from remote actions',async t=>{
 });
 
 test('event streams receive only their selected connection events',async t=>{
- const remote=new FakeManager(),local=new FakeManager();const {server}=createApp({manager:remote,localManager:local});
+ const remote=new FakeManager(),local=new FakeManager();const {server}=await createApp({manager:remote,localManager:local});
  server.listen(0,'127.0.0.1');await once(server,'listening');
  t.after(()=>new Promise(resolve=>{server.close(resolve);server.closeAllConnections();}));
  const response=await fetch(`http://127.0.0.1:${server.address().port}/api/events?host=local`,{signal:AbortSignal.timeout(3000)});

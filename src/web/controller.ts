@@ -1,3 +1,9 @@
+import {composerSendView} from './services/composer-send-view';
+import {publishConversationActivity} from './components/RunningIndicator';
+import {publishWorkspaceRegion} from './components/WorkspaceRegions';
+import {publishMessageInput,publishComposerBusy} from './components/MainComposer';
+import {publishWorkspaceControl,setWorkspaceControlAction} from './components/WorkspaceControls';
+import {setWorkspaceText,publishWorkspaceLabel} from './components/WorkspaceLabels';
 import type {NativeConnectionStatus,NativeRequest,NativeThread,NativeItem,NativeTurn} from '../contracts/native';
 import {createRequestRenderer} from './services/request-renderer';
 import {createConnectionBootstrap} from './services/connection-bootstrap';
@@ -15,7 +21,7 @@ import {createEventConnection} from './services/event-connection';
 import {installWorkspaceLifecycle,installOfflineDraftGuard} from './services/workspace-lifecycle';
 import {applyControllerStatus} from './services/connection-status';
 import {createThreadViewReporter} from './services/thread-view';
-import {controllerElement as $,el,icon,clear,setText} from './controller-dom';
+import {controllerElement as $,el,icon,clear} from './controller-dom';
 import {createControllerState} from './controller-state';
 import {createConnectionActions} from './services/connection-actions';
 import {publishWelcome,setWelcomeDisabled,installWelcomeAction,installClearRecovery} from './components/WorkspaceActions';
@@ -83,7 +89,7 @@ import {publishRequestCards,syncRequestCards} from './components/RequestCards';
 import {fileLink,closeFileViewer} from '../../public/message-files.js';
 import {notifyManagerError, recoveryMessage, selectedRecoveryMessage} from '../../public/recovery-state.js';
 import {processSummary,renderProcessSummary} from '../../public/process-summary.js';
-import {activitySource,conversationActivity,renderConversationActivity} from '../../public/activity.js';
+import {activitySource,conversationActivity} from '../../public/activity.js';
 import {installTurnNavigation} from '../../public/turn-navigation.js';
 let scrollFollow: ReturnType<typeof installScrollFollow> | undefined;
 let scrollContext: string | undefined;
@@ -153,13 +159,13 @@ let newChatOpen=false;
 const inputId=()=>newChatOpen?newDraftId:state.selectedId;
 const inputReady=()=>state.desktopMode&&!newChatOpen?Boolean(state.transport&&state.detail?.desktop?.available):newChatOpen?usable()&&Boolean(newDraft.cwd):usable()&&controlled()&&!state.selectedArchived;
 const {rememberNewDraft,closeNewChat,updateNewProjects,openNewDialog}=createNewChatPage({state,newDraft,newDraftId,
-  opened:{get:()=>newChatOpen,set:value=>{newChatOpen=value;}},element:$,document,toast,renderThread,resizeInput,queueMicrotask,reportThreadView,recordError,
+  opened:{get:()=>newChatOpen,set:value=>{newChatOpen=value;}},setNewChatVisible:visible=>publishWorkspaceRegion('new-chat-page',{hidden:!visible}),element:$,document,toast,renderThread,resizeInput,queueMicrotask,reportThreadView,recordError,
   currentThread,projectFolderOptions,publishProjectPicker,automations:()=>automations,flushDrafts,installProjectPickerActions,renderControls,publishNewChatControls,
   toggleInspector:open=>toggleInspector(open),compactLayout,toggleSidebar:(...args)=>toggleSidebar(...args),renderModels:()=>renderModels(),mobileUI:()=>mobileUI});
 
 function flushDrafts() {
   if (draftWritesSuspended) return;
-  if (inputId()) state.drafts.set(inputId(),$('message-input').value);
+  if (inputId()) state.drafts.set(inputId()!,$('message-input').value);
   else state.drafts.persist();
   saveView(); saveOutputPositions();
 }
@@ -271,18 +277,15 @@ function renderStatus() {
     version:service.version || h.version,connectedAt:dateTime(c.connectedAt),transport:state.transport ? '实时通道已连接' : '实时通道未连接',
     icon:connected()||connectionPending() ? 'close' : 'link',connectLabel:state.busy.has('disconnect') ? '正在断开…' : connectionPending()?'取消连接':connected() ? '断开本机连接' : '连接目标机器'});
   publishWelcome({ready:true,icon:connected()?'plus':'link',label:connectionPending()?'正在连接…':connected()?'新建目标机器会话':'连接 '+(h.alias||'目标机器')});
-  setText('welcome-footnote',connected() ? '已连接。选择左侧会话，或新建目标机器会话。' : '等待连接。此页面不包含演示会话。');
+  setWorkspaceText('welcome-footnote',connected() ? '已连接。选择左侧会话，或新建目标机器会话。' : '等待连接。此页面不包含演示会话。');
   renderControlOverview();
   renderControls(); renderDiagnostics(); if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();
 }
 function renderControlOverview() {
   const sessions=state.status?.controlledSessions||[],counts=new Map();
   sessions.forEach(session=>{const label=sessionLabel(session);counts.set(label,(counts.get(label)||0)+1);});
-  setText('control-overview',sessions.length?'本工作台 · '+[...counts].map(([label,count])=>label+' '+count).join(' · '):'尚未接管会话');
-  document.querySelectorAll<HTMLElement>('.thread-runtime').forEach(badge=>{
-    const session=sessions.find(item=>item.id===badge.dataset.threadId);
-    badge.textContent=session?sessionLabel(session):'查看模式';
-  });
+  setWorkspaceText('control-overview',sessions.length?'本工作台 · '+[...counts].map(([label,count])=>label+' '+count).join(' · '):'尚未接管会话');
+
 }
 function renderConnectionBanner() {
   const s=state.status||{}, c=s.connection||{}, service=s.service||{}, conn=c.state||'disconnected';
@@ -307,90 +310,75 @@ function renderControls() {
     supported:state.status?.service?.protocolValidation?.features?.handoff?.supported===true,busy:handing,archived:state.selectedArchived,conflict:state.detail?.controlState==='conflict'});
   const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
   publishConnectionSelect({disabled:creating});
-  $('new-thread').disabled = !!state.status?.loginRecovery || !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels;
+  publishWorkspaceControl('new-thread',{ disabled:!!state.status?.loginRecovery || !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels });
   setWelcomeDisabled(connectionPending() || state.busy.has('connect') || state.busy.has('disconnect') || (connected() && (!ready || !state.models.length||!featureReady('create'))));
   publishConnectionSettings({connectDisabled:state.busy.has('connect') || state.busy.has('disconnect') || state.busy.has('release'),
     reloadDisabled:!ready||!featureReady('release')||state.busy.has('release'),
     releaseDisabled:!ready || !featureReady('release') || !state.status?.service?.running || state.busy.has('release'),
     releaseLabel:state.busy.has('release') ? '正在检查并释放…' : '停止目标服务（影响所有入口）',
     releaseReason:!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。'});
-  $('refresh-projects').disabled = !ready || state.refreshing; $('refresh-all').disabled = state.refreshing || state.busy.has('refresh');
-  $('thread-search').disabled = !connected();
+  publishWorkspaceControl('refresh-projects',{ disabled:!ready || state.refreshing }); publishWorkspaceControl('refresh-all',{ disabled:state.refreshing || state.busy.has('refresh') });
+  publishWorkspaceControl('thread-search',{ disabled:!connected() });
   publishModelSelectAvailability(!ready || !state.models.length || state.loadingModels,
     !ready || !state.model || !effortsFor(state.model).length || state.loadingModels);
-  const input = $('message-input'); input.disabled = !ready || !own || posting || handing;
+  const input = $('message-input'); publishMessageInput({disabled:!ready || !own || posting || handing});
   const followUp=followUpAction({active,touch:touchInput()});
-  input.placeholder = !ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? (followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…') : '发送消息…';
-  const hasModel = Boolean(modelFor(state.model));
-  const hasEffort = effortsFor(state.model).some(e => e.value === state.effort);
-  const buttonView:Parameters<typeof publishSendActions>[0]={send:{disabled:false,label:''},guide:{hidden:false,disabled:false},stop:{hidden:false,disabled:false,text:'',title:''}};
-  buttonView.send.disabled = !!state.status?.loginRecovery || !ready || !own || !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') || posting || attachments?.pending() || (!input.value.trim()&&!attachments?.has()&&!annotations?.has()) || (!active && (!hasModel || !hasEffort));
-  buttonView.send.label=active ? (followUp==='queue'?'排队发送':'引导当前任务') : '发送消息';
-  buttonView.guide.hidden=!active||touchInput()||state.desktopMode;buttonView.guide.disabled=!ready||!own||posting||attachments?.pending()||!featureReady('steer')||(!input.value.trim()&&!attachments?.has()&&!annotations?.has());
-  $('message-form').setAttribute('aria-busy',String(posting));
-  buttonView.send.title = posting ? '正在发送…' : active ? (followUp==='queue'?'排队发送':'引导当前任务') : '发送消息';
-  buttonView.stop.hidden = !active&&background.state!=='running'&&!stopping; buttonView.stop.disabled = !ready || !own || !featureReady('stop') || state.busy.has('interrupt') || stopping;
-  $('takeover').hidden = own || !state.selectedId || state.selectedArchived; $('takeover').disabled = !ready || !featureReady('takeover') || switching || handing || !state.selectedId;
-  $('takeover').querySelector('span')!.textContent = switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话';
-  const availability = $('composer-availability');
-  const unavailable = !ready ? '连接恢复后可继续，草稿已保留。' : state.selectedArchived ? '此会话已归档，恢复后可继续。' : handing ? '正在确认交还状态，草稿已保留。' : posting ? '' : !featureReady(active?(followUp==='queue'?'queueWrite':'steer'):'message') ? '当前引擎暂不支持此操作。' : active && !featureReady('stop') ? '当前引擎暂不支持停止，仍可补充要求。' : own && !active && !hasModel ? '请选择一个可用模型。' : own && !active && !hasEffort ? '请选择思考档位。' : '';
-  availability.textContent = unavailable; availability.hidden = !unavailable;
-  $('new-thread').setAttribute('aria-description',!ready ? '连接恢复后可新建会话。' : !state.models.length ? '正在等待目标机器模型目录。' : creating ? '正在创建，请稍候。' : '');
+  publishMessageInput({placeholder:!ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? (followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…') : '发送消息…'});
+  const {buttonView,unavailable}=composerSendView({active,ready,own,posting,handing,stopping,
+    loginRecovery:!!state.status?.loginRecovery,desktopMode:state.desktopMode,interrupting:state.busy.has('interrupt'),archived:state.selectedArchived,
+    touch:touchInput(),backgroundState:background.state,followUp,attachmentPending:attachments?.pending(),hasAttachments:attachments?.has(),hasAnnotations:annotations?.has(),
+    text:input.value,hasModel:Boolean(modelFor(state.model)),hasEffort:effortsFor(state.model).some(e=>e.value===state.effort),featureReady});
+  publishComposerBusy(posting);
+  publishWorkspaceControl('takeover',{ hidden:own || !state.selectedId || state.selectedArchived }); publishWorkspaceControl('takeover',{ disabled:!ready || !featureReady('takeover') || switching || handing || !state.selectedId });
+  publishWorkspaceControl('takeover',{text:switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话'});
+  publishWorkspaceControl('composer-availability',{text:unavailable,hidden:!unavailable});
+  publishWorkspaceControl('new-thread',{description:!ready ? '连接恢复后可新建会话。' : !state.models.length ? '正在等待目标机器模型目录。' : creating ? '正在创建，请稍候。' : ''});
   controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
   controlReason('takeover',!ready ? '连接恢复后可接管。' : switching ? '正在接管，请稍候。' : handing ? '交还状态正在确认，请稍候。' : '当前引擎暂不支持接管。');
   buttonView.stop.text=stopLabel;
   buttonView.stop.title=stopping?'停止请求已发出，等待目标确认。':active?'停止当前轮次':'停止后台命令';
   buttonView.stop.label=stopping?stopLabel:buttonView.stop.title;
   buttonView.stop.busy=String(stopping);
-  const indicator=$('running-indicator'),nextIndicator=el('div');
-  renderConversationActivity(nextIndicator,newChatOpen?null:conversationActivity(currentThread(),{
+  publishConversationActivity(newChatOpen?null:conversationActivity(currentThread(),{
     connected:ready,controlled:controlled(),active,background,needsAnswer:needsAnswer(state.selectedId),
-  }),icon);
-  indicator.hidden=nextIndicator.hidden;
-  reconcileMessages(indicator,nextIndicator);
+  }));
   if(newChatOpen){
     const reason=!ready?'连接恢复后可发送，草稿已保留。':newDraft.phase==='uncertain'?'创建结果未确认，请刷新侧栏核对，避免重复创建。':!newDraft.cwd?'选择一个项目后开始。':creating?'正在创建会话…':'';
     buttonView.send.disabled ||= !featureReady('create')||!newDraft.cwd||newDraft.phase!=='editing';
     buttonView.send.label=creating?'正在创建会话':'发送并开始会话';
-    input.disabled=!ready||posting;input.placeholder='描述你想完成的任务…';
-    availability.textContent=reason;availability.hidden=!reason;
+    publishMessageInput({disabled:!ready||posting,placeholder:'描述你想完成的任务…'});
+    publishWorkspaceControl('composer-availability',{text:reason,hidden:!reason});
     publishNewChatControls({retryHidden:newDraft.phase!=='uncertain',closeDisabled:creating});
     publishProjectPicker({disabled:!ready||creating||newDraft.phase==='uncertain'});
-    buttonView.stop.hidden=true;$('takeover').hidden=true;
-    $('thread-title').hidden=false;setText('thread-title','新会话');
+    buttonView.stop.hidden=true;publishWorkspaceControl('takeover',{ hidden:true });
+    publishWorkspaceLabel('thread-title',{hidden:false});setWorkspaceText('thread-title','新会话');
   }
   projectFolders?.sync();
-  document.querySelectorAll<HTMLButtonElement>('.project-create').forEach(button => { button.disabled = $('new-thread').disabled; });
-  setText('composer-model-label',(modelFor(state.model)?.displayName || state.model || '模型')+' · '+(effortNames[state.effort] || state.effort || '档位'));
+  setWorkspaceText('composer-model-label',(modelFor(state.model)?.displayName || state.model || '模型')+' · '+(effortNames[state.effort] || state.effort || '档位'));
   composer?.render(); attachments?.render();
   const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '查看模式。接管后可在原会话继续工作。';
-  setText('composer-hint',state.desktopMode&&!newChatOpen?'使用桌面会话的模型与设置。发送成功仅代表会话已接收，任务结果以原始回复为准。':state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
-  setText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
+  setWorkspaceText('composer-hint',state.desktopMode&&!newChatOpen?'使用桌面会话的模型与设置。发送成功仅代表会话已接收，任务结果以原始回复为准。':state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
+  setWorkspaceText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
   syncRequestCards({ready,pending:id=>state.busy.has('request:'+id),controlledThreads:state.status?.controlledThreads});
   const desktopView:Parameters<typeof publishDesktopControls>[0]={entryHidden:newChatOpen||!state.selectedId||state.selectedArchived||own||state.desktopMode,entryDisabled:!state.transport||state.busy.size>0||Boolean(handoff&&handoff.state!=='released'),reviewHidden:true};
   if(state.desktopMode&&!newChatOpen){
     const desktop=state.detail?.desktop,online=state.transport&&desktop?.available,unconfirmed=desktop?.unconfirmed||desktopSends[state.selectedId!]?.messageId;
-    input.disabled=posting;input.placeholder=active?'任务执行中，可先输入下一条要求…':'发送消息，输入 @ 引用会话…';
-    $('takeover').hidden=true;
+    publishMessageInput({disabled:posting,placeholder:active?'任务执行中，可先输入下一条要求…':'发送消息，输入 @ 引用会话…'});
+    publishWorkspaceControl('takeover',{ hidden:true });
     buttonView.send.disabled=!online||!desktop?.canSend||!!unconfirmed||posting||(!input.value.trim()&&!annotations?.has());
     buttonView.send.title='发送到桌面会话';buttonView.send.label='发送到桌面会话';
     buttonView.stop.hidden=!active&&!stopping;buttonView.stop.disabled=!online||state.busy.has('interrupt')||stopping;
     const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
-    availability.textContent=reason;availability.hidden=!reason;
+    publishWorkspaceControl('composer-availability',{text:reason,hidden:!reason});
     desktopView.reviewHidden=!unconfirmed;desktopView.reviewDisabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
   }
   publishDesktopControls(desktopView);
   publishSendActions(buttonView);
-  if(automations?.opened){$('thread-title').hidden=false;setText('thread-title','定时任务');}
+  if(automations?.opened){publishWorkspaceLabel('thread-title',{hidden:false});setWorkspaceText('thread-title','定时任务');}
 }
-function controlReason(id:'new-thread'|'takeover', text:string) {
-  const button = $(id); let note = $('reason-' + id);
-  // Sidebar loading feedback must not insert/remove a row above the project list.
-  const compact = id === 'new-thread', hidden = !button.disabled || button.hidden;
-  if (!note) { note = el('p',compact ? 'sr-only' : 'control-reason'); note.id = 'reason-' + id; button.after(note); button.setAttribute('aria-describedby',note.id); }
-  if (note.textContent !== text) note.textContent = text;
-  note.hidden = hidden;
-  if (compact) button.title = hidden ? '新建会话（⌘/Ctrl+N）' : text;
+function controlReason(id:'new-thread'|'takeover',text:string){
+  const button=$(id),hidden=Boolean(!button.disabled||button.hidden);
+  publishWorkspaceControl(id,{reason:{text,hidden},...(id==='new-thread'?{title:hidden?'新建会话（⌘/Ctrl+N）':text}:{})});
 }
 const sidebar: Sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadName,relativeTime,api,toast,
   needsAnswer,
@@ -403,13 +391,13 @@ const sidebar: Sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon
 });
 function renderProjects() { renderThreads(); if(newChatOpen&&!state.busy.has('create')){updateNewProjects();renderControls();} }
 function renderThreads() {
-  setText('projects-heading','工作区');
+  setWorkspaceText('projects-heading','工作区');
   if(state.sidebar)sidebar.render({...state.sidebar,data:state.threads},{search:state.search,loading:state.loadingThreads});
-  setText('breadcrumb-project',state.projects.find(p=>p.id===state.projectId)?.name||'工作区');
-  $('more-threads').hidden=!state.threadPageError&&!state.threadCursor&&(!state.loadingThreads||state.threads.length>0);
-  $('more-threads').textContent=state.threadPageError?'加载失败，点击重试':state.loadingThreads?'正在加载会话…':'加载更多会话';
-  $('more-threads').disabled=state.loadingThreads;
-  $('more-threads').onclick=()=>loadThreads(Boolean(state.threadCursor));
+  setWorkspaceText('breadcrumb-project',state.projects.find(p=>p.id===state.projectId)?.name||'工作区');
+  publishWorkspaceControl('more-threads',{ hidden:!state.threadPageError&&!state.threadCursor&&(!state.loadingThreads||state.threads.length>0) });
+  publishWorkspaceControl('more-threads',{ text:state.threadPageError?'加载失败，点击重试':state.loadingThreads?'正在加载会话…':'加载更多会话' });
+  publishWorkspaceControl('more-threads',{ disabled:state.loadingThreads });
+  setWorkspaceControlAction('more-threads',()=>loadThreads(Boolean(state.threadCursor)));
 }
 const {modelId,modelFor,effortsFor,defaultEffort,fillModels,fillEfforts,renderModels}=createModelSelection({state,effortNames,newChatOpen:()=>newChatOpen,currentThread,element:$,renderSelectOptions,renderControls});
 
@@ -512,7 +500,7 @@ function renderItem(item:NativeItem,{threadId=state.selectedId,side=false,refres
   if (item.type === 'mcpToolCall') {
     const host=targetHost,selection=state.selectionVersion;
     installDeferredTool({details:d,body,isCurrent:()=>targetHost===host&&(side||state.selectedId===threadId&&state.selectionVersion===selection),
-      load:async()=>item.detailsDeferred?(await api('/api/threads/'+encodeURIComponent(threadId!)+'/items/'+encodeURIComponent(item.id!)+'/detail')).item:item,
+      load:async()=>item.detailsDeferred?(await api<{item:NativeItem}>('/api/threads/'+encodeURIComponent(threadId!)+'/items/'+encodeURIComponent(item.id!)+'/detail')).item:item,
       render:(value:NativeItem,body:HTMLElement)=>{body.append(el('div','tool-meta','服务：'+(value.server||'—')));
         if(value.arguments)body.append(el('pre','tool-output',pretty(value.arguments)));
         if(value.result)body.append(el('pre','tool-output',pretty(value.result)));
@@ -537,7 +525,7 @@ function renderMessages() {
   if(scrollContext!==context){turnNavigation?.switchContext(context);closeFileViewer();scrollContext=context;scrollFollow?.reset();clear($('messages'));lastMessageShape=undefined;messageCache.clear();}
   progressiveTurns.reset(context+':'+state.selectionVersion+':'+state.detailVersion);
   const visibleTurns:NativeTurn[]=progressiveTurns.view(state.loadingDetail?[]:turns());
-  $('messages').setAttribute('aria-busy',String(state.loadingDetail||progressiveTurns.pending));
+  publishWorkspaceRegion('messages',{busy:state.loadingDetail||progressiveTurns.pending});
   progressiveTurns.enqueue();
   const receipts=sendReceipts.view(context,turns());
   const completion=completedGoalPlacement(state.detail?.goal,turns(),state.detail?.goalError||uncertainHistory());
@@ -636,18 +624,18 @@ function renderMessages() {
 }
 function renderThread() {
   renderRequests();
-  const t = currentThread(); $('welcome').hidden = Boolean(state.selectedId); $('conversation').hidden = !state.selectedId;
-  $('thread-title').hidden = !state.selectedId;
-  $('breadcrumb-project').hidden = Boolean(state.selectedId);
+  const t = currentThread(); publishWorkspaceRegion('welcome',{hidden:Boolean(state.selectedId)}); publishWorkspaceRegion('conversation',{hidden:!state.selectedId});
+  publishWorkspaceLabel('thread-title',{hidden:!state.selectedId});
+  publishWorkspaceLabel('breadcrumb-project',{hidden:Boolean(state.selectedId)});
   if (!state.selectedId) { renderControls(); return; }
-  setText('thread-title',t ? threadName(t) : '正在读取会话…'); $('thread-title').title = $('thread-title').textContent; setText('thread-path',t?.cwd ? '目标机器 · ' + t.cwd : '');
+  setWorkspaceText('thread-title',t ? threadName(t) : '正在读取会话…'); publishWorkspaceLabel('thread-title',{title:$('thread-title').textContent||''}); setWorkspaceText('thread-path',t?.cwd ? '目标机器 · ' + t.cwd : '');
   const own = controlled(), control = typeOf(state.detail?.controlState), busy = ['busy','occupied','active_writer','conflict'].includes(control);
-  const badge = $('control-badge'); badge.className = 'control-badge' + (own ? ' controlled' : busy ? ' busy' : ''); badge.textContent = own ? '已取得控制' : busy ? '已被占用' : '查看模式';
-  const note = $('control-note');
-  note.className = 'control-note';
-  note.textContent = own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话由其他入口管理，当前为查看模式。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
-  if (snapshotHistory()) note.textContent = (own ? '历史来自快照。实时状态由目标机器控制连接确认。' : '历史快照，运行状态需接管后确认。') + (busy ? ' ' + note.textContent : '');
-  if(state.desktopMode){badge.textContent='桌面托管';note.textContent='消息由 Codex 桌面执行，沿用该会话的原生工具。';}
+  let badgeText=own ? '已取得控制' : busy ? '已被占用' : '查看模式';
+  let noteText=own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话由其他入口管理，当前为查看模式。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
+  if(snapshotHistory())noteText=(own ? '历史来自快照。实时状态由目标机器控制连接确认。' : '历史快照，运行状态需接管后确认。')+(busy?' '+noteText:'');
+  if(state.desktopMode){badgeText='桌面托管';noteText='消息由 Codex 桌面执行，沿用该会话的原生工具。';}
+  publishWorkspaceLabel('control-badge',{className:'control-badge'+(own?' controlled':busy?' busy':''),text:badgeText});
+  publishWorkspaceLabel('control-note',{className:'control-note',text:noteText});
   renderMessages(); renderControls(); resizeInput();
 }
 function renderDiagnostics() {
@@ -790,7 +778,7 @@ const sendDesktopMessage=createDesktopSend({state,input:()=>$('message-input'),
   acknowledgeDraft:sent=>state.drafts.acknowledge(sent),sends:desktopSends,saveSends:()=>saveDesktopSends(),
   uuid:()=>crypto.randomUUID(),action:(...args)=>action(...args),post:(path,body)=>api(path,{method:'POST',body}),
   refresh:()=>refreshSelected(),resize:()=>resizeInput(),toast:(...args)=>toast(...args)});
-const historyPagination=createHistoryPagination({state,busy:value=>$('messages-scroller').setAttribute('aria-busy',String(value)),
+const historyPagination=createHistoryPagination({state,busy:value=>publishWorkspaceRegion('messages-scroller',{busy:value}),
   action:(...args)=>action(...args),read:path=>api(path),turns,render:()=>renderThread()});
 const interruptThread=createStopRequest({state,newChatOpen:()=>newChatOpen,context:stopContext,turns,kind:typeOf,
   controlled,running,feedback:stopFeedback,action:(...args)=>action(...args),api:(...args)=>api(...args),
@@ -832,9 +820,9 @@ function wireEvents() {
   document.querySelector('.main-panel')!.classList.toggle('desktop-chat',state.desktopMode);
   setInterval(()=>{if(automations!.opened&&!document.hidden)void automations!.refresh();},15000);
 
-  capacityRetry=installCapacityRetry({container:document.querySelector('.composer-region'),storage:sessionStorage,refresh:refreshSelected,
+  capacityRetry=installCapacityRetry({container:document.querySelector<HTMLElement>('.composer-region')!,storage:sessionStorage,refresh:refreshSelected,
     context:()=>({host:targetHost,id:state.selectedId,turns:!newChatOpen&&!state.desktopMode?turns():[],unavailableReason:!usable()?'连接尚未恢复，暂不能重试。':running()?'会话正在运行，暂不能重试。':!controlled()?'接管会话后可重试。':'正在确认会话状态，暂不能重试。',ready:!newChatOpen&&!state.desktopMode&&usable()&&controlled()&&!running()&&!uncertainHistory()&&!state.loadingDetail&&!state.historyError&&!state.busy.size}),
-    send:async(c:{host:string;id:string},turnId:string,automatic:boolean)=>{try{const result=await api<{turn:NativeTurn}>('/api/threads/'+encodeURIComponent(c.id)+'/retry-capacity',{method:'POST',body:{turnId,automatic,model:state.model,effort:state.effort,mode:composer!.options().mode}});if(c.host===targetHost&&c.id===state.selectedId){upsertTurn(result.turn);renderThread();scheduleDetailRefresh();}}catch(error){if(c.host===targetHost&&c.id===state.selectedId)await refreshSelected().catch(()=>{});throw error;}}});
+    send:async(c,turnId,automatic)=>{try{const result=await api<{turn:NativeTurn}>('/api/threads/'+encodeURIComponent(c.id!)+'/retry-capacity',{method:'POST',body:{turnId,automatic,model:state.model,effort:state.effort,mode:composer!.options().mode}});if(c.host===targetHost&&c.id===state.selectedId){upsertTurn(result.turn);renderThread();scheduleDetailRefresh();}}catch(error){if(c.host===targetHost&&c.id===state.selectedId)await refreshSelected().catch(()=>{});throw error;}}});
   scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
   attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady()&&!state.desktopMode,busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});
@@ -866,8 +854,8 @@ function wireEvents() {
   }).observe($('message-input'));
   installConnectionActions({connect:()=>connected()||connectionPending()?disconnectRemote():connectRemote(),reload:reloadLogin,release:releaseService});
   installWelcomeAction(() => connected() ? openNewDialog() : connectRemote());
-  $('new-thread').onclick = openNewDialog; $('takeover').onclick = takeoverThread;
-  $('refresh-all').onclick = () => action('refresh',() => refreshWorkspace(true)); $('refresh-projects').onclick = () => action('projects',() => showRefresh('侧边栏',()=>loadThreads(false,true)));
+  setWorkspaceControlAction('new-thread',openNewDialog); setWorkspaceControlAction('takeover',takeoverThread);
+  setWorkspaceControlAction('refresh-all',() => action('refresh',() => refreshWorkspace(true))); setWorkspaceControlAction('refresh-projects',() => action('projects',() => showRefresh('侧边栏',()=>loadThreads(false,true))));
   $('project-list').addEventListener('scroll',loadVisibleThreads,{passive:true});
   new ResizeObserver(loadVisibleThreads).observe($('project-list'));
   const historyScroller = $('messages-scroller');
@@ -880,7 +868,7 @@ function wireEvents() {
   },{passive:true});
   historyScroller.addEventListener('wheel',event => { if (event.deltaY < 0) loadEarlierNearTop(); },{passive:true});
   historyScroller.addEventListener('keydown',event => { if (['ArrowUp','PageUp','Home'].includes(event.key)) loadEarlierNearTop(); });
-  let searchTimer:ReturnType<typeof setTimeout> | undefined; $('thread-search').oninput = e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.search = (e.target as HTMLInputElement).value.trim(); loadThreads(); },300); };
+  let searchTimer:ReturnType<typeof setTimeout> | undefined; setWorkspaceControlAction('thread-search',e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.search = (e.target as HTMLInputElement).value.trim(); loadThreads(); },300); });
   installSendActions({guide:()=>sendMessage(undefined,true),stop:interruptThread});
   messageInput.bind($('message-form'));
   installModelSelectActions({
@@ -894,14 +882,14 @@ function wireEvents() {
   $('open-sidebar').onclick = () => toggleSidebar();
   $('close-sidebar').onclick = () => { toggleSidebar(false); $('open-sidebar').focus(); };
   $('sidebar-backdrop').onclick = () => { if (compactLayout()) toggleSidebar(false); toggleInspector(false); };
-  $('toggle-projects').onclick = () => { const show = $('project-list').hidden; $('project-list').hidden = !show; $('toggle-projects').setAttribute('aria-expanded',String(show)); saveLayout('projects',show); };
+  $('toggle-projects').onclick = () => { const show = $('project-list').hidden; publishWorkspaceRegion('project-list',{hidden:!show}); $('toggle-projects').setAttribute('aria-expanded',String(show)); saveLayout('projects',show); };
   document.addEventListener('keydown',e => { if(e.defaultPrevented||document.querySelector('dialog[open]'))return; if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); toggleSidebar(true); $('thread-search').focus(); } if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') { e.preventDefault(); openNewDialog(); } if (e.key === 'Escape' && !compactLayout() && window.innerWidth <= 1050) toggleInspector(false); });
   toggleSidebar(!compactLayout() && readLayout('sidebar',true), false);
   toggleInspector(false);
-  $('project-list').hidden = !readLayout('projects',true);
+  publishWorkspaceRegion('project-list',{hidden:!readLayout('projects',true)});
   $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
   mobileUI = installMobileUI({closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:(mobile:boolean)=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
-  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector('.mobile-more-panel'),follow:scrollFollow,loadEarlier:moreHistory,loadDirectory:()=>api('/api/threads/'+encodeURIComponent(state.selectedId!)+'/turn-directory'),onError:message=>toast(message,true),context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),ready:usable()&&!state.loadingDetail&&!state.historyError&&!state.detail?.recovering&&!selectedRefresh.pending(),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:(id:string)=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
+  turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector<HTMLElement>('.mobile-more-panel')!,follow:scrollFollow,loadEarlier:moreHistory,loadDirectory:()=>api('/api/threads/'+encodeURIComponent(state.selectedId!)+'/turn-directory'),onError:message=>toast(message,true),context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),ready:usable()&&!state.loadingDetail&&!state.historyError&&!state.detail?.recovering&&!selectedRefresh.pending(),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:(id:string)=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
   installOfflineDraftGuard({window,state,flushDrafts,renderStatus,renderControls});
 }
 const init=createWorkspaceStartup({state,sidebar,document,location,sessionStorage,element:$,setInterval,targetHost,requestedHost,
@@ -916,6 +904,6 @@ if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)|
 await init();
 
 publishConnectionSelect({value:targetHost});
-installConnectionSelectAction(value=>{if(state.busy.has('create'))return;rememberHost(value);if(inputId())state.drafts.set(inputId(),$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',value);url.searchParams.delete('thread');location.assign(url);});
+installConnectionSelectAction(value=>{if(state.busy.has('create'))return;rememberHost(value);if(inputId())state.drafts.set(inputId()!,$('message-input').value);try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}const url=new URL(location.href);url.searchParams.set('host',value);url.searchParams.delete('thread');location.assign(url);});
 
 const setClearRecoveryDisabled=installClearRecovery(async()=>{flushDrafts();setClearRecoveryDisabled(true);cancelDetailSave();try{await clearDetailCache();location.reload();}catch(e){setClearRecoveryDisabled(false);toast('无法清除日志缓存：'+messageOf(e),true);}});

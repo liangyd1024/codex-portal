@@ -15,7 +15,7 @@ test('scoped file route streams bytes and preserves ranges, downloads and access
   disconnect(){}
   async openFile(threadId,itemId,payload){calls.push({threadId,itemId,payload});return {meta:{status:payload.range?206:200,name:'中文 (1).mp4',mime:'video/mp4',kind:'video',size:20,length:3,start:2,end:4,etag:'"v1"'},body:Readable.from([Buffer.from([0,128,255])]),cancel(){cancelled++;}};}
  }
- const app=createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});
+ const app=await createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});
  await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
  const route=base+itemFileUrl('thread','item','/tmp/中文.mp4','local');
  try {
@@ -43,14 +43,14 @@ test('binary reader preserves non-UTF8 bytes across header chunks and cancels pr
 
 test('transfer errors and invalid ranges remain actionable HTTP errors',async()=>{
  class Fake extends EventEmitter {disconnect(){}async openFile(){return {meta:{status:416,error:'范围无效',size:20},body:Readable.from([]),cancel(){}};}}
- const app=createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+ const app=await createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
  try {const result=await fetch('http://127.0.0.1:'+app.server.address().port+itemFileUrl('t','i','/tmp/a','local'));assert.equal(result.status,416);assert.equal(result.headers.get('content-range'),'bytes */20');assert.equal((await result.json()).error.message,'范围无效');}
  finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));}
 });
 
 test('unpaired mobile clients cannot read file bytes',async()=>{
  let calls=0;class Fake extends EventEmitter {disconnect(){}async openFile(){calls++;throw Error('must not run');}}
- const mobileConfig={origins:[]};const app=createApp({mobileConfig,config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});
+ const mobileConfig={origins:[]};const app=await createApp({mobileConfig,config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});
  await new Promise(r=>app.proxyServer.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.proxyServer.address().port;mobileConfig.origins.push(base);
  try {const response=await fetch(base+itemFileUrl('t','i','/tmp/a','local'));assert.equal(response.status,401);assert.equal(calls,0);}
  finally {app.proxyServer.closeAllConnections();await new Promise(r=>app.proxyServer.close(r));}

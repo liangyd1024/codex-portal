@@ -163,7 +163,7 @@ test('an already unloaded thread is released without an unsubscribe mutation',as
 });
 
 test('HTTP handoff uses the selected host and requires CSRF and matching Origin',async()=>{
-  const f=fixture(),second=fixture();const {server}=createApp({config:{machineId:'test',defaultConnection:'one'},managers:new Map([['one',f.m],['two',second.m]])});
+  const f=fixture(),second=fixture();const {server}=await createApp({config:{machineId:'test',defaultConnection:'one'},managers:new Map([['one',f.m],['two',second.m]])});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
   try{
     assert.equal((await fetch(base+'/api/threads/a/handoff?host=two',{method:'POST',body:'{}'})).status,403);

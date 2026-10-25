@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {Manager} from '../lib/manager.mjs';
+import {WorkspaceManager as Manager} from '../src/server/services/workspace-manager.ts';
 import {notifyManagerError,recoveryMessage,selectedRecoveryMessage} from '../public/recovery-state.js';
 
 function fixture(){
@@ -86,7 +86,7 @@ test('diagnostic clearing requires CSRF, matching Origin and only clears the sel
   const first=fixture(),second=fixture();
   first.m.restoreOnStart=false;second.m.restoreOnStart=false;
   first.m.record(new Error('first'));second.m.record(new Error('second'));
-  const {server}=createApp({config:{defaultConnection:'one',connections:[]},managers:new Map([['one',first.m],['two',second.m]])});
+  const {server}=await createApp({config:{defaultConnection:'one',connections:[]},managers:new Map([['one',first.m],['two',second.m]])});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const base='http://127.0.0.1:'+server.address().port;
   try{

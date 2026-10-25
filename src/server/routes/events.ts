@@ -1,7 +1,7 @@
 import type {IncomingMessage} from 'node:http';
 import type {Manager} from '../../../lib/manager.mjs';
-import type {MobileAccess} from '../../../lib/mobile-access.mjs';
-import type {WebUpdate} from '../../../lib/web-update.mjs';
+import type {MobileAccess} from '../services/mobile-access';
+import type {WebUpdate} from '../services/web-update';
 import type {Response} from '../types';
 import {AppError} from '../../../lib/manager.mjs';
 import {body,json} from '../protocol';

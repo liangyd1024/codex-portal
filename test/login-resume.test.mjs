@@ -1,14 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import vm from 'node:vm';
-import {readFile} from 'node:fs/promises';
-const source=await readFile(new URL('../public/login.js',import.meta.url),'utf8');
+import {createPairingController,initialPairingView} from '../src/web/services/pairing.ts';
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(fetch){
   const nodes=Object.fromEntries(['pair-form','pair-code','pair-status','pair-retry','button'].map(id=>[id,{hidden:id==='pair-form',value:'123456',addEventListener(){},setAttribute(){},setCustomValidity(){},reportValidity(){},focus(){}}]));
   nodes['pair-form'].querySelector=()=>nodes.button;
   const events={},state={reloads:0,calls:[]};
-  vm.runInNewContext(source,{document:{hidden:false,getElementById:id=>nodes[id],addEventListener:(key,fn)=>events[key]=fn},window:{addEventListener:(key,fn)=>events[key]=fn},location:{reload:()=>state.reloads++},fetch:(...args)=>{state.calls.push(args);return fetch(...args);},AbortController,setTimeout,clearTimeout});
+  const view={...initialPairingView};
+  const publish=patch=>{Object.assign(view,patch);nodes['pair-form'].hidden=view.formHidden;nodes['pair-retry'].hidden=view.retryHidden;nodes['pair-status'].textContent=view.status;nodes.button.disabled=view.pending;nodes.button.textContent=view.button;};
+  publish({});
+  const controller=createPairingController({input:nodes['pair-code'],publish,
+    document:{hidden:false,addEventListener:(key,fn)=>events[key]=fn,removeEventListener(){}},
+    window:{addEventListener:(key,fn)=>events[key]=fn,removeEventListener(){}},
+    reload:()=>state.reloads++,fetch:(...args)=>{state.calls.push(args);return fetch(...args);}});
+  nodes['pair-form'].onsubmit=controller.submit;
+  nodes['pair-retry'].onclick=controller.restoreLogin;
+  controller.start();
   return {nodes,events,state};
 }
 const expired=()=>new Response(JSON.stringify({error:{code:'PAIRING_REQUIRED'}}),{status:401});

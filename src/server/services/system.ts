@@ -1,6 +1,6 @@
 import type {Manager} from '../../../lib/manager.mjs';
 import {AppError} from '../../../lib/manager.mjs';
-import type {WebUpdate} from '../../../lib/web-update.mjs';
+import type {WebUpdate} from './web-update';
 import {deploymentStatus} from '../../../lib/deployment-status.mjs';
 import {publicHost} from '../../../lib/config.mjs';
 import type {Config,ApplicationOptions} from '../types';
