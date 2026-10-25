@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
 import {createStore,useStore,type StoreApi} from 'zustand';
 import {goalPresentation,goalDuration} from '../../../public/goal-toolbar.js';
-interface Goal {status:string;objective?:string;timeUsedSeconds?:number;[key:string]:unknown}
+interface Goal {status?:string;objective?:string;timeUsedSeconds?:number;[key:string]:unknown}
 interface Context {id:string|null;goal?:Goal|null;goalError?:unknown;draft?:boolean;ephemeral?:boolean;ready:boolean;busy:boolean;active:boolean}
 interface Options {input:HTMLTextAreaElement;context:()=>Context;api:(path:string,options:{method:'POST';body:{clear:true}|{status:string}})=>Promise<unknown>;refresh:()=>Promise<unknown>;edit:(anchor:HTMLButtonElement)=>void}
 interface View {hidden:boolean;pending:boolean;label:string;objective:string;duration:string;disabled:boolean;action:string|null;toggleDisabled:boolean;feedback:string}

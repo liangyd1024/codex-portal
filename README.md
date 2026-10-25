@@ -262,9 +262,10 @@ python3 scripts/restore-apply.py apply /absolute/restore-directory --entrances-d
 ## 验证
 
 ```sh
-node --test test/*.test.mjs
-python3 -m unittest discover -s test -p 'test_*.py'
+node scripts/run-tests.mjs
 ```
+
+该入口先构建，再运行完整 Node 和 Python 回归。需要单独运行 Node 测试时，使用 `node --experimental-strip-types --test test/goal-submit.test.mjs`，将文件名换成所需测试。显式参数兼容尚未默认启用类型剥离的 Node 22 版本；它不替代独立类型检查。
 
 测试覆盖可配置连接路由、CSRF/Origin 防护、普通断开语义、维护确认、浏览器来源限制、并发 SQLite 备份、隔离恢复、错误密钥、损坏、错误机器、版本、路径越界、校验失败、恢复失败回退和手机配对撤销。测试只使用独立的临时目录；为遵守不批量删除的约束，测试目录保留并输出路径，需手动清理。
 

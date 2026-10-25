@@ -6,7 +6,7 @@ export interface NativeThread {id:string;name?:string;title?:string;preview?:str
 export interface NativeProject {id:string;name?:string;roots:string[];[field:string]:unknown}
 export interface NativeRequest {id?:unknown;key?:string;kind?:string;threadId?:string;method?:string;params?:{threadId?:string;turnId?:unknown;itemId?:unknown;questions?:{id:string;header?:string;question?:string;options?:{label?:string;value?:string;description?:string}[];isOther?:boolean;isSecret?:boolean}[];[field:string]:unknown};[field:string]:unknown}
 export interface NativeHandoff {threadId?:string;state?:string;[field:string]:unknown}
-export interface NativeGoal {objective:string;status?:string;[field:string]:unknown}
+export interface NativeGoal {createdAt?:number;updatedAt?:number;timeUsedSeconds?:number;objective:string;status?:string;[field:string]:unknown}
 export interface NativeDetail {
  thread?:NativeThread;turns?:NativeTurn[];pendingRequests?:NativeRequest[];controlled?:boolean;recovering?:boolean;historySource?:string;handoff?:NativeHandoff|null;
  queue?:{data?:{id:string;input?:{type:string;text?:string;[field:string]:unknown}[];[field:string]:unknown}[];[field:string]:unknown};goal?:NativeGoal|null;goalError?:unknown;controlState?:string;nextCursor?:string|null;historyCursor?:string|null;totalTurns?:number;

@@ -6,7 +6,7 @@ export interface SideFragment {text:string;source?:unknown;range?:Range}
 export interface SideModel {id:string;label:string;efforts:string[];defaultEffort?:string;[field:string]:unknown}
 export interface SideState {parent:string|null;cwd:string|undefined;requestId:string;draft:string;selections:SideFragment[];turns:SideTurn[];model:string;effort:string;id?:string;error?:string;busy?:boolean;active?:boolean;stopping?:boolean;creating?:boolean;uncertain?:boolean;expired?:boolean;refreshing?:boolean;updatedTurns?:Set<string>|null}
 interface SideResponse {thread:{id:string;cwd?:string;status?:{type?:string};[field:string]:unknown};turns:SideTurn[];turn?:SideTurn;[field:string]:unknown}
-export interface SideOptions {api:(path:string,options?:ApiOptions)=>Promise<SideResponse>;context:()=>{id:string|null;cwd:string|undefined;ready:boolean;models:SideModel[];model:string;effort:string};renderItem:(item:SideItem|{id:string;type:string;content:unknown},options:{threadId?:string;side:boolean;refresh?:()=>void})=>HTMLElement;notify:(message:string,error?:boolean)=>unknown;selectionChanged?:()=>void;requestsChanged?:()=>void}
+export interface SideOptions {api:<T=SideResponse>(path:string,options?:ApiOptions)=>Promise<T>;context:()=>{id:string|null;cwd:string|undefined;ready:boolean;models:SideModel[];model:string;effort:string};renderItem:(item:SideItem|{id:string;type:string;content:unknown},options:{threadId?:string;side:boolean;refresh?:()=>void})=>HTMLElement;notify:(message:string,error?:boolean)=>unknown;selectionChanged?:()=>void;requestsChanged?:()=>void}
 interface SideEvent {threadId?:string;thread?:{id?:string};turnId?:string;turn?:SideTurn;status?:{type?:string};error?:{message?:string};[field:string]:unknown}
 import {installSideChatView} from '../components/SideChat';
 import {clearRequestCards} from '../components/RequestCards';
@@ -38,7 +38,7 @@ export function installSideChat({api,context,renderItem,notify,selectionChanged=
  const {panel,close,scroller,output,requestsHost,form,input,settings,summary,model,effort,send}=view;
  const follow=installScrollFollow(scroller,output);
  const localContext=()=>({id:selected?.id||selected?.requestId||'side-empty',cwd:selected?.cwd||context().cwd,ready:!!selected?.id&&context().ready&&!selected?.expired,busy:!!selected?.busy||!!selected?.creating||!!selected?.uncertain,active:!!selected?.active,turns:selected?.turns||[],ephemeral:true});
- const sideApi=(path:string,options?:ApiOptions)=>/^\/api\/threads\/[^/]+$/.test(path)?api(path+'/side-chat-view',options):api(path,options);
+ const sideApi=<T=SideResponse>(path:string,options?:ApiOptions):Promise<T>=>/^\/api\/threads\/[^/]+$/.test(path)?api<T>(path+'/side-chat-view',options):api<T>(path,options);
  attachments=installAttachments({host:'side-'+crypto.randomUUID(),context:localContext,changed:render,notify,form,input,prefix:'side-'});
  composer=installComposer({host:'side-'+crypto.randomUUID(),api:sideApi,context:localContext,refresh,notify,input,images:attachments.images,prefix:'side-',implementPlan:async(id:string,plan:{text:string})=>{if(id!==selected?.id||selected!.active||selected!.busy||selected!.uncertain||!localContext().ready||attachments.pending())throw Object.assign(Error('请先等待当前轮次完成。'),{status:409});await submit(implementationText(plan),true);}});
  const closeSettings=()=>{settings.open=false;summary.focus();};

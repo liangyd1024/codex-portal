@@ -3,7 +3,7 @@ import {createPortal,flushSync} from 'react-dom';
 import {createStore,useStore,type StoreApi} from 'zustand';
 type Kind='skills'|'plugins';
 interface Entry {path?:string;id?:string;name?:string;enabled?:boolean;missing?:boolean;description?:string;disabledReason?:string;interface?:{displayName?:string;shortDescription?:string};[key:string]:unknown}
-interface Context {id:string|null;cwd:string}
+interface Context {id:string|null;cwd?:string}
 interface Source {error?:string;data?:{skills?:Entry[];errors?:unknown[]}[];marketplaces?:{plugins?:Entry[]}[];marketplaceLoadErrors?:unknown[]}
 interface Options {dialog:HTMLDialogElement;input:HTMLTextAreaElement;context:()=>Context;open:(title:string,button:HTMLElement)=>Context;version:()=>number;api:(path:string)=>Promise<Record<Kind,Source>>;choice:()=>Record<Kind,string[]>;present:()=>{kind:string;key:string;start:number;end:number}[];insertReference:(entry:Entry,kind:Kind)=>unknown;syncReferences:()=>void;save:()=>void;render:()=>void;loading:(value:boolean)=>void}
 interface Row {entry:Entry;key:string;search:string;checked:boolean;description:string}
@@ -38,7 +38,7 @@ export function installReactComposerCatalog(o:Options){
    publish({...view});
   }};publish(view);o.loading(true);
   try{
-   const catalog=await o.api('/api/composer?cwd='+encodeURIComponent(current.cwd)+'&kind='+kind);if(!same())return;
+   const catalog=await o.api('/api/composer?cwd='+encodeURIComponent(current.cwd!)+'&kind='+kind);if(!same())return;
    const source=catalog[kind];if(source.error)throw Error(source.error);
    const entries=kind==='skills'?(source.data||[]).flatMap(e=>e.skills||[]):(source.marketplaces||[]).flatMap(e=>e.plugins||[]).filter(p=>p.installed);
    const seen=new Set<string|undefined>(),items=entries.filter(e=>{const key=e.path||e.id;if(seen.has(key))return false;seen.add(key);return true;});

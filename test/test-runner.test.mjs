@@ -1,3 +1,7 @@
+import {mkdtempSync,mkdirSync,writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {runTests} from '../scripts/run-tests.mjs';import {updateTestFailure} from '../lib/update-failure.mjs';
 
@@ -14,4 +18,17 @@ test('update failure distinguishes runner corruption, launch failure, timeout an
  assert.match(updateTestFailure({killed:true}),/超时/);
  assert.match(updateTestFailure({stdout:'test at test/example.test.mjs:12:1\nAssertionError'}),/test\/example.test.mjs/);
  assert.ok(!updateTestFailure({stdout:'secret unrelated log'}).includes('secret'));
+});
+
+test('shared runner executes TypeScript-backed tests when type stripping defaults to disabled',()=>{
+ const root=mkdtempSync(path.join(tmpdir(),'rcm-runner-types-'));mkdirSync(path.join(root,'test'));
+ writeFileSync(path.join(root,'package.json'),JSON.stringify({type:'module'}));
+ writeFileSync(path.join(root,'test','value.ts'),'export const value:number=42;\n');
+ writeFileSync(path.join(root,'test','value.test.mjs'),"import {test} from 'node:test';import assert from 'node:assert/strict';import {value} from './value.ts';test('typed import',()=>assert.equal(value,42));\n");
+ let actual;
+ const status=runTests({root,run(command,args,options){
+  if(!args.includes('--test'))return {status:0};
+  actual=spawnSync(command,['--no-experimental-strip-types',...args],{...options,stdio:'pipe',encoding:'utf8'});return actual;
+ }});
+ assert.equal(status,0,actual?.stdout+'\n'+actual?.stderr);assert.match(actual.stdout,/typed import/);
 });

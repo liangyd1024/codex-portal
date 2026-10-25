@@ -1,3 +1,4 @@
+import type {NativeTurn} from '../../contracts/native';
 import {useLayoutEffect} from 'react';
 import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
@@ -5,7 +6,7 @@ import {createStore,useStore,type StoreApi} from 'zustand';
 import {completedPlan} from '../../../public/composer.js';
 interface Plan {turnId:string;text:string}
 interface RecordState {turnId:string;state:'open'|'dismissed'|'sent'|'uncertain';error?:string}
-interface Context {id:string;draft?:boolean;desktop?:boolean;turns:unknown[];active:boolean;ready:boolean;busy:boolean}
+interface Context {id:string|null;draft?:boolean;desktop?:boolean;turns:NativeTurn[];active:boolean;ready:boolean;busy:boolean}
 interface Options {host:string;context:()=>Context;resetMode:()=>void;send:(id:string,plan:Plan)=>Promise<unknown>;notify:(message:string,negative:boolean)=>void;input?:HTMLTextAreaElement}
 interface View {hidden:boolean;sending:boolean;uncertain:boolean;yesDisabled:boolean;reviewDisabled:boolean;status:string}
 function Card({card,store,dismiss,review,submit}:{card:HTMLElement;store:StoreApi<{view:View|null}>;dismiss:()=>void;review:()=>void;submit:()=>Promise<void>}){
@@ -24,9 +25,9 @@ export function installReactPlanCompletion({host,context,resetMode,send,notify,i
  const record=(id:string,plan:Plan)=>records[id]?.turnId===plan.turnId?records[id]:null;
  function render(){
   const c=context(),plan:Plan|null=c.draft||c.desktop?null:completedPlan(c.turns);
-  current=plan?{id:c.id,plan}:null;
-  if(plan&&!record(c.id,plan)){records[c.id]={turnId:plan.turnId,state:'open'};resetMode();save();}
-  const r=plan&&record(c.id,plan),sending=pending===c.id,uncertain=r?.state==='uncertain'&&!sending;
+  current=plan?{id:c.id!,plan}:null;
+  if(plan&&!record(c.id!,plan)){records[c.id!]={turnId:plan.turnId,state:'open'};resetMode();save();}
+  const r=plan&&record(c.id!,plan),sending=pending===c.id,uncertain=r?.state==='uncertain'&&!sending;
   const view:View={hidden:!r||r.state==='dismissed'||r.state==='sent'||c.active,sending,uncertain,yesDisabled:!c.ready||c.busy||sending||uncertain,reviewDisabled:sending||!c.ready||c.busy,status:sending?'正在提交…':uncertain?'执行结果未确认，请先核对会话记录，避免重复执行。':r?.error||(!c.ready?'连接恢复后可执行，草稿已保留。':'')};
   const previous=store.getState().view;if(previous&&Object.entries(view).every(([k,v])=>Object.is(previous[k as keyof View],v)))return;
   flushSync(()=>store.setState({view}));
