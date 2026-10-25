@@ -2,7 +2,7 @@ import {useLayoutEffect,useRef} from 'react';
 import {createPortal,flushSync} from 'react-dom';
 import {createStore,useStore,type StoreApi} from 'zustand';
 import {QuestionForm,type QuestionRequest,type QuestionOptions,type SavedField} from './QuestionForms';
-interface CardView {
+export interface CardView {
  host:HTMLElement;id:string;threadId:string;asyncQuestion:boolean;title:string;origin?:string;
  reason?:string;command?:string;cwd?:string;changes?:{path:string}[];detail:string;knownApproval:boolean;
  availableDecisions?:string[];question?:{request:QuestionRequest;options:QuestionOptions;skipped:boolean;restore:()=>void};

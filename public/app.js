@@ -1,3 +1,4 @@
+import {createRequestRenderer} from '../src/web/services/request-renderer';
 import {createConnectionBootstrap} from '../src/web/services/connection-bootstrap';
 import {createSessionContext} from '../src/web/services/session-context';
 import {createWorkspaceStartup} from '../src/web/services/workspace-startup';
@@ -651,30 +652,7 @@ function renderDiagnostics() {
   for(const e of all)entries.push({title:dateTime(e.time)+(e.stage?' · '+(stages[e.stage]||e.stage):''),messages:[e.message||messageOf(e)],error:true});
   renderDiagnosticsView({selectedId:state.selectedId,entries});
 }
-function renderRequests() {
-  const list = requests().filter(r=>!questionDrafts.get(r).sent), signature = JSON.stringify([state.selectedId,sideChat?.id,list]);
-  if (signature === state.requestSignature) { renderControls(); return; }
-  state.requestSignature = signature;
-  for(const r of list)if(r.params?.questions?.length)notifyTaskEvent('manager/request',r);
-  if(!sidebar.menu&&!sidebar.dialog&&!sidebar.drag)renderThreads();
-  const saved = new Map([...document.querySelectorAll('.request-card')].map(card => [card.dataset.requestId, {fields:[...card.querySelectorAll('input,textarea')].map(f => ({name:f.name,value:f.value,checked:f.checked})),open:Boolean(card.querySelector('details[open]'))}]));
-  const views=[];
-  list.forEach(r => {
-    const threadId=requestThread(r);
-    if(threadId&&threadId!==state.selectedId&&threadId!==sideChat?.id)return;
-    const method=r.method||'',p=r.params||{},question=Array.isArray(p.questions)&&p.questions.length>0;
-    const knownApproval=/requestApproval|approval|requestPermissions/i.test(method)||['approval','commandApproval','fileApproval','command','file','permissions'].includes(r.kind);
-    const title=question?'需要你的回答':/commandExecution/i.test(method)?'命令执行审批':/fileChange/i.test(method)?'文件修改审批':/requestPermissions/i.test(method)?'权限请求':knownApproval?'操作审批':'工具请求待处理';
-    const target=threadId&&!question?(currentThread()?.id===threadId?currentThread():state.threads.find(t=>t.id===threadId)):null;
-    const rerender=()=>{state.requestSignature='';renderRequests();};
-    views.push({host:sideChat?.id&&threadId===sideChat.id?sideChat.requestsHost:$('conversation-requests'),id:requestPath(r),threadId:threadId||'',asyncQuestion:r.kind==='asyncQuestion',title,
-      origin:threadId&&!question?'会话：'+(target?threadName(target):threadId):undefined,reason:p.reason?String(p.reason):undefined,command:p.command?String(p.command):undefined,cwd:p.cwd?String(p.cwd):undefined,changes:Array.isArray(p.changes)?p.changes.map(c=>({path:c.path==null?'':String(c.path)})):undefined,
-      knownApproval,availableDecisions:p.availableDecisions,detail:pretty({method,params:p}),respond:answer=>respondRequest(r,answer),previous:saved.get(requestPath(r)),
-      question:question?{request:r,options:{drafts:questionDrafts,submit:answer=>respondRequest(r,answer),rerender},skipped:!!questionDrafts.get(r).skipped,restore:()=>{questionDrafts.set(r,{skipped:false,collapsed:false});rerender();}}:undefined});
-  });
-  publishRequestCards(views);
-  renderControls();
-}
+const renderRequests=createRequestRenderer({state,sidebar,sideChat:()=>sideChat,requests,questionDrafts,document,element:$,renderControls,renderThreads,notifyTaskEvent:(...args)=>notifyTaskEvent(...args),requestThread,requestPath,currentThread,threadName,pretty,respondRequest:(...args)=>respondRequest(...args),publishRequestCards});
 
 async function loadStatus() { applyStatus(await api('/api/status')); renderStatus(); renderRequests(); return state.status; }
 let accountViewVersion=0;
