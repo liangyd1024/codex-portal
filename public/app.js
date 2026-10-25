@@ -1,3 +1,4 @@
+import {createConnectionBootstrap} from '../src/web/services/connection-bootstrap';
 import {createSessionContext} from '../src/web/services/session-context';
 import {createWorkspaceStartup} from '../src/web/services/workspace-startup';
 import {createNewChatPage} from '../src/web/services/new-chat-page';
@@ -103,7 +104,7 @@ let composer;
 import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrateOutputs, decodeOutputs} from './detail-cache.js';
 import {outputWindow, OUTPUT_WINDOW_SIZE} from './output-window.js';
 import {updateExtensionNotice, renderExtensionNotice, mergeLiveTurns, taskNotice, backgroundActivity} from './connection-state.js';
-function savedHost() { try { return localStorage.getItem('rcm.connection'); } catch { return null; } }
+const {readConnections,selectTarget}=createConnectionBootstrap({storage:()=>localStorage,reload:()=>location.reload(),fetch:(...args)=>fetch(...args),setTimeout,clearTimeout});
 const requestedHost = new URL(location.href).searchParams.get('host');
 let pendingNotification=null, notificationNavigationReady=false;
 navigator.serviceWorker?.addEventListener('message',event=>{
@@ -112,17 +113,8 @@ navigator.serviceWorker?.addEventListener('message',event=>{
   if(notificationNavigationReady)openNotificationThread(data);else pendingNotification=data;
 });
 const connectionConfig=await readConnections();
-async function readConnections(){
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
-  try {
-    const response=await fetch('/api/connections',{credentials:'same-origin',cache:'no-store',signal:controller.signal});
-    if(response.status===401){location.reload();throw new Error('登录已失效，请重新配对。');}
-    if(!response.ok)throw new Error('无法读取连接配置。');
-    return await response.json();
-  } finally {clearTimeout(timer);}
-}
 const connectionIds=connectionConfig.data.map(c=>c.id);
-const targetHost=connectionIds.includes(requestedHost)?requestedHost:connectionIds.includes(savedHost())?savedHost():connectionConfig.defaultConnection;
+const targetHost=selectTarget(connectionIds,requestedHost,connectionConfig.defaultConnection);
 renderSelectOptions(document.getElementById('connection-select'),connectionConfig.data.map(c=>({value:c.id,label:c.host.alias})),connectionConfig.data[0]?.id||'');
 function savedView() { try { return JSON.parse(sessionStorage.getItem('rcm.view.'+targetHost)||'{}'); } catch { return {}; } }
 function pendingDesktopSends(){try{return JSON.parse(sessionStorage.getItem('rcm.desktopSends.'+targetHost)||'{}');}catch{return {};}}
