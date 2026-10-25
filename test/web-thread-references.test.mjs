@@ -42,3 +42,11 @@ test('failed reload restores the same web subscription but does not invent refer
  m.rpc.request=async(method,p)=>{if(method==='thread/resume'&&p.config)throw Error('MCP unavailable');return request(method,p);};
  await assert.rejects(r.prepare(caller,[target]),/MCP unavailable/);assert.ok(calls.some(c=>c.method==='thread/resume'&&!c.p.config));assert.equal(m.controlled.has(caller),true);
 });
+test('running reference preparation only authorizes an already connected tool',async()=>{
+ for(const configured of [true,false]){
+  const {r,m,calls,writes}=fixture({configured,busy:true});m.activeTurns.set(caller,'turn-active');
+  if(configured){await r.prepare(caller,[target],{allowReload:false});assert.equal(writes.length,1);}
+  else {await assert.rejects(r.prepare(caller,[target],{allowReload:false}),e=>e.code==='THREAD_REFERENCES_UNAVAILABLE');assert.equal(writes.length,0);}
+  assert.deepEqual(calls.map(c=>c.method),['mcpServerStatus/list']);assert.equal(m.activeTurns.get(caller),'turn-active');
+ }
+});

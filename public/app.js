@@ -1273,7 +1273,8 @@ async function sendMessage(e,alternate=false) {
   await action('message',async () => {
     const images=pictures.items.map(i=>({url:i.url}));
     const options=composer.options();
-    if(options.threads.length&&(active||composer.isGoalPending()))throw new Error('请在当前任务结束后单独发送会话引用，暂不能与启动目标模式合并发送。草稿已保留。');
+    if(options.threads.length&&followUp==='queue')throw new Error('排队暂不支持会话引用，请使用“引导”发送。草稿已保留。');
+    if(options.threads.length&&!active&&composer.isGoalPending())throw new Error('暂不能同时启动目标并发送会话引用，请先发送引用或取消目标模式。草稿已保留。');
     const payload = active ? {text,images,skills:options.skills,plugins:options.plugins,threads:options.threads} : {text,images,model:state.model,effort:state.effort,...options};
     const scope=targetHost+':'+id;
     const content=[...(text?[{type:'text',text}]:[]),...images.map(i=>({type:'image',url:i.url}))];

@@ -511,3 +511,19 @@ test('terminal notices survive restart, acknowledge durably, and ignore unknown 
   b.disconnect({preserveIntent:true});assert.equal(new Manager({host:{id:"test",alias:"test",user:"example",home:"/Users/example"},titleStore}).restoreOnStart,true);
   b.disconnect();const c=new Manager({host:{id:"test",alias:"test",user:"example",home:"/Users/example"},titleStore});c.connect=()=>{connects++;};c.restoreConnection();assert.equal(connects,1);
 });
+test('steer passes reference context separately and never reloads the running thread',async(t)=>{
+ const {manager,rpc}=fixture(t),id='00000000-0000-0000-0000-000000000001',target='00000000-0000-0000-0000-000000000002';
+ manager.controlled.set(id,{});manager.activeTurns.set(id,'active-turn');
+ manager.service.protocolValidation={features:{threadReferenceSteer:{supported:true}}};
+ manager.references.prepare=async(caller,ids,options)=>{assert.equal(caller,id);assert.deepEqual(ids,[target]);assert.deepEqual(options,{allowReload:false});return [{threadId:target,title:'引用会话'}];};
+ await manager.steer(id,{text:'原文 @引用会话',threads:[target]});
+ const call=rpc.calls.find(c=>c.method==='turn/steer');assert.equal(call.params.expectedTurnId,'active-turn');assert.equal(call.params.input[0].text,'原文 @引用会话');assert.match(call.params.additionalContext['rcm.threadReferences'].value,new RegExp(target));
+ assert.equal(rpc.calls.some(c=>['thread/resume','thread/unsubscribe','thread/goal/set'].includes(c.method)),false);
+});
+test('unverified reference steering fails before authorizing or submitting',async(t)=>{
+ const {manager,rpc}=fixture(t),id='00000000-0000-0000-0000-000000000001';
+ manager.controlled.set(id,{});manager.activeTurns.set(id,'active-turn');
+ manager.references.prepare=()=>assert.fail('unverified capability');
+ await assert.rejects(manager.steer(id,{text:'引用',threads:['00000000-0000-0000-0000-000000000002']}),e=>e.code==='FEATURE_UNAVAILABLE');
+ assert.equal(rpc.calls.some(c=>c.method==='turn/steer'),false);
+});
