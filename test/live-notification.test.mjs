@@ -6,12 +6,15 @@ const typed=readFileSync(new URL('../src/web/services/task-notifications.ts',imp
 const output=ts.transpileModule(typed,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const {createTaskNotifications}=await import('data:text/javascript;base64,'+Buffer.from(output).toString('base64'));
 const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+const ast=ts.createSourceFile('app.js',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+const notificationSetup=ast.statements.find(node=>ts.isVariableStatement(node)&&node.declarationList.declarations.some(d=>ts.isIdentifier(d.name)&&d.name.text==='notifyTaskEvent'));
+assert.ok(notificationSetup,'notification controller initialization exists');
 function fixture(success=true){
  const values=new Map([['rcm.taskNotifications.local','true']]),sent=[],acks=[];let lock=Promise.resolve();
  const storage={getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)};
  const c=vm.createContext({createTaskNotifications,sideChat:null,authRecoveryMessage,taskNotificationsEnabled:true,window:{Notification:{}},Notification:{permission:'granted'},targetHost:'local',state:{threads:[{id:'a'}],status:{},selectedId:null,detail:null},currentThread:()=>null,threadName:()=> 'test',taskNotice,deliverNotice,localStorage:storage,navigator:{locks:{request:(_key,work)=>{const next=lock.then(work);lock=next.catch(()=>{});return next;}}},sendTaskNotification:async(...args)=>{sent.push(args);return success;},api:async(path,options)=>acks.push({path,options}),notificationDiagnostic(){},recordError(){},scheduleListRefresh(){}});
  c.notificationPreferences={enabled:()=>c.taskNotificationsEnabled};
- vm.runInContext(source.slice(source.indexOf('const notifyTaskEvent=createTaskNotifications'),source.indexOf('async function connectRemote()'))+'\nglobalThis.notifyTaskEvent=notifyTaskEvent;',c);
+ vm.runInContext(notificationSetup.getText(ast)+'\nglobalThis.notifyTaskEvent=notifyTaskEvent;',c);
  vm.runInContext(source.slice(source.indexOf('function handleEvent('),source.indexOf('function setupEvents()')),c);
  return {c,sent,acks,values,emit:(id)=>c.notifyTaskEvent('turn/completed',{threadId:'a',turn:{id,status:'completed'}})};
 }

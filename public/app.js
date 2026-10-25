@@ -1,3 +1,4 @@
+import {createConnectionActions} from '../src/web/services/connection-actions';
 import {publishWelcome,setWelcomeDisabled,installWelcomeAction,installClearRecovery} from '../src/web/components/WorkspaceActions';
 import {installDesktopControls,publishDesktopControls} from '../src/web/components/DesktopControls';
 import {installInspectorNavigation,installAutomationNavigation} from '../src/web/components/InspectorNavigation';
@@ -930,47 +931,12 @@ const notifyTaskEvent=createTaskNotifications({enabled:()=>notificationPreferenc
   acknowledge:key=>api('/api/notices/ack',{method:'POST',body:{key}}),
   diagnostic:notificationDiagnostic,recordError});
 
-async function connectRemote() {
-  maintenanceFeedback('');
-  const success = await action('connect',async () => {
-    const data = await api('/api/connect',{method:'POST',body:{},timeout:150000});
-    if (data.connection) { applyStatus(data); renderStatus(); } else await loadStatus();
-    return true;
-  });
-  if (success) { renderStatus(); if(connected())refreshWorkspace().catch(e => recordError(e,'sync')); }
-}
-async function disconnectRemote() {
-  maintenanceFeedback('');
-  return action('disconnect',async () => { await api('/api/disconnect',{method:'POST'}); await loadStatus(); if (state.detail) state.detail.controlled = false; renderThread(); });
-}
-async function takeoverThread() {
-  if (!state.selectedId || !usable()) return;
-  const id = state.selectedId,selection=state.selectionVersion;
-  const current=()=>id===state.selectedId&&selection===state.selectionVersion&&!newChatOpen;
-  await action('takeover',async () => {
-    try { const d = await api('/api/threads/' + encodeURIComponent(id) + '/takeover',{method:'POST'}); if(current())applyDetail(d,true); await loadStatus(); }
-    catch (e) {
-      recordError(e,'takeover');
-      if(!current())return;
-      if (e.code==='WRITER_CONFLICT'&&state.detail) { state.detail.controlled = false; state.detail.controlState = 'conflict'; renderThread(); }
-      toast(messageOf(e),true,8000,'takeover');
-    }
-  });
-}
-async function endThreadUse() {
-  const id=state.selectedId,selection=state.selectionVersion;
-  if(!id||!usable())return;
-  state.drafts.set(id,$('message-input').value);
-  try{sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts]));}catch{}
-  await action('handoff:'+id,async()=>{
-    try {
-      const handoff=await api('/api/threads/'+encodeURIComponent(id)+'/handoff',{method:'POST',timeout:45000});
-      if(id===state.selectedId&&selection===state.selectionVersion&&state.detail){state.detail.controlled=false;state.detail.handoff=handoff;state.detail.controlState='viewing';}
-      await loadStatus();renderThread();
-      if(id===state.selectedId&&selection===state.selectionVersion)handoffControls.focus();
-    }catch(error){recordError(error,'handoff');await loadStatus().catch(()=>{});renderThread();if(id===state.selectedId&&selection===state.selectionVersion)handoffControls.showError(messageOf(error));}
-  });
-}
+const {connectRemote,disconnectRemote,takeoverThread,endThreadUse}=createConnectionActions({
+  state,api,action,feedback:maintenanceFeedback,applyStatus,renderStatus,loadStatus,connected,refreshWorkspace,renderThread,usable,
+  newChatOpen:()=>newChatOpen,applyDetail,recordError,messageOf,toast,input:()=>$('message-input').value,
+  saveDrafts:()=>sessionStorage.setItem('rcm.drafts.'+targetHost,JSON.stringify([...state.drafts])),
+  focusHandoff:()=>handoffControls.focus(),handoffError:message=>handoffControls.showError(message),
+});
 function maintenanceFeedback(message) {
   publishConnectionSettings({feedback:message});
 }
