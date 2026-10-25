@@ -7,10 +7,10 @@ interface View {
 }
 interface Actions {connect:()=>unknown;reload:()=>unknown;release:()=>unknown}
 const store=createStore<{view:View;actions:Actions|null}>(()=>({actions:null,view:{variant:'',label:'未连接',host:'目标机器',user:'—',version:'—',connectedAt:'—',transport:'本机浏览器',icon:'link',connectLabel:'连接目标机器',connectDisabled:false,reloadDisabled:true,releaseDisabled:true,releaseLabel:'停止目标服务（影响所有入口）',releaseReason:null,feedback:'',ready:false}}));
-export function publishConnectionSettings(patch:Partial<View>){
+export function publishConnectionSettings(patch:Partial<View>,commit:(update:()=>void)=>void=flushSync){
  const current=store.getState().view;
  if(!Object.entries(patch).some(([key,value])=>current[key as keyof View]!==value))return;
- flushSync(()=>store.setState({view:{...current,...patch}}));
+ commit(()=>store.setState({view:{...current,...patch}}));
 }
 export function installConnectionActions(actions:Actions){flushSync(()=>store.setState({actions}));}
 const text=(value:unknown)=>value==null||value===''?'—':String(value);

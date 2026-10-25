@@ -3,9 +3,9 @@ import {flushSync} from 'react-dom';
 import type {BannerView} from '../services/connection-banner';
 interface Indicators {ready:boolean;variant:string;label:unknown;name:unknown;address:unknown}
 const store=createStore<{indicators:Indicators;banner:BannerView}>(()=>({indicators:{ready:false,variant:'',label:'未连接',name:'目标机器',address:'目标机器'},banner:{hidden:true,className:'connection-banner',text:''}}));
-export function publishConnectionIndicators(patch:Partial<Indicators>){
+export function publishConnectionIndicators(patch:Partial<Indicators>,commit:(update:()=>void)=>void=flushSync){
  const current=store.getState().indicators;
- if(Object.entries(patch).some(([key,value])=>current[key as keyof Indicators]!==value))flushSync(()=>store.setState({indicators:{...current,...patch}}));
+ if(Object.entries(patch).some(([key,value])=>current[key as keyof Indicators]!==value))commit(()=>store.setState({indicators:{...current,...patch}}));
 }
 export function publishConnectionBanner(patch:Partial<BannerView>){
  const current=store.getState().banner;

@@ -35,7 +35,7 @@
 | 输入、中文组合、快捷键、剪切粘贴、撤销、附件、误发送 | 输入与附件专项、Node 行为回归和设备模拟 | 模拟验证不能替代实体候选窗、系统选区和剪贴板；真实设备项仍缺证据 |
 | 原文、流式、历史前插、锚点、选区、迟到响应、恢复 | 流式、侧聊、历史、SSE、草稿专项 | 有限定通过结果；[当前候选恢复复核](verification-framework-recovery-current.md)确认原生 SSE 断流重连一致，模拟离线的输入停滞和惯性前插跳动仍为两版共有问题；其余集成范围继续复核 |
 | 本机／SSH、项目／目标／问题／任务／文件／通知／配对／维护 | 协议差分、隔离 UI 与限定本机真实会话 | 原生定时任务管理执行、持续 SSH、实体手机等不能凭模拟或只读结果标为完成 |
-| 性能与 CPU／内存／磁盘资源 | 输入、列表、流式、首屏及 Fastify 专项样本 | 未通过整体门槛；存在波动、历史稳定差异及资源成本缺口；[当前首屏资源测量](verification-framework-startup-resources.md)记录候选脚本 CPU 和静态体积增加，并在 `8362c3d` 复测定位普通首次 pageshow 可能触发的共同重复恢复读取；[连接设置优化](verification-framework-connection-settings-batch.md)已减少每次状态切换的一次 React 提交，[账号标签优化](verification-framework-account-publication.md)减少启动样本三次无变化提交，[模型选项优化](verification-framework-model-publication.md)另减少模型发布三次提交；但未证明整体性能通过，禁止宣称整体提速 |
+| 性能与 CPU／内存／磁盘资源 | 输入、列表、流式、首屏及 Fastify 专项样本 | 未通过整体门槛；存在波动、历史稳定差异及资源成本缺口；[当前首屏资源测量](verification-framework-startup-resources.md)记录候选脚本 CPU 和静态体积增加，并在 `8362c3d` 复测定位普通首次 pageshow 可能触发的共同重复恢复读取；[连接设置优化](verification-framework-connection-settings-batch.md)已减少每次状态切换的一次 React 提交，[账号标签优化](verification-framework-account-publication.md)减少启动样本三次无变化提交，[模型选项优化](verification-framework-model-publication.md)另减少模型发布三次提交；[连接摘要同步提交合并](verification-framework-connection-summary.md)在同一会话的校准样本中通常再减少一次提交，同步耗时未稳定改善；但未证明整体性能通过，禁止宣称整体提速 |
 | 类型检查、完整 npm test、构建产物验证、报告 | 最近应用代码：884 Node／74 Python、typecheck、构建通过；干净资源与候选一致 | 当前回归通过；不替代迁移完整性、真实预览更新及全量验收 |
 
 ## 尚需完成的实现

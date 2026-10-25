@@ -37,7 +37,8 @@ import {createAutoRefresh} from '../src/web/services/auto-refresh';
 import {createDetailRecovery} from '../src/web/services/detail-recovery';
 import {createLayoutController} from '../src/web/services/layout';
 import {connectionBanner} from '../src/web/services/connection-banner';
-import {publishConnectionIndicators,publishConnectionBanner} from '../src/web/components/ConnectionIndicators';
+import {publishConnectionSummary} from '../src/web/components/ConnectionSummary';
+import {publishConnectionBanner} from '../src/web/components/ConnectionIndicators';
 import {publishConnectionSettings,installConnectionActions} from '../src/web/components/ConnectionSettings';
 import {publishNotificationView,installNotificationActions,appendNotificationDiagnostic} from '../src/web/components/NotificationControls';
 import {createWorkspaceRefresh} from '../src/web/services/workspace-refresh.ts';
@@ -256,8 +257,7 @@ function renderStatus() {
   const variant = connected() && state.transport ? 'connected' : ['connecting','reconnecting'].includes(conn) ? 'connecting' : conn === 'error' || conn === 'failed' ? 'error' : '';
   const label = connected() && !state.transport ? '实时连接中断' : stages[conn] || conn;
   document.title = (currentThread() ? threadName(currentThread()) + ' · ' : '') + 'Codex 工作台';
-  publishConnectionIndicators({ready:true,variant,label,name:h.alias || '目标机器',address:h.hostname || '目标机器'});
-  publishConnectionSettings({ready:true,variant,label,host:h.hostname || h.alias || '目标机器',user:h.user,
+  publishConnectionSummary({ready:true,variant,label,name:h.alias || '目标机器',address:h.hostname || '目标机器'}, {ready:true,variant,label,host:h.hostname || h.alias || '目标机器',user:h.user,
     version:service.version || h.version,connectedAt:dateTime(c.connectedAt),transport:state.transport ? '实时通道已连接' : '实时通道未连接',
     icon:connected()||connectionPending() ? 'close' : 'link',connectLabel:state.busy.has('disconnect') ? '正在断开…' : connectionPending()?'取消连接':connected() ? '断开本机连接' : '连接目标机器'});
   publishWelcome({ready:true,icon:connected()?'plus':'link',label:connectionPending()?'正在连接…':connected()?'新建目标机器会话':'连接 '+(h.alias||'目标机器')});
