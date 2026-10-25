@@ -1,3 +1,4 @@
+import {createControllerState} from '../src/web/controller-state';
 import {createConnectionActions} from '../src/web/services/connection-actions';
 import {publishWelcome,setWelcomeDisabled,installWelcomeAction,installClearRecovery} from '../src/web/components/WorkspaceActions';
 import {installDesktopControls,publishDesktopControls} from '../src/web/components/DesktopControls';
@@ -32,7 +33,7 @@ import {createSidebarLoader} from '../src/web/services/sidebar-loader.ts';
 import {createCatalogReaders} from '../src/web/services/catalogs.ts';
 import {createSelectedRefresh} from '../src/web/services/selected-refresh.ts';
 import {installDeferredTool} from './deferred-tool.js';
-import {renderSelectOptions,renderDiagnosticsView,renderRefreshStatusView,publishWorkspace,createWorkspaceState} from '../src/web/views.tsx';
+import {renderSelectOptions,renderDiagnosticsView,renderRefreshStatusView,publishWorkspace} from '../src/web/views.tsx';
 import {completedGoalPlacement,renderCompletedGoal} from './goal-toolbar.js';
 import {installQueuedInputs} from '../src/web/components/QueuedInputs.tsx';
 let queuedInputs;
@@ -156,12 +157,9 @@ function applyStatus(status){
 }
 
 const $ = id => document.getElementById(id);
-const state = createWorkspaceState({
-  desktopMode:Boolean(savedView().desktopMode), status: null, models: [], projects: [], threads: [], selectedId: savedView().selectedId || null, detail: null,
-  sidebar:null, sidebarArchived:false, selectedArchived:false, projectId: savedView().projectId || null, search: '', threadCursor: null, historyCursor: null, loadedOlderHistory: false,
-  model: '', effort: '', csrf: '', transport: false, busy: new Set(), loadingThreads: false, loadingModels: false, loadingProjects: false, threadListSource: null,
-  runtimeNotices: new Map(), loadingDetail: false, errors: [], localRequests: [], drafts: new DraftStore({storage:()=>sessionStorage,host:targetHost,onError:()=>toast('浏览器无法保存草稿，请先复制重要内容。',true)}), selectionVersion: 0,
-  listVersion: 0, detailVersion: 0, threadPageError: false, historyError: '', eventSource: null, lastSync: null, refreshScope: '', refreshMessage: '', refreshing: false, streamRender: false, requestSignature: '',
+const state = createControllerState({
+  desktopMode:Boolean(savedView().desktopMode),selectedId:savedView().selectedId||null,projectId:savedView().projectId||null,
+  drafts:new DraftStore({storage:()=>sessionStorage,host:targetHost,onError:()=>toast('浏览器无法保存草稿，请先复制重要内容。',true)}),
 });
 const questionDrafts=new QuestionDrafts(sessionStorage,targetHost,()=>toast('问题草稿暂未保存，请先复制回答。',true));
 const newDraftId='local:new-chat-draft';
