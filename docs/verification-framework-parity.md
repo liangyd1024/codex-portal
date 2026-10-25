@@ -2265,3 +2265,8 @@ ego-lite 在同一空间和页面执行。桌面 1480×747、DPR 2；iPhone 12 �
 ## 连接设置同步更新合并
 
 `ddfd731` 将同一控件刷新内的三次连接设置发布合并为一次。正式基准 `227dbfe`；桌面和 iPhone 三种视口维护流程四对结果一致。完整 857 Node／74 Python 与类型检查通过。320 个状态切换样本每次均减少一次 React 提交。详见[专项报告](verification-framework-connection-settings-batch.md)，不据此宣称整体性能完成。
+
+
+## 操作协调器类型迁移
+
+`d0d78a1` 保持 action 运行 token 一致，迁入严格 TypeScript 服务。类型检查与完整 862 Node／74 Python 回归通过。对照 `227dbfe`，桌面及 iPhone 三种视口的异步问题 48 对状态、维护四对流程一致。详见[专项报告](verification-framework-action-runner.md)。全量迁移和整体性能仍未完成。
