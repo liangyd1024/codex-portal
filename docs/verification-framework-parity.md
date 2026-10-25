@@ -2280,3 +2280,8 @@ ego-lite 在同一空间和页面执行。桌面 1480×747、DPR 2；iPhone 12 �
 ## 工作台启动协调迁移
 
 `dc4bba1` 将工作台 init 迁入严格 TypeScript，保留刷新间隔、门控条件、延迟安装和通知优先级。对照 `227dbfe`，桌面及 iPhone 三种视口的六类启动场景共 144 样本、72 对状态一致。类型检查、873 Node／74 Python 和干净构建通过。详见[专项报告](verification-framework-workspace-startup.md)，全量迁移与性能门槛仍未完成。
+
+
+## 同一候选集成复验
+
+候选 `dc4bba1` 对照正式 `227dbfe`，四种视口的迟到详情、问题回答及带附件新建失败／结果未知共 240 样本、120 对状态一致，详见[集成报告](verification-framework-candidate-integration.md)。最新候选另测 16 次首屏，脚本计数及静态体积差异仍存在，不能标记性能或全量迁移完成。本轮只改验收文档，未重启正式或预览服务。
