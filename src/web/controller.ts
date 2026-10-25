@@ -2,7 +2,7 @@ import {composerSendView} from './services/composer-send-view';
 import {publishConversationActivity} from './components/RunningIndicator';
 import {publishWorkspaceRegion} from './components/WorkspaceRegions';
 import {publishMessageInput,publishComposerBusy} from './components/MainComposer';
-import {publishWorkspaceControl,setWorkspaceControlAction} from './components/WorkspaceControls';
+import {publishWorkspaceControl,setWorkspaceControlAction,prepareWorkspaceControlReasons} from './components/WorkspaceControls';
 import {setWorkspaceText,publishWorkspaceLabel} from './components/WorkspaceLabels';
 import type {NativeConnectionStatus,NativeRequest,NativeThread,NativeItem,NativeTurn} from '../contracts/native';
 import {createRequestRenderer} from './services/request-renderer';
@@ -888,6 +888,7 @@ function wireEvents() {
   toggleInspector(false);
   publishWorkspaceRegion('project-list',{hidden:!readLayout('projects',true)});
   $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
+  prepareWorkspaceControlReasons();
   mobileUI = installMobileUI({closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:(mobile:boolean)=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
   turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector<HTMLElement>('.mobile-more-panel')!,follow:scrollFollow,loadEarlier:moreHistory,loadDirectory:()=>api('/api/threads/'+encodeURIComponent(state.selectedId!)+'/turn-directory'),onError:message=>toast(message,true),context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),ready:usable()&&!state.loadingDetail&&!state.historyError&&!state.detail?.recovering&&!selectedRefresh.pending(),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:(id:string)=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});
   installOfflineDraftGuard({window,state,flushDrafts,renderStatus,renderControls});
