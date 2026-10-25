@@ -1,5 +1,7 @@
 # master 一比一还原验证报告（进行中）
 
+流式轮次与消息合并已迁入严格 TypeScript，提交 `64b8467`／资源 `7de3e030` 已更新独立预览，并包含前轮 SSE 迁移。三个函数运行语法树一致，32 对四视口行为比较、844 Node／74 Python、类型检查、构建和八个真实启动样本通过。性能样本及维护检查范围修正见[流式合并报告](verification-framework-live-turns.md)，整体任务仍未完成。
+
 SSE 事件分发已迁入严格 TypeScript，候选提交 `b5e134b`／资源 `4ee67231`。32 对事件渲染和 12 对真实 EventSource 重连比较一致，840 Node／74 Python、类型检查和构建通过。性能小幅差异保留；正式入口有待回答请求，本轮尚未更新预览，预览仍为 `e90de91`。见[事件分发报告](verification-framework-events.md)。
 
 连接状态应用与页面会话登记已迁入严格 TypeScript，提交 `e90de91`／资源 `46a38268` 已更新独立预览。四视口连接维护和 12 对三轮 SSE 恢复比较一致，835 Node／74 Python、类型检查、构建及八个真实启动样本通过。手机性能首轮高值与加长复测均保留；整体性能及剩余迁移未完成，见[状态与登记报告](verification-framework-status-view.md)。
