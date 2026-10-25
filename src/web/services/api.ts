@@ -16,19 +16,21 @@ interface WireEnvelope {
 export interface ApiError extends Error { readOnly?:boolean;status?:number;code?:string;details?:unknown }
 export interface ApiDependencies {
  targetUrl:(path:string)=>string;
+ configRevision?:()=>string|undefined;
  csrf:{get:()=>string;set:(token:string)=>void};
  flushDrafts:()=>void;
  reload:()=>void;
  fetch?:typeof globalThis.fetch;
 }
 // Preserve the wire payload, request ordering and browser-clock freshness contract.
-export function createApiClient({targetUrl,csrf,flushDrafts,reload,fetch=(...args:Parameters<typeof globalThis.fetch>)=>globalThis.fetch(...args)}:ApiDependencies) {
+export function createApiClient({targetUrl,configRevision,csrf,flushDrafts,reload,fetch=(...args:Parameters<typeof globalThis.fetch>)=>globalThis.fetch(...args)}:ApiDependencies) {
 async function api<T=WireEnvelope>(path:string, options:ApiOptions = {}):Promise<T> {
   path=targetUrl(path);
   const method = options.method || 'GET';
   const headers:Record<string,string> = {Accept:'application/json',...options.headers};
   if (method !== 'GET') {
     if (!csrf.get()) { const c = await api<{token:string}>('/api/csrf'); csrf.set(c.token); }
+    if(configRevision?.())headers['X-RCM-Config-Revision']=configRevision()!;
     headers['Content-Type'] = 'application/json'; headers['X-CSRF-Token'] = csrf.get();
   }
   const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), options.timeout || 90000);

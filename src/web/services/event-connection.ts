@@ -8,6 +8,7 @@ interface EventConnectionDependencies {
   reportThreadView: () => Promise<unknown>;
   resumeWorkspace: () => Promise<unknown>;
   recordError: (error: unknown, stage: string) => void;
+  receiveConfiguration?:(data:unknown)=>void;
   receiveWebUpdate: (data: unknown) => void;
   handleEvent: (event: MessageEvent<string>) => void;
 }
@@ -33,6 +34,7 @@ export function createEventConnection(deps: EventConnectionDependencies) {
     es.addEventListener('system/update', event => {
       if (state.eventSource === es) deps.receiveWebUpdate(JSON.parse((event as MessageEvent<string>).data));
     });
+    es.addEventListener('configuration/change',event=>{if(state.eventSource===es)deps.receiveConfiguration?.(JSON.parse((event as MessageEvent<string>).data));});
     es.onmessage = deps.handleEvent;
     for (const name of ['manager/status', 'manager/error', 'manager/request', 'manager/requestResolved']) {
       es.addEventListener(name, deps.handleEvent as EventListener);

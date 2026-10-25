@@ -28,3 +28,7 @@
 .sidebar-project-create:hover:not(:disabled){background:var(--line);color:var(--ink)}
 .project-heading:hover>.sidebar-project-create:disabled,.project-heading:focus-within>.sidebar-project-create:disabled{opacity:.4}
 @media(max-width:700px),(hover:none){.sidebar-project-create{opacity:1;width:44px;height:44px;flex:0 0 44px}.sidebar-project-create:disabled{opacity:.4}}
+.connection-editor{max-height:calc(100dvh - 32px);overflow:auto;color:var(--control-foreground)}
+.connection-editor form{display:grid;gap:10px}.connection-editor input,.connection-editor select,.connection-editor button{min-height:44px}
+.connection-editor .sidebar-dialog-actions{flex-wrap:wrap}.connection-editor .settings-actions{flex-wrap:wrap}
+.connection-editor button{white-space:nowrap;flex-shrink:0}

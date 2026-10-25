@@ -7,11 +7,11 @@ import type {Config,ApplicationOptions} from '../types';
 
 export interface SystemServices {
  config:Config;managers:Map<string,Manager>;updater:WebUpdate;buildVersion:string;
- providedManagers:ApplicationOptions['managers'];
+ registry?:{revision:string}|null;providedManagers:ApplicationOptions['managers'];
 }
-export function createSystemService({config,managers,updater,buildVersion,providedManagers}:SystemServices) {
+export function createSystemService({config,managers,updater,buildVersion,providedManagers,registry}:SystemServices) {
  return {
-  connections:()=>({machineId:config.machineId,defaultConnection:config.defaultConnection,data:[...managers].map(([id,m])=>({id,host:publicHost(m.host),connection:m.connection}))}),
+  connections:()=>({...registry?{configRevision:registry.revision}:{},machineId:config.machineId,defaultConnection:config.defaultConnection,data:[...managers].map(([id,m])=>({id,host:publicHost(m.host),connection:m.connection}))}),
   version:()=>({version:buildVersion,machineId:config.machineId}),
   async updateStatus(check:boolean){if(check)void updater.checkLatest?.().catch(()=>{});return await updater.status();},
   async startUpdate(data:object,port:number|undefined){

@@ -18,7 +18,9 @@ npm run init
 
 Codex 不在 PATH 或已知应用位置时，使用 `npm run init -- --binary /absolute/path/to/codex`。诊断只执行版本检查，不启动原生引擎。初始化写入仓库外的 `connections.json`，权限为 `600`；再次执行保留已有文件和身份，损坏配置会报错，不自动覆盖。`npm install` 不再部署服务，正式部署使用下文的显式命令。
 
-默认配置位置为 `~/Library/Application Support/RemoteCodexManager/connections.json`，可以用绝对路径 `RCM_CONFIG` 指定。SSH 连接目前仍按 `config/connections.example.json` 配置；动态管理界面尚在公开准备计划内。`machineId` 与连接 `id` 必须稳定，`alias` 只负责展示。SSH 主机公钥须事先核验，私钥不复制到目标机，也不进入备份。
+默认配置位置为 `~/Library/Application Support/RemoteCodexManager/connections.json`，可以用绝对路径 `RCM_CONFIG` 指定。SSH 连接可在“工作区详情 → 设置 → 目标机器连接 → 管理连接”新增、检测、改名、设置默认及移除。检测只核对身份和可执行路径，不代表原生业务接口已经可用。更换目标地址、用户或 HOME 时新增连接，不复用旧 ID。`machineId` 与连接 `id` 必须稳定，`alias` 只负责展示。SSH 主机公钥须事先核验，私钥不复制到目标机，也不进入备份。管理界面不会返回已有私钥路径，编辑时留空表示保留。
+
+连接修改使用版本校验及原子保存。其他标签页先保存草稿，再刷新连接列表；中文输入组词期间等待输入结束。旧页面的写入会被拒绝，不覆盖新配置。有请求尚未确认或连接正在恢复时，不能移除或替换该连接。移除只断开当前 RCM 入口，不停止目标任务。外部手工修改配置文件后，需要重启网页再使用管理界面。源码预览默认不提供真实配置写入入口。
 
 源码预览需要构建，使用独立状态目录：
 

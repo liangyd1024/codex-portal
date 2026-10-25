@@ -18,7 +18,7 @@ async function application(){
 // Existing JavaScript tooling loads the built application, never the old HTTP implementation.
 export async function createApp(options={}){
  const {module,staticRoot,extraAssets,version,installed}=await application();
- const runtime=installed?{buildVersion:version,updater:new module.WebUpdate({supportDir:(await import('./lib/config.mjs')).supportDir,root,version})}:{};
+ const runtime=installed?{connectionConfigFile:(await import('./lib/config.mjs')).configPath,buildVersion:version,updater:new module.WebUpdate({supportDir:(await import('./lib/config.mjs')).supportDir,root,version})}:{};
  return module.createFrameworkApp({staticRoot,extraAssets,...runtime,...options});
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
