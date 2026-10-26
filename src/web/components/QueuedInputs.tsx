@@ -95,5 +95,10 @@ export function installQueuedInputs({host,context,api,refresh,onError}:QueueOpti
   if(!mounted&&!items.length){store.setState(view);return;}
   flushSync(()=>{store.setState(view);if(!mounted){(root??=createRoot(list)).render(<QueueRows store={store} act={act} edit={edit}/>);mounted=true;}});
  }
- return {render};
+ function steerFirst(){
+  const c=context(),item=c.queue?.data?.[0];
+  if(!c.visible||!c.running||!c.ready||!c.supported||!item||busy.has(itemKey(c,item)))return;
+  return act(item,'steer');
+ }
+ return {render,steerFirst};
 }

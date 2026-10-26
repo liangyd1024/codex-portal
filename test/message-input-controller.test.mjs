@@ -8,10 +8,20 @@ const output=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.
 const {createMessageInput}=await import('data:text/javascript;base64,'+Buffer.from(output).toString('base64'));
 function fixture(){
  const input=new EventTarget();Object.assign(input,{value:'draft',clientWidth:300,scrollHeight:45,style:{}});const form={},saved=[],sent=[];let id='a',suspended=false,touch=false,now=100,canSend=true,renders=0,reads=0,font='16px system-ui';
- const controller=createMessageInput({input:()=>input,id:()=>id,suspended:()=>suspended,persist:(...v)=>saved.push(v),render:()=>renders++,send:(...v)=>sent.push(v),canSend:()=>canSend,touch:()=>touch,shouldSend:(e,s)=>shouldSendOnEnter(e,{...s,now}),now:()=>now,style:()=>{reads++;return{font,lineHeight:'26px'};}});controller.bind(form);
+ const queued=[];
+ const controller=createMessageInput({input:()=>input,id:()=>id,suspended:()=>suspended,persist:(...v)=>saved.push(v),render:()=>renders++,send:(...v)=>sent.push(v),steerQueued:()=>queued.push(true),canSend:()=>canSend,touch:()=>touch,shouldSend:(e,s)=>shouldSendOnEnter(e,{...s,now}),now:()=>now,style:()=>{reads++;return{font,lineHeight:'26px'};}});controller.bind(form);
  const key=(props={})=>{let prevented=false;input.onkeydown({key:'Enter',preventDefault:()=>{prevented=true;},...props});return prevented;};
- return{input,form,saved,sent,controller,key,renders:()=>renders,reads:()=>reads,set:v=>{if('id'in v)id=v.id;if('suspended'in v)suspended=v.suspended;if('touch'in v)touch=v.touch;if('now'in v)now=v.now;if('canSend'in v)canSend=v.canSend;if('font'in v)font=v.font;}};
+ return{input,form,saved,sent,queued,controller,key,renders:()=>renders,reads:()=>reads,set:v=>{if('id'in v)id=v.id;if('suspended'in v)suspended=v.suspended;if('touch'in v)touch=v.touch;if('now'in v)now=v.now;if('canSend'in v)canSend=v.canSend;if('font'in v)font=v.font;}};
 }
+test('empty composer modified Enter guides queued input even when draft send is disabled',()=>{
+ const f=fixture();f.input.value=' \n';f.set({canSend:false});
+ for(const props of [{ctrlKey:true},{metaKey:true}])f.key(props);
+ assert.equal(f.queued.length,2);assert.equal(f.sent.length,0);
+ for(const props of [{},{ctrlKey:true,repeat:true},{ctrlKey:true,altKey:true},{ctrlKey:true,shiftKey:true},{ctrlKey:true,isComposing:true},{ctrlKey:true,keyCode:229}])f.key(props);
+ f.input.dispatchEvent(new Event('compositionstart'));f.key({ctrlKey:true});f.input.dispatchEvent(new Event('compositionend'));f.key({ctrlKey:true});
+ f.set({now:151});f.input.disabled=true;f.key({ctrlKey:true});assert.equal(f.queued.length,2);
+ f.input.disabled=false;f.input.value='新草稿';f.set({canSend:true});f.key({ctrlKey:true});assert.equal(f.queued.length,2);assert.deepEqual(f.sent,[[undefined,true]]);
+});
 test('composition candidates and mobile Enter never send; desktop modifiers preserve alternate sends',()=>{
  const f=fixture();f.input.dispatchEvent(new Event('compositionstart'));assert.equal(f.key(),false);f.input.dispatchEvent(new Event('compositionend'));f.set({now:150});assert.equal(f.key(),false);f.set({now:151});assert.equal(f.key({ctrlKey:true,metaKey:false}),true);assert.deepEqual(f.sent,[[undefined,true]]);
  for(const props of [{shiftKey:true},{isComposing:true},{keyCode:229}])assert.equal(f.key(props),false);

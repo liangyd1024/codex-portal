@@ -7,6 +7,7 @@ interface Dependencies {
   render: () => void;
   send: (event?: Event, alternate?: boolean) => unknown;
   canSend: () => boolean;
+  steerQueued?: () => unknown;
   touch: () => boolean;
   shouldSend: (event: KeyboardEvent, state: EnterState) => boolean;
   now: () => number;
@@ -40,7 +41,10 @@ export function createMessageInput(d: Dependencies) {
     input.onkeydown = event => {
       if (d.shouldSend(event, {touch: d.touch(), composing, compositionEnded})) {
         event.preventDefault();
-        if (d.canSend() && !event.repeat && !event.altKey) d.send(undefined, event.metaKey || event.ctrlKey);
+        if (event.repeat || event.altKey || input.disabled) return;
+        const alternate = event.metaKey || event.ctrlKey;
+        if (alternate && !input.value.trim()) d.steerQueued?.();
+        else if (d.canSend()) d.send(undefined, alternate);
       }
     };
   }

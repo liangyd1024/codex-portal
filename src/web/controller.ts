@@ -786,6 +786,7 @@ const interruptThread=createStopRequest({state,newChatOpen:()=>newChatOpen,conte
 async function moreHistory(options={}) { return historyPagination(options); }
 const messageInput=createMessageInput({input:()=>$('message-input'),id:inputId,suspended:()=>draftWritesSuspended,
   persist:(id,value)=>state.drafts.set(id,value),render:()=>renderControls(),send:(...args)=>sendMessage(...args),
+  steerQueued:()=>{if(attachments?.has()||attachments?.pending()||annotations?.has()){if(!$('send-message').disabled)void sendMessage(undefined,true);return;}void queuedInputs?.steerFirst();},
   canSend:()=>!$('send-message').disabled,touch:touchInput,shouldSend:shouldSendOnEnter,now:()=>performance.now(),style:input=>getComputedStyle(input)});
 function resizeInput() { messageInput.resize(); }
 const updateScheduler=createUpdateScheduler({state,defer:(run,delay)=>window.setTimeout(run,delay),cancel:timer=>window.clearTimeout(timer),usable,
