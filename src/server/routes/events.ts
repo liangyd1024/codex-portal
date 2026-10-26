@@ -6,8 +6,8 @@ import type {Response} from '../types';
 import {AppError} from '../../../lib/manager.mjs';
 import {body,json} from '../protocol';
 
-interface EventServices {clients:Set<Response>;access:MobileAccess;updater:WebUpdate}
-export function createEventRoute({clients,access,updater}:EventServices) {
+interface EventServices {registry?:{revision:string}|null;clients:Set<Response>;access:MobileAccess;updater:WebUpdate}
+export function createEventRoute({clients,access,updater,registry}:EventServices) {
  return (req:IncomingMessage,res:Response,manager:Manager,targetKey:string,remote:boolean,url:URL)=>{
   const viewId=url.searchParams.get('viewId');
   if(viewId&&!/^[a-zA-Z0-9_-]{16,80}$/.test(viewId))throw new AppError('页面标识无效。');
@@ -15,6 +15,7 @@ export function createEventRoute({clients,access,updater}:EventServices) {
   const releaseView=manager.retention?.attach(viewId||res);
   res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-store','Connection':'keep-alive','X-Accel-Buffering':'no'});
   res.write(`data: ${JSON.stringify({method:'manager/status',params:manager.status()})}\n\n`);res.targetKey=targetKey;clients.add(res);
+  if(registry)res.write(`event: configuration/change\ndata: ${JSON.stringify({version:registry.revision})}\n\n`);
   for(const request of manager.status().pendingRequests||[])res.write(`data: ${JSON.stringify({method:'manager/request',params:request})}\n\n`);
   const heartbeat=setInterval(()=>{if(remote&&!access.valid(req)){res.end();clients.delete(res);}else res.write(': ping\n\n');},15000);
   res.mobileRequest=remote?req:null;

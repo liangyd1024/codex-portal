@@ -10,11 +10,13 @@
     "backup": "python3 scripts/data-backup.py backup",
     "restore": "python3 scripts/data-backup.py restore",
     "restore:apply": "python3 scripts/restore-apply.py apply",
-    "install": "node scripts/install-local.mjs",
     "maintenance": "python3 scripts/restore-apply.py",
     "start:preview": "node scripts/start-preview.mjs",
     "build": "node scripts/build-framework.mjs",
-    "typecheck": "node scripts/typecheck.mjs"
+    "typecheck": "node scripts/typecheck.mjs",
+    "deploy": "node scripts/install-local.mjs",
+    "doctor": "node scripts/configure.mjs doctor",
+    "init": "node scripts/configure.mjs init"
   },
   "engines": {
     "node": ">=22.12"

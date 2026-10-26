@@ -1,3 +1,5 @@
+import {probeConnection} from '../../../lib/connection-config.mjs';
+import type {ConnectionConfigStore} from '../../../lib/connection-config.mjs';
 import {createLocalOriginMatcher} from '../local-origin';
 import type {IncomingMessage} from 'node:http';
 import type {AddressInfo} from 'node:net';
@@ -22,6 +24,7 @@ import {Manager,AppError} from '../../../lib/manager.mjs';
 import {NativeAutomations} from '../../../lib/native-automations.mjs';
 
 export interface RouteServices {
+ connectionWrites:Map<string,number>;registry:ConnectionConfigStore|null;changeConnections:((data:Record<string,unknown>)=>Promise<unknown>)|null;
  config:import('../types').Config; managers:Map<string,Manager>; automations:Map<string,NativeAutomations>;
  desktopSessions:Map<string,NativeAutomations>;desktopSession:(host:string,id:string)=>NativeAutomations;
  csrf:string;clients:Set<Response>;staticResponse:ReturnType<typeof createStaticResponse>;
@@ -38,8 +41,8 @@ export function createDispatcher(context:RouteServices){
  const threadView=createThreadViewRoute(context);
  const workspaceRoutes=new WeakMap<Manager,ReturnType<typeof createWorkspaceRoutes>>();
  const workspaceRoutesFor=(manager:Manager)=>{let routes=workspaceRoutes.get(manager);if(!routes){routes=createWorkspaceRoutes(manager);workspaceRoutes.set(manager,routes);}return routes;};
- const desktopRoutes=new Map<string,ReturnType<typeof createDesktopRoutes>>();
- const desktopRoutesFor=(host:string,manager:Manager)=>{let routes=desktopRoutes.get(host);if(!routes){routes=createDesktopRoutes(manager,context.automations.get(host)!,id=>context.desktopSession(host,id));desktopRoutes.set(host,routes);}return routes;};
+ const desktopRoutes=new WeakMap<Manager,ReturnType<typeof createDesktopRoutes>>();
+ const desktopRoutesFor=(host:string,manager:Manager)=>{let routes=desktopRoutes.get(manager);if(!routes){routes=createDesktopRoutes(manager,context.automations.get(host)!,id=>context.desktopSession(host,id));desktopRoutes.set(manager,routes);}return routes;};
  const mediaRoutes=new WeakMap<Manager,ReturnType<typeof createMediaRoutes>>();
  const mediaRoutesFor=(manager:Manager)=>{let routes=mediaRoutes.get(manager);if(!routes){routes=createMediaRoutes(manager);mediaRoutes.set(manager,routes);}return routes;};
  const threadRoutes=new WeakMap<Manager,ReturnType<typeof createThreadRoutes>>();
@@ -52,6 +55,7 @@ export function createDispatcher(context:RouteServices){
     res.allowGzip=String(req.headers['accept-encoding']||'').split(',').some(part=>/^gzip(?:\s*;|\s*$)/i.test(part.trim())&&!/;\s*q=0(?:\.0*)?(?:\s*;|\s*$)/i.test(part));
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    let writingTarget:string|undefined;
     try {
       // Host and origin checks protect the local control API against DNS rebinding and drive-by sites.
       const port=(server.address() as AddressInfo|null)?.port;
@@ -67,6 +71,7 @@ export function createDispatcher(context:RouteServices){
       if(remote&&access.expires(req)===null)res.setHeader('Set-Cookie',access.cookie(access.token(req)));
       if(req.method==='GET'){const route=accessRoutes.read(p,remote,mobileConfig);if(route){await route(req,res,url);return;}}
       if(req.method==='GET'){const route=systemRoutes.read(p);if(route){await route(url,res);return;}}
+      if(req.method==='GET'&&p==='/api/connection-config'){if(!context.registry)throw new AppError('此预览不支持修改连接配置。',409);return json(res,200,context.registry.snapshot());}
       const targetKey=url.searchParams.get('host')||config.defaultConnection;
       const manager=managers.get(targetKey);
       if(!manager)throw new AppError('未知连接。',404,'UNKNOWN_HOST');
@@ -85,7 +90,12 @@ export function createDispatcher(context:RouteServices){
       if(req.method==='POST'){
         const token=req.headers['x-csrf-token']||'';
         if(typeof token!=='string'||Buffer.byteLength(token)!==Buffer.byteLength(csrf)||!timingSafeEqual(Buffer.from(token),Buffer.from(csrf)))throw new AppError('本机会话已变化。请刷新页面。',403,'CSRF');
+        if(context.registry&&req.headers['x-rcm-config-revision']!==context.registry.revision)throw new AppError('连接配置已变化，请保存草稿并刷新页面。',409,'CONFIG_CONFLICT');
         const data=await body(req,/^\/api\/threads\/[A-Za-z0-9_-]+\/(message|steer|queue-add)$/.test(p)?6*1024*1024:1024*1024);
+        if(p==='/api/connection-probe'){if(!context.registry)throw new AppError('此预览不支持连接检测。',409);return json(res,200,await probeConnection(context.config,data));}
+        if(p==='/api/connection-config'){if(!context.changeConnections)throw new AppError('此预览不支持修改连接配置。',409);return json(res,200,await context.changeConnections(data));}
+        if(context.registry?.writing)throw new AppError('连接配置正在保存，请稍后重试。',409,'CONFIG_BUSY');
+        writingTarget=targetKey;context.connectionWrites.set(targetKey,(context.connectionWrites.get(targetKey)||0)+1);
         if(p==='/api/system/update'){await systemRoutes.update(data,(server.address() as AddressInfo|null)?.port,res);return;}
         if(p==='/api/project-folders'||p==='/api/projects/open'){await workspaceRoutesFor(manager).get('POST '+p)!(url,data,res);return;}
         const desktopRoute=desktopRoutesFor(targetKey,manager).desktopWrite(desktopMatch);if(desktopRoute){await desktopRoute(url,data,res);return;}
@@ -103,5 +113,6 @@ export function createDispatcher(context:RouteServices){
       if(p.startsWith('/api/'))return json(res,404,{error:{message:'找不到此接口。',code:'NOT_FOUND'}});
       await staticRoutes.read(req,res,p);
     }catch(caught){const error=caught as {status?:number;message?:string;code?:string;details?:unknown};if(res.headersSent){res.destroy();return;}json(res,error.status||502,{error:{message:error.message,code:error.code||'REMOTE_ERROR',...(error.details?{details:error.details}:{})}});}
+    finally{if(writingTarget){const count=(context.connectionWrites.get(writingTarget)||1)-1;if(count)context.connectionWrites.set(writingTarget,count);else context.connectionWrites.delete(writingTarget);}}
   };
 }

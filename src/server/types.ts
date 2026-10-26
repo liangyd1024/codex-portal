@@ -13,6 +13,6 @@ export interface ApplicationOptions {
  staticRoot?:string; extraAssets?:Record<string,string>; buildVersion?:string;
  mobileConfig?:MobileConfig|null;setupMobile?:((mode:string)=>Promise<MobileConfig>)|null;
  access?:MobileAccess;config?:Config;stateDir?:string;
- managers?:Map<string,Manager>;updater?:WebUpdate;
+ managers?:Map<string,Manager>;updater?:WebUpdate;connectionConfigFile?:string;
 }
 export interface Response extends ServerResponse {allowGzip?:boolean;targetKey?:string;mobileRequest?:IncomingMessage|null;viewId?:string|null}

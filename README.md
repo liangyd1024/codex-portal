@@ -6,32 +6,34 @@
 
 ## 配置与运行
 
-需要 macOS、Node.js 22.12+、Python 3、Git、age。上传和下载 Release 附件还需要已登录的 GitHub CLI (`gh`)。从官方发行渠道安装工具。
+需要 macOS、Node.js 22.12+、Python 3、Git，以及可运行的 Codex。`age` 用于可选的手动加密备份。正式部署检查目前还需要 `ego-browser`，它不是 Codex 自带组件；缺少它时诊断会提示，安装器不会跳过浏览器检查。
 
-将 `config/connections.example.json` 按本机情况填写为：
-
-```text
-~/Library/Application Support/RemoteCodexManager/connections.json
-```
-
-实际配置置于仓库外，权限为 `600`。`machineId` 必须稳定；连接的 `id` 用于状态文件、`?host=` 路由及浏览器缓存，后续不要随意修改。连接 ID 由部署者自行配置；示例使用 `local` 和 `remote-b`。`alias` 只负责展示。
-
-每个连接需设置真实用户名、HOME、Codex 二进制路径；SSH 连接另需地址、端口和本机私钥路径。私钥不复制到另一台机器、不进入备份。双方主机公钥必须事先核验。SSH 强制使用配置的密钥和严格主机校验。
-
-本分支是框架迁移验收分支。准备依赖必须禁用安装脚本，避免触发现有正式安装入口。使用锁定版本构建：
+新克隆的工作目录先下载锁定依赖，再检查并初始化本机连接：
 
 ```sh
 npm ci --ignore-scripts
-npm run typecheck
+npm run doctor
+npm run init
+```
+
+Codex 不在 PATH 或已知应用位置时，使用 `npm run init -- --binary /absolute/path/to/codex`。诊断只执行版本检查，不启动原生引擎。初始化写入仓库外的 `connections.json`，权限为 `600`；再次执行保留已有文件和身份，损坏配置会报错，不自动覆盖。`npm install` 不再部署服务，正式部署使用下文的显式命令。
+
+默认配置位置为 `~/Library/Application Support/RemoteCodexManager/connections.json`，可以用绝对路径 `RCM_CONFIG` 指定。SSH 连接可在“工作区详情 → 设置 → 目标机器连接 → 管理连接”新增、检测、改名、设置默认及移除。检测只核对身份和可执行路径，不代表原生业务接口已经可用。更换目标地址、用户或 HOME 时新增连接，不复用旧 ID。`machineId` 与连接 `id` 必须稳定，`alias` 只负责展示。SSH 主机公钥须事先核验，私钥不复制到目标机，也不进入备份。管理界面不会返回已有私钥路径，编辑时留空表示保留。
+
+连接修改使用版本校验及原子保存。其他标签页先保存草稿，再刷新连接列表；中文输入组词期间等待输入结束。旧页面的写入会被拒绝，不覆盖新配置。有请求尚未确认或连接正在恢复时，不能移除或替换该连接。移除只断开当前 RCM 入口，不停止目标任务。外部手工修改配置文件后，需要重启网页再使用管理界面。源码预览默认不提供真实配置写入入口。
+
+源码预览需要构建，使用独立状态目录：
+
+```sh
 npm run build
 RCM_PREVIEW_ROOT=/absolute/new/preview-state node server.mjs
 ```
 
-`server.mjs` 保留 JavaScript 入口，运行构建后的 Fastify 应用。修改源码后重新构建才会进入预览。独立状态根目录必须使用新的绝对路径；已有验收目录只有含本分支所有权标记时才能复用。
+源码的 `server.mjs` 只启动预览；已安装产物使用相对目录加载编译服务端和静态资源，不依赖源码目录或开发 node_modules。修改源码后重新构建才会进入预览。预览状态根目录必须是新的绝对路径；只有带有验收所有权标记的目录才能复用。
 
 本机正式网页固定为 `http://127.0.0.1:4317`。手机本地代理使用 `4318`，手机局域网 HTTPS 使用 `4319`。开发预览固定使用 `4327`。未经用户明确要求不得改动这些端口。端口占用时先查原因，不自动换端口。
 
-本分支预览固定使用 4327，默认不绑定手机端口。已授权的手机验收使用 `RCM_PREVIEW_ROOT=/absolute/new/preview-state node scripts/start-preview.mjs --mobile`，绑定独立的 4338／4339，证书、配对、维护状态与日志均位于该状态根目录。正式 4317／4318／4319 不变。预览仍连接同一目标引擎，只操作专用测试会话；本轮不合并 master 或执行正式安装。
+源码预览固定使用 4327，默认不绑定手机端口。已授权的手机验收使用 `RCM_PREVIEW_ROOT=/absolute/new/preview-state node scripts/start-preview.mjs --mobile`，绑定独立的 4338／4339，证书、配对、维护状态与日志均位于该状态根目录。正式 4317／4318／4319 不变。预览仍连接同一目标引擎，只操作专用测试会话；预览启动不执行正式安装。
 
 ## 源码边界与页面性能
 
@@ -111,8 +113,11 @@ iPhone / iPad（iOS 16.4+）需要通过浏览器分享菜单“添加到主屏�
 部署前对比当前正式版本，保留已上线的其他功能。网页重启不以原生会话空闲为条件，不得停止在用任务。提交并推送后执行：
 
 ```sh
-node scripts/install-local.mjs --ref <commit>
+npm test
+npm run deploy -- --ref <commit>
 ```
+
+`npm test` 会构建并验证当前版本，成功后记录整个构建的摘要。安装新框架版本要求工作目录干净、构建提交匹配且摘要未变。安装器在全新暂存目录准备锁定的生产依赖，验证独立模块可加载后才发布 release；网络或产物检查失败不会停止旧网页。仅执行 `npm run build` 不构成可部署的验收凭据。
 
 部署健康检查分两步：先核对版本接口，再用 ego-browser 打开正式工作台。浏览器禁用资源缓存，等待工作台初始化和入口模块执行完成，检查脚本、样式加载错误及未处理异常。只有两步都通过才记录部署成功；浏览器加载失败或超时会走原有网页回退流程。
 
@@ -122,7 +127,7 @@ RCM 网页安装和页面“更新并重新部署”均允许本机与 SSH 目�
 
 用户明确授权忽略某个本机待处理请求时，可在本次安装命令追加 `--allow-pending-request <request-key>`。参数按请求 key 精确匹配，可重复传入，不保存为配置；其他请求和连接异常仍会阻止部署。网页更新按钮不自动忽略待处理请求。
 
-安装会在安装前及重启前检查当前网页入口，再将 Git 提交安装到 `~/Library/Application Support/RemoteCodexManager/releases/<commit>`。部署不自动生成数据备份；需要时按“加密备份”一节手动执行。旧安装、副本和配置不删除。仅重启本机网页服务；不会停止目标机引擎或更新正在运行的输出采集器。新版本健康检查失败会恢复原网页 plist。要回退，使用同一安装命令指定之前的兼容提交；需要回到最初基线时使用 `install-history/` 中保存的旧 plist。
+安装会在安装前及重启前检查当前网页入口，再将经过测试的产物安装到 `~/Library/Application Support/RemoteCodexManager/releases/<commit>`。部署不自动生成数据备份；需要时按“加密备份”一节手动执行。旧安装、副本和配置不删除。仅重启本机网页服务；不会停止目标机引擎或更新正在运行的输出采集器。新版本健康检查失败会恢复原网页 plist。已存在的完整框架 release 可校验后离线复用；旧源码版本也保留原安装路径。要回退，使用显式部署命令指定之前的兼容提交，不重建已有 release；需要回到最初基线时使用 `install-history/` 中保存的旧 plist。
 
 开发代码位于 Git 工作目录；后台服务运行不可变的 release 目录。
 
@@ -290,10 +295,10 @@ node scripts/verify-framework-baseline.mjs <基准提交> /absolute/path/to/buil
 
 项目验证范围和历史结果见 [验证文档](docs/README.md)。公开记录中的环境信息均使用通用标识，不提供个人部署入口或备份位置。
 
-测试入口 `npm test` 与网页更新共用 `scripts/run-tests.mjs`。网页更新直接使用服务的 Node 路径，不依赖后台 PATH 中存在 npm。Node 测试的保留目录等诊断信息使用 `t.diagnostic()`，避免旧 Node 测试运行器混合解析中文 stdout 时的序列化缺陷；不要以跳过测试或失败自动重跑代替修复。
+测试入口 `npm test` 与网页更新共用 `scripts/run-tests.mjs`。测试入口直接使用服务的 Node 路径；准备正式运行依赖时使用同一 Node 安装目录的 npm。Node 测试的保留目录等诊断信息使用 `t.diagnostic()`，避免旧 Node 测试运行器混合解析中文 stdout 时的序列化缺陷；不要以跳过测试或失败自动重跑代替修复。
 
 ### 框架迁移分支的独立验收
 
 `refactor/framework-migration` 使用独立工作树和 4327 / 4338 / 4339 入口。
-本分支不安装或更新正式服务。工程初始化必须禁用安装生命周期脚本。
+迁移工作树保留为历史验收入口。重构已整合至 master；其性能差异按用户要求暂缓，不标为通过。正式安装使用本页的独立产物流程。
 实现范围、运行步骤、基准变化和未验证项见[框架迁移记录](docs/framework-migration.md)。

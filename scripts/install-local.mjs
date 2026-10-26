@@ -3,6 +3,7 @@ import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {prepareRelease} from '../lib/release-artifact.mjs';
 import {loadConfig,supportDir} from '../lib/config.mjs';
 import {launchdService} from '../lib/launchd.mjs';
 import {prepareWorkbenchCheck} from '../lib/workbench-check.mjs';
@@ -23,7 +24,7 @@ try {
 const commit=run('git',['-C',root,'rev-parse','--verify',ref+'^{commit}']);
 if(!/^[a-f0-9]{40}$/.test(commit))throw Error('版本无效。');
 if(run('git',['-C',root,'status','--porcelain']))throw Error('开发目录有未提交修改，请提交后按版本安装。');
-const app=path.join(supportDir,'releases',commit),logs=path.join(supportDir,'logs');
+const release=path.join(supportDir,'releases',commit);let app=release;const logs=path.join(supportDir,'logs');
 await mkdir(logs,{recursive:true,mode:0o700});await mkdir(path.dirname(job),{recursive:true});
 // Check this entrance only. Do not interrupt tasks running through another entrance.
 const existing=spawnSync('/bin/launchctl',['print',domain+'/'+label],{encoding:'utf8'}).status===0;
@@ -32,9 +33,19 @@ async function checkEntrance(){
  await checkDeploymentEntrance({localConnectionId,allowedPendingRequestKeys,onWaiting:message=>console.log('正在重新核对：'+message)});
 }
 if(existing)await checkEntrance();
-try{await stat(app);if((await readFile(path.join(app,'VERSION'),'utf8')).trim()!==commit)throw Error('已有版本目录不完整，请手动检查：'+app);}catch(error){if(error.code!=='ENOENT')throw error;await mkdir(app,{recursive:true,mode:0o700});const archive=spawnSync('git',['-C',root,'archive',commit],{maxBuffer:64*1024*1024});if(archive.status!==0)throw Error('无法导出版本');run('/usr/bin/tar',['-xf','-','-C',app],{input:archive.stdout});await writeFile(path.join(app,'VERSION'),commit+'\n',{mode:0o600});}
+const archivedPackage=JSON.parse(run('git',['-C',root,'show',commit+':package.json']));
+if(archivedPackage.scripts?.build){
+ app=await prepareRelease({root,commit,destination:release});
+}else{
+ // Legacy source-only versions remain usable for rollback.
+ try{await stat(app);if((await readFile(path.join(app,'VERSION'),'utf8')).trim()!==commit)throw Error('已有版本目录不完整，请手动检查：'+app);}catch(error){if(error.code!=='ENOENT')throw error;await mkdir(app,{recursive:true,mode:0o700});const archive=spawnSync('git',['-C',root,'archive',commit],{maxBuffer:64*1024*1024});if(archive.status!==0)throw Error('无法导出版本');run('/usr/bin/tar',['-xf','-','-C',app],{input:archive.stdout});await writeFile(path.join(app,'VERSION'),commit+'\n',{mode:0o600});}
+}
 const escape=v=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-const plist=`<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array><string>${escape(process.execPath)}</string><string>${escape(path.join(app,'server.mjs'))}</string></array><key>WorkingDirectory</key><string>${escape(app)}</string><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>ProcessType</key><string>Interactive</string><key>Umask</key><integer>63</integer><key>StandardOutPath</key><string>${escape(path.join(logs,'web.stdout.log'))}</string><key>StandardErrorPath</key><string>${escape(path.join(logs,'web.stderr.log'))}</string></dict></plist>`;
+const environment={PYTHONDONTWRITEBYTECODE:'1',PATH:path.dirname(process.execPath)+path.delimiter+(process.env.PATH||'/usr/bin:/bin:/usr/sbin:/sbin')};
+for(const key of ['RCM_CONFIG','RCM_STATE_DIR','RCM_EGO_BROWSER','RCM_MOBILE'])if(process.env[key])environment[key]=process.env[key];
+for(const key of ['RCM_CONFIG','RCM_STATE_DIR'])if(environment[key]&&!path.isAbsolute(environment[key]))throw Error(key+' 必须为绝对路径。');
+const environmentXml=Object.entries(environment).map(([key,value])=>`<key>${escape(key)}</key><string>${escape(value)}</string>`).join('');
+const plist=`<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array><string>${escape(process.execPath)}</string><string>${escape(path.join(app,'server.mjs'))}</string></array><key>EnvironmentVariables</key><dict>${environmentXml}</dict><key>WorkingDirectory</key><string>${escape(app)}</string><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>ProcessType</key><string>Interactive</string><key>Umask</key><integer>63</integer><key>StandardOutPath</key><string>${escape(path.join(logs,'web.stdout.log'))}</string><key>StandardErrorPath</key><string>${escape(path.join(logs,'web.stderr.log'))}</string></dict></plist>`;
 let previous=null;try{previous=await readFile(job);}catch(e){if(e.code!=='ENOENT')throw e;}
 const previousFile=path.join(supportDir,'install-history',Date.now()+'.plist');
 await mkdir(path.dirname(previousFile),{recursive:true,mode:0o700});

@@ -1,3 +1,4 @@
+import {installConnectionManager,connectionSavePending} from './components/ConnectionManager';
 import {composerSendView} from './services/composer-send-view';
 import {publishConversationActivity} from './components/RunningIndicator';
 import {publishWorkspaceRegion} from './components/WorkspaceRegions';
@@ -255,7 +256,7 @@ function recordError(error:unknown, stage = 'client') {
 let toastPresenter: ReturnType<typeof createToasts> | undefined;
 function toast(...args:Parameters<ReturnType<typeof createToasts>>) { return (toastPresenter??=createToasts({region:$('toasts'),make:el,icon}))(...args); }
 
-const api=createApiClient({targetUrl,csrf:{get:()=>state.csrf,set:token=>{state.csrf=token;}},flushDrafts,reload:()=>location.reload()});
+const api=createApiClient({targetUrl,configRevision:()=>connectionConfig.configRevision as string|undefined,csrf:{get:()=>state.csrf,set:token=>{state.csrf=token;}},flushDrafts,reload:()=>location.reload()});
 
 const action=createActionRunner({state,renderControls,renderStatus,usable,syncRequestCards,recordError,messageOf,toast});
 
@@ -793,6 +794,12 @@ const updateScheduler=createUpdateScheduler({state,defer:(run,delay)=>window.set
 function scheduleStreamRender(kind='all') { updateScheduler.stream(kind); }
 function scheduleDetailRefresh() { updateScheduler.detail(); }
 function scheduleListRefresh() { updateScheduler.list(); }
+let configurationUpdate:unknown;
+const configurationSync=createVersionSync({flush:()=>{if(connectionSavePending())throw Error('Configuration save pending');flushDrafts();if(state.drafts.warned)throw Error('Draft persistence failed');},reload:()=>location.reload(),onError:()=>{if(!connectionSavePending())toast('草稿保存失败，请保留当前页面。',true);}});
+configurationSync.receive({version:connectionConfig.configRevision});
+document.defaultView!.addEventListener('rcm:configuration-idle',()=>{if(configurationUpdate)configurationSync.receive(configurationUpdate);});
+document.addEventListener('compositionstart',configurationSync.compositionStart);
+document.addEventListener('compositionend',configurationSync.compositionEnd);
 const webVersionSync=createVersionSync({flush:()=>{flushDrafts();if(state.drafts.warned)throw Error("Draft persistence failed");},reload:()=>location.reload(),onError:()=>toast('草稿保存失败，请保留当前页面。',true)});
 function receiveWebUpdate(data:unknown){
  webVersionSync.receive(data);
@@ -807,7 +814,7 @@ const handleEvent=createEventHandler({state,sideChat:()=>sideChat,accountVersion
   notifyManagerError,toast,messageOf,requestKey,updateExtensionNotice,upsertTurn,upsertItem,ensureTurn,turns});
 const setupEvents=createEventConnection({state,url:()=>targetUrl('/api/events?viewId='+threadViewId),createSource:url=>new EventSource(url),
   resetThreadView:()=>threadViewReporter.reset(),reconnectSideChat:()=>sideChat?.reconnect(),renderStatus,
-  reportThreadView,resumeWorkspace,recordError,receiveWebUpdate,handleEvent});
+  reportThreadView,resumeWorkspace,recordError,receiveWebUpdate,receiveConfiguration:data=>{configurationUpdate=data;configurationSync.receive(data);},handleEvent});
 const {saveLayout,readLayout,setupResizableLayout,toggleSidebar,toggleInspector}=createLayoutController({element:$,compact:compactLayout});
 function wireEvents() {
   automations=installAutomations({api,onOpen:()=>{flushDrafts();closeNewChat();state.selectionVersion++;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);queueMicrotask(renderControls);},
@@ -851,6 +858,7 @@ function wireEvents() {
     const width = entries[0].contentRect.width;
     if (width !== composerWidth) { composerWidth = width; requestAnimationFrame(resizeInput); }
   }).observe($('message-input'));
+  installConnectionManager({api,enabled:typeof connectionConfig.configRevision==='string',flush:()=>{flushDrafts();if(state.drafts.warned)throw Error('草稿保存失败，请保留当前页面。');}});
   installConnectionActions({connect:()=>connected()||connectionPending()?disconnectRemote():connectRemote(),reload:reloadLogin,release:releaseService});
   installWelcomeAction(() => connected() ? openNewDialog() : connectRemote());
   setWorkspaceControlAction('new-thread',openNewDialog); setWorkspaceControlAction('takeover',takeoverThread);

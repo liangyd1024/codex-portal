@@ -94,3 +94,12 @@ test('token reads with explicit transport options do not join the default read',
  assert.equal(calls.length,3);assert.equal(calls[1].init.headers['X-Probe'],'isolated');
  release();await Promise.all(pending);
 });
+
+test('shared CSRF read preserves the current configuration revision on every write',async()=>{
+ let token='',revision='first',release;const gate=new Promise(resolve=>{release=resolve;}),calls=[];
+ const api=createApiClient({targetUrl:p=>p,configRevision:()=>revision,csrf:{get:()=>token,set:t=>{token=t;}},flushDrafts(){},reload(){},fetch:async(path,init)=>{calls.push({path,init});if(path==='/api/csrf'){await gate;return json({token:'shared'});}return json({ok:true});}});
+ const pending=[api('/api/a',{method:'POST'}),api('/api/b',{method:'POST'})];
+ assert.equal(calls.length,1);revision='second';release();await Promise.all(pending);
+ assert.equal(calls[0].init.headers['X-RCM-Config-Revision'],undefined);
+ assert.ok(calls.slice(1).every(c=>c.init.headers['X-RCM-Config-Revision']==='second'&&c.init.headers['X-CSRF-Token']==='shared'));
+});

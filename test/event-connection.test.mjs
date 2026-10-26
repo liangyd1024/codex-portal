@@ -9,7 +9,7 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(overrides={}){
  const state={transport:false},calls=[],sources=[];
  let url='/api/events?viewId=qa-view&host=qa-a',side=null;
- const deps={state,url:()=>url,createSource:url=>{const listeners=new Map();const es={url,listeners,addEventListener:(name,listener)=>listeners.set(name,listener)};sources.push(es);return es;},resetThreadView:()=>calls.push('reset'),reconnectSideChat:()=>side?.(),renderStatus:()=>calls.push(['status',state.transport]),reportThreadView:async()=>{calls.push('report');},resumeWorkspace:async()=>{calls.push('resume');},recordError:(e,stage)=>calls.push(['error',e.message,stage]),receiveWebUpdate:data=>calls.push(['update',data]),handleEvent:event=>calls.push(['event',event]),...overrides};
+ const deps={state,url:()=>url,createSource:url=>{const listeners=new Map();const es={url,listeners,addEventListener:(name,listener)=>listeners.set(name,listener)};sources.push(es);return es;},resetThreadView:()=>calls.push('reset'),reconnectSideChat:()=>side?.(),renderStatus:()=>calls.push(['status',state.transport]),reportThreadView:async()=>{calls.push('report');},resumeWorkspace:async()=>{calls.push('resume');},recordError:(e,stage)=>calls.push(['error',e.message,stage]),receiveWebUpdate:data=>calls.push(['update',data]),receiveConfiguration:data=>calls.push(['configuration',data]),handleEvent:event=>calls.push(['event',event]),...overrides};
  const setup=createEventConnection(deps);
  return{state,calls,sources,setup,setUrl:value=>url=value,setSide:value=>side=value};
 }
@@ -30,9 +30,9 @@ test('report rejection does not block recovery and failures retain their stages'
 });
 test('named and unnamed events retain the complete message without parsing or copying',()=>{
  const f=fixture();f.setup();const es=f.sources[0];
- assert.deepEqual([...es.listeners.keys()],['system/update','manager/status','manager/error','manager/request','manager/requestResolved']);
+ assert.deepEqual([...es.listeners.keys()],['system/update','configuration/change','manager/status','manager/error','manager/request','manager/requestResolved']);
  const event={data:'{"unknown":{"raw":"原文"}}',type:'message',extra:42};es.onmessage(event);
- for(const name of [...es.listeners.keys()].slice(1)){assert.equal(es.listeners.get(name),es.onmessage);es.listeners.get(name)(event);}
+ for(const name of [...es.listeners.keys()].slice(2)){assert.equal(es.listeners.get(name),es.onmessage);es.listeners.get(name)(event);}
  assert.equal(f.calls.length,5);for(const call of f.calls)assert.equal(call[1],event);
 });
 test('replaced source cannot deliver update or parse its invalid JSON, new source can',()=>{
@@ -49,3 +49,5 @@ test('replacement preserves baseline transport callbacks until the caller closes
  assert.equal(f.state.eventSource,current);
  assert.deepEqual(f.calls,[['status',false],'reset',['status',true],'report','resume']);
 });
+
+test('configuration events ignore replaced streams and preserve their revision',()=>{const f=fixture();f.setup();const old=f.sources[0];f.setup();old.listeners.get('configuration/change')({data:'invalid'});f.sources[1].listeners.get('configuration/change')({data:'{"version":"new-revision"}'});assert.deepEqual(f.calls,[['configuration',{version:'new-revision'}]]);});
