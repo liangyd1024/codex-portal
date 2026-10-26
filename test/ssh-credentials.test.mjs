@@ -5,11 +5,38 @@ import {promisify} from 'node:util';
 import {mkdtemp,writeFile,readFile,stat} from 'node:fs/promises';
 import {homedir,tmpdir,userInfo} from 'node:os';
 import path from 'node:path';
-import {saveCredential,readCredential,deleteCredential} from '../lib/ssh-credentials.mjs';
+import {EventEmitter} from 'node:events';
+import {PassThrough} from 'node:stream';
+import {keychain,saveCredential,readCredential,deleteCredential} from '../lib/ssh-credentials.mjs';
 import {prepareSshAuth} from '../lib/ssh-auth.mjs';
 import {sshArgs} from '../lib/transports/ssh-options.mjs';
 import {ConnectionConfigStore} from '../lib/connection-config.mjs';
 const secret='fictional-password-for-tests';
+function helperResult(output,exitCode=1){
+ return ()=>{const child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.kill=()=>{};child.stdin.on('finish',()=>{child.stdout.write(output);child.emit('close',exitCode);});return child;};
+}
+test('keychain preserves native errors on nonzero helper exits and gives specific recovery instructions',async()=>{
+ for(const status of [-25293,-25308,-25315]){
+  await assert.rejects(keychain('read','unused',undefined,{spawnProcess:helperResult(JSON.stringify({error:'KEYCHAIN_UNAVAILABLE',osStatus:status}))}),error=>error.code==='KEYCHAIN_ACCESS_DENIED'&&error.osStatus===status&&/运行网页服务的 Mac 屏幕/.test(error.message)&&!/密码.*不正确/.test(error.message));
+ }
+ await assert.rejects(keychain('read','unused',undefined,{spawnProcess:helperResult('{"error":"KEYCHAIN_UNAVAILABLE","osStatus":-25300}')}),{code:'SSH_PASSWORD_REQUIRED'});
+ await assert.rejects(keychain('save','unused',secret,{spawnProcess:helperResult('{"error":"KEYCHAIN_UNAVAILABLE","osStatus":-25300}')}),{code:'KEYCHAIN_UNAVAILABLE'});
+});
+test('helper failures and malformed responses never disclose helper output or input',async()=>{
+ for(const output of [secret,'null',JSON.stringify({error:secret}),JSON.stringify({password:secret})]){
+  await assert.rejects(keychain('read','unused',undefined,{spawnProcess:helperResult(output)}),error=>error.code==='KEYCHAIN_UNAVAILABLE'&&!error.message.includes(secret));
+ }
+ await assert.rejects(keychain('read','unused',undefined,{spawnProcess:()=>{throw Error(secret);}}),error=>error.code==='KEYCHAIN_UNAVAILABLE'&&!error.message.includes(secret));
+});
+test('keychain timeout kills the helper and ignores a late successful response',async()=>{
+ let killed=false;const spawnProcess=()=>{const child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.kill=()=>{killed=true;child.stdout.write(JSON.stringify({password:secret}));child.emit('close',0);};return child;};
+ await assert.rejects(keychain('read','unused',undefined,{spawnProcess,timeoutMs:5}),{code:'KEYCHAIN_TIMEOUT'});assert.equal(killed,true);
+});
+test('unlock recovery reads the existing reference again without saving or caching a password',async()=>{
+ const ref='keychain:00000000-0000-0000-0000-000000000000';let locked=true;const calls=[];
+ const vault=(op,reference)=>{calls.push([op,reference]);return keychain(op,reference,undefined,{spawnProcess:helperResult(locked?'{"error":"KEYCHAIN_UNAVAILABLE","osStatus":-25293}':JSON.stringify({password:secret}),locked?1:0)});};
+ await assert.rejects(readCredential(ref,{vault}),{code:'KEYCHAIN_ACCESS_DENIED'});locked=false;assert.equal(await readCredential(ref,{vault}),secret);locked=true;await assert.rejects(readCredential(ref,{vault}),{code:'KEYCHAIN_ACCESS_DENIED'});assert.deepEqual(calls,Array.from({length:3},()=>['read',ref]));
+});
 test('session credentials are opaque, deletable and never require a vault',async()=>{
  const ref=await saveCredential(secret,false);assert.match(ref,/^session:/);assert.equal(await readCredential(ref),secret);await deleteCredential(ref);await assert.rejects(readCredential(ref),{code:'SSH_PASSWORD_REQUIRED'});
 });

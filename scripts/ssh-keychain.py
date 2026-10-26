@@ -5,6 +5,19 @@ import json
 import sys
 
 
+class KeychainError(Exception):
+    def __init__(self, status):
+        self.status = int(status)
+
+
+def error_result(error):
+    # Only return OSStatus. Exception text can contain input or environment data.
+    result = {'error': 'KEYCHAIN_UNAVAILABLE'}
+    if isinstance(error, KeychainError):
+        result['osStatus'] = error.status
+    return result
+
+
 def main():
     value = json.load(sys.stdin)
     security = C.CDLL('/System/Library/Frameworks/Security.framework/Security')
@@ -28,13 +41,13 @@ def main():
         if item.value:
             core.CFRelease(item)
         if status:
-            raise RuntimeError(str(status))
+            raise KeychainError(status)
         return {'ok': True}
     status = find(None, len(service), service, len(account), account, C.byref(length), C.byref(data), C.byref(item))
     if status == -25300 and operation == 'delete':
         return {'ok': True}
     if status:
-        raise RuntimeError(str(status))
+        raise KeychainError(status)
     try:
         if operation == 'read':
             return {'password': C.string_at(data, length.value).decode('utf-8')}
@@ -42,7 +55,7 @@ def main():
             raise RuntimeError('operation')
         status = security.SecKeychainItemDelete(item)
         if status:
-            raise RuntimeError(str(status))
+            raise KeychainError(status)
         return {'ok': True}
     finally:
         security.SecKeychainItemFreeContent(None, data)
@@ -52,6 +65,6 @@ def main():
 if __name__ == '__main__':
     try:
         print(json.dumps(main()))
-    except Exception:
-        print('{"error":"KEYCHAIN_UNAVAILABLE"}')
+    except Exception as error:
+        print(json.dumps(error_result(error)))
         sys.exit(1)
