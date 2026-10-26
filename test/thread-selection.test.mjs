@@ -2,10 +2,10 @@ import test from 'node:test';import assert from 'node:assert/strict';import {rea
 const source=readFileSync(new URL('../src/web/services/thread-selection.ts',import.meta.url),'utf8');
 const output=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const {createThreadSelection}=await import('data:text/javascript;base64,'+Buffer.from(output).toString('base64'));
-function fixture(){
+function fixture(overrides={}){
  const calls=[],pending=[],input={value:'草稿 A'},messages={style:{paddingBottom:'20px'}},state={busy:new Set(),desktopMode:false,drafts:new Map([['b','草稿 B']]),selectionVersion:0,selectedId:'a',detail:{thread:{id:'a'}},historyCursor:'old',loadedOlderHistory:true,loadingDetail:false,historyError:'old'},scroll={schedule:()=>calls.push('scroll')};let automations={threadId:'desktop',close:()=>calls.push('automation-close')};
  const deps={state,location:{href:'http://fixture/?thread=a&host=target#keep'},history:{replaceState:(_s,_t,url)=>calls.push(['url',String(url)])},document:{querySelector:()=>({classList:{toggle:(name,on)=>calls.push([name,on])}})},closeNewChat:()=>calls.push('close-new'),automations:()=>automations,toggleInspector:open=>calls.push(['inspector',open]),element:id=>id==='messages'?messages:input,inputId:()=>state.selectedId,saveView:()=>calls.push(['save',state.selectedId]),resizeInput:()=>calls.push('resize'),renderModels:value=>calls.push(['models',value]),renderThread:()=>calls.push('thread'),renderThreads:()=>calls.push('threads'),renderRequests:()=>calls.push('requests'),saveDetailSoon:()=>calls.push('cache'),compactLayout:()=>true,toggleSidebar:(...args)=>calls.push(['sidebar',...args]),refreshSelected:()=>new Promise((resolve,reject)=>pending.push({resolve,reject})),scrollFollow:()=>scroll,messageOf:e=>e.message,recordError:(e,stage)=>calls.push(['error',stage,e.message])};
- return {...createThreadSelection(deps),state,input,messages,calls,pending,setAutomation:value=>{automations=value;}};
+ return {...createThreadSelection({...deps,...overrides}),state,input,messages,calls,pending,setAutomation:value=>{automations=value;}};
 }
 test('selection preserves draft and transition order before the pending detail settles',async()=>{
  const f=fixture(),work=f.selectThread('b');
@@ -35,4 +35,10 @@ test('verified desktop detail enables the existing composer without changing the
  f.applyDetail({thread:{id:'a'},controlState:'desktop',desktop:{available:true,canSend:true}});
  assert.equal(f.state.desktopMode,true);assert.equal(f.state.selectionVersion,selection);assert.equal(f.input.value,'草稿 A');assert.deepEqual(f.calls.slice(0,2),[['desktop-chat',true],['save','a']]);
  const cached=fixture();cached.applyDetail({thread:{id:'a'},controlState:'desktop',desktop:{available:true},recovering:true});assert.equal(cached.state.desktopMode,false);
+});
+
+test('manual selection cancels pending notification but notification routing does not cancel itself',async()=>{
+ let cancelled=0;const f=fixture({cancelNotification:()=>cancelled++});
+ let work=f.selectThread('b',{notification:true});f.pending[0].resolve();await work;assert.equal(cancelled,0);
+ work=f.selectThread('a');f.pending[1].resolve();await work;assert.equal(cancelled,1);
 });

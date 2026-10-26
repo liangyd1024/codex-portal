@@ -1,4 +1,5 @@
-import {pendingNotificationTarget,saveNotificationTarget,consumeNotificationTarget} from './services/notification-target';
+import {readWorkspaceView,saveWorkspaceView} from './services/workspace-view';
+import {pendingNotificationTarget,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl} from './services/notification-target';
 import {installConnectionManager,connectionSavePending} from './components/ConnectionManager';
 import {composerSendView} from './services/composer-send-view';
 import {publishConversationActivity} from './components/RunningIndicator';
@@ -124,8 +125,8 @@ import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrat
 import {outputWindow, OUTPUT_WINDOW_SIZE} from '../../public/output-window.js';
 import {updateExtensionNotice, renderExtensionNotice, mergeLiveTurns, taskNotice, backgroundActivity} from '../../public/connection-state.js';
 const requestedHost = new URL(location.href).searchParams.get('host');
-let pendingNotification=pendingNotificationTarget(sessionStorage,location.href), notificationNavigationReady=false;
-let openingNotification:string|null=null;
+let pendingNotification=pendingNotificationTarget(localStorage,location.href), notificationNavigationReady=false;
+let openingNotification:string|null=null,notificationWaitingForCreate=false;
 navigator.serviceWorker?.addEventListener('message',event=>{
   const data=event.data;
   if(data?.type!=='rcm-notification-click'||!data.threadId)return;
@@ -133,11 +134,12 @@ navigator.serviceWorker?.addEventListener('message',event=>{
 });
 function requestNotificationTarget(){
   if(!notificationNavigationReady||document.visibilityState==='hidden')return;
-  const linked=pendingNotificationTarget(sessionStorage,location.href);
+  const linked=pendingNotificationTarget(localStorage,location.href);
   if(linked){void openNotificationThread(linked);return;}
   void navigator.serviceWorker?.getRegistration().then(registration=>registration?.active?.postMessage({type:'rcm-notification-ready'})).catch(recordError);
 }
 window.addEventListener('pageshow',requestNotificationTarget);
+window.addEventListener('online',requestNotificationTarget);
 window.addEventListener('hashchange',requestNotificationTarget);
 window.addEventListener('popstate',requestNotificationTarget);
 document.addEventListener('visibilitychange',requestNotificationTarget);
@@ -146,11 +148,12 @@ const connectionConfig=await readConnections();
 const connectionIds=connectionConfig.data.map(c=>c.id);
 const targetHost=selectTarget(connectionIds,requestedHost,connectionConfig.defaultConnection)!;
 renderSelectOptions(document.querySelector<HTMLSelectElement>('#connection-select')!,connectionConfig.data.map(c=>({value:c.id,label:c.host.alias})),connectionConfig.data[0]?.id||'');
-function savedView() { try { return JSON.parse(sessionStorage.getItem('rcm.view.'+targetHost)||'{}'); } catch { return {}; } }
+const standaloneApp=matchMedia('(display-mode: standalone)').matches||(navigator as Navigator & {standalone?:boolean}).standalone===true;
+function savedView(){return readWorkspaceView(sessionStorage,localStorage,targetHost,standaloneApp);}
 function pendingDesktopSends(){try{return JSON.parse(sessionStorage.getItem('rcm.desktopSends.'+targetHost)||'{}');}catch{return {};}}
 const desktopSends=pendingDesktopSends();
 function saveDesktopSends(){try{sessionStorage.setItem('rcm.desktopSends.'+targetHost,JSON.stringify(desktopSends));}catch{toast('浏览器无法保存发送回执，请先核对原始会话再重试。',true);}}
-function saveView() { try { sessionStorage.setItem('rcm.view.'+targetHost,JSON.stringify({selectedId:state.selectedId,projectId:state.projectId,desktopMode:state.desktopMode})); } catch {} }
+function saveView(){saveWorkspaceView(sessionStorage,localStorage,targetHost,standaloneApp,{selectedId:state.selectedId,projectId:state.projectId,desktopMode:state.desktopMode});}
 function rememberHost(host:string) { try { localStorage.setItem('rcm.connection',host); } catch {} }
 rememberHost(targetHost);
 const targetUrl=(path:string)=>path+(path.includes('?')?'&':'?')+'host='+targetHost;
@@ -310,6 +313,7 @@ function renderConnectionBanner() {
     recoveryMessage:()=>selectedRecoveryMessage(s.recoveryFailures,newChatOpen?null:state.selectedId)}));
 }
 function renderControls() {
+  if(notificationWaitingForCreate&&!state.busy.has('create')){notificationWaitingForCreate=false;queueMicrotask(requestNotificationTarget);}
   publishWorkspace(state);
   annotations?.render();sideChat?.sync();queuedInputs?.render();
   queueMicrotask(()=>turnNavigation?.update());
@@ -677,7 +681,7 @@ const loadThreads = createSidebarLoader({
   read:append=>readThreads(append,true),
 });
 const {readThreads,loadSidebarActivity,loadVisibleThreads}=createSidebarReader({state,createdThreads,connected,loadProjects,threadName,element:$,renderThreads,renderControls,api,loadThreads,recordError,toast,messageOf,requestAnimationFrame});
-const {applyDetail,selectThread}=createThreadSelection({state,location,history,document,closeNewChat,automations:()=>automations,toggleInspector:open=>toggleInspector(open),element:$,inputId,saveView,resizeInput,renderModels,renderThread,renderThreads,renderRequests,saveDetailSoon:()=>saveDetailSoon(),compactLayout,toggleSidebar:(...args)=>toggleSidebar(...args),refreshSelected:()=>refreshSelected(),scrollFollow:()=>scrollFollow,messageOf,recordError});
+const {applyDetail,selectThread}=createThreadSelection({cancelNotification:cancelPendingNotification,state,location,history,document,closeNewChat,automations:()=>automations,toggleInspector:open=>toggleInspector(open),element:$,inputId,saveView,resizeInput,renderModels,renderThread,renderThreads,renderRequests,saveDetailSoon:()=>saveDetailSoon(),compactLayout,toggleSidebar:(...args)=>toggleSidebar(...args),refreshSelected:()=>refreshSelected(),scrollFollow:()=>scrollFollow,messageOf,recordError});
 const {saveSoon:saveDetailSoon,restore:restoreDetail,cancelScheduled:cancelDetailSave}=createDetailRecovery({state,host:targetHost,read:readDetailCache,write:writeDetailCache,apply:applyDetail});
 const readDetail=createDetailReader({state,sends:desktopSends,acknowledgeAttachments:pictures=>attachments?.acknowledge(pictures),
   reportView:()=>reportThreadView(),recordError:error=>recordError(error,'thread'),request:(...args)=>api(...args),
@@ -698,7 +702,7 @@ const readSelectedDetail=async(id:string,current:()=>boolean)=>{
 };
 const selectedRefresh=createSelectedRefresh({state,blocked:()=>automations?.opened||newChatOpen,
   newChatOpen:()=>newChatOpen,restore:restoreDetail,read:readSelectedDetail,turns,merge:mergeLiveTurns,
-  apply:applyDetail,updated:()=>turnNavigation?.update()});
+  apply:applyDetail,updated:()=>{turnNavigation?.update();if(!openingNotification)void finishNotificationNavigation().catch(recordError);}});
 const refreshSelected=selectedRefresh.refresh;
 async function refreshWorkspace(forceModels = false, statusReady = false) {
   return workspaceRefresh(forceModels,statusReady);
@@ -732,21 +736,35 @@ async function openNotificationThread(target:{host?:string;threadId:string;click
   const {threadId,clickId}=target,host=target.host||targetHost;
   target={...target,host};
   const key=JSON.stringify(target);if(openingNotification===key)return;
-  saveNotificationTarget(sessionStorage,target);
+  saveNotificationTarget(localStorage,target);
+  history.replaceState(null,'',notificationTargetUrl(location.href,target));
+  if(state.busy.has('create')){notificationWaitingForCreate=true;return;}
   if(host!==targetHost){
-    if(!connectionIds.includes(host))return;
+    if(!connectionIds.includes(host)){toast('通知对应的连接已不存在，请在侧栏选择可用连接。',true);history.replaceState(null,'',consumeNotificationTarget(localStorage,target,location.href));await acknowledgeNotificationClick(target.clickId);return;}
     flushDrafts();
-    const url=new URL(location.href);url.searchParams.set('host',host);url.searchParams.set('thread',threadId);location.assign(url);return;
+    location.assign(notificationTargetUrl(location.href,target));return;
   }
   openingNotification=key;
   try{
-    await selectThread(threadId);
-    if(state.selectedId===threadId&&state.detail?.thread?.id===threadId&&!state.historyError&&!state.busy.has('create')){
-      history.replaceState(null,'',consumeNotificationTarget(sessionStorage,target,location.href));
-      if(clickId){const registration=await navigator.serviceWorker?.getRegistration();registration?.active?.postMessage({type:'rcm-notification-consumed',clickId});}
-    }
+    await selectThread(threadId,{notification:true});
+    await finishNotificationNavigation(target);
   }catch(error){recordError(error,'notification-navigation');}
   finally{if(openingNotification===key)openingNotification=null;}
+}
+async function finishNotificationNavigation(target=pendingNotificationTarget(localStorage,location.href)){
+  if(!target||target.host!==targetHost||state.selectedId!==target.threadId||state.detail?.thread?.id!==target.threadId||state.loadingDetail||state.detail?.recovering||state.historyError||state.busy.has('create'))return;
+  history.replaceState(null,'',consumeNotificationTarget(localStorage,target,location.href));
+  await acknowledgeNotificationClick(target.clickId);
+}
+function cancelPendingNotification(){
+  const target=pendingNotificationTarget(localStorage,location.href);if(!target)return;
+  notificationWaitingForCreate=false;
+  history.replaceState(null,'',consumeNotificationTarget(localStorage,target,location.href));
+  void acknowledgeNotificationClick(target.clickId).catch(recordError);
+}
+async function acknowledgeNotificationClick(clickId?:string){
+  if(!clickId)return;
+  const registration=await navigator.serviceWorker?.getRegistration();registration?.active?.postMessage({type:'rcm-notification-consumed',clickId});
 }
 const sendTaskNotification=notificationDelivery.send;
 const notifyTaskEvent=createTaskNotifications({enabled:()=>notificationPreferences.enabled()&&!pushSubscription.active(),

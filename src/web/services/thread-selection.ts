@@ -1,8 +1,8 @@
 export interface SelectionDetail {goalError?:unknown;goal?:unknown;thread?:{id?:string;turns?:unknown[];[field:string]:unknown};turns?:unknown[];nextCursor?:string|null;historyCursor?:string|null;recovering?:boolean;[field:string]:unknown}
 interface SelectionState {busy:Set<string>;desktopMode:boolean;drafts:{set:(id:string,value:string)=>unknown;get:(id:string)=>string|undefined};selectionVersion:number;selectedId:string|null;detail:SelectionDetail|null;historyCursor:string|null;loadedOlderHistory:boolean;loadingDetail:boolean;historyError:string}
 interface Elements {'messages':HTMLElement;'message-input':HTMLTextAreaElement}
-interface Dependencies {state:SelectionState;location:Pick<Location,'href'>;history:Pick<History,'replaceState'>;document:Pick<Document,'querySelector'>;closeNewChat:()=>void;automations:()=>{close:()=>void;threadId?:string|null}|null|undefined;toggleInspector:(open:boolean)=>void;element:<K extends keyof Elements>(id:K)=>Elements[K];inputId:()=>string|null;saveView:()=>void;resizeInput:()=>void;renderModels:(preferThread:boolean)=>void;renderThread:()=>void;renderThreads:()=>void;renderRequests:()=>void;saveDetailSoon:()=>void;compactLayout:()=>boolean;toggleSidebar:(open:boolean,remember:boolean)=>void;refreshSelected:()=>Promise<void>;scrollFollow:()=>{schedule:()=>void}|null|undefined;messageOf:(error:unknown)=>string;recordError:(error:unknown,stage:string)=>void}
-export function createThreadSelection({state,location,history,document,closeNewChat,automations,toggleInspector,element:$,inputId,saveView,resizeInput,renderModels,renderThread,renderThreads,renderRequests,saveDetailSoon,compactLayout,toggleSidebar,refreshSelected,scrollFollow,messageOf,recordError}:Dependencies){
+interface Dependencies {cancelNotification?:()=>void;state:SelectionState;location:Pick<Location,'href'>;history:Pick<History,'replaceState'>;document:Pick<Document,'querySelector'>;closeNewChat:()=>void;automations:()=>{close:()=>void;threadId?:string|null}|null|undefined;toggleInspector:(open:boolean)=>void;element:<K extends keyof Elements>(id:K)=>Elements[K];inputId:()=>string|null;saveView:()=>void;resizeInput:()=>void;renderModels:(preferThread:boolean)=>void;renderThread:()=>void;renderThreads:()=>void;renderRequests:()=>void;saveDetailSoon:()=>void;compactLayout:()=>boolean;toggleSidebar:(open:boolean,remember:boolean)=>void;refreshSelected:()=>Promise<void>;scrollFollow:()=>{schedule:()=>void}|null|undefined;messageOf:(error:unknown)=>string;recordError:(error:unknown,stage:string)=>void}
+export function createThreadSelection({cancelNotification,state,location,history,document,closeNewChat,automations,toggleInspector,element:$,inputId,saveView,resizeInput,renderModels,renderThread,renderThreads,renderRequests,saveDetailSoon,compactLayout,toggleSidebar,refreshSelected,scrollFollow,messageOf,recordError}:Dependencies){
 function applyDetail(data:SelectionDetail, resetModels = false) {
   if(data.goalError&&state.detail?.thread?.id===data.thread?.id)data.goal=state.detail!.goal;
   if(!state.desktopMode&&!data.recovering&&data.controlState==='desktop'&&data.desktop){
@@ -14,8 +14,9 @@ function applyDetail(data:SelectionDetail, resetModels = false) {
   state.historyCursor = data.nextCursor || data.historyCursor || null; state.historyError = '';
   if (resetModels) renderModels(true); renderThread(); renderRequests(); if(!data.recovering)saveDetailSoon();
 }
-async function selectThread(id:string,options:{desktop?:boolean}={}) {
+async function selectThread(id:string,options:{desktop?:boolean;notification?:boolean}={}) {
   if(state.busy.has('create'))return;
+  if(!options.notification)cancelNotification?.();
   const url=new URL(location.href);url.searchParams.delete('thread');history.replaceState(null,'',url);
   closeNewChat();
   automations()?.close();state.desktopMode=Boolean(options.desktop||id===automations()?.threadId);
