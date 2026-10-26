@@ -6,7 +6,8 @@ import path from 'node:path';
 import {initializeConfig,discoverEnvironment} from '../lib/initialize.mjs';
 async function fixture(){const root=await mkdtemp(path.join(tmpdir(),'rcm-init-'));return {file:path.join(root,'config.json'),binary:process.execPath,home:root,user:'example'};}
 test('concurrent initialization preserves one machine identity and config permissions',async()=>{
- const options=await fixture(),results=await Promise.all([initializeConfig(options),initializeConfig(options)]);
+ const options=await fixture(),results=await Promise.all([initializeConfig({...options,python:'/opt/example/python3'}),initializeConfig({...options,python:'/opt/example/python3'})]);
+ assert.equal(results[0].config.connections[0].python,'/opt/example/python3');
  assert.equal(results.filter(item=>item.created).length,1);
  assert.equal(results[0].config.machineId,results[1].config.machineId);
  assert.equal((await stat(options.file)).mode&0o777,0o600);

@@ -1,4 +1,4 @@
-import importlib.util,json,pathlib,sqlite3,subprocess,tempfile,unittest
+import importlib.util,json,os,pathlib,sqlite3,subprocess,tempfile,unittest
 from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('restore_apply',pathlib.Path(__file__).resolve().parents[1]/'scripts/restore-apply.py');r=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)
 class ApplyTests(unittest.TestCase):
@@ -32,5 +32,13 @@ class ApplyTests(unittest.TestCase):
   with self.scope(),patch.object(r.b,'check_db',side_effect=fail_live):
    with self.assertRaisesRegex(RuntimeError,'simulated'):r.apply(self.stage,True)
   self.assertEqual(self.db.read_bytes(),self.saved)
+  self.assertTrue(json.loads((self.data/'web-titles-local.json.connection.json').read_text())['enabled'])
+ def test_custom_web_state_and_config_restore_to_selected_locations(self):
+  config=self.root/'custom-connections.json';config.write_bytes((self.support/'connections.json').read_bytes())
+  state=self.root/'web-state';state.mkdir();(state/'web-titles-local.json.connection.json').write_text('{"enabled":true}')
+  original=(self.support/'connections.json').read_bytes()
+  with self.scope(),patch.dict(os.environ,{'RCM_CONFIG':str(config),'RCM_STATE_DIR':str(state)}):result=r.apply(self.stage,True)
+  self.assertTrue(result['restored']);self.assertEqual((self.support/'connections.json').read_bytes(),original)
+  self.assertFalse(json.loads((state/'web-titles-local.json.connection.json').read_text())['enabled'])
   self.assertTrue(json.loads((self.data/'web-titles-local.json.connection.json').read_text())['enabled'])
 if __name__=='__main__':unittest.main()

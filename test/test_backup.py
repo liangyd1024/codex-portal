@@ -1,10 +1,12 @@
-import importlib.util,io,json,pathlib,sqlite3,subprocess,tarfile,tempfile,threading,time,unittest
+from unittest.mock import patch
+import importlib.util,io,json,os,pathlib,sqlite3,subprocess,tarfile,tempfile,threading,time,unittest
 spec=importlib.util.spec_from_file_location('backup',pathlib.Path(__file__).resolve().parents[1]/'scripts/data-backup.py');b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
 class BackupTests(unittest.TestCase):
  @classmethod
  def setUpClass(cls):
   cls.root=pathlib.Path(tempfile.mkdtemp(prefix='rcm-tests-'));cls.home=cls.root/'home';cls.support=cls.home/'Library/Application Support/RemoteCodexManager';cls.data=cls.home/'.codex/remote-codex-manager';cls.support.mkdir(parents=True);cls.data.mkdir(parents=True)
   (cls.support/'connections.json').write_text(json.dumps({'formatVersion':1,'machineId':'test','connections':[]}))
+  (cls.data/'web-titles-local.json.archive-sync.json').write_text('{}')
   (cls.data/'web-titles-local.json').write_text('[]');(cls.data/'web-titles-local.json.connection.json').write_text('{"enabled":true}')
   (cls.data/'web-titles-local.json.desktop-00000000-0000-0000-0000-000000000001.json').write_text('{"submissions":{}}')
   (cls.data/'web-titles-local.json.native-automations.json').write_text('{"threadId":null,"submissions":{}}')
@@ -34,7 +36,7 @@ class BackupTests(unittest.TestCase):
   finally:stop.set();t.join()
  def test_complete_restore_and_scope(self):
   dest=self.root/'restored';r=b.prepare(self.result['index'],self.identity,'test',dest);self.assertFalse(r['liveDataChanged'])
-  m=b.verify_tree(dest,'test');self.assertIn('data/output-journal.sqlite',m['files']);self.assertIn('data/web-titles-local.json.connection.json',m['files']);self.assertEqual(m['browserSnapshots'],[]);self.assertIn('data/web-titles-local.json.native-automations.json',m['files']);self.assertIn('data/web-titles-local.json.desktop-00000000-0000-0000-0000-000000000001.json',m['files'])
+  m=b.verify_tree(dest,'test');self.assertIn('data/web-titles-local.json.archive-sync.json',m['files']);self.assertIn('data/output-journal.sqlite',m['files']);self.assertIn('data/web-titles-local.json.connection.json',m['files']);self.assertEqual(m['browserSnapshots'],[]);self.assertIn('data/web-titles-local.json.native-automations.json',m['files']);self.assertIn('data/web-titles-local.json.desktop-00000000-0000-0000-0000-000000000001.json',m['files'])
   self.assertEqual(json.loads((dest/'data/web-titles-local.json.handoffs.json').read_text()),[['test-thread',{'state':'waiting','requestedAt':1}]])
   self.assertFalse(any(any(secret in n for secret in ['auth.json','state_5.sqlite','secret','-wal','-shm']) for n in m['files']))
  def test_wrong_key_rejected_before_extraction(self):
@@ -75,4 +77,21 @@ class BackupTests(unittest.TestCase):
   p=self.root/'invalid.sqlite'
   with sqlite3.connect(p) as db:db.execute('CREATE TABLE other(id)')
   with self.assertRaisesRegex(ValueError,'必需表'):b.check_db(p)
+ def test_custom_config_and_state_keep_native_journal_separate(self):
+  root=pathlib.Path(tempfile.mkdtemp(prefix='rcm-custom-backup-'));config=root/'custom-config.json';state=root/'web-state';state.mkdir()
+  config.write_text(json.dumps({'formatVersion':1,'machineId':'custom','connections':[]}));(state/'web-titles-custom.json.archive-sync.json').write_text('{}')
+  with patch.dict(os.environ,{'RCM_CONFIG':str(config),'RCM_STATE_DIR':str(state)}):
+   self.assertEqual(b.read_config(self.home)['machineId'],'custom')
+   files,missing,tables,browsers=b.collect(self.home)
+  self.assertIn('data/output-journal.sqlite',files);self.assertIn('data/web-titles-custom.json.archive-sync.json',files)
+  self.assertNotIn('data/web-titles-local.json',files);self.assertEqual(json.loads(files['config/connections.json'])['machineId'],'custom')
+ def test_relative_custom_paths_rejected(self):
+  with self.assertRaisesRegex(ValueError,'绝对路径'):b.collect(self.home,config_path='relative.json')
+ def test_backup_records_installed_and_tool_versions_separately(self):
+  file=self.support/'installed.json';file.write_text(json.dumps({'commit':'a'*40}))
+  result=b.backup(self.home,self.root/'version-backup');dest=self.root/'version-restored';b.prepare(result['archive'],self.identity,'test',dest)
+  manifest=json.loads((dest/'manifest.json').read_text());self.assertEqual(manifest['installedVersion'],'a'*40);self.assertEqual(manifest['codeVersion'],'a'*40);self.assertIn('toolVersion',manifest)
+ def test_remote_publish_commands_are_removed(self):
+  result=subprocess.run(['python3',str(b.ROOT/'scripts/data-backup.py'),'publish','unused'],capture_output=True,text=True)
+  self.assertNotEqual(result.returncode,0);self.assertIn('invalid choice',result.stderr)
 if __name__=='__main__':unittest.main()

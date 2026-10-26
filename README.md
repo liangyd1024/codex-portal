@@ -8,7 +8,19 @@
 
 需要 macOS、Node.js 22.12+、Python 3、Git，以及可运行的 Codex。`age` 用于可选的手动加密备份。正式部署检查目前还需要 `ego-browser`，它不是 Codex 自带组件；缺少它时诊断会提示，安装器不会跳过浏览器检查。
 
-新克隆的工作目录先下载锁定依赖，再检查并初始化本机连接：
+首次安装可在干净的克隆目录执行：
+
+```sh
+sh scripts/bootstrap-macos.sh
+# Codex 位于自定义目录时：
+sh scripts/bootstrap-macos.sh --binary /absolute/path/to/codex
+```
+
+这个入口会检查系统工具、下载项目依赖、初始化连接、运行全量测试并部署网页。已有 [Homebrew](https://brew.sh/) 时，缺少或版本过低的 Node 使用 [node@24](https://formulae.brew.sh/formula/node@24)，缺少 Python 3 或 age 时也通过 Homebrew 安装。脚本关闭 Homebrew 自动清理，不删除已有依赖目录；已有 node_modules 时先做类型检查，失败即停止。它不自动安装 Homebrew，也不安装或修改 Codex。
+
+请先安装 [Ego Lite](https://lite.ego.app/)，完成首次启动设置，确保 `ego-browser` 可运行；自定义位置使用 `RCM_EGO_BROWSER`。该部署验证依赖当前需要用户自行准备。安装包、依赖和构建结果不提交到 Git。Mac 自动准备流程已通过隔离命令测试，尚未完成全新 Mac 和 Intel Mac 的实机验收。
+
+若需分步操作，新克隆的工作目录先下载锁定依赖，再检查并初始化本机连接：
 
 ```sh
 npm ci --ignore-scripts
@@ -18,7 +30,7 @@ npm run init
 
 Codex 不在 PATH 或已知应用位置时，使用 `npm run init -- --binary /absolute/path/to/codex`。诊断只执行版本检查，不启动原生引擎。初始化写入仓库外的 `connections.json`，权限为 `600`；再次执行保留已有文件和身份，损坏配置会报错，不自动覆盖。`npm install` 不再部署服务，正式部署使用下文的显式命令。
 
-默认配置位置为 `~/Library/Application Support/RemoteCodexManager/connections.json`，可以用绝对路径 `RCM_CONFIG` 指定。SSH 连接可在“工作区详情 → 设置 → 目标机器连接 → 管理连接”新增、检测、改名、设置默认及移除。检测只核对身份和可执行路径，不代表原生业务接口已经可用。更换目标地址、用户或 HOME 时新增连接，不复用旧 ID。`machineId` 与连接 `id` 必须稳定，`alias` 只负责展示。SSH 主机公钥须事先核验，私钥不复制到目标机，也不进入备份。管理界面不会返回已有私钥路径，编辑时留空表示保留。
+默认配置位置为 `~/Library/Application Support/RemoteCodexManager/connections.json`，可以用绝对路径 `RCM_CONFIG` 指定。SSH 连接可在“工作区详情 → 设置 → 目标机器连接 → 管理连接”新增、检测、改名、设置默认及移除。检测只核对身份和可执行路径，不代表原生业务接口已经可用。更换目标地址、用户或 HOME 时新增连接，不复用旧 ID。`machineId` 与连接 `id` 必须稳定，`alias` 只负责展示。初始化会记录发现的 Python 绝对路径。本机与 SSH 适配可读取连接中的 `python`；旧配置未设置时沿用 `/usr/bin/python3`。SSH 自定义 Python 目前需要在配置中指定。SSH 主机公钥须事先核验，私钥不复制到目标机，也不进入备份。管理界面不会返回已有私钥路径，编辑时留空表示保留。
 
 连接修改使用版本校验及原子保存。其他标签页先保存草稿，再刷新连接列表；中文输入组词期间等待输入结束。旧页面的写入会被拒绝，不覆盖新配置。有请求尚未确认或连接正在恢复时，不能移除或替换该连接。移除只断开当前 RCM 入口，不停止目标任务。外部手工修改配置文件后，需要重启网页再使用管理界面。源码预览默认不提供真实配置写入入口。
 
@@ -226,7 +238,7 @@ python3 scripts/data-backup.py backup --browser /absolute/path/browser-export.js
 备份范围严格限定为：
 
 - `output-journal.sqlite` 的 SQLite Online Backup API 快照，含所有表，并检查完整性。不会复制运行中的 WAL/SHM。
-- `web-titles-*.json` 及 subscriptions、handoffs、notices、connection、native-automations 状态（管理会话绑定和发送回执，不含原生任务配置）（标题状态可能含消息上下文）。
+- `web-titles-*.json` 及 subscriptions、handoffs、notices、connection、archive-sync、native-automations 状态（管理会话绑定和发送回执，不含原生任务配置）（标题状态可能含消息上下文）。
 - 实际连接配置、手机访问配置、配对状态、本项目 CA 和服务端证书/私钥。
 - 管理器服务日志，以及显式提供的浏览器导出文件。
 
@@ -234,12 +246,9 @@ python3 scripts/data-backup.py backup --browser /absolute/path/browser-export.js
 
 每份包包含来源机器、UTC 时间、代码提交、格式版本、文件大小、SHA-256、数据库表和缺失项清单。age 加密包超过 1 GiB 时生成分卷，索引记录顺序及校验值；原加密包保留。无定时任务，不自动删除历史备份。
 
-```sh
-python3 scripts/data-backup.py publish /absolute/path/backup.age.index.json --repo OWNER/remote-codex-manager --tag backup-MACHINE-TIME
-python3 scripts/data-backup.py download --repo OWNER/remote-codex-manager --tag backup-MACHINE-TIME --destination /absolute/new/download-directory
-```
+备份仅保存到本机或用户指定的存储目录。运行数据不再通过项目命令上传 GitHub，工具不依赖 gh。历史远端附件仍需单独核查；移除上传命令不等于远端已经清理。
 
-上传前强制核验仓库为私有。普通 Git 克隆不会下载 Release 数据。上传同名附件会报错，不覆盖历史附件。
+自定义网页配置与状态目录时，备份和恢复沿用 `RCM_CONFIG`、`RCM_STATE_DIR`；备份也可显式传入 `--config /absolute/config.json --state-dir /absolute/web-state`。网页状态目录与本机输出日志目录分别收集，不能把自定义网页目录当作原生输出日志目录。备份清单分别记录已安装版本和工具版本，旧 codeVersion 字段优先表示已安装版本。
 
 ## 浏览器数据
 
@@ -249,7 +258,7 @@ python3 scripts/data-backup.py download --repo OWNER/remote-codex-manager --tag 
 
 ## 恢复
 
-先下载，解密、校验并在一个不存在的新目录中验证：
+先取回本地加密包，解密、校验并在一个不存在的新目录中验证：
 
 ```sh
 python3 scripts/data-backup.py restore /absolute/path/backup.age.index.json --identity /absolute/path/backup-identity.txt --machine MACHINE --destination /absolute/new/restore-directory

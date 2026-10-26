@@ -1,5 +1,5 @@
 """Run through SSH stdin. Only this application's dedicated service is managed."""
-import json, os, pathlib, plistlib, pwd, re, socket, subprocess, time
+import json, os, pathlib, plistlib, pwd, re, socket, sys, subprocess, time
 
 HOME = pathlib.Path(globals().get('SERVICE_HOME', str(pathlib.Path.home())))
 ROOT = HOME / '.codex/remote-codex-manager'
@@ -32,7 +32,7 @@ def ensure_relay():
     script.write_text(source); os.chmod(script, 0o600)
     if reader_source: reader.write_text(reader_source); os.chmod(reader, 0o600)
     if running.returncode != 0:
-        config = {'Label':label, 'ProgramArguments':['/usr/bin/python3',str(script)], 'RunAtLoad':True, 'KeepAlive':True, 'Umask':0o077, 'WorkingDirectory':str(ROOT)}
+        config = {'Label':label, 'ProgramArguments':[globals().get('SERVICE_PYTHON',sys.executable),str(script)], 'RunAtLoad':True, 'KeepAlive':True, 'Umask':0o077, 'WorkingDirectory':str(ROOT)}
         with job.open('wb') as stream: plistlib.dump(config,stream)
         os.chmod(job,0o600)
         result = command(['/bin/launchctl','bootstrap',DOMAIN,str(job)])

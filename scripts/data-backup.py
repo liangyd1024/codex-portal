@@ -5,7 +5,7 @@ import argparse, datetime, hashlib, io, json, os, pathlib, re, shutil, sqlite3, 
 FORMAT = 1
 TABLES = {'commands', 'output_chunks', 'startup_prefixes', 'notification_events', 'turn_owners'}
 MOBILE = {'config.json','sessions.json','sessions.json.code','Codex-Local-CA.crt','ca.key','server.key','server.crt','Codex-Local-CA.srl','server.csr','server.ext','lan.png','tailscale.png'}
-STATE = re.compile(r'web-titles-[A-Za-z0-9_-]+\.json(?:\.(?:subscriptions|handoffs|notices|connection|native-automations|desktop-[0-9a-f-]{36})\.json)?$')
+STATE = re.compile(r'web-titles-[A-Za-z0-9_-]+\.json(?:\.(?:subscriptions|handoffs|notices|connection|archive-sync|native-automations|desktop-[0-9a-f-]{36})\.json)?$')
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 def stamp(): return datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
@@ -18,8 +18,19 @@ def executable(name):
     if candidate.is_file():return str(candidate)
     raise RuntimeError('缺少命令：'+name)
 def run(args, **kw): return subprocess.run([str(a) for a in args], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kw)
-def read_config(home):
-    f=home/'Library/Application Support/RemoteCodexManager/connections.json'
+def configured_path(value, fallback):
+    p=pathlib.Path(value) if value else fallback
+    if not p.is_absolute():raise ValueError('配置与状态目录必须使用绝对路径')
+    return p
+
+def config_file(home, value=None):
+    return configured_path(value or os.environ.get('RCM_CONFIG'),home/'Library/Application Support/RemoteCodexManager/connections.json')
+
+def state_directory(home, value=None):
+    return configured_path(value or os.environ.get('RCM_STATE_DIR'),home/'.codex/remote-codex-manager')
+
+def read_config(home, file=None):
+    f=config_file(home,file)
     c=json.loads(f.read_text())
     if c.get('formatVersion')!=1 or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',c.get('machineId','')):raise ValueError('配置版本或机器标识无效')
     return c
@@ -66,19 +77,21 @@ def key_init(home):
     (directory/'backup-recipient.txt').write_text(recipient+'\n')
     return identity,recipient
 
-def collect(home,browser_files=()):
+def collect(home,browser_files=(),config_path=None,state_dir=None):
     support=home/'Library/Application Support/RemoteCodexManager';data=home/'.codex/remote-codex-manager'
+    web_state=state_directory(home,state_dir)
     files={};missing=[];tables=[]
     def add(name,p):
         if p.is_symlink():raise ValueError('拒绝备份符号链接：'+name)
         if p.is_file():files[name]=p.read_bytes()
         else:missing.append(name)
     db=data/'output-journal.sqlite'
+    if db.is_symlink():raise ValueError('拒绝备份符号链接：data/output-journal.sqlite')
     if db.exists():files['data/output-journal.sqlite'],tables=snapshot_db(db)
     else:missing.append('data/output-journal.sqlite')
-    for p in sorted(data.glob('web-titles-*.json')):
+    for p in sorted(web_state.glob('web-titles-*.json')):
         if STATE.fullmatch(p.name):add('data/'+p.name,p)
-    add('config/connections.json',support/'connections.json')
+    add('config/connections.json',config_file(home,config_path))
     for name in sorted(MOBILE):add('mobile/'+name,support/'mobile'/name)
     for directory,prefix in [(data,'service-'),(support/'logs','web-')]:
         for p in sorted(directory.glob('*.log')):add('logs/'+prefix+p.name,p)
@@ -86,19 +99,27 @@ def collect(home,browser_files=()):
     for index,p in enumerate(browser_files):
         p=pathlib.Path(p);content=p.read_bytes();b=json.loads(content)
         if b.get('format')!='rcm-browser' or b.get('version')!=1:raise ValueError('浏览器导出格式无效')
-        if b.get('machineId')!=read_config(home)['machineId']:raise ValueError('浏览器来源机器不符')
+        if b.get('machineId')!=read_config(home,config_path)['machineId']:raise ValueError('浏览器来源机器不符')
         name='browser/'+str(index)+'.json';files[name]=content
         browsers.append({'file':name,'capturedAt':b.get('capturedAt'),'coverage':b.get('coverage')})
     return files,missing,tables,browsers
 
-def backup(home,out,browser_files=(),recipient=None):
+def backup(home,out,browser_files=(),recipient=None,config_path=None,state_dir=None):
     home=pathlib.Path(home);out=pathlib.Path(out);out.mkdir(parents=True,exist_ok=True,mode=0o700);out.chmod(0o700)
-    config=read_config(home)
+    config=read_config(home,config_path)
     if not recipient:_,recipient=key_init(home)
-    files,missing,tables,browsers=collect(home,browser_files)
-    try:commit=run(['git','-C',ROOT,'rev-parse','HEAD']).stdout.decode().strip()
-    except subprocess.CalledProcessError:commit=(ROOT/'VERSION').read_text().strip() if (ROOT/'VERSION').exists() else 'unknown'
-    manifest={'format':'rcm-backup','formatVersion':FORMAT,'machineId':config['machineId'],'createdAt':stamp(),'codeVersion':commit,'files':{n:{'sha256':digest(v),'size':len(v)} for n,v in files.items()},'databaseTables':tables,'missing':missing,'browserSnapshots':browsers,'browserCoverage':'仅包含显式提供的浏览器和标签页快照；其他浏览器、标签页未包含。','excluded':['Codex native databases and full history','Codex login files','SSH private keys','unrelated credentials','cookies','sockets','original WAL/SHM']}
+    files,missing,tables,browsers=collect(home,browser_files,config_path,state_dir)
+    tool_version=(ROOT/'VERSION').read_text().strip() if (ROOT/'VERSION').exists() else None
+    if not tool_version:
+        try:tool_version=run(['git','-C',ROOT,'rev-parse','HEAD']).stdout.decode().strip()
+        except (subprocess.CalledProcessError,FileNotFoundError):tool_version='unknown'
+    installed_version=None
+    installed_file=home/'Library/Application Support/RemoteCodexManager/installed.json'
+    if installed_file.exists():
+        installed_version=json.loads(installed_file.read_text()).get('commit')
+        if not re.fullmatch(r'[0-9a-f]{40}',installed_version or ''):raise ValueError('已安装版本元数据无效')
+    commit=installed_version or tool_version
+    manifest={'format':'rcm-backup','formatVersion':FORMAT,'machineId':config['machineId'],'createdAt':stamp(),'codeVersion':commit,'installedVersion':installed_version,'toolVersion':tool_version,'files':{n:{'sha256':digest(v),'size':len(v)} for n,v in files.items()},'databaseTables':tables,'missing':missing,'browserSnapshots':browsers,'browserCoverage':'仅包含显式提供的浏览器和标签页快照；其他浏览器、标签页未包含。','excluded':['Codex native databases and full history','Codex login files','SSH private keys','unrelated credentials','cookies','sockets','original WAL/SHM']}
     buf=io.BytesIO()
     with tarfile.open(fileobj=buf,mode='w:gz') as archive:
         for name,content in [('manifest.json',jbytes(manifest))]+list(files.items()):
@@ -173,34 +194,16 @@ def prepare(file,identity,machine,destination):
     verify_tree(dest,machine)
     return {'staging':str(dest),'machineId':machine,'verifiedFiles':len(manifest['files']),'liveDataChanged':False}
 
-def publish(index,repo,tag):
-    gh=executable('gh')
-    info=json.loads(run([gh,'repo','view',repo,'--json','isPrivate,nameWithOwner']).stdout)
-    if not info['isPrivate']:raise ValueError('仓库不是私有，拒绝上传')
-    idx=json.loads(pathlib.Path(index).read_text());assets=[pathlib.Path(index).parent/x['name'] for x in idx['parts']]+[pathlib.Path(index)]
-    encrypted_input(index)
-    existing=subprocess.run([gh,'release','view',tag,'-R',repo],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-    if existing.returncode:run([gh,'release','create',tag,'-R',repo,'--title',tag,'--notes','管理器数据加密备份。按来源机器恢复；恢复私钥不在仓库中。','--target','main'])
-    run([gh,'release','upload',tag,'-R',repo,*assets])
-    return {'release':'https://github.com/'+repo+'/releases/tag/'+tag}
-
 def main():
     os.umask(0o077)
     parser=argparse.ArgumentParser(description=__doc__);sub=parser.add_subparsers(dest='command',required=True)
-    b=sub.add_parser('backup');b.add_argument('--home',type=pathlib.Path,default=pathlib.Path.home());b.add_argument('--out',type=pathlib.Path);b.add_argument('--browser',action='append',default=[]);b.add_argument('--recipient')
+    b=sub.add_parser('backup');b.add_argument('--home',type=pathlib.Path,default=pathlib.Path.home());b.add_argument('--out',type=pathlib.Path);b.add_argument('--browser',action='append',default=[]);b.add_argument('--recipient');b.add_argument('--config',type=pathlib.Path);b.add_argument('--state-dir',type=pathlib.Path)
     k=sub.add_parser('key-init');k.add_argument('--home',type=pathlib.Path,default=pathlib.Path.home())
     r=sub.add_parser('restore');r.add_argument('archive');r.add_argument('--identity',required=True);r.add_argument('--machine',required=True);r.add_argument('--destination',required=True)
-    p=sub.add_parser('publish');p.add_argument('index');p.add_argument('--repo',required=True);p.add_argument('--tag',required=True)
-    d=sub.add_parser('download');d.add_argument('--repo',required=True);d.add_argument('--tag',required=True);d.add_argument('--destination',required=True)
     args=parser.parse_args()
-    if args.command=='backup':result=backup(args.home,args.out or args.home/'Library/Application Support/RemoteCodexManager/backups',args.browser,args.recipient)
+    if args.command=='backup':result=backup(args.home,args.out or args.home/'Library/Application Support/RemoteCodexManager/backups',args.browser,args.recipient,args.config,args.state_dir)
     elif args.command=='key-init':
         identity,recipient=key_init(args.home);result={'identity':str(identity),'recipient':recipient,'instruction':'将 identity 文件另存到离线介质；不要提交到 Git 或上传。'}
     elif args.command=='restore':result=prepare(args.archive,args.identity,args.machine,args.destination)
-    elif args.command=='publish':result=publish(args.index,args.repo,args.tag)
-    else:
-        dest=pathlib.Path(args.destination)
-        if dest.exists():raise ValueError('下载目录必须不存在')
-        dest.mkdir(parents=True,mode=0o700);run([executable('gh'),'release','download',args.tag,'-R',args.repo,'-D',dest]);result={'downloadedTo':str(dest)}
     print(json.dumps(result,ensure_ascii=False,indent=2))
 if __name__=='__main__':main()

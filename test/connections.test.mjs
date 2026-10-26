@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {validateConfig,publicHost,pythonPrefix} from '../lib/config.mjs';
+import {validateConfig,publicHost,pythonPrefix,shellWord} from '../lib/config.mjs';
 import {createApp} from '../server.mjs';
 import {Manager} from '../lib/manager.mjs';
 import {validateBrowser} from '../public/browser-backup.js';
@@ -33,4 +33,32 @@ test('unload delay is scoped to a connection and rejects invalid values',()=>{
  assert.match(pythonPrefix(c.connections[0]),/SERVICE_THREAD_UNLOAD_DELAY_SECS=5\n/);
  assert.match(pythonPrefix(c.connections[1]),/SERVICE_THREAD_UNLOAD_DELAY_SECS=None\n/);
  for(const value of [-1,1.5,86401,'5',NaN]){const bad=sample();bad.connections[0].threadUnloadDelaySecs=value;assert.throws(()=>validateConfig(bad,{checkLocal:false}));}
+});
+
+test('Python path is configured and shell quoting does not expand metacharacters',async()=>{
+ const c=sample();c.connections[1].python="/opt/custom python/bin/python3";
+ assert.equal(validateConfig(c,{checkLocal:false}).connections[1].python,c.connections[1].python);
+ assert.match(pythonPrefix(c.connections[1]),/SERVICE_PYTHON="\/opt\/custom python\/bin\/python3"/);
+ c.connections[1].python='relative';assert.throws(()=>validateConfig(c,{checkLocal:false}),/Python 路径/);
+ const value="/tmp/a'b $(printf injected)";
+ const {execFileSync}=await import('node:child_process');
+ assert.equal(execFileSync('/bin/sh',['-c',"printf '%s' "+shellWord(value)],{encoding:'utf8'}),value);
+});
+
+test('local transport and file reader execute the configured interpreter',async()=>{
+ const {mkdtemp,writeFile}=await import('node:fs/promises');
+ const {tmpdir}=await import('node:os');
+ const path=await import('node:path');
+ const {localPython}=await import('../lib/local.mjs');
+ const {runFileReader}=await import('../lib/file-transfer.mjs');
+ const directory=await mkdtemp(path.join(tmpdir(),'rcm-python-'));
+ const python=path.join(directory,'custom interpreter');
+ // A fake interpreter makes fallback to the system Python observable.
+ await writeFile(python,'#!/bin/sh\ncat >/dev/null\nprintf \'RCM_JSON:{"selected":true}\\n\'\n',{mode:0o700});
+ const host={...sample().connections[0],python};
+ assert.deepEqual(await localPython(host,'ignored'),{selected:true});
+ await writeFile(python,'#!/bin/sh\ncat >/dev/null\nprintf \'{"ok":true}\\npayload\'\n',{mode:0o700});
+ const {meta,body}=await runFileReader(host,'ignored');
+ assert.equal(meta.ok,true);let content='';for await(const chunk of body)content+=chunk;
+ assert.equal(content,'payload');
 });

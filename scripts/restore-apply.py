@@ -32,6 +32,7 @@ def local_disconnected():
 
 def apply(staging,confirmed):
     if not confirmed:raise ValueError('必须先确认两台网页都已断开，且任务已结束：--entrances-disconnected')
+    config_target=b.config_file(HOME);web_state=b.state_directory(HOME)
     config=b.read_config(HOME);manifest=b.verify_tree(staging,config['machineId'])
     restored=json.loads((staging/'config/connections.json').read_text())
     local=[h for h in restored['connections'] if h['kind']=='local']
@@ -62,8 +63,8 @@ def apply(staging,confirmed):
         replacements={}
         for name in manifest['files']:
             group,base=name.split('/')
-            if group=='data':target=DATA/base
-            elif group=='config':target=SUPPORT/base
+            if group=='data':target=(web_state if b.STATE.fullmatch(base) else DATA)/base
+            elif group=='config':target=config_target
             elif group=='mobile':target=SUPPORT/'mobile'/base
             else:continue
             replacements[target]=(staging/name).read_bytes()
@@ -73,7 +74,7 @@ def apply(staging,confirmed):
         for target in replacements:
             if target.name.endswith('.connection.json'):replacements[target]=b'{"enabled":false}'
         preserved=set(replacements)
-        preserved.update(p for p in DATA.glob('web-titles-*.json') if b.STATE.fullmatch(p.name))
+        preserved.update(p for p in web_state.glob('web-titles-*.json') if b.STATE.fullmatch(p.name))
         preserved.update([DATA/'output-journal.sqlite-wal',DATA/'output-journal.sqlite-shm'])
         for index,target in enumerate(sorted(preserved)):
             if target.is_symlink():raise ValueError('实时数据不允许符号链接')
