@@ -33,12 +33,28 @@ export function imageCard(src,alt='图片附件') {
   card.dataset.source=src;
   button.type=retry.type='button';button.setAttribute('aria-label','放大查看：'+alt);button.disabled=true;
   image.alt=alt;image.loading='lazy';image.decoding='async';retry.hidden=true;status.setAttribute('role','status');
-  image.onload=()=>{status.hidden=true;retry.hidden=true;button.disabled=false;image.hidden=false;};
-  image.onerror=()=>{status.hidden=false;status.textContent='图片不可用，文件可能已移动或删除。';retry.hidden=false;button.disabled=true;image.hidden=true;};
-  retry.onclick=()=>{status.textContent='正在加载图片…';retry.hidden=true;image.hidden=false;image.src=src+(src.startsWith('data:')?'':(src.includes('?')?'&':'?')+'retry='+Date.now());};
+  const retryDelays=[500,1500,3000];
+  let attempts=0,timer=null;
+  const clearRetry=()=>{if(timer!==null){clearTimeout(timer);timer=null;}};
+  const load=()=>{
+    status.hidden=false;status.textContent='正在加载图片…';retry.hidden=true;button.disabled=true;image.hidden=false;
+    const hash=src.indexOf('#'),base=hash<0?src:src.slice(0,hash),fragment=hash<0?'':src.slice(hash);
+    image.src=src.startsWith('data:')?src:base+(base.includes('?')?'&':'?')+'retry='+Date.now()+'-'+attempts+fragment;
+  };
+  image.onload=()=>{clearRetry();status.hidden=true;retry.hidden=true;button.disabled=false;image.hidden=false;};
+  image.onerror=()=>{
+    clearRetry();status.hidden=false;button.disabled=true;image.hidden=true;
+    // Native messages can reach the UI before their persisted image reference is readable.
+    // Retry only a bounded number of times, and never fetch for a removed conversation.
+    if(!src.startsWith('data:')&&attempts<retryDelays.length){
+      status.textContent='正在加载图片…';retry.hidden=true;
+      timer=setTimeout(()=>{timer=null;if(card.isConnected)load();},retryDelays[attempts++]);
+    }else{status.textContent='图片暂时无法加载，请重试。';retry.hidden=false;}
+  };
+  retry.onclick=()=>{clearRetry();attempts=0;load();};
   button.onclick=()=>{
     const dialog=node('dialog','image-viewer'),close=node('button','image-viewer-close','关闭'),full=node('img'),download=node('a','image-download','打开原图');
-    dialog.setAttribute('aria-label',alt);close.type='button';full.alt=alt;full.src=src;download.href=src;download.target='_blank';download.rel='noopener noreferrer';
+    dialog.setAttribute('aria-label',alt);close.type='button';full.alt=alt;full.src=image.src;download.href=image.src;download.target='_blank';download.rel='noopener noreferrer';
     close.onclick=()=>dialog.close();dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
     dialog.addEventListener('close',()=>{dialog.remove();if(button.isConnected)button.focus();},{once:true});
     dialog.append(close,download,full);document.body.append(dialog);dialog.showModal();close.focus();
