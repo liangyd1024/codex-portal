@@ -23,7 +23,6 @@ const lock=await deploymentLock(path.join(supportDir,'deployment.lock'),process.
 try {
 const commit=run('git',['-C',root,'rev-parse','--verify',ref+'^{commit}']);
 if(!/^[a-f0-9]{40}$/.test(commit))throw Error('版本无效。');
-if(run('git',['-C',root,'status','--porcelain']))throw Error('开发目录有未提交修改，请提交后按版本安装。');
 const release=path.join(supportDir,'releases',commit);let app=release;const logs=path.join(supportDir,'logs');
 await mkdir(logs,{recursive:true,mode:0o700});await mkdir(path.dirname(job),{recursive:true});
 // Check this entrance only. Do not interrupt tasks running through another entrance.

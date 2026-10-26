@@ -15,7 +15,7 @@ async function fixture(){
  await writeFile(path.join(root,'.framework-build/latest.json'),JSON.stringify(manifest));
  await writeFile(path.join(output,'manifest.json'),JSON.stringify(manifest));
  await writeFile(path.join(output,'verified.json'),JSON.stringify({version,filesHash:await treeDigest(output)}));
- return {root,output,commit:version,destination:path.join(root,'releases',version),run(command,args,options){if(args[0]==='ci')return {status:0};return spawnSync(command,args,options);}};
+ return {root,output,commit:version,destination:path.join(root,'releases',version),run(command,args,options){if(command==='git')return {status:0,stdout:'{}'};if(args[0]==='ci')return {status:0};return spawnSync(command,args,options);}};
 }
 test('verified artifact relocates and can be reused offline without its source',async()=>{
  const f=await fixture(),runtime=await prepareRelease(f);
@@ -36,7 +36,7 @@ test('dirty, changed, wrong-version or unverified builds cannot be installed',as
  }
 });
 test('runtime dependency failure prevents publishing a release',async()=>{
- const f=await fixture();await assert.rejects(prepareRelease({...f,run:()=>({status:1,stderr:'offline'})}),/运行依赖安装失败/);
+ const f=await fixture();await assert.rejects(prepareRelease({...f,run:(command,...args)=>command==='git'?f.run(command,...args):({status:1,stderr:'offline'})}),/运行依赖安装失败/);
  await assert.rejects(readFile(path.join(f.destination,'release.json')),{code:'ENOENT'});
 });
 test('artifact hashes cover runtime adapters and reject links outside the release',async()=>{
@@ -45,4 +45,21 @@ test('artifact hashes cover runtime adapters and reject links outside the releas
  assert.notEqual(await treeDigest(f.output),before);
  await symlink('../../../../outside',path.join(f.output,'runtime/escape'));
  await assert.rejects(treeDigest(f.output),/越界符号链接/);
+});
+
+test('uncommitted dependency edits are excluded from a verified commit release',async()=>{
+ const f=await fixture();
+ for(const name of ['package.json','package-lock.json'])await writeFile(path.join(f.root,name),'invalid uncommitted content');
+ const reads=[];
+ await prepareRelease({...f,run(command,args,options){if(command==='git')reads.push(args);return f.run(command,args,options);}});
+ assert.deepEqual(reads,['package.json','package-lock.json'].map(name=>['-C',f.root,'show',version+':'+name]));
+ for(const name of ['package.json','package-lock.json']){
+  assert.equal(await readFile(path.join(f.destination,name),'utf8'),'{}');
+  assert.equal(await readFile(path.join(f.root,name),'utf8'),'invalid uncommitted content');
+ }
+});
+test('missing committed dependency manifest prevents release preparation',async()=>{
+ const f=await fixture();
+ await assert.rejects(prepareRelease({...f,run:()=>({status:1,stderr:'missing'})}),/指定提交的依赖清单/);
+ await assert.rejects(readFile(path.join(f.destination,'release.json')),{code:'ENOENT'});
 });
