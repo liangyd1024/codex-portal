@@ -83,13 +83,16 @@ test('default deployment check uses HTTP and verifies actual asset bytes without
  const {tmpdir}=await import('node:os');const path=await import('node:path');
  const {createServer}=await import('node:http');
  const root=await mkdtemp(path.join(tmpdir(),'rcm-http-check-'));
- const files={'app.js':'export const ready=true;','styles.css':'body{color:black}'};
+ const html='<script src="/bootstrap.js"></script>';
+ const files={'app.js':'export const ready=true;','bootstrap.js':'import("/app.js");','styles.css':'body{color:black}'};
+ await writeFile(path.join(root,'index.html'),html);
+ await writeFile(path.join(root,'turn-file-viewer.js'),'withdrawn route must not be requested');
  for(const [name,value] of Object.entries(files))await writeFile(path.join(root,name),value);
  let fault='';const methods=[];
  const server=createServer((req,res)=>{
   methods.push(req.method);
   if(req.url==='/api/version'){res.setHeader('content-type','application/json');res.end(JSON.stringify({version:fault==='version'?'old':version}));return;}
-  if(req.url==='/'){res.setHeader('content-type','text/html');res.end('<script src="/app.js"></script>');return;}
+  if(req.url==='/'){res.setHeader('content-type','text/html');res.end(fault==='homepage'?'wrong page':html);return;}
   const name=req.url.slice(1);res.statusCode=fault==='missing'?404:200;
   res.setHeader('content-type',fault==='mime'?'text/html':name.endsWith('.css')?'text/css':'text/javascript');
   res.end(fault==='bytes'?'stale':files[name]);
@@ -97,8 +100,8 @@ test('default deployment check uses HTTP and verifies actual asset bytes without
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  try{
   const check=await prepareWorkbenchCheck({browser:'',staticRoot:root,baseUrl:'http://127.0.0.1:'+server.address().port,run:()=>{throw Error('must not run browser');}});
-  const result=await check.check({version});assert.equal(result.assets,2);assert.equal(result.browserExecuted,false);
-  for(fault of ['version','missing','mime','bytes'])await assert.rejects(check.check({version}));
+  const result=await check.check({version});assert.equal(result.assets,3);assert.equal(result.browserExecuted,false);
+  for(fault of ['version','homepage','missing','mime','bytes'])await assert.rejects(check.check({version}));
   assert.ok(methods.every(method=>method==='GET'));await check.close();
  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
