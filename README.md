@@ -13,6 +13,14 @@ Codex Portal 提供网页界面，通过 Codex 原生接口读取和操作会话
 - **定时任务**：浏览 Codex 原生任务和运行记录，通过桌面管理会话发起变更。
 - **数据与维护**：浏览器草稿导入导出、Codex Portal 数据加密备份、网页更新与失败回退。
 
+## 架构
+
+Codex Portal 负责网页交互、连接管理和输出采集。会话执行、模型与工具调用、队列和目标由 Codex 原生引擎负责。定时任务管理通过 Codex 桌面接口完成。
+
+![Codex Portal 三层架构及原生能力复用](docs/assets/codex-architecture.png)
+
+[查看高清图](docs/assets/codex-architecture.png) · [查看 SVG 源图](docs/assets/codex-architecture.svg)
+
 ## 环境要求
 
 当前网页服务的安装与部署支持 **macOS**，使用 launchd 管理后台服务。

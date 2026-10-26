@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1550" viewBox="0 0 1400 1550">
+<style>text{font-family:"PingFang SC","Helvetica Neue",Arial,sans-serif}</style>
+<defs>
+<marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb" /></marker>
+<marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#9333ea" /></marker>
+<marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6b7280" /></marker>
+</defs>
+<rect width="1400" height="1550" fill="#ffffff" data-graph-role="background" />
+<text x="60" y="65" font-size="34" fill="#111827" font-weight="600" text-anchor="start">Codex Portal 与 Codex 引擎</text>
+<rect x="40" y="115" width="1320" height="170" rx="8" fill="#f8fafc" stroke="#e5e7eb" stroke-width="1.5" data-graph-role="container" />
+<rect x="40" y="375" width="1320" height="270" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5" data-graph-role="container" />
+<rect x="40" y="735" width="1320" height="665" rx="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5" data-graph-role="container" />
+<text x="70" y="155" font-size="25" fill="#111827" font-weight="600" text-anchor="start">浏览器</text>
+<text x="70" y="415" font-size="25" fill="#111827" font-weight="600" text-anchor="start">Codex Portal</text>
+<text x="70" y="775" font-size="25" fill="#111827" font-weight="600" text-anchor="start">Codex 引擎</text>
+<path d="M 530 245 L 530 440" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+<text x="512" y="330" font-size="19" fill="#2563eb" font-weight="400" text-anchor="end">发送指令</text>
+<path d="M 650 440 L 650 245" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)" />
+<text x="670" y="330" font-size="19" fill="#9333ea" font-weight="400" text-anchor="start">返回结果</text>
+<path d="M 530 510 L 530 550" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+<path d="M 650 550 L 650 510" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)" />
+<path d="M 530 620 L 530 800" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+<text x="512" y="700" font-size="19" fill="#2563eb" font-weight="400" text-anchor="end">发送指令</text>
+<path d="M 650 800 L 650 620" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)" />
+<text x="670" y="700" font-size="19" fill="#9333ea" font-weight="400" text-anchor="start">返回结果</text>
+<path d="M 440 870 L 440 960" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+<path d="M 510 960 L 510 870" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)" />
+<path d="M 670 870 L 670 960" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+<path d="M 740 960 L 740 870" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)" />
+<path d="M 810 475 L 960 475" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-gray)" />
+<text x="885" y="460" font-size="18" fill="#6b7280" font-weight="400" text-anchor="middle">保存</text>
+<path d="M 810 585 L 960 585" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-gray)" />
+<text x="885" y="570" font-size="18" fill="#6b7280" font-weight="400" text-anchor="middle">保存</text>
+<path d="M 810 835 L 960 835" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-gray)" />
+<text x="885" y="820" font-size="18" fill="#6b7280" font-weight="400" text-anchor="middle">保存</text>
+<rect x="370" y="175" width="440" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5" data-graph-role="node" />
+<text x="590" y="218" font-size="25" fill="#111827" font-weight="600" text-anchor="middle">发送消息 · 展示结果</text>
+<rect x="370" y="440" width="440" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5" data-graph-role="node" />
+<text x="590" y="470" font-size="24" fill="#111827" font-weight="600" text-anchor="middle">连接与会话管理</text>
+<rect x="370" y="550" width="440" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5" data-graph-role="node" />
+<text x="590" y="580" font-size="24" fill="#111827" font-weight="600" text-anchor="middle">消息转发与输出采集</text>
+<rect x="370" y="800" width="440" height="70" rx="8" fill="#dcfce7" stroke="#86efac" stroke-width="1.5" data-graph-role="node" />
+<text x="590" y="843" font-size="27" fill="#111827" font-weight="600" text-anchor="middle">会话执行</text>
+<rect x="370" y="960" width="210" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5" data-graph-role="node" />
+<text x="475" y="1003" font-size="25" fill="#111827" font-weight="600" text-anchor="middle">模型</text>
+<rect x="600" y="960" width="210" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5" data-graph-role="node" />
+<text x="705" y="1003" font-size="25" fill="#111827" font-weight="600" text-anchor="middle">工具</text>
+<path d="M 960 457 C 960 437 1280 437 1280 457 L 1280 597 C 1280 617 960 617 960 597 Z" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5" />
+<path d="M 960 457 C 960 477 1280 477 1280 457" fill="none" stroke="#d1d5db" stroke-width="1.5" />
+<text x="1120.0" y="499" font-size="22" fill="#111827" font-weight="600" text-anchor="middle">Portal 自有存储</text>
+<text x="1120.0" y="530" font-size="18" fill="#6b7280" font-weight="400" text-anchor="middle">恢复状态 · 采集输出</text>
+<path d="M 960 817 C 960 797 1280 797 1280 817 L 1280 907 C 1280 927 960 927 960 907 Z" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5" />
+<path d="M 960 817 C 960 837 1280 837 1280 817" fill="none" stroke="#d1d5db" stroke-width="1.5" />
+<text x="1120.0" y="859" font-size="22" fill="#111827" font-weight="600" text-anchor="middle">Codex 原生存储</text>
+<text x="1120.0" y="890" font-size="18" fill="#6b7280" font-weight="400" text-anchor="middle">会话历史与状态</text>
+<path d="M 190 1450 L 230 1450" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+<text x="246" y="1457.0" font-size="19" fill="#6b7280" font-weight="400" text-anchor="start">发送指令 / 调用</text>
+<path d="M 550 1450 L 590 1450" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)" />
+<text x="606" y="1457.0" font-size="19" fill="#6b7280" font-weight="400" text-anchor="start">执行结果 / 反馈</text>
+<path d="M 930 1450 L 970 1450" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-gray)" />
+<text x="986" y="1457.0" font-size="19" fill="#6b7280" font-weight="400" text-anchor="start">保存数据</text>
+<text x="700" y="1510.0" font-size="22" fill="#6b7280" font-weight="400" text-anchor="middle">关闭网页不会停止目标任务；重新连接后恢复查看。</text>
+
+<text x="590" y="496" font-size="16" fill="#6b7280" font-weight="400" text-anchor="middle">Portal 自有：多机器连接、草稿与订阅恢复</text>
+<text x="590" y="606" font-size="16" fill="#6b7280" font-weight="400" text-anchor="middle">调用原生接口，转发事件并补存命令输出</text>
+<path d="M 80 1065 L 1320 1065" fill="none" stroke="#bbf7d0" stroke-width="1"/>
+<text x="80" y="1102" font-size="23" fill="#111827" font-weight="600" text-anchor="start">Portal 直接复用的 Codex 原生能力</text>
+<rect x="80" y="1125" width="390" height="80" rx="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="100" y="1156" font-size="22" fill="#111827" font-weight="600" text-anchor="start">会话管理</text>
+<text x="100" y="1186" font-size="18" fill="#6b7280" font-weight="400" text-anchor="start">创建、继续会话与退订交还</text>
+<rect x="505" y="1125" width="390" height="80" rx="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="525" y="1156" font-size="22" fill="#111827" font-weight="600" text-anchor="start">轮次控制</text>
+<text x="525" y="1186" font-size="18" fill="#6b7280" font-weight="400" text-anchor="start">发送消息、引导任务、停止轮次</text>
+<rect x="930" y="1125" width="390" height="80" rx="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="950" y="1156" font-size="22" fill="#111827" font-weight="600" text-anchor="start">原生队列</text>
+<text x="950" y="1186" font-size="18" fill="#6b7280" font-weight="400" text-anchor="start">排队、编辑输入与自动执行</text>
+<rect x="80" y="1225" width="390" height="80" rx="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="100" y="1256" font-size="22" fill="#111827" font-weight="600" text-anchor="start">目标与计划</text>
+<text x="100" y="1286" font-size="18" fill="#6b7280" font-weight="400" text-anchor="start">目标推进、预算与计划模式</text>
+<rect x="505" y="1225" width="390" height="80" rx="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="525" y="1256" font-size="22" fill="#111827" font-weight="600" text-anchor="start">模型与工具</text>
+<text x="525" y="1286" font-size="18" fill="#6b7280" font-weight="400" text-anchor="start">模型选择、技能、插件与工具执行</text>
+<rect x="930" y="1225" width="390" height="80" rx="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="950" y="1256" font-size="22" fill="#111827" font-weight="600" text-anchor="start">事件与交互请求</text>
+<text x="950" y="1286" font-size="18" fill="#6b7280" font-weight="400" text-anchor="start">流式回复、工具结果、审批与提问</text>
+<text x="80" y="1344" font-size="18" fill="#6b7280" font-weight="400" text-anchor="start">定时任务：复用 Codex 桌面原生调度，通过桌面 IPC 管理会话发起变更。</text>
+<text x="80" y="1374" font-size="17" fill="#6b7280" font-weight="400" text-anchor="start">图中为已接入的能力；是否可用取决于目标版本与运行状态。</text>
+</svg>
