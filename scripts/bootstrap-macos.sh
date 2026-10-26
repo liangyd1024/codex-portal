@@ -18,7 +18,7 @@ require_brew() {
 }
 # Homebrew must not automatically remove old versions or cached files.
 export HOMEBREW_NO_INSTALL_CLEANUP=1
-if ! command -v node >/dev/null 2>&1 || ! node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||a===22&&b>=12?0:1)'; then
+if ! command -v node >/dev/null 2>&1 || ! node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit((a>22||a===22&&b>=12)&&require("node:fs").existsSync(require("node:path").join(require("node:path").dirname(process.execPath),"npm"))?0:1)'; then
   require_brew
   "$RCM_BREW" install node@24
   RCM_NODE_PREFIX=$("$RCM_BREW" --prefix node@24)
@@ -39,8 +39,8 @@ if ! command -v age >/dev/null 2>&1 || ! command -v age-keygen >/dev/null 2>&1; 
   PATH="$RCM_BREW_PREFIX/bin:$PATH"
   export PATH
 fi
-# Diagnose before downloading project dependencies. Codex and browser onboarding
-# belong to the user; do not modify their installations or authentication.
+# Diagnose before downloading project dependencies. Codex installation and
+# authentication belong to the user; do not modify either.
 node scripts/configure.mjs doctor "$@"
 if [ -d node_modules ]; then
   echo '保留已有依赖目录并检查版本；不自动清空目录。'

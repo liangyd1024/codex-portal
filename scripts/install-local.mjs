@@ -50,8 +50,8 @@ let previous=null;try{previous=await readFile(job);}catch(e){if(e.code!=='ENOENT
 const previousFile=path.join(supportDir,'install-history',Date.now()+'.plist');
 await mkdir(path.dirname(previousFile),{recursive:true,mode:0o700});
 if(previous)await writeFile(previousFile,previous,{mode:0o600});
-// Browser readiness must be established before stopping the current website.
-workbenchCheck=await prepareWorkbenchCheck();
+// Prepare artifact checks (and explicitly configured browser) before stopping the website.
+workbenchCheck=await prepareWorkbenchCheck({staticRoot:path.join(release,'public')});
 if(existing){await checkEntrance();await lifecycle.stop();}
 try{
  await writeFile(job,plist,{mode:0o600});await chmod(job,0o600);
@@ -59,7 +59,7 @@ try{
  let healthy=false;
  for(let i=0;i<90;i++){try{const r=await fetch('http://127.0.0.1:4317/api/version',{signal:AbortSignal.timeout(1000)});if(r.ok&&(await r.json()).version===commit){healthy=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}
  if(!healthy)throw Error('新版本未通过健康检查。');
- console.log('正在验证正式工作台浏览器加载…');
+ console.log('正在验证正式工作台版本与资源…');
  await workbenchCheck.check({version:commit,host:localConnectionId});
  await writeFile(path.join(supportDir,'installed.json'),JSON.stringify({commit,sourceRoot:root,sourceRemote:run('git',['-C',root,'remote','get-url','origin']),machineId:config.machineId,app,installedAt:new Date().toISOString(),previousPlist:previous?previousFile:null}),{mode:0o600});
  console.log(`已部署 ${commit}，本机网页：http://127.0.0.1:4317`);
