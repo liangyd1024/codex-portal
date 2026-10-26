@@ -75,7 +75,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
     reconcileGoalSelection(choice(),c,save);
     syncReferences();mirror.render();
     const currentGoal=Boolean(c.goal),disabled=!c.ready||c.busy||goalUpdating;
-    controls.render({plan:choice().mode==='plan',goalPending:Boolean(choice().goalPending),currentGoal,ephemeral:Boolean(c.ephemeral),disabled,menuDisabled:Boolean(!c.ready||c.busy),active:Boolean(c.active),status:[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ')});
+    controls.render({desktop:Boolean(c.desktop),plan:!c.desktop&&choice().mode==='plan',goalPending:Boolean(choice().goalPending),currentGoal,ephemeral:Boolean(c.ephemeral),disabled,menuDisabled:Boolean(!c.ready||c.busy),active:Boolean(c.active),status:[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ')});
     // Attachments can accompany a native turn/steer while the current turn runs.
     images.setDisabled(disabled);
 

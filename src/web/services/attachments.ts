@@ -19,7 +19,7 @@ export class AttachmentDrafts {
   add(id:string|null,item:AttachmentItem){this.items.set(id,[...this.get(id),item]);this.save();}
   remove(id:string|null,key:string){this.items.set(id,this.get(id).filter(i=>i.id!==key));this.save();}
   capture(id:string|null):CapturedAttachments{return {id,items:this.get(id).filter((i):i is AttachmentItem & {url:string}=>Boolean(i.url)).map(i=>({...i}))};}
-  acknowledge(sent:CapturedAttachments){const ids=new Set(sent.items.map(i=>i.id));this.items.set(sent.id,this.get(sent.id).filter(i=>!ids.has(i.id)));this.save();}
+  acknowledge(sent:{id:string|null;items:{id:string}[]}){const ids=new Set(sent.items.map(i=>i.id));this.items.set(sent.id,this.get(sent.id).filter(i=>!ids.has(i.id)));this.save();}
 }
 async function prepare(file:File):Promise<string>{
   if(!file.type.startsWith('image/')||file.size>25*1024*1024)throw Error('请选择小于 25 MB 的图片。');
@@ -39,7 +39,7 @@ export function installAttachments({host,context,changed,notify,form=document.ge
 
   async function add(files:Iterable<File>){const c=context();if(!c.ready||c.busy)return;const id=c.id;for(const f of files){if(store.get(id).length>=4){notify('每条消息最多添加 4 张图片。',true);break;}const item:AttachmentItem={id:crypto.randomUUID(),name:f.name||'粘贴图片'};store.add(id,item);changed();try{const url=await prepare(f);if(store.get(id).includes(item)){item.url=url;store.save();}}catch(e){store.remove(id,item.id);notify((e as Error).message,true);}finally{changed();}}}
   clipboard=installComposerClipboard({input,list,context,items:()=>store.get(context().id),replace:(items:AttachmentItem[])=>{store.items.set(context().id,items);store.save();changed();},addFiles:add,notify});
-  return {images:view.images,render,moveDraft:(from:string,to:string)=>{store.items.set(to,store.get(from));store.items.delete(from);store.save();},has:()=>store.get(context().id).some(i=>i.url),pending:()=>store.get(context().id).some(i=>!i.url),capture:()=>store.capture(context().id),acknowledge:(s:CapturedAttachments)=>store.acknowledge(s)};
+  return {images:view.images,render,moveDraft:(from:string,to:string)=>{store.items.set(to,store.get(from));store.items.delete(from);store.save();},has:()=>store.get(context().id).some(i=>i.url),pending:()=>store.get(context().id).some(i=>!i.url),capture:()=>store.capture(context().id),acknowledge:(s:{id:string|null;items:{id:string}[]})=>store.acknowledge(s)};
 }
 
 let attachmentViewInstaller:ViewInstaller|undefined;

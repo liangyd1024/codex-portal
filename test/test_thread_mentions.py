@@ -48,3 +48,27 @@ class ThreadMentionsTest(unittest.TestCase):
         self.assertTrue(text.endswith('## My request:\n仅总结引用\n'))
         self.assertEqual(request['clientUserMessageId'], ID)
         self.assertNotIn('model', request)
+
+    def test_rich_inputs_survive_native_reference_context(self):
+        requests = []
+        class Fake:
+            def __init__(self, *_a, **_kw): pass
+            def __enter__(self): return self
+            def __exit__(self, *_a): pass
+            def owner(self, _id): return 'owner'
+            def settings(self, *_a): return {}
+            def request(self, method, params, *args, **kwargs):
+                requests.append(params)
+                return {'result': {}}
+        rich = [{'type': 'image', 'url': 'data:image/png;base64,iVBORw0KGgo='}, {'type': 'skill', 'name': 'sample', 'path': '/skills/sample/SKILL.md'}, {'type': 'mention', 'name': 'Sample', 'path': 'plugin://sample'}]
+        payload = {'action': 'send', 'threadId': ID, 'messageId': ID, 'text': '', 'input': rich}
+        with patch.object(session, 'DesktopSession', Fake), patch.object(session, 'reference_capability', return_value=True):
+            session.run(payload)
+            self.assertEqual(requests[-1]['turnStart']['request']['input'], rich)
+            payload['threadReferences'] = [{'threadId': REF, 'title': 'sample'}]
+            session.run(payload)
+            inputs = requests[-1]['turnStart']['request']['input']
+            self.assertEqual(inputs[1:], rich)
+            self.assertIn(REF, inputs[0]['text'])
+            payload['input'] = [{'type': 'localImage', 'path': '/private/file'}]
+            with self.assertRaises(session.DesktopError): session.run(payload)

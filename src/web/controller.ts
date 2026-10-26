@@ -364,10 +364,10 @@ function renderControls() {
   const desktopView:Parameters<typeof publishDesktopControls>[0]={entryHidden:true,entryDisabled:!state.transport||state.busy.size>0||Boolean(handoff&&handoff.state!=='released'),reviewHidden:true};
   if(state.desktopMode&&!newChatOpen){
     const desktop=state.detail?.desktop,online=state.transport&&desktop?.available,unconfirmed=desktop?.unconfirmed||desktopSends[state.selectedId!]?.messageId;
-    publishMessageInput({disabled:posting,placeholder:active?'任务执行中，可先输入下一条要求…':'发送消息，输入 @ 引用会话…'});
+    publishMessageInput({disabled:posting,placeholder:active?'任务执行中，可先输入下一条要求…':'发送消息，输入 / 选择技能，@ 引用会话或插件…'});
     publishWorkspaceControl('takeover',{ hidden:true });
-    buttonView.send.disabled=!online||!desktop?.canSend||!!unconfirmed||posting||(!input.value.trim()&&!annotations?.has());
-    buttonView.send.title='发送到桌面会话';buttonView.send.label='发送到桌面会话';
+    buttonView.send.disabled=!online||!desktop?.canSend||!!unconfirmed||posting||attachments?.pending()||(!input.value.trim()&&!annotations?.has()&&!attachments?.has());
+    buttonView.send.title='发送消息';buttonView.send.label='发送消息';
     buttonView.stop.hidden=!active&&!stopping;buttonView.stop.disabled=!online||state.busy.has('interrupt')||stopping;
     const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     publishWorkspaceControl('composer-availability',{text:reason,hidden:!reason});
@@ -665,7 +665,7 @@ const loadThreads = createSidebarLoader({
 const {readThreads,loadSidebarActivity,loadVisibleThreads}=createSidebarReader({state,createdThreads,connected,loadProjects,threadName,element:$,renderThreads,renderControls,api,loadThreads,recordError,toast,messageOf,requestAnimationFrame});
 const {applyDetail,selectThread}=createThreadSelection({state,location,history,document,closeNewChat,automations:()=>automations,toggleInspector:open=>toggleInspector(open),element:$,inputId,saveView,resizeInput,renderModels,renderThread,renderThreads,renderRequests,saveDetailSoon:()=>saveDetailSoon(),compactLayout,toggleSidebar:(...args)=>toggleSidebar(...args),refreshSelected:()=>refreshSelected(),scrollFollow:()=>scrollFollow,messageOf,recordError});
 const {saveSoon:saveDetailSoon,restore:restoreDetail,cancelScheduled:cancelDetailSave}=createDetailRecovery({state,host:targetHost,read:readDetailCache,write:writeDetailCache,apply:applyDetail});
-const readDetail=createDetailReader({state,sends:desktopSends,
+const readDetail=createDetailReader({state,sends:desktopSends,acknowledgeAttachments:pictures=>attachments?.acknowledge(pictures),
   reportView:()=>reportThreadView(),recordError:error=>recordError(error,'thread'),request:(...args)=>api(...args),
   input:()=>$('message-input'),resizeInput:()=>resizeInput(),saveSends:()=>saveDesktopSends(),
   now:()=>performance.now(),host:()=>targetHost,canDecompress:()=>typeof DecompressionStream==='function',
@@ -785,6 +785,7 @@ async function implementPlan(id:Parameters<typeof submitPlan>[0],plan:Parameters
 const sendDesktopMessage=createDesktopSend({state,input:()=>$('message-input'),
   captureAnnotation:()=>annotations!.capture(),annotatedText:(text,draft)=>annotatedText(text,draft.items),
   acknowledgeAnnotation:draft=>annotations!.acknowledge(draft),hasAttachments:()=>attachments?.has(),
+  attachmentsPending:()=>attachments?.pending(),captureAttachments:()=>attachments!.capture(),acknowledgeAttachments:pictures=>attachments!.acknowledge(pictures),
   options:()=>composer!.options(),captureDraft:(id,text)=>state.drafts.capture(id,text),
   acknowledgeDraft:sent=>state.drafts.acknowledge(sent),sends:desktopSends,saveSends:()=>saveDesktopSends(),
   uuid:()=>crypto.randomUUID(),action:(...args)=>action(...args),post:(path,body)=>api(path,{method:'POST',body}),
@@ -842,7 +843,7 @@ function wireEvents() {
     context:()=>({host:targetHost,id:state.selectedId,turns:!newChatOpen&&!state.desktopMode?turns():[],unavailableReason:!usable()?'连接尚未恢复，暂不能重试。':running()?'会话正在运行，暂不能重试。':!controlled()?'会话连接恢复后可重试。':'正在确认会话状态，暂不能重试。',ready:!newChatOpen&&!state.desktopMode&&usable()&&controlled()&&!running()&&!uncertainHistory()&&!state.loadingDetail&&!state.historyError&&!state.busy.size}),
     send:async(c,turnId,automatic)=>{try{const result=await api<{turn:NativeTurn}>('/api/threads/'+encodeURIComponent(c.id!)+'/retry-capacity',{method:'POST',body:{turnId,automatic,model:state.model,effort:state.effort,mode:composer!.options().mode}});if(c.host===targetHost&&c.id===state.selectedId){upsertTurn(result.turn);renderThread();scheduleDetailRefresh();}}catch(error){if(c.host===targetHost&&c.id===state.selectedId)await refreshSelected().catch(()=>{});throw error;}}});
   scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
-  attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady()&&!state.desktopMode,busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
+  attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady(),busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
   handoffControls??=createHandoffControls({endUse:endThreadUse});
   projectFolders=configureProjectBrowser({api,context:()=>({host:targetHost,instance:state.status?.instanceId,ready:newChatOpen&&usable()&&!$('new-cwd').disabled,open:newChatOpen}),onSelect:(project:import('../contracts/native').NativeProject)=>{
     state.projects=[...state.projects.filter(p=>p.id!==project.id),project];updateNewProjects(project.roots[0]);renderProjects();renderControls();void loadThreads().catch(error=>recordError(error,'刷新新项目'));

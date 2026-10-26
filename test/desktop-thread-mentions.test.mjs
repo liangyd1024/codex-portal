@@ -69,3 +69,24 @@ test('desktop routes enforce CSRF, Origin and selected-host scope',async()=>{
   assert.equal(detail.desktop.threadReferencesSupported,true);assert.deepEqual(calls,['two']);
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
 });
+
+test('desktop rich input resolves enabled native catalog and rejects changed idempotency content',async()=>{
+ const {session,m,calls}=fixture();const passive=m.passive;
+ m.passive=async(a,p)=>{const result=await passive(a,p);if(result.thread)result.thread.cwd='/workspace';return result};
+ m.requireConnected=()=>{};m.requireCapability=()=>{};
+ m.rpc={request:async method=>method==='skills/list'?{data:[{skills:[{name:'sample',path:'/skills/sample/SKILL.md',enabled:true}]}]}:method==='plugin/installed'?{marketplaces:[{plugins:[{id:'sample',name:'Sample',installed:true,enabled:true}]}]}:{data:[]}};
+ const image={url:'data:image/png;base64,iVBORw0KGgo='},request={threadId:id,messageId:mid,text:'执行',images:[image],skills:['/skills/sample/SKILL.md'],plugins:['sample']};
+ await session.send(request);await session.send(request);
+ const sends=calls.filter(c=>c.action==='send');assert.equal(sends.length,1);
+ assert.deepEqual(sends[0].input,[{type:'text',text:'执行'},{type:'image',url:image.url},{type:'skill',name:'sample',path:'/skills/sample/SKILL.md'},{type:'mention',name:'Sample',path:'plugin://sample'}]);
+ await assert.rejects(session.send({...request,images:[]}),/不同消息/);
+});
+test('desktop accepts image-only input and rejects malformed image before native dispatch',async()=>{
+ const {session,calls}=fixture();await assert.rejects(session.send({threadId:id,messageId:mid,text:'',images:[{url:'https://example.com/image.png'}]}));assert.equal(calls.length,0);
+ await session.send({threadId:id,messageId:mid,text:'',images:[{url:'data:image/png;base64,iVBORw0KGgo='}]});assert.equal(calls.find(c=>c.action==='send').input[0].type,'image');
+});
+test('desktop unavailable skill preserves retry without dispatch',async()=>{
+ const {session,m,calls}=fixture();const passive=m.passive;m.passive=async(a,p)=>{const r=await passive(a,p);if(r.thread)r.thread.cwd='/workspace';return r};
+ m.requireConnected=()=>{};m.requireCapability=()=>{};m.rpc={request:async()=>({data:[]})};
+ await assert.rejects(session.send({threadId:id,messageId:mid,text:'test',skills:['/missing']}),/技能已不可用/);assert.equal(calls.some(c=>c.action==='send'),false);assert.equal(session.unconfirmed(),undefined);
+});

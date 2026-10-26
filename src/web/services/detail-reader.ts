@@ -5,7 +5,8 @@ interface Detail {
 }
 interface Dependencies {
  state:{desktopMode:boolean;detail:Detail|null;loadingDetail:boolean;drafts:Map<string,string>};
- sends:Record<string,{messageId:string;text:string}>;
+ sends:Record<string,{messageId:string;text:string;pictures?:{id:string|null;items:{id:string}[]}}>;
+ acknowledgeAttachments?:(pictures:{id:string|null;items:{id:string}[]})=>void;
  reportView:()=>Promise<unknown>|null|undefined;
  recordError:(error:unknown)=>void;
  request:(path:string,options?:{headers:Record<string,string>})=>Promise<Detail>;
@@ -30,6 +31,7 @@ export function createDetailReader(deps:Dependencies){
     const pending=deps.sends[id];
     if(pending&&data.desktop?.receipts?.[pending.messageId]?.status==='accepted'){
       if(state.drafts.get(id)===pending.text){state.drafts.set(id,'');if(isCurrent()&&deps.input().value===pending.text){deps.input().value='';deps.resizeInput();}}
+      if(pending.pictures)deps.acknowledgeAttachments?.(pending.pictures);
       delete deps.sends[id];deps.saveSends();
     }
     return data;

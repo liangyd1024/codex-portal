@@ -53,6 +53,7 @@
       return json({...detail(id),controlled:false,controlState:'desktop',historySource:'snapshot',
         desktop:{available:true,canSend:!f.owned.has(id)&&t.status.type==='idle',threadReferencesSupported:true,error:null,unconfirmed:null,settings:null,receipts:{}}});
     }
+    if(/^\/api\/desktop\/threads\/[^/]+\/message$/.test(p)&&method==='POST')return json({accepted:true,turnId:'qa-desktop-turn',messageId:body.messageId});
     if(p==='/api/sidebar')return json(sidebar(u));
     if(p==='/api/sidebar/activity')return json({accountScope:'qa-account',data:JSON.parse(u.searchParams.get('ids')).map(id=>({id}))});
     if(p==='/api/thread-view'&&method==='POST')return json({ok:true});

@@ -10,7 +10,7 @@
 .automation-prompt{white-space:pre-wrap;line-height:1.7}.automation-details button{display:block;margin-top:8px;text-align:left}
 .automation-picker{width:min(480px,calc(100vw - 32px));border:1px solid var(--control-border-color);border-radius:16px;padding:24px;box-sizing:border-box;background:var(--control-background)}.automation-picker::backdrop{background:#0005}
 .automation-picker input,.automation-picker select{display:block;width:100%;margin-bottom:14px}.automation-picker>button{margin:8px 12px 0 0}
-.desktop-chat .composer-tools,.desktop-chat #composer-settings,.desktop-chat #composer-model-label{display:none}
+.desktop-chat #composer-settings,.desktop-chat #composer-model-label{display:none}
 .automations-nav{display:flex;align-items:center;gap:8px;width:100%;margin:8px 0;padding:10px 12px;background:none;border:0;border-radius:8px;text-align:left;font:inherit;color:inherit;cursor:pointer}
 .automations-nav:hover{background:#00000008}.automations-page button:focus-visible,.automation-picker :focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:3px}
 @media(max-width:600px){.automations-page{padding:20px}.automations-toolbar{gap:10px}.automations-search{margin-left:0;width:100%;flex-basis:100%}.automations-heading h1{font-size:25px}.automation-picker{padding:18px}}

@@ -305,9 +305,10 @@ test('desktop accepted receipts clear only the matching draft and current input'
  for(const scenario of ['matching','new-draft','retired','wrong-thread','unaccepted']){
   const draft=scenario==='new-draft'?'新的草稿':'已发送内容';
   const state={desktopMode:true,detail:null,loadingDetail:false,drafts:new Map([['a',draft]])};
-  const sends={a:{messageId:'receipt-a',text:'已发送内容'}},input={value:draft};let resized=0,saved=0;
+  const pictures={id:'a',items:[{id:'sent-image'}]},acks=[];
+  const sends={a:{messageId:'receipt-a',text:'已发送内容',pictures}},input={value:draft};let resized=0,saved=0;
   const payload={thread:{id:scenario==='wrong-thread'?'other':'a'},desktop:{receipts:{'receipt-a':{status:scenario==='unaccepted'?'pending':'accepted'}}},unknown:{native:['完整原文']}};
-  const reader=createDetailReader({state,sends,reportView:()=>null,recordError:()=>{},request:async()=>payload,input:()=>input,resizeInput:()=>resized++,saveSends:()=>saved++});
+  const reader=createDetailReader({state,sends,acknowledgeAttachments:p=>acks.push(p),reportView:()=>null,recordError:()=>{},request:async()=>payload,input:()=>input,resizeInput:()=>resized++,saveSends:()=>saved++});
   if(scenario==='wrong-thread'){await assert.rejects(reader('a',()=>true),/桌面会话已变化/);assert.ok(sends.a);assert.equal(saved,0);continue;}
   assert.equal(await reader('a',()=>scenario!=='retired'),payload);
   assert.equal(state.drafts.get('a'),scenario==='matching'||scenario==='retired'?'':draft);
@@ -315,6 +316,7 @@ test('desktop accepted receipts clear only the matching draft and current input'
   assert.equal(resized,scenario==='matching'?1:0);
   assert.equal(saved,scenario==='unaccepted'?0:1);
   assert.equal(Boolean(sends.a),scenario==='unaccepted');
+  assert.deepEqual(acks,scenario==='unaccepted'?[]:[pictures]);
  }
 });
 
