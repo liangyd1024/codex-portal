@@ -1,3 +1,5 @@
+import {notificationLink,pendingNotificationTarget,saveNotificationTarget,consumeNotificationTarget} from '../src/web/services/notification-target.ts';
+import {notificationPayload} from '../lib/web-push.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -27,7 +29,7 @@ test('running icon follows execution entrance while idle retains original creati
  }finally{globalThis.document=old;}
 });
 
-test('worker replacement preserves iOS declarative navigation with the conversation',async()=>{const handlers={},shown=[];let done;vm.runInNewContext(worker,{self:{addEventListener:(name,fn)=>handlers[name]=fn,registration:{showNotification:async(title,options)=>shown.push(options)}}});const navigate='https://rcm.test/?host=local&thread=fixture';handlers.push({data:{json:()=>({web_push:8030,notification:{title:'test',navigate,data:{host:'local',threadId:'fixture'}}})},waitUntil:p=>done=p});await done;assert.equal(shown[0].navigate,navigate);assert.equal(shown[0].data.threadId,'fixture');});
+test('worker replacement uses click handling while payload retains declarative fallback',async()=>{const handlers={},shown=[];let done;vm.runInNewContext(worker,{self:{addEventListener:(name,fn)=>handlers[name]=fn,registration:{showNotification:async(title,options)=>shown.push(options)}}});const navigate='https://rcm.test/?host=local&thread=fixture';handlers.push({data:{json:()=>({web_push:8030,notification:{title:'test',navigate,data:{host:'local',threadId:'fixture'}}})},waitUntil:p=>done=p});await done;assert.equal(Object.hasOwn(shown[0],'navigate'),false);assert.equal(shown[0].data.threadId,'fixture');});
 
  test('click survives worker restart and lost message; only matching acknowledgement clears it',async()=>{
  const caches=clickStorage(),messages=[];
@@ -50,10 +52,44 @@ test('page acknowledges click only after target detail loads and retains it on d
  const code=source.slice(source.indexOf('async function openNotificationThread('),source.indexOf('const sendTaskNotification='));
  for(const loaded of [false,true]){
   const sent=[],state={selectedId:null,detail:null,historyError:'',busy:new Set()};
-  const context={state,targetHost:'local',connectionIds:['local'],navigator:{serviceWorker:{getRegistration:async()=>({active:{postMessage:value=>sent.push(value)}})}},selectThread:async id=>{state.selectedId=id;if(loaded)state.detail={thread:{id}};}};
+  const context={openingNotification:null,saveNotificationTarget,consumeNotificationTarget,sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://rcm.test/?host=local'},history:{replaceState(){}},recordError:error=>{throw error;},state,targetHost:'local',connectionIds:['local'],navigator:{serviceWorker:{getRegistration:async()=>({active:{postMessage:value=>sent.push(value)}})}},selectThread:async id=>{state.selectedId=id;if(loaded)state.detail={thread:{id}};}};
   vm.createContext(context);vm.runInContext(ts.transpile(code),context);
   await context.openNotificationThread({host:'local',threadId:'target',clickId:'click'});
   assert.equal(sent.length,loaded?1:0);
   if(loaded)assert.equal(sent[0].clickId,'click');
  }
+});
+
+test('declarative notification link carries a same-document navigation target',()=>{
+ const payload=notificationPayload({title:'test',data:{host:'local',threadId:'thread /?中文'}},'https://rcm.test');
+ const parsed=notificationLink(payload.notification.navigate);
+ assert.deepEqual(parsed,{host:'local',threadId:'thread /?中文'});
+ assert.equal(new URL(payload.notification.navigate).hash.startsWith('#notification-thread='),true);
+});
+test('URL target survives early URL cleanup and reload until matching successful consumption',()=>{
+ const values=new Map(),storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
+ const href='https://rcm.test/?host=local#notification-thread=target';
+ const target=pendingNotificationTarget(storage,href);
+ assert.equal(target.threadId,'target');
+ assert.deepEqual(pendingNotificationTarget(storage,'https://rcm.test/?host=local'),target);
+ saveNotificationTarget(storage,{host:'local',threadId:'newer'});
+ consumeNotificationTarget(storage,target,href);
+ assert.equal(pendingNotificationTarget(storage,'https://rcm.test/').threadId,'newer');
+ saveNotificationTarget(storage,target);
+ assert.equal(consumeNotificationTarget(storage,target,href),'https://rcm.test/?host=local');
+ assert.equal(pendingNotificationTarget(storage,'https://rcm.test/'),null);
+ assert.deepEqual(notificationLink('https://rcm.test/?host=local&thread=old'),{host:'local',threadId:'old'});
+});
+
+test('foreground link change and resumed legacy URL both route without worker messages',async()=>{
+ const ts=await import('typescript'),source=await readFile(new URL('../src/web/controller.ts',import.meta.url),'utf8');
+ const code=source.slice(source.indexOf('function requestNotificationTarget(){'),source.indexOf('const connectionConfig=await readConnections();'));
+ const events={},opened=[],values=new Map(),location={href:'https://rcm.test/?host=local#notification-thread=foreground'};
+ const storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
+ const context={pendingNotificationTarget,sessionStorage:storage,location,notificationNavigationReady:true,document:{visibilityState:'visible',addEventListener:(name,fn)=>events[name]=fn},window:{addEventListener:(name,fn)=>events[name]=fn},navigator:{},openNotificationThread:target=>opened.push(target),recordError:error=>{throw error;}};
+ vm.createContext(context);vm.runInContext(ts.transpile(code),context);
+ events.hashchange();assert.equal(opened[0].threadId,'foreground');
+ location.href='https://rcm.test/?host=local&thread=legacy';events.pageshow();assert.equal(opened[1].threadId,'legacy');
+ context.document.visibilityState='hidden';events.visibilitychange();assert.equal(opened.length,2);
+ context.document.visibilityState='visible';events.visibilitychange();assert.equal(opened[2].threadId,'legacy');
 });

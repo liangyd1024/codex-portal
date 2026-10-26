@@ -1,3 +1,4 @@
+import {pendingNotificationTarget,saveNotificationTarget,consumeNotificationTarget} from './services/notification-target';
 import {installConnectionManager,connectionSavePending} from './components/ConnectionManager';
 import {composerSendView} from './services/composer-send-view';
 import {publishConversationActivity} from './components/RunningIndicator';
@@ -123,7 +124,8 @@ import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrat
 import {outputWindow, OUTPUT_WINDOW_SIZE} from '../../public/output-window.js';
 import {updateExtensionNotice, renderExtensionNotice, mergeLiveTurns, taskNotice, backgroundActivity} from '../../public/connection-state.js';
 const requestedHost = new URL(location.href).searchParams.get('host');
-let pendingNotification: {host?:string;threadId:string;clickId?:string} | null = null, notificationNavigationReady=false;
+let pendingNotification=pendingNotificationTarget(sessionStorage,location.href), notificationNavigationReady=false;
+let openingNotification:string|null=null;
 navigator.serviceWorker?.addEventListener('message',event=>{
   const data=event.data;
   if(data?.type!=='rcm-notification-click'||!data.threadId)return;
@@ -131,9 +133,13 @@ navigator.serviceWorker?.addEventListener('message',event=>{
 });
 function requestNotificationTarget(){
   if(!notificationNavigationReady||document.visibilityState==='hidden')return;
+  const linked=pendingNotificationTarget(sessionStorage,location.href);
+  if(linked){void openNotificationThread(linked);return;}
   void navigator.serviceWorker?.getRegistration().then(registration=>registration?.active?.postMessage({type:'rcm-notification-ready'})).catch(recordError);
 }
 window.addEventListener('pageshow',requestNotificationTarget);
+window.addEventListener('hashchange',requestNotificationTarget);
+window.addEventListener('popstate',requestNotificationTarget);
 document.addEventListener('visibilitychange',requestNotificationTarget);
 navigator.serviceWorker?.addEventListener('controllerchange',requestNotificationTarget);
 const connectionConfig=await readConnections();
@@ -722,17 +728,25 @@ const setTaskNotifications=notificationPreferences.setEnabled;
 function notificationDiagnostic(message:string) {
   appendNotificationDiagnostic(dateTime(new Date()) + ' · ' + message);
 }
-async function openNotificationThread({host,threadId,clickId}:{host?:string;threadId:string;clickId?:string}) {
+async function openNotificationThread(target:{host?:string;threadId:string;clickId?:string}) {
+  const {threadId,clickId}=target,host=target.host||targetHost;
+  target={...target,host};
+  const key=JSON.stringify(target);if(openingNotification===key)return;
+  saveNotificationTarget(sessionStorage,target);
   if(host!==targetHost){
-    if(!connectionIds.includes(host!))return;
+    if(!connectionIds.includes(host))return;
     flushDrafts();
-    const url=new URL(location.href);url.searchParams.set('host',host!);url.searchParams.set('thread',threadId);location.assign(url);return;
+    const url=new URL(location.href);url.searchParams.set('host',host);url.searchParams.set('thread',threadId);location.assign(url);return;
   }
-  await selectThread(threadId);
-  if(clickId&&state.selectedId===threadId&&state.detail?.thread?.id===threadId&&!state.historyError&&!state.busy.has('create')){
-    const registration=await navigator.serviceWorker?.getRegistration();
-    registration?.active?.postMessage({type:'rcm-notification-consumed',clickId});
-  }
+  openingNotification=key;
+  try{
+    await selectThread(threadId);
+    if(state.selectedId===threadId&&state.detail?.thread?.id===threadId&&!state.historyError&&!state.busy.has('create')){
+      history.replaceState(null,'',consumeNotificationTarget(sessionStorage,target,location.href));
+      if(clickId){const registration=await navigator.serviceWorker?.getRegistration();registration?.active?.postMessage({type:'rcm-notification-consumed',clickId});}
+    }
+  }catch(error){recordError(error,'notification-navigation');}
+  finally{if(openingNotification===key)openingNotification=null;}
 }
 const sendTaskNotification=notificationDelivery.send;
 const notifyTaskEvent=createTaskNotifications({enabled:()=>notificationPreferences.enabled()&&!pushSubscription.active(),
@@ -932,8 +946,8 @@ const init=createWorkspaceStartup({state,sidebar,document,location,sessionStorag
   installUsage:options=>refreshAccountUsage=installAccountUsage({details:options.details,api,connected,context:options.context}),showUsageDetails:text=>toast(text,false,3000,'account-usage',{information:true}),
   installBackup:imported=>installBrowserBackup(connectionConfig,flushDrafts,imported),suspendDraftWrites:()=>{draftWritesSuspended=true;},installNavigation:installInspectorNavigation,
   renderControls,renderThreads,renderStatus,renderThread,connected,connectionPending,loadThreads,wireEvents,setupEvents,dispatchReady:()=>window.dispatchEvent(new Event('rcm-ready')),
-  setNavigationReady:()=>{notificationNavigationReady=true;requestNotificationTarget();},pendingNotification:()=>pendingNotification,clearPendingNotification:()=>{pendingNotification=null;},
-  openNotificationThread,restoreDetail,readCsrf:()=>api('/api/csrf'),loadStatus,refreshWorkspace,connectRemote,recordError,messageOf,publishConnectionBanner,finishStarting:()=>{workspaceStarting=false;}});
+  setNavigationReady:()=>{notificationNavigationReady=true;},pendingNotification:()=>pendingNotification,clearPendingNotification:()=>{pendingNotification=null;},
+  openNotificationThread,restoreDetail,readCsrf:()=>api('/api/csrf'),loadStatus,refreshWorkspace,connectRemote,recordError,messageOf,publishConnectionBanner,finishStarting:()=>{workspaceStarting=false;requestNotificationTarget();}});
 
 if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
 await init();

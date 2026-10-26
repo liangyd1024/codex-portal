@@ -1,4 +1,4 @@
-interface NotificationTarget {host?:string;threadId:string;[field:string]:unknown}
+import type {NotificationTarget} from './notification-target';
 type InspectorView='settings'|'mobile';
 type RefreshUsage=(force?:boolean)=>Promise<unknown>;
 interface Elements {'messages':HTMLElement;'inspector':HTMLElement;'app-shell':HTMLElement}

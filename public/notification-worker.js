@@ -21,7 +21,9 @@ self.addEventListener('push',event=>{
   const notice=message?.notification||message;
   event.waitUntil((async()=>{
     let error;
-    try{await self.registration.showNotification(notice?.title||'Codex · 新通知',{body:notice?.body||'打开应用查看',tag:notice?.tag,data:notice?.data||{},navigate:notice?.navigate,silent:false});}
+    // Replacement notifications use notificationclick; only the declarative fallback
+    // uses navigate. Setting navigate here bypasses our durable click/ack handshake.
+    try{await self.registration.showNotification(notice?.title||'Codex · 新通知',{body:notice?.body||'打开应用查看',tag:notice?.tag,data:notice?.data||{},silent:false});}
     catch(caught){error=String(caught.message||caught);}
     // A test receipt distinguishes provider acceptance from device handling.
     if(notice?.data?.testId){
