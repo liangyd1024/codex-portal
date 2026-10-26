@@ -30,3 +30,9 @@ test('detail apply retains raw values and same-thread goal on error but never sa
  assert.equal(f.state.detail.goal,goal);assert.equal(f.state.detail.turns,turns);assert.equal(f.state.detail.future,data.future);assert.equal(f.state.historyCursor,'next');assert.deepEqual(f.calls,[['models',true],'thread','requests']);
  f.calls.length=0;f.applyDetail({thread:{id:'b'},goalError:'unavailable',historyCursor:'older'});assert.equal(f.state.detail.goal,undefined);assert.deepEqual(f.state.detail.turns,[]);assert.equal(f.state.historyCursor,'older');assert.deepEqual(f.calls,['thread','requests','cache']);
 });
+test('verified desktop detail enables the existing composer without changing the draft or selection',()=>{
+ const f=fixture();const selection=f.state.selectionVersion;
+ f.applyDetail({thread:{id:'a'},controlState:'desktop',desktop:{available:true,canSend:true}});
+ assert.equal(f.state.desktopMode,true);assert.equal(f.state.selectionVersion,selection);assert.equal(f.input.value,'草稿 A');assert.deepEqual(f.calls.slice(0,2),[['desktop-chat',true],['save','a']]);
+ const cached=fixture();cached.applyDetail({thread:{id:'a'},controlState:'desktop',desktop:{available:true},recovering:true});assert.equal(cached.state.desktopMode,false);
+});

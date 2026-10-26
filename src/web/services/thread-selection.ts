@@ -5,6 +5,11 @@ interface Dependencies {state:SelectionState;location:Pick<Location,'href'>;hist
 export function createThreadSelection({state,location,history,document,closeNewChat,automations,toggleInspector,element:$,inputId,saveView,resizeInput,renderModels,renderThread,renderThreads,renderRequests,saveDetailSoon,compactLayout,toggleSidebar,refreshSelected,scrollFollow,messageOf,recordError}:Dependencies){
 function applyDetail(data:SelectionDetail, resetModels = false) {
   if(data.goalError&&state.detail?.thread?.id===data.thread?.id)data.goal=state.detail!.goal;
+  if(!state.desktopMode&&!data.recovering&&data.controlState==='desktop'&&data.desktop){
+    state.desktopMode=true;
+    document.querySelector<HTMLElement>('.main-panel')!.classList.toggle('desktop-chat',true);
+    saveView();
+  }
   state.detail = {...data, turns:data.turns || data.thread?.turns || []};
   state.historyCursor = data.nextCursor || data.historyCursor || null; state.historyError = '';
   if (resetModels) renderModels(true); renderThread(); renderRequests(); if(!data.recovering)saveDetailSoon();

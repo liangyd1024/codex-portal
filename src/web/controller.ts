@@ -24,6 +24,7 @@ import {applyControllerStatus} from './services/connection-status';
 import {createThreadViewReporter} from './services/thread-view';
 import {controllerElement as $,el,icon,clear} from './controller-dom';
 import {createControllerState} from './controller-state';
+import {createThreadAccess} from './services/thread-access';
 import {createConnectionActions} from './services/connection-actions';
 import {publishWelcome,setWelcomeDisabled,installWelcomeAction,installClearRecovery} from './components/WorkspaceActions';
 import {installDesktopControls,publishDesktopControls} from './components/DesktopControls';
@@ -284,7 +285,7 @@ function renderStatus() {
 function renderControlOverview() {
   const sessions=state.status?.controlledSessions||[],counts=new Map();
   sessions.forEach(session=>{const label=sessionLabel(session);counts.set(label,(counts.get(label)||0)+1);});
-  setWorkspaceText('control-overview',sessions.length?'本工作台 · '+[...counts].map(([label,count])=>label+' '+count).join(' · '):'尚未接管会话');
+  setWorkspaceText('control-overview',sessions.length?'本工作台 · '+[...counts].map(([label,count])=>label+' '+count).join(' · '):'暂无网页执行的会话');
 
 }
 function renderConnectionBanner() {
@@ -323,18 +324,18 @@ function renderControls() {
     !ready || !state.model || !effortsFor(state.model).length || state.loadingModels);
   const input = $('message-input'); publishMessageInput({disabled:!ready || !own || posting || handing});
   const followUp=followUpAction({active,touch:touchInput()});
-  publishMessageInput({placeholder:!ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '接管后发送消息…' : active ? (followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…') : '发送消息…'});
+  publishMessageInput({placeholder:!ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '正在确认会话…' : active ? (followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…') : '发送消息…'});
   const {buttonView,unavailable}=composerSendView({active,ready,own,posting,handing,stopping,
     loginRecovery:!!state.status?.loginRecovery,desktopMode:state.desktopMode,interrupting:state.busy.has('interrupt'),archived:state.selectedArchived,
     touch:touchInput(),backgroundState:background.state,followUp,attachmentPending:attachments?.pending(),hasAttachments:attachments?.has(),hasAnnotations:annotations?.has(),
     text:input.value,loadingModels:state.loadingModels,hasModel:Boolean(modelFor(state.model)),hasEffort:effortsFor(state.model).some(e=>e.value===state.effort),featureReady});
   publishComposerBusy(posting);
-  publishWorkspaceControl('takeover',{ hidden:own || !state.selectedId || state.selectedArchived }); publishWorkspaceControl('takeover',{ disabled:!ready || !featureReady('takeover') || switching || handing || !state.selectedId });
-  publishWorkspaceControl('takeover',{text:switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话'});
-  publishWorkspaceControl('composer-availability',{text:unavailable,hidden:!unavailable});
+  publishWorkspaceControl('takeover',{ hidden:own || !state.selectedId || state.selectedArchived || (!handoff&&!state.detail?.accessError) }); publishWorkspaceControl('takeover',{ disabled:!ready || Boolean(handoff&&!featureReady('takeover')) || switching || handing || !state.selectedId });
+  publishWorkspaceControl('takeover',{text:switching ? '正在连接…' : handoff ? '在网页继续' : '重试'});
+  publishWorkspaceControl('composer-availability',{text:!own&&state.detail?.accessError?String(state.detail.accessError):unavailable,hidden:!unavailable&&!state.detail?.accessError});
   publishWorkspaceControl('new-thread',{description:!ready ? '连接恢复后可新建会话。' : !state.models.length ? '正在等待目标机器模型目录。' : creating ? '正在创建，请稍候。' : ''});
   controlReason('new-thread',$('new-thread').getAttribute('aria-description') || (!featureReady('create') ? '当前引擎不支持创建会话。' : '正在读取模型目录…'));
-  controlReason('takeover',!ready ? '连接恢复后可接管。' : switching ? '正在接管，请稍候。' : handing ? '交还状态正在确认，请稍候。' : '当前引擎暂不支持接管。');
+  controlReason('takeover',!ready ? '连接恢复后可重试。' : switching ? '正在连接，请稍候。' : handing ? '交还状态正在确认，请稍候。' : '当前引擎暂不支持在网页继续。');
   buttonView.stop.text=stopLabel;
   buttonView.stop.title=stopping?'停止请求已发出，等待目标确认。':active?'停止当前轮次':'停止后台命令';
   buttonView.stop.label=stopping?stopLabel:buttonView.stop.title;
@@ -356,11 +357,11 @@ function renderControls() {
   projectFolders?.sync();
   setWorkspaceText('composer-model-label',(modelFor(state.model)?.displayName || state.model || '模型')+' · '+(effortNames[state.effort] || state.effort || '档位'));
   composer?.render(); attachments?.render();
-  const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '查看模式。接管后可在原会话继续工作。';
+  const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '正在确认会话的可用入口。';
   setWorkspaceText('composer-hint',state.desktopMode&&!newChatOpen?'使用桌面会话的模型与设置。发送成功仅代表会话已接收，任务结果以原始回复为准。':state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
   setWorkspaceText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
   syncRequestCards({ready,pending:id=>state.busy.has('request:'+id),controlledThreads:state.status?.controlledThreads});
-  const desktopView:Parameters<typeof publishDesktopControls>[0]={entryHidden:newChatOpen||!state.selectedId||state.selectedArchived||own||state.desktopMode,entryDisabled:!state.transport||state.busy.size>0||Boolean(handoff&&handoff.state!=='released'),reviewHidden:true};
+  const desktopView:Parameters<typeof publishDesktopControls>[0]={entryHidden:true,entryDisabled:!state.transport||state.busy.size>0||Boolean(handoff&&handoff.state!=='released'),reviewHidden:true};
   if(state.desktopMode&&!newChatOpen){
     const desktop=state.detail?.desktop,online=state.transport&&desktop?.available,unconfirmed=desktop?.unconfirmed||desktopSends[state.selectedId!]?.messageId;
     publishMessageInput({disabled:posting,placeholder:active?'任务执行中，可先输入下一条要求…':'发送消息，输入 @ 引用会话…'});
@@ -530,7 +531,7 @@ function renderMessages() {
   const receipts=sendReceipts.view(context,turns());
   const completion=completedGoalPlacement(state.detail?.goal,turns(),state.detail?.goalError||uncertainHistory());
   const nearBottom = scrollFollow?.following ?? true;
-  const shape=JSON.stringify([completion,receipts.map(r=>[r.id,r.status]),state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,backgroundActivity(state.detail,{controlled:controlled(),connected:usable()}),[...(state.runtimeNotices.get(state.selectedId!)?.values()||[])],visibleTurns],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
+  const shape=JSON.stringify([state.desktopMode,completion,receipts.map(r=>[r.id,r.status]),state.selectedId,state.loadingDetail,state.historyError,controlled(),uncertainHistory(),state.detail?.recovering,backgroundActivity(state.detail,{controlled:controlled(),connected:usable()}),[...(state.runtimeNotices.get(state.selectedId!)?.values()||[])],visibleTurns],(key,value)=>['aggregatedOutput','outputToken'].includes(key)?undefined:value);
   if(shape===lastMessageShape){
     for(const turn of visibleTurns)for(const item of turn.items||[]){
       if(item.type!=='commandExecution')continue;
@@ -559,7 +560,7 @@ function renderMessages() {
   if (state.historyError) { n.append(el('div','turn-error',state.historyError)); if(!turns().length){commit();return;} }
   if(state.detail?.recovering)n.append(el('div','history-notice','已恢复本机保存的输出，正在同步最新内容…')); 
   for (const notice of state.runtimeNotices.get(state.selectedId!)?.values() || []) n.append(renderExtensionNotice(notice));
-  if (!turns().length) { const empty = el('div','empty-history'); empty.append(icon('chat'),el('p','','此会话暂无消息。'),el('p','',state.desktopMode ? '通过桌面继续此会话。' : controlled() ? '输入要求，开始目标机器工作。' : '接管后，可以在此会话开始工作。')); n.append(empty); }
+  if (!turns().length) { const empty = el('div','empty-history'); empty.append(icon('chat'),el('p','','此会话暂无消息。'),el('p','',state.desktopMode ? '输入要求，继续此会话。' : controlled() ? '输入要求，开始目标机器工作。' : '正在确认会话的可用入口。')); n.append(empty); }
   if(completion&&!completion.turnId)n.append(renderCompletedGoal(completion.goal));
   visibleTurns.forEach(t => {
     const cachedTurn=messageCache.render('turn:'+t.id,renderSignature([renderContext,t]),()=>{
@@ -631,8 +632,8 @@ function renderThread() {
   setWorkspaceText('thread-title',t ? threadName(t) : '正在读取会话…'); publishWorkspaceLabel('thread-title',{title:$('thread-title').textContent||''}); setWorkspaceText('thread-path',t?.cwd ? '目标机器 · ' + t.cwd : '');
   const own = controlled(), control = typeOf(state.detail?.controlState), busy = ['busy','occupied','active_writer','conflict'].includes(control);
   let badgeText=own ? '已取得控制' : busy ? '已被占用' : '查看模式';
-  let noteText=own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话由其他入口管理，当前为查看模式。' : '当前只读取历史。点击“接管会话”后，可以继续原会话。';
-  if(snapshotHistory())noteText=(own ? '历史来自快照。实时状态由目标机器控制连接确认。' : '历史快照，运行状态需接管后确认。')+(busy?' '+noteText:'');
+  let noteText=own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话由其他入口管理，当前为查看模式。' : '正在确认会话的可用入口。';
+  if(snapshotHistory())noteText=(own ? '历史来自快照。实时状态由目标机器控制连接确认。' : '历史来自快照，正在确认运行状态。')+(busy?' '+noteText:'');
   if(state.desktopMode){badgeText='桌面托管';noteText='消息由 Codex 桌面执行，沿用该会话的原生工具。';}
   publishWorkspaceLabel('control-badge',{className:'control-badge'+(own?' controlled':busy?' busy':''),text:badgeText});
   publishWorkspaceLabel('control-note',{className:'control-note',text:noteText});
@@ -664,13 +665,23 @@ const loadThreads = createSidebarLoader({
 const {readThreads,loadSidebarActivity,loadVisibleThreads}=createSidebarReader({state,createdThreads,connected,loadProjects,threadName,element:$,renderThreads,renderControls,api,loadThreads,recordError,toast,messageOf,requestAnimationFrame});
 const {applyDetail,selectThread}=createThreadSelection({state,location,history,document,closeNewChat,automations:()=>automations,toggleInspector:open=>toggleInspector(open),element:$,inputId,saveView,resizeInput,renderModels,renderThread,renderThreads,renderRequests,saveDetailSoon:()=>saveDetailSoon(),compactLayout,toggleSidebar:(...args)=>toggleSidebar(...args),refreshSelected:()=>refreshSelected(),scrollFollow:()=>scrollFollow,messageOf,recordError});
 const {saveSoon:saveDetailSoon,restore:restoreDetail,cancelScheduled:cancelDetailSave}=createDetailRecovery({state,host:targetHost,read:readDetailCache,write:writeDetailCache,apply:applyDetail});
-const readSelectedDetail=createDetailReader({state,sends:desktopSends,
+const readDetail=createDetailReader({state,sends:desktopSends,
   reportView:()=>reportThreadView(),recordError:error=>recordError(error,'thread'),request:(...args)=>api(...args),
   input:()=>$('message-input'),resizeInput:()=>resizeInput(),saveSends:()=>saveDesktopSends(),
   now:()=>performance.now(),host:()=>targetHost,canDecompress:()=>typeof DecompressionStream==='function',
   applyPreview:preview=>applyDetail(preview,true),turns:()=>turns(),outputBases:values=>outputBases(values),
   decode:data=>decodeOutputs(data),hydrate:(data,bases)=>hydrateOutputs(data,bases),
   recordTiming:value=>{document.body.dataset.logRecovery=value;},defer:(run,delay)=>setTimeout(run,delay),refreshSoon:()=>scheduleDetailRefresh()});
+const threadAccess=createThreadAccess({
+  key:()=>JSON.stringify([targetHost,state.selectedId,state.selectionVersion,state.detailVersion]),
+  ready:()=>usable()&&!state.busy.size,
+  desktop:id=>api('/api/desktop/threads/'+encodeURIComponent(id)),
+  resume:id=>api('/api/threads/'+encodeURIComponent(id)+'/takeover',{method:'POST'}),messageOf});
+const readSelectedDetail=async(id:string,current:()=>boolean)=>{
+  const detail=await readDetail(id,current);
+  if(!current()||state.desktopMode)return detail;
+  return threadAccess.resolve(id,detail,current);
+};
 const selectedRefresh=createSelectedRefresh({state,blocked:()=>automations?.opened||newChatOpen,
   newChatOpen:()=>newChatOpen,restore:restoreDetail,read:readSelectedDetail,turns,merge:mergeLiveTurns,
   apply:applyDetail,updated:()=>turnNavigation?.update()});
@@ -828,7 +839,7 @@ function wireEvents() {
   setInterval(()=>{if(automations!.opened&&!document.hidden)void automations!.refresh();},15000);
 
   capacityRetry=installCapacityRetry({container:document.querySelector<HTMLElement>('.composer-region')!,storage:sessionStorage,refresh:refreshSelected,
-    context:()=>({host:targetHost,id:state.selectedId,turns:!newChatOpen&&!state.desktopMode?turns():[],unavailableReason:!usable()?'连接尚未恢复，暂不能重试。':running()?'会话正在运行，暂不能重试。':!controlled()?'接管会话后可重试。':'正在确认会话状态，暂不能重试。',ready:!newChatOpen&&!state.desktopMode&&usable()&&controlled()&&!running()&&!uncertainHistory()&&!state.loadingDetail&&!state.historyError&&!state.busy.size}),
+    context:()=>({host:targetHost,id:state.selectedId,turns:!newChatOpen&&!state.desktopMode?turns():[],unavailableReason:!usable()?'连接尚未恢复，暂不能重试。':running()?'会话正在运行，暂不能重试。':!controlled()?'会话连接恢复后可重试。':'正在确认会话状态，暂不能重试。',ready:!newChatOpen&&!state.desktopMode&&usable()&&controlled()&&!running()&&!uncertainHistory()&&!state.loadingDetail&&!state.historyError&&!state.busy.size}),
     send:async(c,turnId,automatic)=>{try{const result=await api<{turn:NativeTurn}>('/api/threads/'+encodeURIComponent(c.id!)+'/retry-capacity',{method:'POST',body:{turnId,automatic,model:state.model,effort:state.effort,mode:composer!.options().mode}});if(c.host===targetHost&&c.id===state.selectedId){upsertTurn(result.turn);renderThread();scheduleDetailRefresh();}}catch(error){if(c.host===targetHost&&c.id===state.selectedId)await refreshSelected().catch(()=>{});throw error;}}});
   scrollFollow=installScrollFollow($('messages-scroller'),$('messages'));
   attachments=installAttachments({host:targetHost,context:()=>({id:inputId(),ready:inputReady()&&!state.desktopMode,busy:state.busy.has('message')||state.busy.has('create')}),changed:renderControls,notify:toast});
@@ -862,7 +873,7 @@ function wireEvents() {
   installConnectionManager({api,targetId:targetHost,enabled:typeof connectionConfig.configRevision==='string',flush:()=>{flushDrafts();if(state.drafts.warned)throw Error('草稿保存失败，请保留当前页面。');}});
   installConnectionActions({connect:()=>connected()||connectionPending()?disconnectRemote():connectRemote(),reload:reloadLogin,release:releaseService});
   installWelcomeAction(() => connected() ? openNewDialog() : connectRemote());
-  setWorkspaceControlAction('new-thread',openNewDialog); setWorkspaceControlAction('takeover',takeoverThread);
+  setWorkspaceControlAction('new-thread',openNewDialog); setWorkspaceControlAction('takeover',()=>{if(currentHandoff())return takeoverThread();threadAccess.reset();return refreshSelected();});
   setWorkspaceControlAction('refresh-all',() => action('refresh',() => refreshWorkspace(true))); setWorkspaceControlAction('refresh-projects',() => action('projects',() => showRefresh('侧边栏',()=>loadThreads(false,true))));
   $('project-list').addEventListener('scroll',loadVisibleThreads,{passive:true});
   new ResizeObserver(loadVisibleThreads).observe($('project-list'));

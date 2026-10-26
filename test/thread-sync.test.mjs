@@ -83,14 +83,14 @@ function detailFixture() {
   const state={selectedId:'a',selectionVersion:1,detailVersion:1,detail:{thread:{id:'a'},turns:[]},loadedOlderHistory:false,
     status:{instanceId:'one',connection:{state:'connected'},controlledThreads:[],handoffs:[]}};
   const requests=[],applied=[],cacheReads=[],navigationUpdates=[];
-  const context=vm.createContext({createDetailReader,createSelectedRefresh,applyControllerStatus,state,newChatOpen:false,automations:null,desktopSends:{},performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
+  const context=vm.createContext({createThreadAccess:()=>({resolve:async(_id,detail)=>detail}),messageOf:e=>e.message,createDetailReader,createSelectedRefresh,applyControllerStatus,state,newChatOpen:false,automations:null,desktopSends:{},performance,document:{body:{dataset:{}}},targetHost:'test',setTimeout,mergeLiveTurns,selectConnectionStatus,retiredStatusInstances:new Set(),
     turnNavigation:{update:()=>navigationUpdates.push(state.selectedId)},reportThreadView:()=>null,turns:()=>state.detail?.turns||[],outputBases:()=>new Map(),decodeOutputs:async x=>x,hydrateOutputs:x=>x,
     readDetailCache:()=>new Promise(resolve=>cacheReads.push(resolve)),scheduleDetailRefresh:()=>{},
     api:path=>new Promise((resolve,reject)=>requests.push({path,resolve,reject})),
     applyDetail:data=>{state.detail=data;applied.push(data);},
   });
   context.restoreDetail=createDetailRecovery({state,host:'test',read:context.readDetailCache,write:async()=>{},apply:context.applyDetail}).restore;
-  runController(source.slice(source.indexOf('const readSelectedDetail='),source.indexOf('async function refreshWorkspace('))+'\nglobalThis.read=refreshSelected;',context);
+  runController(source.slice(source.indexOf('const readDetail='),source.indexOf('async function refreshWorkspace('))+'\nglobalThis.read=refreshSelected;',context);
   const ast=ts.createSourceFile('controller.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
   const applyStatus=ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='applyStatus');
   assert.ok(applyStatus,'status controller exists');

@@ -2,7 +2,7 @@ import type {ReactNode} from 'react';
 import {flushSync} from 'react-dom';
 import {createStore,useStore} from 'zustand';
 interface InputView {disabled:boolean;placeholder:string}
-const inputStore=createStore<InputView>(()=>({disabled:true,placeholder:'先接管会话，再发送消息…'}));
+const inputStore=createStore<InputView>(()=>({disabled:true,placeholder:'正在确认会话…'}));
 const formStore=createStore<{busy?:string}>(()=>({}));
 export function publishMessageInput(patch:Partial<InputView>){const old=inputStore.getState();if(Object.entries(patch).every(([key,value])=>old[key as keyof InputView]===value))return;flushSync(()=>inputStore.setState(patch));}
 export function publishComposerBusy(busy:boolean){const value=String(busy);if(formStore.getState().busy!==value)flushSync(()=>formStore.setState({busy:value}));}

@@ -48,7 +48,7 @@ export function createDetailReader(deps:Dependencies){
   const response=await deps.request('/api/threads/' + encodeURIComponent(id)+encoding,{headers:{'X-Output-Versions':JSON.stringify(versions)}}),received=deps.now();
   const result=deps.hydrate(await deps.decode(response),bases);
   if(cold&&isCurrent())deps.recordTiming(JSON.stringify({host:deps.host(),id,firstMs:Math.round(firstMs??0),networkMs:Math.round(received-started-(firstMs??0)),decodeMs:Math.round(deps.now()-received),completeMs:Math.round(deps.now()-started)}));
-  if(cold)deps.defer(()=>{if(isCurrent())deps.refreshSoon();},1000);
+  if(cold)deps.defer(()=>{if(isCurrent()&&!state.desktopMode)deps.refreshSoon();},1000);
   return result;
 
  };
