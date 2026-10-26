@@ -18,6 +18,11 @@ test('configuration API atomically updates live targets and rejects stale tabs w
  let finishWrite,writeStarted;const started=new Promise(resolve=>{writeStarted=resolve;});manager.newThread=()=>{writeStarted();return new Promise(resolve=>{finishWrite=resolve;});};
  const {token}=await json('/api/csrf'),initial=await json('/api/connection-config');
  const send=(revision,body)=>fetch(base+'/api/connection-config',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':token,'X-RCM-Config-Revision':revision},body:JSON.stringify({...body,revision})});
+ const discover=async headers=>fetch(base+'/api/connection-discover',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify({connection:{address:'-invalid'}})});
+ assert.equal((await discover({})).status,403);
+ assert.equal((await discover({'X-CSRF-Token':token,'X-RCM-Config-Revision':'stale'})).status,409);
+ assert.equal((await discover({'X-CSRF-Token':token,'X-RCM-Config-Revision':initial.revision})).status,400);
+ assert.equal((await json('/api/connection-config')).revision,initial.revision);
  const pending=fetch(base+'/api/threads',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':token,'X-RCM-Config-Revision':initial.revision},body:'{}'});await started;
  const blocked=await send(initial.revision,{action:'edit',id:'local',connection:{binary:'/opt/example/other'}});assert.equal(blocked.status,409);assert.equal(disconnected,0);finishWrite({thread:{id:'fake'}});await pending;
  let response=await send(initial.revision,{action:'edit',id:'local',connection:{alias:'Renamed'}});assert.equal(response.status,200);let current=await response.json();

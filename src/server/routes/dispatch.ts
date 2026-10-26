@@ -1,3 +1,4 @@
+import {discoverConnection} from '../../../lib/connection-discovery.mjs';
 import {probeConnection} from '../../../lib/connection-config.mjs';
 import type {ConnectionConfigStore} from '../../../lib/connection-config.mjs';
 import {createLocalOriginMatcher} from '../local-origin';
@@ -92,6 +93,7 @@ export function createDispatcher(context:RouteServices){
         if(typeof token!=='string'||Buffer.byteLength(token)!==Buffer.byteLength(csrf)||!timingSafeEqual(Buffer.from(token),Buffer.from(csrf)))throw new AppError('本机会话已变化。请刷新页面。',403,'CSRF');
         if(context.registry&&req.headers['x-rcm-config-revision']!==context.registry.revision)throw new AppError('连接配置已变化，请保存草稿并刷新页面。',409,'CONFIG_CONFLICT');
         const data=await body(req,/^\/api\/threads\/[A-Za-z0-9_-]+\/(message|steer|queue-add)$/.test(p)?6*1024*1024:1024*1024);
+        if(p==='/api/connection-discover'){if(!context.registry)throw new AppError('此入口不支持添加机器。',409);return json(res,200,await discoverConnection(data.connection||{}));}
         if(p==='/api/connection-probe'){if(!context.registry)throw new AppError('此预览不支持连接检测。',409);return json(res,200,await probeConnection(context.config,data));}
         if(p==='/api/connection-config'){if(!context.changeConnections)throw new AppError('此预览不支持修改连接配置。',409);return json(res,200,await context.changeConnections(data));}
         if(context.registry?.writing)throw new AppError('连接配置正在保存，请稍后重试。',409,'CONFIG_BUSY');

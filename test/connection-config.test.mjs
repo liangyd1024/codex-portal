@@ -34,3 +34,9 @@ test('SSH probe is bounded and never invokes service startup or native execution
  await probeConnection(store.config,{connection:remote},{remote:async(host,code,options)=>{invoked=true;assert.equal(host.address,remote.address);assert.equal(options.timeoutMs,8000);assert.match(code,/os.access/);assert.doesNotMatch(code,/subprocess|launchctl|serviceAction|Popen/);}});
  assert.ok(invoked);
 });
+
+test('discovered connections persist Python and support SSH-managed credentials',async()=>{
+ const {store,file}=await fixture();const value={...remote,python:'/usr/bin/python3'};delete value.identityFile;
+ const result=await store.change({revision:store.revision,action:'add',connection:value});
+ assert.equal(result.connections[1].hasIdentityFile,false);assert.equal(JSON.parse(await readFile(file,'utf8')).connections[1].python,'/usr/bin/python3');
+});

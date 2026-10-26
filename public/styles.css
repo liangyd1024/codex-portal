@@ -600,3 +600,11 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .connection-maintenance>summary::-webkit-details-marker{display:none}
 .connection-maintenance>summary:focus-visible{outline:2px solid var(--control-border-color);outline-offset:2px}
 .connection-maintenance>.subtle{margin:0 0 8px}
+
+.connection-editor-advanced>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;font-size:14px}
+.connection-editor-advanced>summary:before{content:"›"}
+.connection-editor-advanced[open]>summary:before{transform:rotate(90deg)}
+.connection-editor-advanced>summary::-webkit-details-marker{display:none}
+.connection-editor-advanced>summary:focus-visible{outline:2px solid var(--control-border-color);outline-offset:2px}
+.connection-editor-fields{display:grid;gap:12px;padding:8px 0}
+.connection-editor form>h2{margin-bottom:20px}
