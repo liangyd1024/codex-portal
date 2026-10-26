@@ -6,14 +6,15 @@ export function installDrawerGestures({surface, mode, openSidebar, closeDrawers}
   closeDrawers: () => void;
 }) {
   type Gesture = {id: number; x: number; y: number; started: number; mode: 'main' | 'sidebar' | 'inspector'; horizontal: boolean};
-  let gesture: Gesture | null = null;
+  let gesture: Gesture | null = null, suppressClickUntil = 0;
   const reset = () => {gesture = null;};
   surface.addEventListener('touchstart', event => {
-    reset();
+    reset(); suppressClickUntil = 0;
     const current = mode(), target = event.target;
     if (!current || event.touches.length !== 1 || !(target instanceof Element)) return;
     if (document.querySelector('dialog[open], .sidebar-menu, #mobile-more[open], #composer-settings[open]') || window.getSelection()?.toString()) return;
-    if (target.closest('input, textarea, select, button, a, summary, label, [contenteditable]:not([contenteditable="false"]), [role="slider"]')) return;
+    if (target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="slider"]')) return;
+    if (current === 'main' && target.closest('button, a, summary, label')) return;
     for (let node: Element | null = target; node && node !== surface; node = node.parentElement) {
       if (node.scrollWidth > node.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(node).overflowX)) return;
     }
@@ -33,6 +34,7 @@ export function installDrawerGestures({surface, mode, openSidebar, closeDrawers}
       const direction = gesture.mode === 'sidebar' ? -1 : 1;
       if (dx * direction <= 0 || Math.abs(dx) < Math.abs(dy) * 1.5) {reset();return;}
       gesture.horizontal = true;
+      suppressClickUntil = Date.now() + 2000;
     }
     if (event.cancelable) event.preventDefault();
     else reset();
@@ -41,12 +43,18 @@ export function installDrawerGestures({surface, mode, openSidebar, closeDrawers}
     const current = gesture;reset();
     if (!current || !current.horizontal || event.touches.length || mode() !== current.mode) return;
     const touch = [...event.changedTouches].find(t => t.identifier === current.id);
-    if (!touch || event.timeStamp - current.started > 900 || window.getSelection()?.toString()) return;
+    if (!touch || event.timeStamp - current.started > (current.mode === 'main' ? 900 : 1500) || window.getSelection()?.toString()) return;
     const dx = touch.clientX - current.x, dy = touch.clientY - current.y;
     const direction = current.mode === 'sidebar' ? -1 : 1;
-    if (dx * direction < 64 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx * direction < (current.mode === 'main' ? 64 : 40) || Math.abs(dx) < Math.abs(dy) * 1.5) return;
     if (event.cancelable) event.preventDefault();
     if (current.mode === 'main') openSidebar();else closeDrawers();
   },{passive:false});
   surface.addEventListener('touchcancel',reset,{passive:true});
+  // Swiping a row must not also activate its button or link. A new touch clears this guard.
+  surface.addEventListener('click', event => {
+    if (event.detail && Date.now() < suppressClickUntil) {
+      suppressClickUntil = 0;event.preventDefault();event.stopImmediatePropagation();
+    }
+  },true);
 }

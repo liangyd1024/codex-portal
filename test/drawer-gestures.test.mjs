@@ -52,3 +52,15 @@ test('only the leftmost 24px opens the sidebar, including the exact screen edge'
  for(const x of [0,8,24,25,80,200])f.swipe(x,x+100);
  assert.deepEqual(f.actions,['open','open','open']);
 });
+
+test('drawer rows close with a shorter swipe without activating the row; taps still work',t=>{
+ const f=fixture(t);f.mode('sidebar');f.target.tag='button';f.swipe(200,155);
+ assert.deepEqual(f.actions,['close']);assert.equal(f.fire('click',[],{detail:1}).defaultPrevented,true);
+ f.fire('touchstart',[f.touch(200)]);f.fire('touchend',[f.touch(200)]);
+ assert.equal(f.fire('click',[],{detail:1}).defaultPrevented,false);
+});
+test('drawer form inputs and vertical row scrolling remain available',t=>{
+ const f=fixture(t);f.mode('sidebar');
+ f.target.tag='input';f.swipe(200,100);f.target.tag='button';f.swipe(200,155,350);
+ assert.deepEqual(f.actions,[]);assert.equal(f.fire('click',[],{detail:1}).defaultPrevented,false);
+});

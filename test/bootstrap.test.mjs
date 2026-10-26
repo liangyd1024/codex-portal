@@ -5,12 +5,13 @@ import {readFile} from 'node:fs/promises';
 // Substitute only the module transport so startup hangs/errors are deterministic.
 const source=(await readFile(new URL('../public/bootstrap.js',import.meta.url),'utf8')).replace("import('./app.js')",'loadApp()');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-function fixture(loadApp,fetch=async()=>new Response('{}')){
+function fixture(loadApp,fetch=async()=>new Response('{}'),storage=new Map()){
+ const sessionStorage={getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
  const nodes=Object.fromEntries(['startup-status','startup-title','startup-message','startup-retry'].map(id=>[id,{hidden:false,setAttribute(name,value){this[name]=value;}}]));
  const events={},timers=new Map(),state={reloads:0};let seq=0;
  const document={body:{classList:{remove(){}}},hidden:false,getElementById:id=>nodes[id],addEventListener:(name,fn)=>events[name]=fn};
- vm.runInNewContext(source,{document,window:{addEventListener:(name,fn)=>events[name]=fn},navigator:{onLine:true},location:{reload:()=>state.reloads++},setTimeout:(fn)=>{timers.set(++seq,fn);return seq;},clearTimeout:id=>timers.delete(id),loadApp,fetch,AbortController});
- return {nodes,events,timers,state,document};
+ vm.runInNewContext(source,{sessionStorage,document,window:{addEventListener:(name,fn)=>events[name]=fn},navigator:{onLine:true},location:{reload:()=>state.reloads++},setTimeout:(fn,delay)=>{fn.delay=delay;timers.set(++seq,fn);return seq;},clearTimeout:id=>timers.delete(id),loadApp,fetch,AbortController});
+ return {nodes,events,timers,state,document,storage,runTimer(delay){const [id,fn]=[...timers].find(([,f])=>f.delay===delay)||[];assert.ok(fn,'missing timer '+delay);timers.delete(id);fn();}};
 }
 test('stalled startup offers retry and resumes when network returns',async()=>{
  const f=fixture(()=>new Promise(()=>{}));[...f.timers.values()][0]();
@@ -49,4 +50,25 @@ test('initial pageshow does not silently retry a fast failure, but a restored pa
  const f=fixture(()=>new Promise(()=>{}));[...f.timers.values()][0]();
  f.events.pageshow({persisted:false});await tick();assert.equal(f.state.reloads,0);
  f.events.pageshow({persisted:true});await tick();assert.equal(f.state.reloads,1);
+});
+
+test('startup failure automatically recovers without another lifecycle event',async()=>{
+ const f=fixture(()=>new Promise(()=>{}));f.runTimer(15000);f.runTimer(1000);await tick();assert.equal(f.state.reloads,1);
+});
+test('automatic recovery is bounded across page reloads and resets once ready',async()=>{
+ const storage=new Map();
+ for(const delay of [1000,3000,8000]){
+  const f=fixture(()=>new Promise(()=>{}),undefined,storage);f.runTimer(15000);f.runTimer(delay);await tick();assert.equal(f.state.reloads,1);
+ }
+ const f=fixture(()=>new Promise(()=>{}),undefined,storage);f.runTimer(15000);f.events.focus();await tick();assert.equal(f.state.reloads,0);assert.equal(f.timers.size,0);
+ f.events['rcm-ready']();assert.equal(storage.size,0);
+});
+test('foreground before failure still retries later, background waits for return',async()=>{
+ const f=fixture(()=>new Promise(()=>{}));f.events.visibilitychange();f.runTimer(15000);f.runTimer(1000);await tick();assert.equal(f.state.reloads,1);
+ const g=fixture(()=>new Promise(()=>{}));g.document.hidden=true;g.runTimer(15000);assert.equal(g.timers.size,0);g.document.hidden=false;g.events.visibilitychange();await tick();assert.equal(g.state.reloads,1);
+});
+test('transient recovery request failure backs off and late readiness cancels retry',async()=>{
+ let calls=0;const f=fixture(()=>new Promise(()=>{}),async()=>{if(++calls===1)throw Error('offline');return new Response('{}');});
+ f.runTimer(15000);f.runTimer(1000);await tick();assert.equal(f.state.reloads,0);f.runTimer(3000);await tick();assert.equal(f.state.reloads,1);
+ const g=fixture(()=>new Promise(()=>{}));g.runTimer(15000);g.events['rcm-ready']();assert.equal(g.timers.size,0);
 });
