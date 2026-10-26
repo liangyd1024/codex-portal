@@ -272,7 +272,7 @@ function renderStatus() {
   }
   const variant = connected() && state.transport ? 'connected' : ['connecting','reconnecting'].includes(conn) ? 'connecting' : conn === 'error' || conn === 'failed' ? 'error' : '';
   const label = connected() && !state.transport ? '实时连接中断' : stages[conn] || conn;
-  document.title = (currentThread() ? threadName(currentThread()) + ' · ' : '') + 'Codex 工作台';
+  document.title = (currentThread() ? threadName(currentThread()) + ' · ' : '') + 'Codex Portal';
   publishConnectionSummary({ready:true,variant,label,name:h.alias || '目标机器',address:h.hostname || '目标机器'}, {ready:true,variant,label,host:h.hostname || h.alias || '目标机器',user:h.user,
     version:service.version || h.version,connectedAt:dateTime(c.connectedAt),transport:state.transport ? '实时通道已连接' : '实时通道未连接',
     icon:connected()||connectionPending() ? 'close' : 'link',connectLabel:state.busy.has('disconnect') ? '正在断开…' : connectionPending()?'取消连接':connected() ? '断开本机连接' : '连接目标机器'});

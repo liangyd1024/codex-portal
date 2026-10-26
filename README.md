@@ -1,8 +1,8 @@
-# Remote Codex Manager
+# Codex Portal
 
-通过 Tailscale，在手机或另一台电脑的浏览器中远程使用 Mac 上的 Codex。查看任务进度，继续对话。
+在浏览器中连接本机与远程 Codex，继续你的工作。可通过 Tailscale 在手机或另一台电脑上访问。
 
-RCM 提供网页界面，通过 Codex 原生接口读取和操作会话。任务执行与调度由 Codex 负责。
+Codex Portal 提供网页界面，通过 Codex 原生接口读取和操作会话。任务执行与调度由 Codex 负责。
 
 ## 功能
 
@@ -11,7 +11,7 @@ RCM 提供网页界面，通过 Codex 原生接口读取和操作会话。任务
 - **多机器连接**：管理本机与 SSH 连接，查看目标账号及用量。
 - **手机访问**：局域网 HTTPS、二维码配对，以及可选的 Tailscale 跨网络访问。
 - **定时任务**：浏览 Codex 原生任务和运行记录，通过桌面管理会话发起变更。
-- **数据与维护**：浏览器草稿导入导出、RCM 数据加密备份、网页更新与失败回退。
+- **数据与维护**：浏览器草稿导入导出、Codex Portal 数据加密备份、网页更新与失败回退。
 
 ## 环境要求
 
@@ -55,7 +55,7 @@ npm run init -- --binary /absolute/path/to/codex
 先在 Mac 完成上面的安装步骤。
 
 1. 在 Mac 和访问设备上安装 Tailscale，加入同一 Tailscale 网络。
-2. 在 Mac 打开 RCM，进入“工作区详情 → 手机访问”。
+2. 在 Mac 打开 Codex Portal，进入“工作区详情 → 手机访问”。
 3. 展开“Tailscale · 跨网络访问”，点击“开启 Tailscale 访问”。
 4. 在已连接 Tailscale 的设备上打开生成的 HTTPS 地址，按页面提示完成配对。
 
@@ -71,6 +71,8 @@ npm run init -- --binary /absolute/path/to/codex
 
 配置默认保存在 `~/Library/Application Support/RemoteCodexManager/connections.json`；可用绝对路径 `RCM_CONFIG` 指定其他位置。连接配置、运行状态与源码分开保存。
 
+项目原名为 Remote Codex Manager。为兼容已有安装，数据目录、launchd 服务标识、`RCM_*` 环境变量和内部协议标识沿用旧名称。工程目录使用 `codex-portal`。
+
 详细说明见[使用与运维指南](docs/usage.md)。
 
 ## 限制与安全
@@ -79,7 +81,7 @@ npm run init -- --binary /absolute/path/to/codex
 - 同一会话同一时间只从一个入口操作；当前没有跨入口控制锁。
 - 普通断开和网页更新不会停止目标任务。停止目标服务或原地恢复需单独完成维护检查。
 - 部分能力依赖 Codex 内部版本化接口，升级后可能需要更新适配。定时任务管理需要兼容的 Codex 桌面保持运行；SSH 目标的桌面任务管理尚未完成真实验证。
-- 备份只覆盖 RCM 自有数据，不包含完整 Codex 会话、Codex 登录凭据或 SSH 私钥。草稿与缓存仍可能包含敏感内容。
+- 备份只覆盖 Codex Portal 自有数据，不包含完整 Codex 会话、Codex 登录凭据或 SSH 私钥。草稿与缓存仍可能包含敏感内容。
 
 ## 开发
 

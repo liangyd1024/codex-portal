@@ -28,8 +28,8 @@ Codex 路径非默认时，为 `init` 添加 `--binary /absolute/path/to/codex`�
 | `test/` | 纳入版本管理的 Node.js、Python 测试及隔离夹具 |
 | `acceptance/` | 本地验收资料，由 Git 忽略 |
 
-浏览器通过 HTTP/JSON 和 SSE 连接 RCM。RCM 通过适配层访问目标机器。
-Codex 负责会话执行和任务调度。RCM 配置及缓存不替代原生业务数据。
+浏览器通过 HTTP/JSON 和 SSE 连接 Codex Portal。Codex Portal 通过适配层访问目标机器。
+Codex 负责会话执行和任务调度。Codex Portal 配置及缓存不替代原生业务数据。
 
 ## 启动预览
 
@@ -72,7 +72,7 @@ npm run start:preview -- --mobile
 
 ### 会话引用
 
-普通网页会话通过 RCM 只读 MCP 适配读取引用。
+普通网页会话通过 Codex Portal 只读 MCP 适配读取引用。
 底层使用原生 `thread/read` 和 `thread/items/list`。
 被引用会话不恢复、不订阅，也不接管。
 

@@ -45,7 +45,7 @@ sh scripts/bootstrap-macos.sh
 
 入口：“工作区详情 → 设置 → 目标机器连接”。
 点击“添加机器”新增 SSH 连接。点击“管理连接”编辑当前机器，也可切换其他已配置连接。
-支持检测、改名、设置默认和移除。SSH 私钥路径指运行 RCM 网页服务的机器上的路径。
+支持检测、改名、设置默认和移除。SSH 私钥路径指运行 Codex Portal 网页服务的机器上的路径。
 
 - 检测只核对身份和可执行路径，不代表全部原生接口可用。
 - 更换地址、用户或 HOME 时，新建连接。不要复用旧 ID。
@@ -64,14 +64,14 @@ sh scripts/bootstrap-macos.sh
 
 ### 准备
 
-- 在 Mac 安装并启动 RCM。
+- 在 Mac 安装并启动 Codex Portal。
 - 在 Mac 和访问设备上安装 Tailscale。
 - 将两端加入同一 Tailscale 网络，并确认连接正常。
 - 使用期间，让 Mac 保持开机、联网且服务运行。
 
 ### 开启访问
 
-1. 在 Mac 打开 [RCM](http://127.0.0.1:4317)。
+1. 在 Mac 打开 [Codex Portal](http://127.0.0.1:4317)。
 2. 进入“工作区详情 → 手机访问”。
 3. 展开“Tailscale · 跨网络访问”。
 4. 点击“开启 Tailscale 访问”。
@@ -79,7 +79,7 @@ sh scripts/bootstrap-macos.sh
 6. 在远程设备打开该地址，或用手机扫描二维码。
 7. 按页面提示输入配对码。
 
-RCM 配置 Tailscale HTTPS Serve，并检查转发结果。转发成功后才显示地址。远程设备无需安装局域网证书。
+Codex Portal 配置 Tailscale HTTPS Serve，并检查转发结果。转发成功后才显示地址。远程设备无需安装局域网证书。
 
 ### 连接失败
 
@@ -87,7 +87,7 @@ RCM 配置 Tailscale HTTPS Serve，并检查转发结果。转发成功后才显
 | --- | --- |
 | 提示未安装或未登录 Tailscale | 在 Mac 打开 Tailscale，完成登录后重试 |
 | 提示 HTTPS 转发未生效 | 按错误提示检查 Tailscale 的 HTTPS 设置，再重试 |
-| 提示已有 Serve 配置冲突或公网 Funnel | 先核对现有服务用途。RCM 不会覆盖冲突配置 |
+| 提示已有 Serve 配置冲突或公网 Funnel | 先核对现有服务用途。Codex Portal 不会覆盖冲突配置 |
 | 地址无法打开 | 确认两端 Tailscale 已连接，再确认 Mac 上的本机网页可访问 |
 | 页面要求配对 | 在 Mac 的“手机访问”面板获取配对码，按页面提示输入 |
 
@@ -120,11 +120,11 @@ RCM 配置 Tailscale HTTPS Serve，并检查转发结果。转发成功后才显
 “工作区详情”显示目标登录身份。ChatGPT 账号可显示邮箱及剩余额度。
 API Key 模式不显示账号额度或 Key 片段。
 身份每分钟刷新一次。断开时隐藏；读取失败后自动重试。
-RCM 不保存账号凭据。
+Codex Portal 不保存账号凭据。
 
 ### 手动重新加载登录
 
-桌面 Codex 与 RCM 专用引擎是不同进程。桌面切换账号后，引擎可能仍保留旧登录。
+桌面 Codex 与 Codex Portal 专用引擎是不同进程。桌面切换账号后，引擎可能仍保留旧登录。
 刷新网页只重读身份，不重启引擎。
 
 1. 在目标机器的 Codex 中完成登录。
@@ -134,7 +134,7 @@ RCM 不保存账号凭据。
 
 检查覆盖会话、目标、后台命令、队列和待处理请求。
 运行中或状态不明时会阻止操作。
-通过后只重启 RCM 专用引擎，不重启桌面，也不重发消息。
+通过后只重启 Codex Portal 专用引擎，不重启桌面，也不重发消息。
 失败或结果未知时，先检查连接诊断，不连续重试。
 
 ### 自动恢复登录
@@ -180,7 +180,7 @@ iPhone / iPad（iOS 16.4+）：
 ## 定时任务
 
 “工作区详情 → 定时任务”可搜索、筛选并查看原生任务和运行记录。
-面板打开时每 15 秒刷新。RCM 不保存任务副本，也不执行调度。
+面板打开时每 15 秒刷新。Codex Portal 不保存任务副本，也不执行调度。
 
 1. 在目标机器的 Codex 桌面新建并打开专用管理会话。
 2. 在网页点击“新建任务”，选择并绑定该会话。
@@ -203,7 +203,7 @@ SSH 目标还需兼容桌面；其任务管理尚未完成真实验证。
 
 ## 安装指定版本与回退
 
-部署仅重启 RCM 网页，不停止 Codex 桌面、目标引擎或任务。
+部署仅重启 Codex Portal 网页，不停止 Codex 桌面、目标引擎或任务。
 连接会短暂断开并自动恢复。`git pull` 只更新源码，不更新运行服务。
 
 确认待部署提交包含已上线改动，并保持工作目录干净，然后执行：
@@ -256,7 +256,7 @@ npm run deploy -- --ref <commit>
 仅 README、AGENTS 或 `docs/` Markdown 变化时，只同步源码，不重启网页。
 
 更新在后台执行。刷新页面不会重复启动更新。
-日志位于 RCM 状态目录的 `logs/web-update.log`。
+日志位于 Codex Portal 状态目录的 `logs/web-update.log`。
 重启后自动恢复连接并保存草稿，再刷新页面。
 中文输入组词或草稿保存失败时，暂不刷新。
 
@@ -398,9 +398,9 @@ python3 scripts/data-backup.py backup --browser /absolute/path/browser-export.js
 备份包含：
 
 - `output-journal.sqlite` 的一致性快照，不直接复制运行中的 WAL/SHM。
-- RCM 标题、订阅、交还、通知、连接、归档同步及任务管理会话绑定状态。
+- Codex Portal 标题、订阅、交还、通知、连接、归档同步及任务管理会话绑定状态。
 - 连接配置、手机配置、配对、本项目证书及证书私钥。
-- RCM 日志和显式提供的浏览器导出文件。
+- Codex Portal 日志和显式提供的浏览器导出文件。
 
 不包含 Codex 原生数据、登录凭据、SSH 私钥、其他项目凭据、Cookie 或临时文件。
 引用工具和授权缓存也不在备份范围。备份不是完整聊天历史。
@@ -417,7 +417,7 @@ python3 scripts/data-backup.py backup --browser /absolute/path/browser-export.js
 ## 浏览器数据
 
 入口：“设置 → 浏览器数据备份”。
-导出包含当前 origin 的 RCM 设置、当前标签页草稿和详情缓存，不读取 Cookie。
+导出包含当前 origin 的 Codex Portal 设置、当前标签页草稿和详情缓存，不读取 Cookie。
 其他浏览器、标签页和旧缓存库需分别处理。
 
 导入时先选择身份匹配的连接，再预览覆盖范围。
