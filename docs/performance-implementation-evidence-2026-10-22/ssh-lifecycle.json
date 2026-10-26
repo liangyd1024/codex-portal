@@ -1,8 +1,0 @@
-{
-  "identity": true,
-  "separate": true,
-  "privateDirectory": true,
-  "otherAlive": true,
-  "newSocket": true,
-  "reconnected": true
-}
