@@ -25,7 +25,8 @@ Codex 路径非默认时，为 `init` 添加 `--binary /absolute/path/to/codex`�
 | `public/` | 公共样式、兼容入口和浏览器基础算法 |
 | `shared/` | 前后端共用的纯数据逻辑 |
 | `scripts/` | 构建、启动、数据读取、安装和维护工具 |
-| `test/` | Node.js、Python 测试及隔离夹具 |
+| `test/` | 纳入版本管理的 Node.js、Python 测试及隔离夹具 |
+| `acceptance/` | 本地验收资料，由 Git 忽略 |
 
 浏览器通过 HTTP/JSON 和 SSE 连接 RCM。RCM 通过适配层访问目标机器。
 Codex 负责会话执行和任务调度。RCM 配置及缓存不替代原生业务数据。
@@ -109,7 +110,27 @@ node --experimental-strip-types --test test/goal-submit.test.mjs
 ```
 
 将文件名换成相关测试。单项测试不能替代类型检查或完整回归。
-测试使用独立临时目录。目录路径会输出，清理由使用者处理。
+测试继续使用独立临时目录。目录路径会输出，清理由使用者处理。
+
+### 验收资料
+
+`docs/` 只放可持续维护的使用和开发说明。验收资料统一放在根目录 `acceptance/`：
+
+| 子目录 | 内容 |
+| --- | --- |
+| `reports/` | 验收结论与未验证项 |
+| `screenshots/` | 桌面和手机截图 |
+| `data/` | 请求记录、性能采样和检查结果 |
+| `logs/` | 验收命令输出 |
+| `scripts/` | 一次性验证脚本 |
+
+按需创建子目录。整个目录由 Git 忽略，不使用 `git add -f` 提交。
+可复用的回归测试移入 `test/`，测试夹具移入 `test/fixtures/`，并提交 Git。
+构建输出仍在 `.framework-build/`。测试结果、覆盖率和本地日志目录也由 Git 忽略。
+现有测试脚本的系统临时目录保持不变，不为归档资料修改测试运行逻辑。
+含真实账号、凭据或部署信息的资料仍放在仓库外。
+
+`.gitignore` 不会停止跟踪已有文件。迁移已有验收资料时，保留本地文件，并提交原跟踪路径的移除。
 
 需要比较旧 HTTP 实现与新构建时，执行：
 
@@ -153,5 +174,5 @@ node scripts/verify-framework-baseline.mjs <基准提交> /absolute/path/to/buil
 - 保留命令、前置条件、失败处理和能力限制。
 - 删除重复说明、操作流水和过期状态。
 - URL 使用显式 Markdown 链接。不要把裸地址直接夹在加粗标记中。
-- `docs/` 保存当前说明。历史过程通过 Git 查询，不持续追加验收日志。
+- `docs/` 保存当前说明。验收过程放在本地 `acceptance/`，不提交。
 - 许可证、第三方声明和必要归属信息保持原文。

@@ -1,9 +1,14 @@
+# 系统与依赖（同时忽略 node_modules 符号链接）
 .DS_Store
-node_modules/
+node_modules
 __pycache__/
 *.pyc
+
+# 本地环境与敏感数据
 .env
 .env.*
+!.env.example
+!.env.*.example
 config.local.json
 *.sqlite*
 *.age
@@ -13,4 +18,16 @@ backups/
 restore-staging/
 browser-export*.json
 
+# 构建产物
 .framework-build/
+*.tsbuildinfo
+
+# 本地验收资料：报告、截图、采样、日志和一次性验证脚本
+/acceptance/
+
+# 测试输出与本地运行日志；不忽略 test/ 源码和夹具
+/test-results/
+/coverage/
+/.nyc_output/
+/logs/
+npm-debug.log*
