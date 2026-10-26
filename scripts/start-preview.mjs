@@ -27,7 +27,7 @@ const liveConfig=loadConfig();
 const configFile=path.join(stateRoot,'connections.json');await writeFile(configFile,JSON.stringify(liveConfig,null,2),{mode:0o600});
 let mobileSetup;
 const mobileEnabled=process.argv.includes('--mobile');
-const app=await createFrameworkApp({config:liveConfig,stateDir:state,staticRoot,extraAssets,buildVersion:build.version,access,updater,
+const app=await createFrameworkApp({config:liveConfig,connectionConfigFile:configFile,stateDir:state,staticRoot,extraAssets,buildVersion:build.version,access,updater,
  setupMobile:mobileEnabled?mode=>mobileSetup(mode):null});
 const listen=(server,port,host)=>new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,()=>{server.off('error',reject);resolve();});});
 await listen(app.server,4327,'127.0.0.1');

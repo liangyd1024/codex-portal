@@ -858,7 +858,7 @@ function wireEvents() {
     const width = entries[0].contentRect.width;
     if (width !== composerWidth) { composerWidth = width; requestAnimationFrame(resizeInput); }
   }).observe($('message-input'));
-  installConnectionManager({api,enabled:typeof connectionConfig.configRevision==='string',flush:()=>{flushDrafts();if(state.drafts.warned)throw Error('草稿保存失败，请保留当前页面。');}});
+  installConnectionManager({api,targetId:targetHost,enabled:typeof connectionConfig.configRevision==='string',flush:()=>{flushDrafts();if(state.drafts.warned)throw Error('草稿保存失败，请保留当前页面。');}});
   installConnectionActions({connect:()=>connected()||connectionPending()?disconnectRemote():connectRemote(),reload:reloadLogin,release:releaseService});
   installWelcomeAction(() => connected() ? openNewDialog() : connectRemote());
   setWorkspaceControlAction('new-thread',openNewDialog); setWorkspaceControlAction('takeover',takeoverThread);

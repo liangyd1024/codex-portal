@@ -590,3 +590,13 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .file-preview-markdown{max-height:65dvh;overflow:auto;overflow-wrap:anywhere;padding:0 12px}
 .file-viewer-content [hidden]{display:none}
 @media(max-width:600px){.file-viewer .secondary-button{min-height:44px;min-width:44px}.file-preview-markdown{padding:0 4px}}
+
+.connection-management-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.connection-management-actions>button{min-height:44px;min-width:0}
+.connection-maintenance{margin-top:12px}
+.connection-maintenance>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;font-size:13px}
+.connection-maintenance>summary:before{content:"›";transition:transform .15s}
+.connection-maintenance[open]>summary:before{transform:rotate(90deg)}
+.connection-maintenance>summary::-webkit-details-marker{display:none}
+.connection-maintenance>summary:focus-visible{outline:2px solid var(--control-border-color);outline-offset:2px}
+.connection-maintenance>.subtle{margin:0 0 8px}

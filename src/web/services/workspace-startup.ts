@@ -44,7 +44,7 @@ export function createWorkspaceStartup(d:Dependencies){
   const selectInspectorView=installNavigation(showInspectorView);
   const groups=[...inspector.querySelectorAll<HTMLDetailsElement>(':scope > details')];
   const category=(group:HTMLDetailsElement)=>group.id==='mobile-access'?'mobile':'settings';
-  groups.forEach(group=>{group.open=group.id!=='diagnostics'&&group.id!=='browser-backup'&&!group.classList.contains('connection-section');});
+  groups.forEach(group=>{group.open=group.id!=='diagnostics'&&group.id!=='browser-backup';});
   function showInspectorView(view:InspectorView){
     if(view==='settings'&&!$('app-shell').classList.contains('inspector-hidden'))loadSettings();
     if(view==='mobile')loadMobile();
