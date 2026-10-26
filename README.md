@@ -1,6 +1,6 @@
 # Remote Codex Manager
 
-通过浏览器访问本机与 SSH 目标上的 Codex，在桌面和手机之间继续工作。
+通过 Tailscale，在手机或另一台电脑的浏览器中远程使用 Mac 上的 Codex。查看任务进度，继续对话。
 
 RCM 提供网页界面，通过 Codex 原生接口读取和操作会话。任务执行与调度由 Codex 负责。
 
@@ -38,7 +38,7 @@ npm test
 npm run deploy -- --ref HEAD
 ```
 
-打开 **http://127.0.0.1:4317**。
+打开本机网页：[http://127.0.0.1:4317](http://127.0.0.1:4317)。
 
 如果 Codex 不在默认位置，初始化时指定路径：
 
@@ -50,11 +50,24 @@ npm run init -- --binary /absolute/path/to/codex
 
 部署要求工作目录干净，且当前提交已通过测试。`npm install` 不会启动或部署服务。
 
+## 通过 Tailscale 远程访问
+
+先在 Mac 完成上面的安装步骤。
+
+1. 在 Mac 和访问设备上安装 Tailscale，加入同一 Tailscale 网络。
+2. 在 Mac 打开 RCM，进入“工作区详情 → 手机访问”。
+3. 展开“Tailscale · 跨网络访问”，点击“开启 Tailscale 访问”。
+4. 在已连接 Tailscale 的设备上打开生成的 HTTPS 地址，按页面提示完成配对。
+
+现在可以选择项目、发送消息或查看任务进度。Mac 需保持开机、联网且服务运行。此方式无需安装局域网证书。
+
+配置与故障排查见[远程访问指南](docs/usage.md#通过-tailscale-远程访问)。
+
 ## 使用
 
 在网页中选择目标机器和项目，发送首条消息后创建会话。SSH 连接在“工作区详情 → 设置 → 目标机器连接”管理。
 
-手机与 Mac 连接同一网络后，在“工作区详情 → 手机访问”开启访问，按页面提示安装并信任证书，再扫码配对。
+如果只在同一 Wi-Fi 下使用，可选择“开启同一 Wi-Fi 访问”。按页面提示安装并信任证书，再扫码配对。此方式不需要 Tailscale。
 
 配置默认保存在 `~/Library/Application Support/RemoteCodexManager/connections.json`；可用绝对路径 `RCM_CONFIG` 指定其他位置。连接配置、运行状态与源码分开保存。
 
@@ -70,7 +83,7 @@ npm run init -- --binary /absolute/path/to/codex
 
 ## 开发
 
-前端使用 React、TypeScript、Zustand 和 Vite；服务端使用 Fastify。原生 RPC、IPC 与 SSH 适配位于 `lib/`。
+前端使用 React、TypeScript、Zustand 和 Vite。服务端使用 Fastify。原生 RPC、IPC 与 SSH 适配位于 `lib/`。
 
 ```sh
 npm run typecheck
@@ -78,7 +91,9 @@ npm run build
 npm run start:preview
 ```
 
-预览地址为 **http://127.0.0.1:4327**，启动器自动创建独立状态目录。修改源码后需重新构建。预览仍连接配置中的真实目标，交互测试应使用专用测试会话。
+预览地址：[http://127.0.0.1:4327](http://127.0.0.1:4327)。
+
+启动器自动创建独立状态目录。修改源码后需重新构建。预览连接真实目标，请使用专用测试会话。
 
 ```sh
 npm test
@@ -86,15 +101,16 @@ npm test
 
 测试入口包含构建、Node.js 和 Python 回归。UI 变更还需检查桌面、移动设备模式、键盘与输入行为；浏览器工具不限。
 
-提交问题或改进建议时，请附复现步骤、版本与脱敏日志。项目约定见 [AGENTS.md](AGENTS.md)。
+提交问题时，请附版本、复现步骤和脱敏日志。开发流程见[开发指南](docs/development.md)，项目约定见 [AGENTS.md](AGENTS.md)。
 
 ## 文档
 
-- [配置、连接与手机访问](docs/usage.md#配置与运行)
+- [Tailscale 远程访问](docs/usage.md#通过-tailscale-远程访问)
+- [配置与连接](docs/usage.md#配置与运行)
 - [安装指定版本与回退](docs/usage.md#安装指定版本与回退)
 - [连接和维护](docs/usage.md#连接和维护)
 - [加密备份](docs/usage.md#加密备份)与[恢复](docs/usage.md#恢复)
-- [验证与技术记录](docs/README.md)
+- [开发指南](docs/development.md)
 
 ## 许可证
 
