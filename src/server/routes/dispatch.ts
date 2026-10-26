@@ -50,7 +50,7 @@ export function createDispatcher(context:RouteServices){
  const mediaRoutes=new WeakMap<Manager,ReturnType<typeof createMediaRoutes>>();
  const mediaRoutesFor=(manager:Manager)=>{let routes=mediaRoutes.get(manager);if(!routes){routes=createMediaRoutes(manager);mediaRoutes.set(manager,routes);}return routes;};
  const threadRoutes=new WeakMap<Manager,ReturnType<typeof createThreadRoutes>>();
- const threadRoutesFor=(manager:Manager)=>{let routes=threadRoutes.get(manager);if(!routes){routes=createThreadRoutes(manager);threadRoutes.set(manager,routes);}return routes;};
+ const threadRoutesFor=(manager:Manager)=>{let routes=threadRoutes.get(manager);if(!routes){routes=createThreadRoutes(manager,(id,turns)=>{const host=[...context.managers].find(([,value])=>value===manager)?.[0];if(host)context.push?.observe(host,id,turns);});threadRoutes.set(manager,routes);}return routes;};
  const connectionRoutes=new WeakMap<Manager,ReturnType<typeof createConnectionRoutes>>();
  const routesFor=(manager:Manager)=>{let routes=connectionRoutes.get(manager);if(!routes){routes=createConnectionRoutes(manager);connectionRoutes.set(manager,routes);}return routes;};
  const {config,managers,automations,desktopSessions,csrf,access}=context;

@@ -1043,3 +1043,18 @@ test('isolated preview never arms automatic task interruption from copied connec
   if(app.close)await app.close();
  }
 });
+
+test('ordinary thread detail registers background observation after push is enabled',async()=>{
+ const {mkdtemp}=await import('node:fs/promises'),{tmpdir}=await import('node:os');
+ const {createPushKeys}=await import('../lib/web-push.mjs');
+ const stateDir=await mkdtemp(path.join(tmpdir(),'portal-push-route-'));
+ const f=await create(createFrameworkApp,{stateDir});
+ try{
+  const response=await fetch(f.base+'/api/push/subscribe',{method:'POST',headers:{'content-type':'application/json','x-csrf-token':f.token},body:JSON.stringify({subscription:{endpoint:'https://web.push.apple.com/fixture',keys:{p256dh:createPushKeys().publicKey,auth:Buffer.alloc(16,1).toString('base64url')}}})});
+  assert.equal(response.status,200);
+  assert.equal((await fetch(f.base+'/api/threads/fixture-thread')).status,200);
+  const saved=JSON.parse(await readFile(path.join(stateDir,'web-push.json'),'utf8'));
+  assert.equal(saved.watches['a:fixture-thread'].threadId,'fixture-thread');
+  assert.deepEqual(saved.jobs,{});
+ }finally{await f.close();}
+});

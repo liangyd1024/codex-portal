@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync,mkdirSync,writeFileSync,renameSync} from 'node:fs';
 import path from 'node:path';
 import {createPushKeys,validateSubscription,sendPush} from '../../../lib/web-push.mjs';
+import {asyncQuestions} from '../../../shared/questions.js';
 import {taskNotice} from '../../../shared/connection-state.js';
 import type {MobileAccess} from './mobile-access';
 type Subscription={endpoint:string;keys:{auth:string;p256dh:string}};
@@ -20,6 +21,9 @@ export class PushNotifications {
   const s=this.data(),watches=s.watches ||= {},key=host+':'+threadId;
   const terminal=turns.filter(t=>['completed','failed','interrupted'].includes(t.status));
   const previous=watches[key];
+  // Pending questions are actionable now, including on the first observed read.
+  // Use the native question/reply parser, never infer requests from message text.
+  for(const request of asyncQuestions(turns,threadId))this.receive(host,{method:'manager/request',params:request});
   if(previous)for(const turn of terminal)if(!previous.seen.includes(turn.id+':'+turn.status))this.receive(host,{method:'turn/completed',params:{threadId,turn}});
   watches[key]={host,threadId,seen:[...new Set([...(previous?.seen||[]),...terminal.map(t=>t.id+':'+t.status)])].slice(-200),expires:Date.now()+86400000,next:Date.now()+(turns.some(t=>['inProgress','in_progress','running'].includes(t.status))?15000:60000)};
   const keys=Object.keys(watches);if(keys.length>20)delete watches[keys[0]];
