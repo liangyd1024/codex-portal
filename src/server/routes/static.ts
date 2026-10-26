@@ -7,14 +7,15 @@ import {AppError} from '../../../lib/manager.mjs';
 
 import {publicAssets as assets,generatedAsset} from '../../../lib/public-assets.mjs';
 
-const loginAssets=['/','/index.html','/login.js','/styles.css','/mobile-ui.css'];
+const iconAssets=['/icon-cp-64.png','/icon-cp-180.png','/icon-cp-192.png','/icon-cp-512.png'];
+const loginAssets=['/','/index.html','/login.js','/styles.css','/mobile-ui.css','/manifest.webmanifest',...iconAssets];
 
 export function createStaticRoutes({staticRoot,extraAssets,staticResponse}:Pick<RouteServices,'staticRoot'|'extraAssets'|'staticResponse'>) {
  return {
   isLoginAsset:(pathname:string)=>loginAssets.includes(pathname),
   async login(pathname:string,res:Response){
-   const file=pathname==='/login.js'?'login.js':pathname==='/styles.css'?'styles.css':pathname==='/mobile-ui.css'?'mobile-ui.css':'login.html';
-   res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html; charset=utf-8','Cache-Control':'no-store'});
+   const file=iconAssets.includes(pathname)||pathname==='/manifest.webmanifest'?pathname.slice(1):pathname==='/login.js'?'login.js':pathname==='/styles.css'?'styles.css':pathname==='/mobile-ui.css'?'mobile-ui.css':'login.html';
+   res.writeHead(200,{'Content-Type':file.endsWith('.png')?'image/png':file.endsWith('.webmanifest')?'application/manifest+json':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html; charset=utf-8','Cache-Control':'no-store'});
    res.end(await readFile(path.join(staticRoot,file)));
   },
   async read(req:IncomingMessage,res:Response,pathname:string){

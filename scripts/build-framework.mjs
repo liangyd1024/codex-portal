@@ -26,7 +26,7 @@ export async function buildFramework(){
   rollupOptions:{external:id=>id.includes('/lib/')&&id.endsWith('.mjs'),output:{entryFileNames:'application.mjs',paths:id=>id.includes('/lib/')?'../runtime/lib/'+id.split('/lib/').at(-1):id}}}});
  await mkdir(path.join(output,'runtime'),{recursive:true});
  for(const name of ['lib','scripts','shared','public','server.mjs','package.json'])await cp(path.join(root,name),path.join(output,'runtime',name),{recursive:true,filter:source=>!source.split(path.sep).some(part=>part==='__pycache__'||part==='.DS_Store'||part.endsWith('.pyc'))});
- for(const name of await readdir(path.join(root,'public'))){if(name.endsWith('.css')||name.endsWith('.js')||['mermaid-frame.html','index.html','bootstrap.js','login.html','login.js','notification-worker.js','manifest.webmanifest'].includes(name))await cp(path.join(root,'public',name),path.join(output,'public',name));}
+ for(const name of await readdir(path.join(root,'public'))){if(name.endsWith('.css')||name.endsWith('.js')||['mermaid-frame.html','index.html','bootstrap.js','login.html','login.js','notification-worker.js','manifest.webmanifest','icon-cp-64.png','icon-cp-180.png','icon-cp-192.png','icon-cp-512.png'].includes(name))await cp(path.join(root,'public',name),path.join(output,'public',name));}
  // Pairing is reachable before authentication. Keep it a self-contained classic
  // script: unauthenticated clients cannot fetch workspace chunks.
  await build({configFile:false,root,publicDir:false,define:{'process.env.NODE_ENV':JSON.stringify('production')},plugins:[react()],build:{target:['es2022','safari16'],outDir:path.join(output,'public'),emptyOutDir:false,minify:true,

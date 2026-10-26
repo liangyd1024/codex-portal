@@ -53,6 +53,9 @@ test('macOS LAN setup creates trusted TLS and usable QR without Tailscale or Pyt
   try{
    assert.equal((await request('/')).status,200);assert.equal((await request('/api/status')).status,401);
    const styles=await request('/mobile-ui.css');assert.equal(styles.status,200);assert.match(styles.headers['content-type'],/text\/css/);
+   const manifest=await request('/manifest.webmanifest');assert.equal(manifest.status,200);assert.match(manifest.headers['content-type'],/application\/manifest\+json/);
+   assert.equal(JSON.parse(manifest.text).icons.length,2);
+   for(const size of [64,180,192,512]){const icon=await request('/icon-cp-'+size+'.png');assert.equal(icon.status,200);assert.equal(icon.headers['content-type'],'image/png');}
    assert.equal((await request('/input-state.js')).status,401);
    const {code}=await post('/api/access/code').then(r=>r.json());const login=await request('/api/access/login',{method:'POST',body:{code}});assert.equal(login.status,200);
    const cookie=login.headers['set-cookie'][0].split(';')[0];assert.equal((await request('/api/access/status',{cookie})).status,200);
