@@ -327,7 +327,7 @@ function renderControls() {
   const {buttonView,unavailable}=composerSendView({active,ready,own,posting,handing,stopping,
     loginRecovery:!!state.status?.loginRecovery,desktopMode:state.desktopMode,interrupting:state.busy.has('interrupt'),archived:state.selectedArchived,
     touch:touchInput(),backgroundState:background.state,followUp,attachmentPending:attachments?.pending(),hasAttachments:attachments?.has(),hasAnnotations:annotations?.has(),
-    text:input.value,hasModel:Boolean(modelFor(state.model)),hasEffort:effortsFor(state.model).some(e=>e.value===state.effort),featureReady});
+    text:input.value,loadingModels:state.loadingModels,hasModel:Boolean(modelFor(state.model)),hasEffort:effortsFor(state.model).some(e=>e.value===state.effort),featureReady});
   publishComposerBusy(posting);
   publishWorkspaceControl('takeover',{ hidden:own || !state.selectedId || state.selectedArchived }); publishWorkspaceControl('takeover',{ disabled:!ready || !featureReady('takeover') || switching || handing || !state.selectedId });
   publishWorkspaceControl('takeover',{text:switching ? '正在接管…' : handoff ? '在网页继续' : '接管会话'});

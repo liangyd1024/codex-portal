@@ -11,11 +11,11 @@ const {createModelSelection}=await import('data:text/javascript;base64,'+Buffer.
 const catalog=[{id:'catalog-alias',model:'test-model',displayName:'Test Model',supportedReasoningEfforts:['medium'],defaultReasoningEffort:'medium'}];
 function fixture({active=false,models=catalog,model='test-model',effort='medium',ready=true,featureReady=()=>true}={}) {
   const nodes=new Map();const $=id=>{if(!nodes.has(id))nodes.set(id,{value:'补充要求',hidden:false,setAttribute(){},querySelector(){return this;}});return nodes.get(id);};
-  const state={models,model,effort,status:{},busy:new Set()};
+  const state={models,model,effort,loadingModels:false,status:{},busy:new Set()};
   const c=({state,$,input:$('message-input'),active,ready,own:true,posting:false,handing:false,stopping:false,background:{state:'idle'},switching:false,handoff:null,followUp:'queue',attachments:null,annotations:null,touchInput:()=>false,featureReady,effortNames:{},newChatOpen:false,currentThread:()=>null,renderControls(){},renderSelectOptions:(select,options,value)=>{select.options=options;select.value=value;},clear:n=>{n.children=[];},el:()=>({}),});
   for(const id of ['model-select','effort-select'])$(id).append=function(child){this.children.push(child);};
   Object.assign(c,createModelSelection({state,effortNames:{},newChatOpen:()=>c.newChatOpen,currentThread:c.currentThread,element:$,renderSelectOptions:c.renderSelectOptions,renderControls:c.renderControls}));
-  const render=()=>{const {buttonView,unavailable}=composerSendView({active:c.active,ready,own:true,posting:false,handing:false,stopping:false,loginRecovery:false,desktopMode:false,interrupting:false,archived:false,touch:false,backgroundState:'idle',followUp:'queue',text:$('message-input').value,hasModel:Boolean(c.modelFor(state.model)),hasEffort:c.effortsFor(state.model).some(e=>e.value===state.effort),featureReady});c.buttonView=buttonView;Object.assign($('composer-availability'),{textContent:unavailable,hidden:!unavailable});};
+  const render=()=>{const {buttonView,unavailable}=composerSendView({active:c.active,ready,own:true,posting:false,handing:false,stopping:false,loginRecovery:false,desktopMode:false,interrupting:false,archived:false,touch:false,backgroundState:'idle',followUp:'queue',text:$('message-input').value,loadingModels:state.loadingModels,hasModel:Boolean(c.modelFor(state.model)),hasEffort:c.effortsFor(state.model).some(e=>e.value===state.effort),featureReady});c.buttonView=buttonView;Object.assign($('composer-availability'),{textContent:unavailable,hidden:!unavailable});};
   return {state,$,render,view:()=>c.buttonView,setActive:value=>{c.active=value;},renderModels:()=>c.renderModels()};
 }
 test('running follow-ups need no next-turn model catalog or effort; idle turns still do',()=>{
@@ -38,4 +38,20 @@ test('run completion and catalog recovery update the notice without losing the d
   const f=fixture({active:true,models:[]});f.render();assert.equal(f.$('composer-availability').hidden,true);
   f.setActive(false);f.render();assert.equal(f.$('composer-availability').hidden,false);assert.equal(f.view().send.disabled,true);
   f.state.models=catalog;f.renderModels();f.render();assert.equal(f.$('composer-availability').hidden,true);assert.equal(f.view().send.disabled,false);assert.equal(f.$('message-input').value,'补充要求');
+});
+
+test('loading a catalog suppresses premature model and effort prompts without enabling invalid sends',()=>{
+  for(const options of [{models:[]},{effort:'missing'}]){
+    const f=fixture(options);f.state.loadingModels=true;f.render();
+    assert.equal(f.$('composer-availability').hidden,true);assert.equal(f.view().send.disabled,true);
+    f.state.loadingModels=false;f.render();assert.equal(f.$('composer-availability').hidden,false);
+    f.state.models=catalog;f.renderModels();f.render();assert.equal(f.$('composer-availability').hidden,true);
+    assert.equal(f.view().send.disabled,false);assert.equal(f.$('message-input').value,'补充要求');
+  }
+});
+test('catalog refresh preserves valid sends and connection errors remain visible',()=>{
+  const valid=fixture();valid.state.loadingModels=true;valid.render();assert.equal(valid.view().send.disabled,false);assert.equal(valid.$('composer-availability').hidden,true);
+  for(const options of [{ready:false},{featureReady:()=>false}]){
+    const f=fixture({...options,models:[]});f.state.loadingModels=true;f.render();assert.equal(f.$('composer-availability').hidden,false);assert.equal(f.view().send.disabled,true);
+  }
 });
