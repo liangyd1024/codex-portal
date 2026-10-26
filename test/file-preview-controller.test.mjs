@@ -33,3 +33,17 @@ test('text response keeps complete preview bytes and truncation notice; failures
  fail=true;await f.controller.load();assert.equal(f.view.retryHidden,false);
  assert.equal(f.view.status,'offline');assert.equal(f.content.children.length,0);
 });
+
+test('permanent file errors hide retry while connection and unsaved-message errors can retry',async t=>{
+ let status=422,retryable=false;
+ const f=fixture(t,async()=>new Response(JSON.stringify({error:{message:'文件夹不能预览',retryable}}),{status}));
+ await f.controller.load();assert.equal(f.view.retryHidden,true);assert.equal(f.view.downloadHidden,true);
+ status=404;retryable=true;await f.controller.load();assert.equal(f.view.retryHidden,false);
+ status=503;await f.controller.load();assert.equal(f.view.retryHidden,false);
+ f.controller.close();const count=f.updates.length;await f.controller.load();assert.equal(f.updates.length,count);
+});
+
+test('a failed text read keeps download available and honors nonretryable errors',async t=>{
+ const f=fixture(t,async mode=>mode==='meta'?json({name:'sample.txt',size:20,kind:'text'}):new Response(JSON.stringify({error:{message:'文件已移动',retryable:false}}),{status:404}));
+ await f.controller.load();assert.equal(f.view.downloadHidden,false);assert.equal(f.view.retryHidden,true);assert.equal(f.view.status,'文件已移动');
+});

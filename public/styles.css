@@ -451,7 +451,7 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .file-viewer::backdrop{background:rgba(0,0,0,.55)}
 .file-viewer-header{display:flex;align-items:center;justify-content:space-between;gap:16px}.file-viewer-header strong{min-width:0;overflow-wrap:anywhere}.file-viewer-header button{flex-shrink:0}
 .file-viewer-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.file-viewer-actions a{display:inline-block;text-decoration:none}.file-viewer-actions a[hidden]{display:none}
-.file-viewer-status{font-size:13px;color:var(--muted,#666);overflow-wrap:anywhere}.file-viewer-content{min-width:0}.file-preview-media{display:block;max-width:100%;max-height:65dvh;margin:auto}.file-preview-media:is(video,audio){width:100%}.file-preview-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:65dvh;overflow:auto;padding:12px;background:var(--soft,#f7f7f7);font-size:13px}.file-preview-pdf{width:100%;height:65dvh;border:0}.file-viewer :focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:3px}
+.file-viewer-status{font-size:13px;color:var(--muted,#666);overflow-wrap:anywhere}.file-viewer-content{min-width:0}.file-preview-media{display:block;max-width:100%;max-height:65dvh;margin:auto}.file-preview-media:is(video,audio){width:100%}.file-preview-text{white-space:pre;overflow-wrap:normal;max-height:65dvh;overflow:auto;padding:12px;background:var(--soft,#f7f7f7);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;line-height:1.625;tab-size:4}.file-preview-pdf{width:100%;height:65dvh;border:0}.file-viewer :focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:3px}
 @media(max-width:600px){.file-viewer{width:calc(100vw - 16px);max-height:calc(100dvh - 16px);padding:14px}.file-viewer-header{gap:8px}.file-viewer-header strong{font-size:15px}}
 
 /* User questions share the composer surface, without a voice control. */
@@ -580,3 +580,13 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 @media(pointer:coarse),(max-width:700px){.mermaid-action,.mermaid-block .code-copy{min-width:44px;min-height:44px}.mermaid-dialog{width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}.mermaid-viewport{padding:12px}}
 
 .mermaid-block .code-copy{color:var(--control-foreground)}
+
+/* Referenced files use the same controls and reading baseline as messages. */
+.file-viewer-path{margin:10px 0 0;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);overflow-wrap:anywhere;user-select:text}
+.file-viewer-actions{align-items:center}
+.file-copy-status{font-size:13px;color:var(--muted)}
+.file-preview-text-tools{display:flex;gap:8px;margin-bottom:8px}
+.file-preview-line{color:inherit;background:var(--line);box-shadow:inset 0 -1px var(--control-border-color);min-width:.6em;min-height:1em;display:inline-block}
+.file-preview-markdown{max-height:65dvh;overflow:auto;overflow-wrap:anywhere;padding:0 12px}
+.file-viewer-content [hidden]{display:none}
+@media(max-width:600px){.file-viewer .secondary-button{min-height:44px;min-width:44px}.file-preview-markdown{padding:0 4px}}

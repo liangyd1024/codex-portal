@@ -87,3 +87,32 @@ class MessageFilesTest(unittest.TestCase):
         before,_=self.read(mode='meta');self.file.write_bytes(b'')
         after,body=self.read();self.assertNotEqual(before['etag'],after['etag']);self.assertEqual(after['length'],0);self.assertEqual(body,b'')
         header,_=self.read(range='bytes=0-');self.assertEqual(header['status'],416)
+
+    def test_directory_is_not_retryable_and_never_streamed(self):
+        directory=self.home/'project';directory.mkdir();self.add('directory',directory)
+        for mode in ['meta','text','content','download']:
+            with self.assertRaises(reader.FileError) as caught:
+                self.read(itemId='directory',reference=str(directory),mode=mode)
+            self.assertEqual(caught.exception.status,422)
+            self.assertFalse(caught.exception.retryable)
+            self.assertIn('文件夹',str(caught.exception))
+
+    def test_reference_positions_and_literal_names(self):
+        path=self.home/'source.py';path.write_text('one\ntwo\n')
+        for i,suffix in enumerate([':2',':2:3','#L2','#L2C3']):
+            reference=str(path)+suffix;self.add('position'+str(i),reference)
+            meta,_=self.read(itemId='position'+str(i),reference=reference,mode='meta')
+            self.assertEqual(meta['line'],2);self.assertEqual(meta['path'],str(path))
+            _,body=self.read(itemId='position'+str(i),reference=reference,mode='text')
+            self.assertEqual(json.loads(body)['line'],2)
+        for i,suffix in enumerate([':2','#L2']):
+            literal=self.home/('literal'+suffix);literal.write_text('literal')
+            self.add('literal'+str(i),literal)
+            meta,_=self.read(itemId='literal'+str(i),reference=str(literal),mode='meta')
+            self.assertEqual(meta['name'],literal.name);self.assertNotIn('line',meta)
+
+    def test_utf8_limit_does_not_add_replacement_for_split_character(self):
+        path=self.home/'unicode.txt';path.write_text('中'*400000);self.add('unicode',path)
+        _,body=self.read(itemId='unicode',reference=str(path),mode='text')
+        result=json.loads(body);self.assertTrue(result['truncated'])
+        self.assertNotIn('\ufffd',result['text']);self.assertEqual(result['text'],'中'*(reader.TEXT_LIMIT//3))

@@ -1,5 +1,6 @@
 """Scoped, read-only file streaming. One JSON header followed by binary bytes."""
 import base64
+import codecs
 import hashlib
 import json
 import os
@@ -20,9 +21,10 @@ TYPES = {
 TEXT_EXTENSIONS = {'.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.tsv', '.log', '.py', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.java', '.sql', '.css', '.html', '.htm', '.svg', '.xml', '.yaml', '.yml', '.toml', '.sh', '.go', '.rs', '.c', '.h', '.cpp'}
 
 class FileError(Exception):
-    def __init__(self, message, status=400):
+    def __init__(self, message, status=400, retryable=False):
         super().__init__(message)
         self.status = status
+        self.retryable = retryable
 
 
 def references(text):
@@ -51,22 +53,24 @@ def scoped_path(payload, home):
         raise FileError('文件引用无效。')
     db_path = home / '.codex/thread_history_1.sqlite'
     if not db_path.is_file():
-        raise FileError('目标机器缺少可核验的历史消息记录，暂时无法读取该文件。', 503)
+        raise FileError('目标机器缺少可核验的历史消息记录，暂时无法读取该文件。', 503, True)
     db = sqlite3.connect(db_path.as_uri() + '?mode=ro', uri=True, timeout=2)
     try:
         db.execute('PRAGMA query_only=ON')
         row = db.execute('SELECT item_json FROM thread_items WHERE thread_id=? AND item_id=?', (payload.get('threadId'), payload.get('itemId'))).fetchone()
         if row is None:
-            raise FileError('未找到文件所属消息，请等待消息保存后重试。', 404)
+            raise FileError('未找到文件所属消息，请等待消息保存后重试。', 404, True)
         value = json.loads(row[0])
         if value.get('type') not in ('agentMessage', 'plan') or reference not in references(value.get('text') or ''):
             raise FileError('该消息未引用此文件。', 403)
     finally:
         db.close()
-    filename = re.sub(r':\d+(?::\d+)?$', '', reference)
+    location = re.search(r'(?::(?P<line>\d+)(?::(?P<column>\d+))?|#L(?P<anchor>\d+)(?:C(?P<anchor_column>\d+))?)$', reference)
+    filename = reference[:location.start()] if location else reference
     # Exact names take precedence over code line suffixes.
-    if pathlib.Path(reference).is_file():
+    if pathlib.Path(reference).exists():
         filename = reference
+        location = None
     path = pathlib.Path(filename).resolve(strict=True)
     # Message membership is necessary, but not sufficient: secrets stay private.
     parts = path.parts
@@ -87,7 +91,13 @@ def scoped_path(payload, home):
             db.close()
     if not any(path == root or root in path.parents for root in roots):
         raise FileError('文件不在目标用户或会话项目的可读取范围内。', 403)
-    return path
+    position = {}
+    if location:
+        line = int(location['line'] or location['anchor'])
+        column = int(location['column'] or location['anchor_column'] or '1')
+        if 0 < line <= 9007199254740991 and 0 < column <= 9007199254740991:
+            position = {'line': line, 'column': column}
+    return path, position
 
 
 def open_regular(path):
@@ -101,9 +111,12 @@ def open_regular(path):
         result = os.open(path.name, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW, dir_fd=fd)
     finally:
         os.close(fd)
-    if not stat.S_ISREG(os.fstat(result).st_mode):
+    mode = os.fstat(result).st_mode
+    if not stat.S_ISREG(mode):
         os.close(result)
-        raise FileError('只支持读取普通文件。', 403)
+        if stat.S_ISDIR(mode):
+            raise FileError('这是文件夹，暂不支持在网页中浏览。可复制路径，在目标机器上打开。', 422)
+        raise FileError('此路径不是普通文件，无法预览或下载。', 422)
     return os.fdopen(result, 'rb')
 
 
@@ -131,13 +144,13 @@ def send_header(value):
 
 
 def serve(payload, home):
-    path = scoped_path(payload, home)
+    path, position = scoped_path(payload, home)
     with open_regular(path) as source:
         info = os.fstat(source.fileno())
         size = info.st_size
         mime, kind = TYPES.get(path.suffix.lower(), ('text/plain; charset=utf-8', 'text') if path.suffix.lower() in TEXT_EXTENSIONS else ('application/octet-stream', 'download'))
         etag = '"' + hashlib.sha256(f'{info.st_dev}:{info.st_ino}:{size}:{info.st_mtime_ns}'.encode()).hexdigest() + '"'
-        metadata = {'name': path.name, 'size': size, 'mime': mime, 'kind': kind, 'etag': etag}
+        metadata = {'name': path.name, 'path': str(path), 'size': size, 'mime': mime, 'kind': kind, 'etag': etag, **position}
         mode = payload.get('mode', 'content')
         if mode == 'meta':
             send_header({'status': 200, **metadata, 'length': 0})
@@ -146,8 +159,9 @@ def serve(payload, home):
             if kind != 'text':
                 raise FileError('此文件不支持文本预览。')
             content = source.read(TEXT_LIMIT)
-            text = content.decode('utf-8', errors='replace')
-            data = json.dumps({'text': text, 'truncated': size > TEXT_LIMIT}, ensure_ascii=False).encode('utf-8')
+            truncated = size > TEXT_LIMIT
+            text = codecs.getincrementaldecoder('utf-8')(errors='replace').decode(content, final=not truncated)
+            data = json.dumps({'text': text, 'truncated': truncated, **position}, ensure_ascii=False).encode('utf-8')
             send_header({'status': 200, **metadata, 'mime': 'application/json; charset=utf-8', 'length': len(data)})
             sys.stdout.buffer.write(data)
             return
@@ -189,5 +203,8 @@ if __name__ == '__main__':
         # Before a header this is an error response; afterwards the parent detects
         # a short/failed transfer. Never append a second JSON header to file data.
         if not globals().get('HEADER_SENT'):
-            send_header({'status': getattr(error, 'status', 404 if isinstance(error, FileNotFoundError) else 502), 'error': str(error)})
+            missing = isinstance(error, FileNotFoundError)
+            denied = isinstance(error, PermissionError)
+            message = '文件不存在或已移动。请检查消息中的路径。' if missing else '没有权限读取此文件。' if denied else str(error)
+            send_header({'status': getattr(error, 'status', 404 if missing else 403 if denied else 502), 'error': message, 'retryable': getattr(error, 'retryable', not (missing or denied))})
         sys.exit(1)

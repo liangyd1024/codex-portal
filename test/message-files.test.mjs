@@ -55,3 +55,14 @@ test('unpaired mobile clients cannot read file bytes',async()=>{
  try {const response=await fetch(base+itemFileUrl('t','i','/tmp/a','local'));assert.equal(response.status,401);assert.equal(calls,0);}
  finally {app.proxyServer.closeAllConnections();await new Promise(r=>app.proxyServer.close(r));}
 });
+
+test('file errors preserve retry guidance across HTTP, including retryable missing history',async()=>{
+ let permanent=true;
+ class Fake extends EventEmitter {disconnect(){}async openFile(){return {meta:{status:permanent?422:404,error:permanent?'这是文件夹':'消息尚未保存',retryable:!permanent},body:Readable.from([]),cancel(){}};}}
+ const app=await createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+ const url='http://127.0.0.1:'+app.server.address().port+itemFileUrl('t','i','/tmp/project','local','meta');
+ try{
+  let response=await fetch(url);assert.equal(response.status,422);assert.equal((await response.json()).error.retryable,false);assert.equal(response.headers.get('cache-control'),'no-store');
+  permanent=false;response=await fetch(url);assert.equal(response.status,404);assert.equal((await response.json()).error.retryable,true);
+ }finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));}
+});
