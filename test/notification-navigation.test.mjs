@@ -52,7 +52,7 @@ test('page acknowledges click only after target detail loads and retains it on d
  const code=source.slice(source.indexOf('async function openNotificationThread('),source.indexOf('const sendTaskNotification='));
  for(const loaded of [false,true]){
   const sent=[],state={selectedId:null,detail:null,historyError:'',busy:new Set()};
-  const context={openingNotification:null,notificationWaitingForCreate:false,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl,pendingNotificationTarget,localStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://rcm.test/?host=local'},history:{replaceState(){}},recordError:error=>{throw error;},state,targetHost:'local',connectionIds:['local'],navigator:{serviceWorker:{getRegistration:async()=>({active:{postMessage:value=>sent.push(value)}})}},selectThread:async id=>{state.selectedId=id;if(loaded)state.detail={thread:{id}};}};
+  const context={reportPageNavigation:async()=>{},openingNotification:null,notificationWaitingForCreate:false,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl,pendingNotificationTarget,localStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://rcm.test/?host=local'},history:{replaceState(){}},recordError:error=>{throw error;},state,targetHost:'local',connectionIds:['local'],navigator:{serviceWorker:{getRegistration:async()=>({active:{postMessage:value=>sent.push(value)}})}},selectThread:async id=>{state.selectedId=id;if(loaded)state.detail={thread:{id}};}};
   vm.createContext(context);vm.runInContext(ts.transpile(code),context);
   await context.openNotificationThread({host:'local',threadId:'target',clickId:'click'});
   assert.equal(sent.length,loaded?1:0);
@@ -101,7 +101,7 @@ async function pageNavigation(storage=memoryStorage()){
  const sent=[],selected=[],assigned=[],errors=[];
  const location={href:'https://rcm.test/?host=local',assign:value=>assigned.push(value)};
  const state={selectedId:null,detail:null,loadingDetail:false,historyError:'',busy:new Set()};
- const context={openingNotification:null,notificationWaitingForCreate:false,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl,pendingNotificationTarget,localStorage:storage,location,history:{replaceState:(_a,_b,url)=>location.href=url},recordError:e=>errors.push(e),toast:e=>errors.push(e),flushDrafts(){},state,targetHost:'local',connectionIds:['local','remote'],navigator:{serviceWorker:{getRegistration:async()=>({active:{postMessage:value=>sent.push(value)}})}},selectThread:async id=>{selected.push(id);state.selectedId=id;state.detail={thread:{id}};}};
+ const context={reportPageNavigation:async()=>{},openingNotification:null,notificationWaitingForCreate:false,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl,pendingNotificationTarget,localStorage:storage,location,history:{replaceState:(_a,_b,url)=>location.href=url},recordError:e=>errors.push(e),toast:e=>errors.push(e),flushDrafts(){},state,targetHost:'local',connectionIds:['local','remote'],navigator:{serviceWorker:{getRegistration:async()=>({active:{postMessage:value=>sent.push(value)}})}},selectThread:async id=>{selected.push(id);state.selectedId=id;state.detail={thread:{id}};}};
  vm.createContext(context);vm.runInContext(ts.transpile(code),context);
  return {context,state,sent,selected,assigned,errors,storage,location};
 }

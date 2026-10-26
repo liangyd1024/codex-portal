@@ -1,4 +1,5 @@
-import {readFileSync,writeFileSync,readdirSync} from 'node:fs';
+import {readFileSync,writeFileSync,readdirSync,mkdtempSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import path from 'node:path';
@@ -11,7 +12,9 @@ export async function runTests({root=path.resolve(path.dirname(fileURLToPath(imp
  let verified;
  const env={...process.env};delete env.NODE_TEST_CONTEXT;
  for(const [command,args] of [[node,[path.join(root,'scripts/build-framework.mjs')]],[node,['--test','--experimental-strip-types',...files]],['python3',['-m','unittest','discover','-s','test','-p','test_*.py']]]){
-  const result=run(command,args,{cwd:root,env,stdio:'inherit'});
+  // Server fixtures must never load or rewrite the installed Portal push state.
+  const commandEnv=command===node&&args.includes('--test')?{...env,RCM_STATE_DIR:mkdtempSync(path.join(tmpdir(),'portal-node-tests-'))}:env;
+  const result=run(command,args,{cwd:root,env:commandEnv,stdio:'inherit'});
   if(result.error)throw Error('无法启动测试命令 '+path.basename(command)+'：'+result.error.message);
   if(result.status!==0)return result.status||1;
   if(run===spawnSync&&args[0]===path.join(root,'scripts/build-framework.mjs')){

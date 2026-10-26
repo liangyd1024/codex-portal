@@ -1,3 +1,4 @@
+import {notificationTitle,notificationPreview} from '../../../shared/notification-text.js';
 export interface NoticeParams {
   threadId?: string;
   thread?: {id?: string; [key: string]: unknown};
@@ -34,7 +35,8 @@ export function createTaskNotifications<T>(deps: NotificationDependencies<T>) {
     const thread = deps.thread(threadId);
     const notice = deps.notice(method, params, {host, known: !!thread || deps.known(threadId)});
     if (!notice) return;
-    const body = (deps.alias() || host) + ' · ' + (thread ? deps.threadName(thread) : '会话 ' + threadId!.slice(0, 8));
+    const title=notificationTitle(notice.label,thread?deps.threadName(thread):undefined,threadId);
+    const body=notificationPreview(method,params)||notice.label+'。点按查看会话。';
     try {
       const delivered = await deps.lock('rcm.task-notifications', async () => {
         if (host !== deps.host() || deps.preference('rcm.taskNotifications.' + host) !== 'true') return false;
@@ -42,7 +44,7 @@ export function createTaskNotifications<T>(deps: NotificationDependencies<T>) {
           if (attempted.has(notice.key)) return false;
           attempted.add(notice.key);
           if (attempted.size > 1000) attempted.delete(attempted.values().next().value!);
-          return deps.send('Codex · ' + notice.label, body, notice.key, threadId, host);
+          return deps.send(title, body, notice.key, threadId, host);
         });
       });
       if (delivered && host === deps.host()) await deps.acknowledge(notice.key);

@@ -8,6 +8,7 @@ import {runTests} from '../scripts/run-tests.mjs';import {updateTestFailure} fro
 test('shared suite uses the current Node executable without npm and propagates failures',async()=>{
  const calls=[];const run=(command,args,options)=>{calls.push({command,args,options});return {status:0};};
  assert.equal(await runTests({run,node:'/runtime/node'}),0);assert.equal(calls[0].command,'/runtime/node');assert.ok(calls[0].args[0].endsWith('/scripts/build-framework.mjs'));assert.equal(calls[1].args[0],'--test');assert.ok(calls[1].args.some(s=>s.endsWith('/mobile-session.test.mjs')));assert.equal(calls[2].command,'python3');assert.ok(!calls.some(c=>c.command==='npm'));assert.equal(calls[0].options.env.NODE_TEST_CONTEXT,undefined);
+ assert.notEqual(calls[1].options.env.RCM_STATE_DIR,process.env.RCM_STATE_DIR);assert.match(calls[1].options.env.RCM_STATE_DIR,/portal-node-tests-/);assert.equal(calls[2].options.env.RCM_STATE_DIR,process.env.RCM_STATE_DIR);
  let count=0;assert.equal(await runTests({run:()=>{count++;return {status:7};}}),7);assert.equal(count,1);
  count=0;assert.equal(await runTests({run:()=>({status:++count===2?3:0})}),3);
  await assert.rejects(()=>runTests({run:()=>({error:Object.assign(Error('missing'),{code:'ENOENT'})})}),/无法启动测试命令/);

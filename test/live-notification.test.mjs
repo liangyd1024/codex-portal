@@ -2,7 +2,7 @@ import {authRecoveryMessage} from '../shared/account-state.js';
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';
 import {taskNotice} from '../shared/connection-state.js';import {deliverNotice} from '../public/notification-delivery.js';
 import ts from 'typescript';
-const typed=readFileSync(new URL('../src/web/services/task-notifications.ts',import.meta.url),'utf8');
+const typed=readFileSync(new URL('../src/web/services/task-notifications.ts',import.meta.url),'utf8').replaceAll("'../../../shared/notification-text.js'",JSON.stringify(new URL('../shared/notification-text.js',import.meta.url).href));
 const output=ts.transpileModule(typed,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const {createTaskNotifications}=await import('data:text/javascript;base64,'+Buffer.from(output).toString('base64'));
 const eventSource=readFileSync(new URL('../src/web/services/events.ts',import.meta.url),'utf8');

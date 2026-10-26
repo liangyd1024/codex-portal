@@ -38,7 +38,11 @@ export function createApp({connectionConfigFile,serverFactory=handler=>http.crea
    if(!desktopSessions.has(key))desktopSessions.set(key,new NativeAutomations(managers.get(host),{threadId:id}));
    return desktopSessions.get(key)!;
  };
-  const push=new PushNotifications(path.join(stateDir,'web-push.json'),access,undefined,async(host,id)=>{const manager=managers.get(host);if(!manager)throw Error('连接已移除');return manager.passive('history',{threadId:id,withOutputs:false});});
+  const push=new PushNotifications(path.join(stateDir,'web-push.json'),access,undefined,async(host,id)=>{const manager=managers.get(host);if(!manager)throw Error('连接已移除');return manager.passive('history',{threadId:id,withOutputs:false});},async(host,id,turnId)=>{
+    const manager=managers.get(host);if(!manager)throw Error('连接已移除');
+    const [metadata,history]=await Promise.allSettled([manager.readThreadMetadata(id,true,false),turnId!==undefined?manager.passive('history',{threadId:id,withOutputs:false}):Promise.resolve(null)]);
+    return {name:metadata.status==='fulfilled'?metadata.value.thread?.name:undefined,turn:history.status==='fulfilled'?history.value?.data?.find((turn:any)=>turnId===null?['completed','failed','interrupted'].includes(turn.status):turn.id===turnId):undefined};
+  });
   const broadcasts=new Map<string,(event:unknown)=>void>();
   const staticResponse=createStaticResponse();
   const csrf=randomBytes(32).toString('hex'); const clients=new Set<Response>();

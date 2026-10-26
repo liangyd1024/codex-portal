@@ -29,7 +29,7 @@ export function createPushSubscription({api,threadId}:Dependencies){
   });
   await new Promise<void>((resolve,reject)=>{
     const channel=new MessageChannel();const timer=setTimeout(()=>{channel.port1.close();reject(Error('通知接收器版本未更新，请重新打开应用后重试'));},5000);
-    channel.port1.onmessage=event=>{clearTimeout(timer);channel.port1.close();event.data?.version===2?resolve():reject(Error('通知接收器版本不匹配'));};
+    channel.port1.onmessage=event=>{clearTimeout(timer);channel.port1.close();event.data?.version===3?resolve():reject(Error('通知接收器版本不匹配'));};
     worker.postMessage({type:'rcm-push-version'},[channel.port2]);
   });
   const subscription=await registration.pushManager.getSubscription();if(!subscription)throw Error('请先开启后台通知');

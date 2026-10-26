@@ -732,10 +732,20 @@ const setTaskNotifications=notificationPreferences.setEnabled;
 function notificationDiagnostic(message:string) {
   appendNotificationDiagnostic(dateTime(new Date()) + ' · ' + message);
 }
+async function reportPageNavigation(stage:string,target?:{threadId?:string;clickId?:string}){
+  if(!state.csrf)return;
+  const selectedId=state.selectedId,visibility=document.visibilityState;
+  try{
+    const registration=await navigator.serviceWorker?.getRegistration();
+    const subscription=await registration?.pushManager?.getSubscription();
+    await api('/api/push/trace',{method:'POST',body:{stage,threadId:target?.threadId,clickId:target?.clickId,selectedId,endpoint:subscription?.endpoint,version:'page-3',visibility}});
+  }catch{}
+}
 async function openNotificationThread(target:{host?:string;threadId:string;clickId?:string}) {
   const {threadId,clickId}=target,host=target.host||targetHost;
   target={...target,host};
   const key=JSON.stringify(target);if(openingNotification===key)return;
+  void reportPageNavigation('page-target',target);
   saveNotificationTarget(localStorage,target);
   history.replaceState(null,'',notificationTargetUrl(location.href,target));
   if(state.busy.has('create')){notificationWaitingForCreate=true;return;}
@@ -748,11 +758,13 @@ async function openNotificationThread(target:{host?:string;threadId:string;click
   try{
     await selectThread(threadId,{notification:true});
     await finishNotificationNavigation(target);
-  }catch(error){recordError(error,'notification-navigation');}
+    if(state.selectedId===threadId&&(state.historyError||!state.detail))void reportPageNavigation('page-failed',target);
+  }catch(error){void reportPageNavigation('page-failed',target);recordError(error,'notification-navigation');}
   finally{if(openingNotification===key)openingNotification=null;}
 }
 async function finishNotificationNavigation(target=pendingNotificationTarget(localStorage,location.href)){
   if(!target||target.host!==targetHost||state.selectedId!==target.threadId||state.detail?.thread?.id!==target.threadId||state.loadingDetail||state.detail?.recovering||state.historyError||state.busy.has('create'))return;
+  void reportPageNavigation('page-opened',target);
   history.replaceState(null,'',consumeNotificationTarget(localStorage,target,location.href));
   await acknowledgeNotificationClick(target.clickId);
 }
@@ -965,7 +977,7 @@ const init=createWorkspaceStartup({state,sidebar,document,location,sessionStorag
   installBackup:imported=>installBrowserBackup(connectionConfig,flushDrafts,imported),suspendDraftWrites:()=>{draftWritesSuspended=true;},installNavigation:installInspectorNavigation,
   renderControls,renderThreads,renderStatus,renderThread,connected,connectionPending,loadThreads,wireEvents,setupEvents,dispatchReady:()=>window.dispatchEvent(new Event('rcm-ready')),
   setNavigationReady:()=>{notificationNavigationReady=true;},pendingNotification:()=>pendingNotification,clearPendingNotification:()=>{pendingNotification=null;},
-  openNotificationThread,restoreDetail,readCsrf:()=>api('/api/csrf'),loadStatus,refreshWorkspace,connectRemote,recordError,messageOf,publishConnectionBanner,finishStarting:()=>{workspaceStarting=false;requestNotificationTarget();}});
+  openNotificationThread,restoreDetail,readCsrf:()=>api('/api/csrf'),loadStatus,refreshWorkspace,connectRemote,recordError,messageOf,publishConnectionBanner,finishStarting:()=>{workspaceStarting=false;void reportPageNavigation('page-ready');requestNotificationTarget();}});
 
 if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
 await init();

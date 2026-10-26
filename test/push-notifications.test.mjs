@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import ts from 'typescript';
 import {createPushKeys} from '../lib/web-push.mjs';
-const source=readFileSync(new URL('../src/server/services/push-notifications.ts',import.meta.url),'utf8').replaceAll("'../../../lib/web-push.mjs'",JSON.stringify(new URL('../lib/web-push.mjs',import.meta.url).href)).replaceAll("'../../../shared/questions.js'",JSON.stringify(new URL('../shared/questions.js',import.meta.url).href)).replaceAll("'../../../shared/connection-state.js'",JSON.stringify(new URL('../shared/connection-state.js',import.meta.url).href));
+const source=readFileSync(new URL('../src/server/services/push-notifications.ts',import.meta.url),'utf8').replaceAll("'../../../shared/notification-text.js'",JSON.stringify(new URL('../shared/notification-text.js',import.meta.url).href)).replaceAll("'../../../lib/web-push.mjs'",JSON.stringify(new URL('../lib/web-push.mjs',import.meta.url).href)).replaceAll("'../../../shared/questions.js'",JSON.stringify(new URL('../shared/questions.js',import.meta.url).href)).replaceAll("'../../../shared/connection-state.js'",JSON.stringify(new URL('../shared/connection-state.js',import.meta.url).href));
 const {PushNotifications}=await import('data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText).toString('base64'));
 const subscription=()=>({endpoint:'https://web.push.apple.com/device',keys:{p256dh:createPushKeys().publicKey,auth:Buffer.alloc(16,1).toString('base64url')}});
 const complete=(id='turn')=>({method:'turn/completed',params:{threadId:'thread',turn:{id,status:'completed'}}});
@@ -19,7 +19,7 @@ const questionTurn=(items)=>({id:'active',status:'inProgress',items});
 const questionItem={id:'question-item',type:'agentMessage',questions:[{title:'请选择关闭方向',options:['向右','向左']}]};
 test('native async question observed before or after backgrounding notifies once without a completion',async()=>{
  const sent=[],f=fixture(async(_subscription,payload)=>{sent.push(payload);return 201;});
- try{f.push.observe('host','thread',[questionTurn([])]);f.push.observe('host','thread',[questionTurn([questionItem])]);await f.push.drain();assert.equal(sent.length,1);assert.equal(sent[0].title,'Codex · 需要你回答');f.push.observe('host','thread',[questionTurn([questionItem])]);await f.push.drain();assert.equal(sent.length,1);}finally{f.push.close();}
+ try{f.push.observe('host','thread',[questionTurn([])]);f.push.observe('host','thread',[questionTurn([questionItem])]);await f.push.drain();assert.equal(sent.length,1);assert.equal(sent[0].title,'会话 thread · 需要你回答');assert.equal(sent[0].body,'请选择关闭方向');f.push.observe('host','thread',[questionTurn([questionItem])]);await f.push.drain();assert.equal(sent.length,1);}finally{f.push.close();}
 });
 test('first read catches a pending question but accepted replies and finished turns never notify',async()=>{
  let sent=0;const f=fixture(async()=>{sent++;return 201;});
@@ -27,3 +27,56 @@ test('first read catches a pending question but accepted replies and finished tu
 });
 
 test('test delivery carries the requested session and rejects malformed session identifiers',async()=>{const sent=[],f=fixture(async(_s,payload)=>{sent.push(payload);return 201;});try{const endpoint=Object.values(f.state().devices)[0].subscription.endpoint;const threadId='00000000-0000-4000-8000-000000000001';await f.push.test('host','owner',endpoint,'fixture-test-12345',threadId);assert.equal(sent[0].data.threadId,threadId);await assert.rejects(f.push.test('host','owner',endpoint,'fixture-test-12345','../bad'),/会话标识/);}finally{f.push.close();}});
+
+test('navigation traces are bounded, owner-isolated and omit endpoints, keys and message content',()=>{
+ const f=fixture();try{
+  for(let i=0;i<170;i++)f.push.trace('host','owner',{stage:'page-target',threadId:'t'+i,endpoint:subscription().endpoint,body:'private text',keys:{auth:'secret'},version:'page-3'});
+  f.push.trace('host','another',{stage:'page-ready',threadId:'other'});
+  const rows=f.push.traces('owner');assert.equal(f.push.traces().length,160);assert.equal(rows.length,159);assert.equal(rows.at(-1).threadId,'t169');
+  assert.equal(JSON.stringify(rows).includes('private text'),false);assert.equal(JSON.stringify(rows).includes('push.apple.com'),false);assert.ok(rows[0].device);assert.equal(Object.hasOwn(rows[0],'owner'),false);
+  assert.throws(()=>f.push.trace('host','owner',{stage:'arbitrary'}),/阶段无效/);
+ }finally{f.push.close();}
+});
+
+test('renewed subscriptions for one pairing replace endpoints and preserve successful claims',async()=>{
+ const sent=[],f=fixture(async(sub,p)=>{sent.push({endpoint:sub.endpoint,p});return 201;});
+ try{
+  f.push.receive('host',complete('first'));await f.push.drain();
+  for(let i=0;i<4;i++)f.push.subscribe('host','owner','https://portal.example.com',{...subscription(),endpoint:'https://web.push.apple.com/new-'+i});
+  assert.equal(f.push.devices('host').length,1);
+  f.push.receive('host',complete('first'));f.push.receive('host',complete('second'));await f.push.drain();
+  assert.equal(sent.length,2);assert.match(sent[1].endpoint,/new-3$/);
+ }finally{f.push.close();}
+});
+test('endpoint rotation transfers a pending job once; independent identities and local browsers retain delivery',async()=>{
+ let calls=0;const f=fixture(async()=>{calls++;return 201;});
+ try{
+  f.push.receive('host',complete());f.push.subscribe('host','owner','https://portal.example.com',{...subscription(),endpoint:'https://web.push.apple.com/rotated'});await f.push.drain();assert.equal(calls,1);
+  f.access.sessions.second=null;
+  for(const [owner,origin,suffix] of [['second','https://portal.example.com','second'],['owner','https://other.example.com','origin'],['local','http://localhost','local1'],['local','http://localhost','local2']])f.push.subscribe('host',owner,origin,{...subscription(),endpoint:'https://web.push.apple.com/'+suffix});
+  f.push.receive('host',complete('next'));await f.push.drain();assert.equal(calls,6);
+ }finally{f.push.close();}
+});
+test('legacy duplicate subscriptions migrate to one receiver without replaying previous claims',async()=>{
+ const {writeFileSync}=await import('node:fs'),{createHash}=await import('node:crypto');
+ const f=fixture();f.push.close();const state=f.state(),old=Object.values(state.devices)[0],key=JSON.stringify(['host','thread','turn','already']);state.devices={};state.seen={};
+ for(let i=0;i<4;i++){const endpoint='https://web.push.apple.com/legacy-'+i,id=createHash('sha256').update('host\0'+endpoint).digest('hex');state.devices[id]={...old,updatedAt:undefined,subscription:{...old.subscription,endpoint}};state.seen[id+':'+key]=Date.now();}
+ writeFileSync(f.file,JSON.stringify(state));const sent=[],p=new PushNotifications(f.file,f.access,async(s)=>{sent.push(s.endpoint);return 201;});
+ try{assert.equal(p.devices('host').length,1);p.receive('host',complete('already'));p.receive('host',complete('new'));await p.drain();assert.equal(sent.length,1);assert.match(sent[0],/legacy-3$/);}finally{p.close();}
+});
+test('content uses native final answer and thread name, shares one lookup across receivers and excludes replay',async()=>{
+ const f=fixture();f.push.close();let reads=0;const sent=[];
+ const p=new PushNotifications(f.file,f.access,async(s,payload)=>{sent.push(payload);return 201;},undefined,async(host,id,turnId)=>{reads++;assert.equal(turnId,'result');return {name:'修复手机通知',turn:{id:turnId,status:'completed',items:[{type:'agentMessage',phase:'commentary',text:'正在工作'},{type:'agentMessage',phase:'final_answer',text:'已修复 **重复推送**，保留一份订阅。'}]}};});
+ try{p.subscribe('host','local','http://localhost',{...subscription(),endpoint:'https://web.push.apple.com/local'});p.receive('host',{...complete('replayed'),replayed:true});p.receive('host',complete('result'));await p.drain();assert.equal(reads,1);assert.equal(sent.length,2);assert.equal(sent[0].title,'修复手机通知 · 本次执行已完成');assert.equal(sent[0].body,'已修复 重复推送，保留一份订阅。');assert.equal(sent[0].data.threadId,'thread');}finally{p.close();}
+});
+test('context failure and unrelated native history cannot block or mislabel a notification',async()=>{
+ for(const detail of [new Error('offline'),{name:'测试会话',turn:{id:'different',items:[{type:'agentMessage',text:'不可使用的回复'}]}}]){
+  const f=fixture();f.push.close();const sent=[],p=new PushNotifications(f.file,f.access,async(s,p)=>{sent.push(p);return 201;},undefined,async()=>{if(detail instanceof Error)throw detail;return detail;});
+  try{p.receive('host',complete());await p.drain();assert.equal(sent.length,1);assert.doesNotMatch(sent[0].body,/不可使用/);}finally{p.close();}
+ }
+});
+test('an explicitly requested device test previews real native content and keeps its destination',async()=>{
+ const f=fixture();f.push.close();const sent=[],id='00000000-0000-4000-8000-000000000001';
+ const p=new PushNotifications(f.file,f.access,async(s,payload)=>{sent.push(payload);return 201;},undefined,async(host,threadId,turnId)=>{assert.equal(threadId,id);assert.equal(turnId,null);return {name:'通知验证会话',turn:{status:'completed',items:[{type:'agentMessage',phase:'final_answer',text:'这是原生会话里的回复。'}]}};});
+ try{await p.testDevice('host',p.devices('host')[0].id,'test-device-preview',id);assert.equal(sent.length,1);assert.equal(sent[0].title,'通知验证会话 · 测试通知');assert.equal(sent[0].body,'这是原生会话里的回复。');assert.equal(sent[0].data.threadId,id);await assert.rejects(p.testDevice('other',p.devices('host')[0].id),/设备不存在/);}finally{p.close();}
+});
