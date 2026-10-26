@@ -924,6 +924,8 @@ function wireEvents() {
     refresh:refreshSelected,resume:resumeWorkspace,
     onError:(error:unknown)=>{if((error as {code?:string})?.code==='READ_SUSPENDED')return;const message='自动同步暂未成功，将自动重试：'+messageOf(error);if(state.historyError!==message){state.historyError=message;recordError(error,'sync');renderThread();}},
   });
+  // Placeholder changes can wrap without changing the textarea width.
+  new MutationObserver(resizeInput).observe($('message-input'), {attributes:true,attributeFilter:['placeholder']});
   let composerWidth = 0;
   new ResizeObserver(entries => {
     const width = entries[0].contentRect.width;

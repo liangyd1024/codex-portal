@@ -33,3 +33,10 @@ test('draft writes follow current identity and suspension; form receives the ori
 test('resize retains node and value, skips hidden inputs, and clamps height with overflow',()=>{
  const f=fixture(),node=f.input;f.input.clientWidth=0;f.controller.resize();assert.equal(f.reads(),0);f.input.clientWidth=300;f.input.scrollHeight=20;f.controller.resize();assert.deepEqual(f.input.style,{height:'34px',overflowY:'hidden'});f.input.scrollHeight=240;f.controller.resize();assert.equal(f.input.style.height,'34px');f.input.value+='\nmore';f.controller.resize();assert.deepEqual(f.input.style,{height:'160px',overflowY:'auto'});f.input.scrollHeight=70;f.set({font:'17px system-ui'});f.controller.resize();assert.deepEqual(f.input.style,{height:'70px',overflowY:'hidden'});assert.equal(f.input,node);assert.equal(f.input.value,'draft\nmore');
 });
+
+test('empty input remeasures when placeholder wraps or becomes short again',()=>{
+ const f=fixture();f.input.value='';f.input.placeholder='发送消息…';f.input.scrollHeight=48;f.controller.resize();
+ f.input.placeholder='发送消息，输入 / 选择技能，@ 引用会话或插件…';f.input.scrollHeight=72;f.controller.resize();
+ assert.equal(f.input.style.height,'72px');assert.equal(f.input.value,'');
+ f.input.placeholder='发送消息…';f.input.scrollHeight=48;f.controller.resize();assert.equal(f.input.style.height,'48px');
+});

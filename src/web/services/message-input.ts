@@ -18,7 +18,7 @@ export function createMessageInput(d: Dependencies) {
   function resize() {
     const input = d.input();
     if (!input.clientWidth) return;
-    const key = JSON.stringify([input.value, input.clientWidth, d.style(input).font, d.style(input).lineHeight]);
+    const key = JSON.stringify([input.value, input.placeholder, input.clientWidth, d.style(input).font, d.style(input).lineHeight]);
     if (sizeKey === key) return;
     sizeKey = key;
     input.style.height = '0px';
