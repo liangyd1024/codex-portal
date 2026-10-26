@@ -165,3 +165,30 @@ test('manual navigation cancels an offline target so reconnect cannot hijack the
  assert.equal(pendingNotificationTarget(page.storage,page.location.href),null);
  assert.equal(page.sent[0].clickId,'cancelled');
 });
+
+test('Apple mutable declarative dispatch retains the native Notification target with null event data',async()=>{
+ const payload=notificationPayload({title:'测试会话 · 本次执行已完成',body:'已经完成。',data:{host:'local',threadId:'other-thread'}},'https://rcm.test');
+ const handlers={},shown=[],messages=[],pending=[],storage=clickStorage();
+ // Notification properties are WebIDL getters, not enumerable JSON members.
+ const notification=Object.create(Object.fromEntries(Object.entries(payload.notification).map(([key,value])=>[key,value])));
+ const client={url:'https://rcm.test/?host=local',focus:async()=>client,postMessage:m=>messages.push(m)};
+ vm.runInNewContext(worker,{URL,Response,crypto,caches:storage,self:{location:{origin:'https://rcm.test'},addEventListener:(n,fn)=>handlers[n]=fn,registration:{showNotification:async(title,options)=>shown.push({title,options})},clients:{matchAll:async()=>[client]}}});
+ // The actual parser defaults mutable to false: in that case it never invokes push.
+ if(payload.mutable===true)handlers.push({data:null,notification,waitUntil:p=>pending.push(p)});
+ await Promise.all(pending);assert.equal(shown.length,1,'Apple must run our receiver, not only display an immutable fallback');
+ assert.equal(shown[0].title,payload.title);assert.equal(shown[0].options.body,payload.body);assert.equal(shown[0].options.data.threadId,'other-thread');assert.equal(Object.hasOwn(shown[0].options,'navigate'),false);
+ let done;handlers.notificationclick({notification:{...shown[0].options,close(){}},waitUntil:p=>done=p});await done;
+ assert.equal(messages.at(-1).threadId,'other-thread');assert.ok(messages.at(-1).clickId);
+});
+
+test('declarative test receipts use notification data and replacement failure remains eligible for system fallback',async()=>{
+ for(const fails of [false,true]){
+  const handlers={},shown=[],receipts=[],pending=[];
+  const payload=notificationPayload({title:'会话 · 测试通知',body:'真实回复',data:{host:'local',threadId:'target',testId:'declarative-test'}},'https://rcm.test');
+  vm.runInNewContext(worker,{self:{addEventListener:(n,fn)=>handlers[n]=fn,registration:{showNotification:async(title,options)=>{shown.push(options);if(fails)throw Error('display rejected');}},clients:{matchAll:async()=>[{postMessage:m=>receipts.push(m)}]}}});
+  handlers.push({data:null,notification:payload.notification,waitUntil:p=>pending.push(p)});
+  const results=await Promise.allSettled(pending);assert.equal(results.some(r=>r.status==='rejected'),fails);
+  assert.equal(shown[0].data.threadId,'target');assert.equal(receipts[0].testId,'declarative-test');assert.equal(!!receipts[0].error,fails);
+  assert.equal(notificationLink(payload.notification.navigate).threadId,'target');
+ }
+});

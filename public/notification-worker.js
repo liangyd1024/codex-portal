@@ -10,7 +10,7 @@ async function reportNavigation(stage,data={},windows){
   try{
     traceContext ||= Promise.all([fetch('/api/csrf',{cache:'no-store',signal:AbortSignal.timeout(4000)}).then(r=>r.json()),fetch('/api/connections',{cache:'no-store',signal:AbortSignal.timeout(4000)}).then(r=>r.json())]).catch(error=>{traceContext=null;throw error;});
     const [csrf,config]=await traceContext,subscription=await self.registration.pushManager.getSubscription();
-    const result=await fetch('/api/push/trace?host='+encodeURIComponent(data.host||config.defaultConnection),{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf.token,'X-RCM-Config-Revision':config.configRevision},body:JSON.stringify({stage,threadId:data.threadId,clickId:data.clickId,testId:data.testId,endpoint:subscription?.endpoint,version:'worker-3',windows}),signal:AbortSignal.timeout(4000)});
+    const result=await fetch('/api/push/trace?host='+encodeURIComponent(data.host||config.defaultConnection),{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf.token,'X-RCM-Config-Revision':config.configRevision},body:JSON.stringify({stage,threadId:data.threadId,clickId:data.clickId,testId:data.testId,endpoint:subscription?.endpoint,version:'worker-4',windows}),signal:AbortSignal.timeout(4000)});
     if(!result.ok)traceContext=null;
   }catch{}
 }
@@ -27,11 +27,13 @@ self.addEventListener('message',event=>{
     try{const cache=await clickCache(),saved=await cache.match(clickKey);
     if(saved&&(await saved.json()).clickId===event.data.clickId)await cache.delete(clickKey);}catch{}
   }));
-  if(event.data?.type==='rcm-push-version')event.ports?.[0]?.postMessage({version:3});
+  if(event.data?.type==='rcm-push-version')event.ports?.[0]?.postMessage({version:4});
 });
 self.addEventListener('push',event=>{
   let message;try{message=event.data?.json();}catch{}
-  const notice=message?.notification||message;
+  // Declarative mutable push supplies a Notification object and null data.
+  // Legacy browsers still deliver the original JSON bytes through event.data.
+  const notice=event.notification||message?.notification||message;
   event.waitUntil(reportNavigation('worker-push',notice?.data));
   event.waitUntil((async()=>{
     let error;

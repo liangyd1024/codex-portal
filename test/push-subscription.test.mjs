@@ -8,7 +8,7 @@ const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES
 function fixture(error){
  const listeners=new Set();let sent=0,updates=0;const bodies=[];
  class Channel{constructor(){this.port1={close(){},onmessage:null};this.port2={postMessage:data=>this.port1.onmessage?.({data})};}}
- const registration={update:async()=>{updates++;},active:{state:'activated',postMessage:(_message,ports)=>ports[0].postMessage({version:3})},pushManager:{getSubscription:async()=>({endpoint:'https://web.push.apple.com/test'})}};
+ const registration={update:async()=>{updates++;},active:{state:'activated',postMessage:(_message,ports)=>ports[0].postMessage({version:4})},pushManager:{getSubscription:async()=>({endpoint:'https://web.push.apple.com/test'})}};
  const context={prepareNotificationWorker:async()=>registration,MessageChannel:Channel,crypto:{randomUUID:()=> 'fixture-test-123456'},navigator:{serviceWorker:{addEventListener:(_type,fn)=>listeners.add(fn),removeEventListener:(_type,fn)=>listeners.delete(fn)}},setTimeout,clearTimeout,api:async(_path,options)=>{sent++;bodies.push(options.body);for(const fn of listeners)fn({data:{type:'rcm-push-receipt',testId:options.body.testId,error}});}};
  vm.runInNewContext(code+'\nglobalThis.client=createPushSubscription({api,threadId:()=>globalThis.selectedThread});',context);
  return {client:context.client,listeners,bodies,select:id=>{context.selectedThread=id;},counts:()=>({sent,updates})};
