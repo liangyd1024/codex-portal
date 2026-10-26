@@ -40,7 +40,7 @@
 .mobile-layout .mobile-takeover{max-width:880px;width:100%;margin:0 auto 8px}
 .mobile-layout #takeover{width:100%;font-size:16px}
 .mobile-layout .mobile-only{display:grid}
-.mobile-layout .sidebar{position:fixed;inset:var(--visual-top,0px) auto auto 0;width:min(340px,calc(100vw - 24px));height:var(--visual-height,100dvh);min-height:0;z-index:50;visibility:hidden;transform:translateX(-100%);padding:calc(8px + env(safe-area-inset-top)) 12px max(8px,env(safe-area-inset-bottom));overflow:hidden}
+.mobile-layout .sidebar{position:fixed;inset:var(--visual-top,0px) auto auto 0;width:min(340px,calc(100vw - 48px));height:var(--visual-height,100dvh);min-height:0;z-index:50;visibility:hidden;transform:translateX(-100%);padding:calc(8px + env(safe-area-inset-top)) 12px max(8px,env(safe-area-inset-bottom));overflow:hidden}
 .mobile-layout .app-shell.sidebar-open .sidebar{visibility:visible;transform:translateX(0)}
 .mobile-layout .app-shell.sidebar-hidden .sidebar{display:flex}
 .mobile-layout .sidebar-resizer{display:none}
@@ -78,7 +78,7 @@
 .mobile-layout .sidebar-menu{padding:8px;max-height:calc(var(--visual-height,100dvh) - 16px)}
 .mobile-layout .sidebar-menu>button{font-size:15px;padding:10px 12px;margin-bottom:8px}
 .mobile-layout .sidebar-undo{gap:8px}
-.mobile-layout .inspector{position:fixed;inset:var(--visual-top,0px) 0 auto auto;z-index:50;width:min(380px,calc(100vw - 16px));height:var(--visual-height,100dvh);padding:env(safe-area-inset-top) 0 max(12px,env(safe-area-inset-bottom));overscroll-behavior:contain;scroll-padding-top:128px}
+.mobile-layout .inspector{position:fixed;inset:var(--visual-top,0px) 0 auto auto;z-index:50;width:min(380px,calc(100vw - 48px));height:var(--visual-height,100dvh);padding:env(safe-area-inset-top) 0 max(12px,env(safe-area-inset-bottom));overscroll-behavior:contain;scroll-padding-top:128px}
 .mobile-layout .inspector-heading{height:56px;min-height:56px;padding:0 12px}
 .mobile-layout .inspector-nav{top:56px;gap:8px;padding:8px;flex-wrap:wrap}
 .mobile-layout .inspector-nav button{font-size:14px;min-width:44px;flex:1}

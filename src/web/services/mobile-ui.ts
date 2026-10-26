@@ -1,3 +1,4 @@
+import {installDrawerGestures} from './drawer-gestures.ts';
 // One breakpoint for both CSS and behavior, including phones rotated to landscape.
 export const COMPACT_QUERY = '(max-width: 700px), (pointer: coarse) and (max-width: 1050px) and (max-height: 600px)';
 export const compactLayout = () => matchMedia(COMPACT_QUERY).matches;
@@ -5,11 +6,12 @@ export const touchInput = () => matchMedia('(pointer: coarse)').matches;
 
 export interface MobileUIOptions {
   closeDrawers: () => void;
+  openSidebar: () => void;
   layoutChanged: (mobile: boolean) => void;
 }
 
 // Shell nodes are required at installation. This adapter owns layout, focus and relocation.
-export function installMobileUI({closeDrawers, layoutChanged}: MobileUIOptions) {
+export function installMobileUI({closeDrawers, openSidebar, layoutChanged}: MobileUIOptions) {
   const root = document.documentElement, shell = document.getElementById('app-shell')!;
   const byId = <K extends string>(id: K) => document.getElementById(id)! as K extends 'composer-settings' ? HTMLDetailsElement : HTMLElement;
   const main = document.querySelector<HTMLElement>('.main-panel')!, sidebar = byId('sidebar'), inspector = byId('inspector');
@@ -47,6 +49,7 @@ export function installMobileUI({closeDrawers, layoutChanged}: MobileUIOptions) 
       returnTo?.focus({preventScroll:true});
     }
   }
+  installDrawerGestures({surface:shell,mode:()=>!compactLayout() ? null : shell.classList.contains('sidebar-open') ? 'sidebar' : !shell.classList.contains('inspector-hidden') ? 'inspector' : 'main',openSidebar,closeDrawers});
   new MutationObserver(syncDrawers).observe(shell,{attributes:true,attributeFilter:['class']});
   function positionPanels() {
     if (!compactLayout()) return;
