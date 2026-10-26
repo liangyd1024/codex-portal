@@ -66,3 +66,27 @@ assert not result['features']['threadReferenceSteer']['supported']
 assert result['features']['steer']['supported']
 assert result['features']['threadReferences']['supported']
 `));
+
+test('the actual 0.155 contract retains goals and references through verified optional parameter variants',()=>check(`
+legacy=json.loads(pathlib.Path(${JSON.stringify(root+'test/fixtures/request-contract-0.155.json')}).read_text())
+old={'oneOf':[{'properties':{'method':{'enum':[name]},'params':{'properties':{field:{} for field in shape['properties']},'required':shape['required']}}} for name,shape in legacy['methods'].items()]}
+result=m['validate_request_schema'](old)
+assert result['methods']==43
+assert result['unsupportedMethods']==['thread/readState/update']
+assert result['methodReasons']['thread/readState/update']=='thread/readState/update 接口缺失'
+assert all(value['supported'] for value in result['features'].values())
+assert result['optionalParams']=={'mcpServerStatus/list':{'serverName':False},'thread/goal/set':{'origin':False},'thread/goal/clear':{'origin':False}}
+assert all(all(flags.values()) for flags in m['validate_request_schema'](schema)['optionalParams'].values())
+`));
+test('legacy exceptions do not waive missing methods, semantic fields or new required fields',()=>check(`
+import copy
+for method,field,feature in [('thread/goal/set','status','goal'),('thread/goal/clear',None,'goalClear'),('mcpServerStatus/list','threadId','threadReferences'),('mcpServerStatus/list','cursor','threadReferences'),('turn/start','additionalContext','threadReferences')]:
+ changed=copy.deepcopy(schema)
+ entry=next(e for e in changed['oneOf'] if method in e['properties']['method']['enum'])
+ if field: m['dereference'](changed,entry['properties']['params'])['properties'].pop(field)
+ else: changed['oneOf'].remove(entry)
+ result=m['validate_request_schema'](changed)
+ assert not result['features'][feature]['supported']
+ assert result['status']=='limited'
+ if field=='additionalContext': assert 'turn/start 缺少参数：additionalContext' in result['features'][feature]['reason']
+`));

@@ -5,11 +5,18 @@ import subprocess
 import tempfile
 import os
 
-PROTOCOL_POLICY = 14
+PROTOCOL_POLICY = 15
+# Only these verified legacy variants may omit fields. Required parameters,
+# permissions and reference context must never be silently stripped.
+OPTIONAL_PARAMS = {
+    'mcpServerStatus/list': {'serverName'},
+    'thread/goal/set': {'origin'},
+    'thread/goal/clear': {'origin'},
+}
 REQUEST_FIELDS = {
     'thread/fork': {'threadId','ephemeral','excludeTurns','developerInstructions','approvalPolicy','sandbox','model','config'},
     'thread/items/list': {'threadId','limit','sortDirection','cursor'},
-    'mcpServerStatus/list': {'threadId','serverName','detail'},
+    'mcpServerStatus/list': {'threadId','serverName','detail','cursor','limit'},
     'mcpServer/tool/call': {'threadId','server','tool','arguments'},
     'fs/getMetadata': {'path'},
     'fs/readDirectory': {'path'},
@@ -98,7 +105,7 @@ def validate_request_schema(schema):
             failures[method] = method + ' 接口缺失'
             continue
         params = methods[method]
-        missing = fields - set(params.get('properties', {}))
+        missing = fields - set(params.get('properties', {})) - OPTIONAL_PARAMS.get(method, set())
         new_required = set(params.get('required', [])) - fields
         if missing:
             failures[method] = method + ' 缺少参数：' + ', '.join(sorted(missing))
@@ -111,14 +118,20 @@ def validate_request_schema(schema):
     for feature, required in FEATURE_METHODS.items():
         reasons = [failures[method] for method in required if method in failures]
         features[feature] = {'supported': not reasons, 'reason': '；'.join(reasons)}
-    if 'config' not in methods.get('thread/resume', {}).get('properties', {}) or 'additionalContext' not in methods.get('turn/start', {}).get('properties', {}):
-        features['threadReferences'] = {'supported': False, 'reason': 'thread/resume 缺少会话配置参数'}
+    reference_missing = [method + ' 缺少参数：' + field for method, field in [('thread/resume', 'config'), ('turn/start', 'additionalContext')]
+                         if field not in methods.get(method, {}).get('properties', {})]
+    if reference_missing:
+        features['threadReferences'] = {'supported': False, 'reason': '；'.join(filter(None, [features['threadReferences']['reason'], *reference_missing]))}
     reference_steer = features['threadReferences']['supported'] and 'turn/steer' not in failures and 'additionalContext' in methods.get('turn/steer', {}).get('properties', {})
     features['threadReferenceSteer'] = {'supported': reference_steer, 'reason': '' if reference_steer else '需要原生引导引用上下文支持'}
     retry_fields = {'clientUserMessageId', 'turnTrigger'}
     if not retry_fields.issubset(methods.get('turn/start', {}).get('properties', {})):
         features['capacityRetry'] = {'supported': False, 'reason': 'turn/start 缺少原生重试标识参数'}
-    return {'status': 'limited' if failures else 'validated', 'methods': len(REQUEST_FIELDS)-len(failures), 'features': features, 'unsupportedMethods': list(failures), 'policy': PROTOCOL_POLICY}
+    optional_params = {method: {field: field in methods.get(method, {}).get('properties', {}) for field in sorted(fields)}
+                       for method, fields in OPTIONAL_PARAMS.items()}
+    return {'status': 'limited' if failures or any(not f['supported'] for f in features.values()) else 'validated',
+            'methods': len(REQUEST_FIELDS)-len(failures), 'features': features, 'unsupportedMethods': list(failures),
+            'methodReasons': failures, 'optionalParams': optional_params, 'policy': PROTOCOL_POLICY}
 
 
 def check_protocol(binary, version, root):

@@ -406,7 +406,9 @@
           "properties": {
             "detail": {},
             "serverName": {},
-            "threadId": {}
+            "threadId": {},
+            "cursor": {},
+            "limit": {}
           },
           "required": []
         }

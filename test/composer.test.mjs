@@ -182,3 +182,15 @@ test('goal creation read failure never falls through to a write',async()=>{
  await assert.rejects(setGoal(m,'a',{objective:'补充内容'}),/offline/);
  assert.deepEqual(calls,['thread/goal/get']);
 });
+
+test('legacy goal mutations omit only the unsupported provenance parameter',async()=>{
+ const {m,calls}=fixture();m.controlled.set('a',{status:{type:'idle'}});
+ m.service.protocolValidation.optionalParams={'thread/goal/set':{origin:false},'thread/goal/clear':{origin:false}};
+ const request=m.rpc.request;m.rpc.request=async(method,params)=>method==='thread/goal/get'?{goal:null}:request(method,params);
+ await setGoal(m,'a',{objective:'兼容目标',tokenBudget:500});
+ await setGoal(m,'a',{status:'paused'});
+ await setGoal(m,'a',{clear:true});
+ assert.deepEqual(calls,[{method:'thread/goal/set',params:{threadId:'a',objective:'兼容目标',tokenBudget:500}},{method:'thread/goal/set',params:{threadId:'a',status:'paused'}},{method:'thread/goal/clear',params:{threadId:'a'}}]);
+ m.service.protocolValidation.optionalParams['thread/goal/set'].origin=true;
+ await setGoal(m,'a',{status:'paused'});assert.equal(calls.at(-1).params.origin,'user');
+});

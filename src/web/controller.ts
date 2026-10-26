@@ -47,7 +47,7 @@ import {createTaskNotifications} from './services/task-notifications';
 import {createAutoRefresh} from './services/auto-refresh';
 import {createDetailRecovery} from './services/detail-recovery';
 import {createLayoutController} from './services/layout';
-import {connectionBanner} from './services/connection-banner';
+import {connectionBanner,protocolDiagnostics} from './services/connection-banner';
 import {publishConnectionSummary} from './components/ConnectionSummary';
 import {publishConnectionBanner} from './components/ConnectionIndicators';
 import {publishConnectionSettings,installConnectionActions} from './components/ConnectionSettings';
@@ -643,7 +643,7 @@ function renderDiagnostics() {
   if(s.recoveryFailures?.length){entries.push({title:'历史会话恢复',messages:[recoveryMessage(s.recoveryFailures),...s.recoveryFailures.map(f=>f.threadId+'：'+f.message)]});}
   if(c.stage)entries.push({title:'当前阶段',messages:[stages[c.stage!]||c.stage]});
   if(s.service?.pid)entries.push({title:'目标机器服务',messages:['PID '+s.service.pid+(s.service.running?' · 运行中':' · 未运行')]});
-  if(s.service?.protocolValidation){const v=s.service.protocolValidation;entries.push({title:'协议兼容性',messages:[`${v.version} · 已核验 ${v.methods} 项接口${v.cached?' · 使用已核验缓存':''}`,...Object.values(v.features||{}).filter(f=>!f.supported).map(f=>f.reason!)]});}
+  if(s.service?.protocolValidation){const v=s.service.protocolValidation;entries.push({title:'协议兼容性',messages:[`${v.version} · 已核验 ${v.methods} 项接口${v.cached?' · 使用已核验缓存':''}`,...protocolDiagnostics(v)]});}
   if(s.service?.installedVersion&&s.service.installedVersion!==s.service.version)entries.push({title:'引擎更新',messages:[`已安装 ${s.service.installedVersion}，当前运行 ${s.service.version}。任务结束后释放并重新连接，即可使用新引擎。`]});
   const all=[...(s.errors||[]),...state.errors].sort((a,b)=>(timestamp(b.time)?.getTime()||0)-(timestamp(a.time)?.getTime()||0)).slice(0,10);
   for(const e of all)entries.push({title:dateTime(e.time)+(e.stage?' · '+(stages[e.stage]||e.stage):''),messages:[e.message||messageOf(e)],error:true});

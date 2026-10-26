@@ -50,3 +50,30 @@ test('running reference preparation only authorizes an already connected tool',a
   assert.deepEqual(calls.map(c=>c.method),['mcpServerStatus/list']);assert.equal(m.activeTurns.get(caller),'turn-active');
  }
 });
+
+test('legacy MCP lookup pages the native inventory and verifies the exact reference server',async()=>{
+ const {r,m,calls}=fixture();const request=m.rpc.request;
+ m.service.protocolValidation={optionalParams:{'mcpServerStatus/list':{serverName:false}}};
+ m.rpc.request=async(method,p)=>{
+  if(!p.cursor){calls.push({method,p});return {data:[{name:'other',runtimeStatus:'connected'}],nextCursor:'page-2'};}
+  return request(method,p);
+ };
+ assert.equal(await r.current(caller),scope);
+ assert.deepEqual(calls.map(c=>c.p),[{threadId:caller,detail:'full',limit:100},{threadId:caller,detail:'full',limit:100,cursor:'page-2'}]);
+});
+test('modern MCP lookup keeps the native server filter and does not request extra pages',async()=>{
+ const {r,calls}=fixture();assert.equal(await r.current(caller),scope);assert.equal(calls.length,1);assert.equal(calls[0].p.serverName,'rcm_references');
+});
+test('MCP pagination fails closed on repeated cursors, invalid lists and changed connections',async()=>{
+ for(const scenario of ['cycle','invalid','connection','endless']){
+  const {r,m}=fixture();let count=0;
+  m.rpc.request=async()=>{count++;if(scenario==='connection')m.generation++;return scenario==='invalid'?{}:{data:[],nextCursor:scenario==='endless'?String(count):'same'};};
+  await assert.rejects(r.current(caller));assert.ok(count<=20);
+ }
+});
+
+test('legacy pagination shares one timeout budget instead of extending it per page',async t=>{
+ const {r,m}=fixture();let calls=0;t.mock.timers.enable({apis:['Date']});
+ m.rpc.request=async(_method,_params,options)=>{calls++;assert.equal(options.timeoutMs,15000);t.mock.timers.tick(15001);return {data:[],nextCursor:'next'};};
+ await assert.rejects(r.current(caller),/未完整读取/);assert.equal(calls,1);
+});
