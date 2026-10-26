@@ -704,7 +704,7 @@ const notificationDelivery=createNotificationDelivery({host:()=>targetHost,worke
   prepareWorker:()=>prepareNotificationWorker(),submitWorker:submitWorkerNotification,
   createNative:(title,options)=>new Notification(title,options),submitNative:submitNotification,
   diagnostic:notificationDiagnostic,publish:publishNotificationView,focus:()=>window.focus(),open:openNotificationThread});
-const pushSubscription=createPushSubscription({api});
+const pushSubscription=createPushSubscription({api,threadId:()=>newChatOpen?null:state.selectedId});
 const notificationPreferences=createNotificationPreference({
   setPushEnabled:pushSubscription.setEnabled,host:()=>targetHost,support:()=>notificationSupport(),
   permission:()=>Notification.permission,requestPermission:()=>Notification.requestPermission(),

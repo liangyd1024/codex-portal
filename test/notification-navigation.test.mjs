@@ -25,3 +25,5 @@ test('running icon follows execution entrance while idle retains original creati
   }
  }finally{globalThis.document=old;}
 });
+
+test('worker replacement preserves iOS declarative navigation with the conversation',async()=>{const handlers={},shown=[];let done;vm.runInNewContext(worker,{self:{addEventListener:(name,fn)=>handlers[name]=fn,registration:{showNotification:async(title,options)=>shown.push(options)}}});const navigate='https://rcm.test/?host=local&thread=fixture';handlers.push({data:{json:()=>({web_push:8030,notification:{title:'test',navigate,data:{host:'local',threadId:'fixture'}}})},waitUntil:p=>done=p});await done;assert.equal(shown[0].navigate,navigate);assert.equal(shown[0].data.threadId,'fixture');});

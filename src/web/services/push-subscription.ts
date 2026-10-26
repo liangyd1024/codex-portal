@@ -1,6 +1,6 @@
 import {prepareNotificationWorker} from '../../../public/notification-platform.js';
-interface Dependencies {api:<T>(path:string,options?:{method?:string;body?:unknown})=>Promise<T>}
-export function createPushSubscription({api}:Dependencies){
+interface Dependencies {threadId?:()=>string|null;api:<T>(path:string,options?:{method?:string;body?:unknown})=>Promise<T>}
+export function createPushSubscription({api,threadId}:Dependencies){
  let active=false;
  async function setEnabled(value:boolean){
   if(!('serviceWorker' in navigator)||!('PushManager' in window)){if(value)throw Error('当前浏览器不支持后台推送');return;}
@@ -15,9 +15,9 @@ export function createPushSubscription({api}:Dependencies){
  let testing:Promise<string>|undefined;
  function test(){
   if(testing)return testing;
-  testing=runTest().finally(()=>{testing=undefined;});return testing;
+  testing=runTest(threadId?.()||undefined).finally(()=>{testing=undefined;});return testing;
  }
- async function runTest(){
+ async function runTest(selectedThread?:string){
   const registration=await prepareNotificationWorker();
   await registration.update();
   const worker=registration.installing||registration.waiting||registration.active;
@@ -39,7 +39,7 @@ export function createPushSubscription({api}:Dependencies){
   navigator.serviceWorker.addEventListener('message',receive);
   let timer:ReturnType<typeof setTimeout>|undefined;
   try{
-    await api('/api/push/test',{method:'POST',body:{endpoint:subscription.endpoint,testId}});
+    await api('/api/push/test',{method:'POST',body:{endpoint:subscription.endpoint,testId,threadId:selectedThread}});
     timer=setTimeout(()=>finish('推送服务已接受，但 20 秒内未收到手机处理回执。系统兜底通知可能已显示；若仍未收到，请保留此结果继续排查。'),20000);
     return await receipt;
   }finally{clearTimeout(timer);navigator.serviceWorker.removeEventListener('message',receive);}
