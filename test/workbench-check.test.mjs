@@ -65,6 +65,7 @@ test('installer rolls back a live web service when browser loading fails despite
   homedir:()=>'/home/test',supportDir:'/support',loadConfig:()=>({connections:[{id:'local',kind:'local'}]}),
   launchdService:()=>({stop:async()=>calls.push('stop'),start:async()=>calls.push('start')}),
   deploymentLock:async()=>({release:async()=>calls.push('unlock')}),checkDeploymentEntrance:async()=>{},
+  resolveUpdateSource:()=>({sourceRoot:'/source',sourceRemote:'https://example.invalid/portal.git'}),
   mkdir:async()=>{},chmod:async()=>{},stat:async()=>({}),writeFile:async(file,data)=>{files.set(file,data);},
   readFile:async file=>file.endsWith('VERSION')?version:'old plist',
   spawnSync:(_cmd,args)=>({status:0,stdout:args.includes('--porcelain')?'':args.includes('show')?'{}':version}),

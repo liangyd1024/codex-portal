@@ -3,6 +3,7 @@ import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {resolveUpdateSource} from '../lib/update-source.mjs';
 import {prepareRelease} from '../lib/release-artifact.mjs';
 import {loadConfig,supportDir} from '../lib/config.mjs';
 import {launchdService} from '../lib/launchd.mjs';
@@ -23,6 +24,7 @@ const lock=await deploymentLock(path.join(supportDir,'deployment.lock'),process.
 try {
 const commit=run('git',['-C',root,'rev-parse','--verify',ref+'^{commit}']);
 if(!/^[a-f0-9]{40}$/.test(commit))throw Error('版本无效。');
+const updateSource=resolveUpdateSource({root,run});
 const release=path.join(supportDir,'releases',commit);let app=release;const logs=path.join(supportDir,'logs');
 await mkdir(logs,{recursive:true,mode:0o700});await mkdir(path.dirname(job),{recursive:true});
 // Check this entrance only. Do not interrupt tasks running through another entrance.
@@ -60,7 +62,7 @@ try{
  if(!healthy)throw Error('新版本未通过健康检查。');
  console.log('正在验证正式工作台版本与资源…');
  await workbenchCheck.check({version:commit,host:localConnectionId});
- await writeFile(path.join(supportDir,'installed.json'),JSON.stringify({commit,sourceRoot:root,sourceRemote:run('git',['-C',root,'remote','get-url','origin']),machineId:config.machineId,app,installedAt:new Date().toISOString(),previousPlist:previous?previousFile:null}),{mode:0o600});
+ await writeFile(path.join(supportDir,'installed.json'),JSON.stringify({commit,...updateSource,machineId:config.machineId,app,installedAt:new Date().toISOString(),previousPlist:previous?previousFile:null}),{mode:0o600});
  console.log(`已部署 ${commit}，本机网页：http://127.0.0.1:4317`);
 }catch(error){
  await lifecycle.stop();
