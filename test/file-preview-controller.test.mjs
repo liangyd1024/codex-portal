@@ -47,3 +47,10 @@ test('a failed text read keeps download available and honors nonretryable errors
  const f=fixture(t,async mode=>mode==='meta'?json({name:'sample.txt',size:20,kind:'text'}):new Response(JSON.stringify({error:{message:'文件已移动',retryable:false}}),{status:404}));
  await f.controller.load();assert.equal(f.view.downloadHidden,false);assert.equal(f.view.retryHidden,true);assert.equal(f.view.status,'文件已移动');
 });
+
+test('verified HTML exposes a separate browser view without executing or refetching source',async t=>{
+ let html=true;const calls=[];
+ const f=fixture(t,async mode=>{calls.push(mode);return mode==='meta'?json({name:html?'page.HTML':'sample.txt',size:50,kind:'text',htmlPreview:html}):json({text:'<script>throw Error("source must remain inert")</script>'});});
+ await f.controller.load();assert.deepEqual(calls,['meta','text']);assert.equal(f.view.externalHidden,false);assert.equal(f.view.externalMode,'html');assert.match(f.content.children[0].textContent,/<script>/);assert.match(f.view.status,/仅加载内嵌资源/);
+ html=false;await f.controller.load();assert.equal(f.view.externalHidden,true);assert.equal(f.view.externalMode,'content');
+});

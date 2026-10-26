@@ -116,3 +116,16 @@ class MessageFilesTest(unittest.TestCase):
         _,body=self.read(itemId='unicode',reference=str(path),mode='text')
         result=json.loads(body);self.assertTrue(result['truncated'])
         self.assertNotIn('\ufffd',result['text']);self.assertEqual(result['text'],'中'*(reader.TEXT_LIMIT//3))
+
+    def test_html_browser_mode_streams_complete_document_but_source_stays_inert(self):
+        for i,extension in enumerate(['.html','.HTM']):
+            path=self.home/('page'+extension);data=b'<!doctype html><script>document.title="sample"</script>'+b' '*(reader.TEXT_LIMIT+1);path.write_bytes(data);self.add('html'+str(i),path)
+            args={'itemId':'html'+str(i),'reference':str(path)}
+            meta,_=self.read(**args,mode='meta');self.assertTrue(meta['htmlPreview']);self.assertEqual(meta['kind'],'text')
+            meta,body=self.read(**args,mode='html',range='bytes=0-9');self.assertEqual(meta['status'],200);self.assertEqual(meta['mime'],'text/html; charset=utf-8');self.assertEqual(body,data)
+            meta,body=self.read(**args,mode='html',head=True);self.assertEqual(body,b'');self.assertEqual(meta['length'],len(data))
+            meta,_=self.read(**args,mode='content');self.assertEqual(meta['mime'],'text/plain; charset=utf-8')
+            _,body=self.read(**args,mode='text');self.assertTrue(json.loads(body)['truncated'])
+        with self.assertRaises(reader.FileError) as caught:self.read(mode='html')
+        self.assertEqual(caught.exception.status,415)
+        with self.assertRaises(reader.FileError):self.read(itemId='other-message',reference=str(path),mode='html')

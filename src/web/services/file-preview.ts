@@ -1,7 +1,7 @@
 import {sourcePreview} from './file-preview-text.ts';
-export interface FilePreviewView {retryHidden:boolean;downloadHidden:boolean;externalHidden:boolean;statusHidden:boolean;status:string;title?:string;path?:string}
+export interface FilePreviewView {retryHidden:boolean;downloadHidden:boolean;externalHidden:boolean;externalMode?:'content'|'html';statusHidden:boolean;status:string;title?:string;path?:string}
 export interface FilePreviewOptions {opener:HTMLElement;label:string;reference?:string;url:(mode:string)=>string}
-interface FileResult {error?:{message?:string;retryable?:boolean};name:string;path?:string;size:number;kind:string;text?:string;truncated?:boolean;line?:number;column?:number}
+interface FileResult {error?:{message?:string;retryable?:boolean};name:string;path?:string;size:number;kind:string;text?:string;truncated?:boolean;line?:number;column?:number;htmlPreview?:boolean}
 const node=<K extends keyof HTMLElementTagNameMap>(tag:K,cls='',text?:string)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;};
 async function responseJSON(url:string,signal:AbortSignal):Promise<FileResult>{const response=await fetch(url,{signal});const result=await response.json();if(!response.ok)throw Object.assign(new Error(result.error?.message||'文件读取失败，请重试。'),{retryable:result.error?.retryable??(response.status>=500||[408,409,429].includes(response.status))});return result;}
 export function createFilePreview({content,label,url,publish}:{content:HTMLElement;label:string;url:FilePreviewOptions['url'];publish:(view:Partial<FilePreviewView>)=>void}){
@@ -14,7 +14,7 @@ export function createFilePreview({content,label,url,publish}:{content:HTMLEleme
   const load=async()=>{
     if(closed)return;
     stop();request=new AbortController();const signal=request.signal;
-    publish({retryHidden:true,downloadHidden:true,externalHidden:true,statusHidden:false,status:'正在读取文件…'});
+    publish({retryHidden:true,downloadHidden:true,externalHidden:true,externalMode:'content',statusHidden:false,status:'正在读取文件…'});
     try {
       const info=await responseJSON(url('meta'),signal);
       if(closed||signal.aborted)return;
@@ -35,6 +35,7 @@ export function createFilePreview({content,label,url,publish}:{content:HTMLEleme
         media.addEventListener('error',()=>{if(closed||signal.aborted)return;publish({status:'无法预览：格式可能不受浏览器支持、文件已变化或连接已中断。可重试或下载文件。',retryHidden:false});});
         media.src=url('content');content.append(media);publish({externalHidden:false});
       } else if(info.kind==='text'){
+        if(info.htmlPreview){publish({externalHidden:false,externalMode:'html'});statusText+=' · 浏览器预览仅加载内嵌资源';}
         const result=await responseJSON(url('text'),signal);if(closed||signal.aborted)return;
         const text=result.text||'',line=result.line??info.line;
         const source=sourcePreview(text,line);content.append(source.pre);source.locate();

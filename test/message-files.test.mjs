@@ -52,7 +52,7 @@ test('unpaired mobile clients cannot read file bytes',async()=>{
  let calls=0;class Fake extends EventEmitter {disconnect(){}async openFile(){calls++;throw Error('must not run');}}
  const mobileConfig={origins:[]};const app=await createApp({mobileConfig,config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});
  await new Promise(r=>app.proxyServer.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.proxyServer.address().port;mobileConfig.origins.push(base);
- try {const response=await fetch(base+itemFileUrl('t','i','/tmp/a','local'));assert.equal(response.status,401);assert.equal(calls,0);}
+ try {for(const mode of ['content','html']){const response=await fetch(base+itemFileUrl('t','i','/tmp/a','local',mode));assert.equal(response.status,401);}assert.equal(calls,0);}
  finally {app.proxyServer.closeAllConnections();await new Promise(r=>app.proxyServer.close(r));}
 });
 
@@ -64,5 +64,24 @@ test('file errors preserve retry guidance across HTTP, including retryable missi
  try{
   let response=await fetch(url);assert.equal(response.status,422);assert.equal((await response.json()).error.retryable,false);assert.equal(response.headers.get('cache-control'),'no-store');
   permanent=false;response=await fetch(url);assert.equal(response.status,404);assert.equal((await response.json()).error.retryable,true);
+ }finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));}
+});
+
+test('HTML browser view is opt-in, sandboxed, noncacheable, and leaves source and download inert',async()=>{
+ const html=Buffer.from('<!doctype html><style>body{color:red}</style><button onclick="this.textContent=1">运行</button>');let valid=true;
+ class Fake extends EventEmitter {disconnect(){}async openFile(_t,_i,payload){return {meta:{status:200,name:'页面.html',mime:payload.mode==='html'?'text/html; charset=utf-8':'text/plain; charset=utf-8',kind:'text',htmlPreview:valid,size:html.length,length:html.length,etag:'"test"'},body:Readable.from([html]),cancel(){}};}}
+ const app=await createApp({config:{defaultConnection:'local',connections:[]},managers:new Map([['local',new Fake()]])});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+ const url=mode=>'http://127.0.0.1:'+app.server.address().port+itemFileUrl('t','i','/tmp/page.html','local',mode);
+ try{
+  const response=await fetch(url('html'));
+  assert.equal(response.status,200);assert.match(response.headers.get('content-type'),/^text\/html/);assert.equal(await response.text(),html.toString());
+  const csp=response.headers.get('content-security-policy');assert.match(csp,/sandbox allow-scripts/);assert.doesNotMatch(csp,/allow-same-origin|allow-popups|allow-forms/);
+  for(const rule of ["default-src 'none'","connect-src 'none'","frame-src 'none'","frame-ancestors 'none'","form-action 'none'","base-uri 'none'","script-src 'unsafe-inline'"])assert.ok(csp.includes(rule),rule);
+  assert.equal(response.headers.get('cache-control'),'no-store');assert.equal(response.headers.get('referrer-policy'),'no-referrer');assert.equal(response.headers.get('cross-origin-opener-policy'),'same-origin');assert.equal(response.headers.get('accept-ranges'),null);
+  const head=await fetch(url('html'),{method:'HEAD'});assert.equal(await head.text(),'');assert.equal(head.headers.get('content-length'),String(html.length));
+  const source=await fetch(url('content'));assert.match(source.headers.get('content-type'),/^text\/plain/);assert.doesNotMatch(source.headers.get('content-security-policy'),/allow-scripts/);await source.text();
+  const download=await fetch(url('download'));assert.match(download.headers.get('content-disposition'),/^attachment/);assert.equal(download.headers.get('content-type'),'application/octet-stream');await download.text();
+  assert.equal((await fetch(url('html'),{headers:{Origin:'null'}})).status,403);
+  valid=false;assert.equal((await fetch(url('html'))).status,502);
  }finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));}
 });

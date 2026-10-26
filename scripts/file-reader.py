@@ -150,7 +150,8 @@ def serve(payload, home):
         size = info.st_size
         mime, kind = TYPES.get(path.suffix.lower(), ('text/plain; charset=utf-8', 'text') if path.suffix.lower() in TEXT_EXTENSIONS else ('application/octet-stream', 'download'))
         etag = '"' + hashlib.sha256(f'{info.st_dev}:{info.st_ino}:{size}:{info.st_mtime_ns}'.encode()).hexdigest() + '"'
-        metadata = {'name': path.name, 'path': str(path), 'size': size, 'mime': mime, 'kind': kind, 'etag': etag, **position}
+        html_preview = path.suffix.lower() in ('.html', '.htm')
+        metadata = {'name': path.name, 'path': str(path), 'size': size, 'mime': mime, 'kind': kind, 'etag': etag, 'htmlPreview': html_preview, **position}
         mode = payload.get('mode', 'content')
         if mode == 'meta':
             send_header({'status': 200, **metadata, 'length': 0})
@@ -165,9 +166,14 @@ def serve(payload, home):
             send_header({'status': 200, **metadata, 'mime': 'application/json; charset=utf-8', 'length': len(data)})
             sys.stdout.buffer.write(data)
             return
-        if mode not in ('content', 'download'):
+        if mode == 'html':
+            if not html_preview:
+                raise FileError('只有 HTML 文件支持浏览器预览。', 415)
+            metadata['mime'] = 'text/html; charset=utf-8'
+        elif mode not in ('content', 'download'):
             raise FileError('文件操作无效。')
-        requested = payload.get('range') if payload.get('ifRange') in (None, etag) else None
+        # HTML documents must be complete, never a truncated source preview or a range.
+        requested = payload.get('range') if mode != 'html' and payload.get('ifRange') in (None, etag) else None
         try:
             start, end, status = byte_range(requested, size)
         except FileError as error:

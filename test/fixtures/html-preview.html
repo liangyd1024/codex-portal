@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HTML 浏览器预览验收</title>
+<style>body{font:16px/1.625 system-ui;margin:24px;background:#fff;color:#222}button{min-height:44px;padding:8px 16px;background:#000;color:#fff;border:1px solid #000;border-radius:8px;font:inherit}pre{white-space:pre-wrap;overflow-wrap:anywhere}#card{padding:16px;background:#eee;border-radius:12px}</style>
+<h1>HTML 页面</h1><section id="card"><p>内嵌样式已加载。</p><button id="counter" onclick="this.textContent='已点击 '+(++window.count)+' 次'">点击测试</button></section>
+<pre id="checks">正在检查隔离…</pre>
+<form id="test-form" action="/probe?form" method="post"></form>
+<script>
+window.count=0;
+(async()=>{
+ const checks={origin:self.origin,opener:window.opener===null,inlineScript:true};
+ for(const [name,operation] of Object.entries({cookies:()=>document.cookie,storage:()=>localStorage.getItem('fixture'),eval:()=>eval('1')})){
+  try{operation();checks[name]='unexpected access';}catch{checks[name]='blocked';}
+ }
+ try{await fetch('/probe?fetch');checks.fetch='unexpected access';}catch{checks.fetch='blocked';}
+ document.querySelector('#test-form').requestSubmit();
+ document.querySelector('#checks').textContent=JSON.stringify(checks,null,2);
+ window.previewChecks=checks;
+})();
+</script>
+<img src="/probe?image" alt="外部资源不加载">
+<script src="/probe?script"></script>
+<link rel="stylesheet" href="/probe?style">
+<iframe src="/probe?frame" title="应被阻止的框架" hidden></iframe>
+</html>
