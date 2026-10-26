@@ -32,3 +32,9 @@
 .connection-editor form{display:grid;gap:10px}.connection-editor input,.connection-editor select,.connection-editor button{min-height:44px}
 .connection-editor .sidebar-dialog-actions{flex-wrap:wrap}.connection-editor .settings-actions{flex-wrap:wrap}
 .connection-editor button{white-space:nowrap;flex-shrink:0}
+
+.backup-selection{min-width:0;border:1px solid var(--control-border-color);border-radius:var(--panel-radius);margin:12px 0;padding:12px;background:var(--control-background);color:var(--control-foreground)}
+.backup-selection label{display:flex;align-items:center;gap:8px;min-height:44px;overflow-wrap:anywhere}
+.backup-selection input{flex:0 0 20px;width:20px;height:20px;accent-color:#000}
+.backup-selection .settings-actions{display:flex;flex-wrap:wrap;gap:8px}
+.backup-selection button{min-height:44px}

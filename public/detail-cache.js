@@ -80,6 +80,10 @@ export async function exportDetailCache(){
  const db=await open();
  return new Promise((resolve,reject)=>{const tx=db.transaction('details'),r=tx.objectStore('details').getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 }
+export async function exportDetailCacheKeys(){
+ const db=await open();
+ return new Promise((resolve,reject)=>{const tx=db.transaction('details'),r=tx.objectStore('details').getAllKeys();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+}
 export async function importDetailCache(rows,hosts){
  for(const row of rows){const key=JSON.parse(row.key);if(!Array.isArray(key)||key.length!==2||!hosts.includes(key[0])||typeof key[1]!=='string'||row.detail?.thread?.id!==key[1])throw Error('详情缓存的连接或会话标识无效。');}
  const db=await open();

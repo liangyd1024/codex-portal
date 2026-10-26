@@ -1,1 +1,1 @@
-export {exportBrowser,validateBrowser,importBrowser} from '../src/web/services/browser-backup.ts';
+export {exportBrowser,validateBrowser,inspectBrowser,selectBrowser,previewBrowser,importBrowser} from '../src/web/services/browser-backup.ts';
