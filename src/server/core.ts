@@ -47,7 +47,7 @@ export function createApp({connectionConfigFile,serverFactory=handler=>http.crea
  const changeConnections=registry?async(data:Record<string,unknown>)=>registry.change(data,(next:Config,change:{action:string;id:string})=>{
   const previous=config.connections.find(host=>host.id===change.id),host=next.connections.find(host=>host.id===change.id);
   const old=managers.get(change.id);
-  const replace=!!old&&!!host&&previous&&(host.binary!==previous.binary||host.identityFile!==previous.identityFile);
+  const replace=!!old&&!!host&&previous&&(host.binary!==previous.binary||host.identityFile!==previous.identityFile||host.credentialRef!==previous.credentialRef);
   if(old&&(replace||!host)){
    const status=old.status();
    if(connectionWrites.get(change.id)||['connecting','reconnecting'].includes(status.connection.state)||status.pendingRequests.length)throw new AppError('连接正在恢复或有请求尚未确认，请处理后再修改。',409);

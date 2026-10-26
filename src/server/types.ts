@@ -3,7 +3,7 @@ import type {Server as SecureServer, ServerOptions} from 'node:https';
 import type {Manager} from '../../lib/manager.mjs';
 import type {MobileAccess} from './services/mobile-access';
 import type {WebUpdate} from './services/web-update';
-export interface Host {id:string;machineId:string;kind:'local'|'ssh';alias:string;user:string;home:string;binary:string;address:string;port?:number;identityFile?:string;python?:string;dataDir?:string;threadUnloadDelaySecs?:number;autoReloadLogin?:'off'|'interrupt'}
+export interface Host {id:string;machineId:string;kind:'local'|'ssh';alias:string;user:string;home:string;binary:string;address:string;port?:number;identityFile?:string;credentialRef?:string;python?:string;dataDir?:string;threadUnloadDelaySecs?:number;autoReloadLogin?:'off'|'interrupt'}
 export interface Config {formatVersion:1;machineId:string;defaultConnection:string;connections:Host[]}
 export interface MobileConfig {origins:string[];ca:string;[key:string]:unknown}
 export interface ApplicationOptions {

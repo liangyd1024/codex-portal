@@ -608,3 +608,8 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .connection-editor-advanced>summary:focus-visible{outline:2px solid var(--control-border-color);outline-offset:2px}
 .connection-editor-fields{display:grid;gap:12px;padding:8px 0}
 .connection-editor form>h2{margin-bottom:20px}
+
+.connection-password-toggle{min-height:44px;text-decoration:underline;text-align:left}
+.connection-password-fields{display:grid;gap:8px}
+.connection-editor .connection-remember-password{display:flex;align-items:center;gap:8px;min-height:44px;font-size:13px}
+.connection-editor .connection-remember-password input{width:20px;height:20px;min-height:20px;flex:none}

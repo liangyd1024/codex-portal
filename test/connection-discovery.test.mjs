@@ -21,7 +21,7 @@ test('unverified identity, missing Codex and malformed remote paths cannot becom
  for(const changed of [{user:'other'},{home:'relative'},{python:'relative'},{binary:null},{binary:'relative'}]){const f=runner({...detected,...changed});await assert.rejects(discoverConnection({address:'host'},{run:f.run}),{code:'CONNECTION_DISCOVERY'});}
 });
 test('authentication and host-key failures produce actionable errors without exposing remote output',async()=>{
- for(const [failure,message] of [['Permission denied (publickey)','SSH 登录失败'],['Host key verification failed','SSH 主机身份'],['REMOTE HOST IDENTIFICATION HAS CHANGED','SSH 主机身份'],['timeout secret-output','无法读取目标机器环境']]){
+ for(const [failure,message] of [['Permission denied (publickey)','SSH 登录需要密码'],['Host key verification failed','SSH 主机身份'],['REMOTE HOST IDENTIFICATION HAS CHANGED','SSH 主机身份'],['timeout secret-output','无法读取目标机器环境']]){
   const f=runner();await assert.rejects(discoverConnection({address:'host'},{run:async(...args)=>{if(args[1].includes('-G'))return f.run(...args);throw Error(failure);}}),e=>e.message.startsWith(message)&&!e.message.includes('secret-output'));
  }
 });

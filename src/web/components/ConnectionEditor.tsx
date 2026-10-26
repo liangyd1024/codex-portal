@@ -3,12 +3,13 @@ import {createPortal} from 'react-dom';
 import {setConnectionSavePending} from './ConnectionManager';
 import type {ConnectionManagerOptions} from './ConnectionManager';
 import {confirmAction} from '../../../public/feedback.js';
-interface Host {id:string;kind:'local'|'ssh';alias:string;address:string;port?:number;user:string;home:string;binary:string;hasIdentityFile?:boolean}
+interface Host {id:string;kind:'local'|'ssh';alias:string;address:string;port?:number;user:string;home:string;binary:string;hasIdentityFile?:boolean;hasPassword?:boolean;credentialStorage?:string}
 interface Config {revision:string;defaultConnection:string;connections:Host[]}
 const empty={alias:'',address:'',port:'',user:'',binary:'',identityFile:''};
 export function ConnectionEditor({api,flush,closed,initialConnection}:ConnectionManagerOptions&{closed:()=>void;initialConnection:string}){
  const dialog=useRef<HTMLDialogElement>(null),generation=useRef(0);
  const [config,setConfig]=useState<Config|null>(null),[fields,setFields]=useState(empty),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[failed,setFailed]=useState(false),[refreshNeeded,setRefreshNeeded]=useState(false);
+ const [password,setPassword]=useState(''),[passwordOpen,setPasswordOpen]=useState(false),[rememberPassword,setRememberPassword]=useState(true);
  const selected=initialConnection,adding=!selected,draftKey='rcm.connection-editor.'+(selected||'new');
  const current=config?.connections.find(host=>host.id===selected);
  useLayoutEffect(()=>{dialog.current!.showModal();return()=>{generation.current++;dialog.current?.close();};},[]);
@@ -37,16 +38,16 @@ export function ConnectionEditor({api,flush,closed,initialConnection}:Connection
   const serial=++generation.current;setConnectionSavePending(true);setBusy(true);setFailed(false);setRefreshNeeded(false);setMessage(adding?'正在连接并识别环境…':'正在保存…');
   try{
    flush();
-   let connection:Record<string,unknown>={alias:fields.alias,binary:fields.binary,...current?.kind==='ssh'?{identityFile:fields.identityFile}:{}};
+   let connection:Record<string,unknown>={alias:fields.alias,binary:fields.binary,...current?.kind==='ssh'?{identityFile:fields.identityFile,...password?{password,rememberPassword}:{}}:{}};
    if(action==='add'){
-    const discovered=await api<{connection:Record<string,unknown>}>('/api/connection-discover',{method:'POST',body:{connection:{address:fields.address,user:fields.user,port:fields.port,binary:fields.binary,identityFile:fields.identityFile}}});
-    connection=discovered.connection;setMessage('已识别机器，正在添加…');
-   }else if(action==='edit'&&current&&(fields.binary!==current.binary||fields.identityFile)){
+    const discovered=await api<{connection:Record<string,unknown>}>('/api/connection-discover',{method:'POST',body:{connection:{address:fields.address,user:fields.user,port:fields.port,binary:fields.binary,identityFile:fields.identityFile,...password?{password}:{}}}});
+    connection={...discovered.connection,...password?{password,rememberPassword}:{}};setMessage('已识别机器，正在添加…');
+   }else if(action==='edit'&&current&&(fields.binary!==current.binary||fields.identityFile||password)){
     await api('/api/connection-probe',{method:'POST',body:{id:selected,connection}});
    }
    await api('/api/connection-config',{method:'POST',body:{revision:config.revision,action,id:selected,connection}});
-   sessionStorage.removeItem(draftKey);setMessage('已保存，正在刷新连接。');
-  }catch(e){if(serial===generation.current){setMessage((e as Error).message);setFailed(true);setRefreshNeeded(/^CONFIG_/.test(String((e as {code?:string}).code||'')));}}
+   sessionStorage.removeItem(draftKey);setPassword('');setMessage('已保存，正在刷新连接。');
+  }catch(e){if(serial===generation.current){setMessage((e as Error).message);setFailed(true);if((e as {code?:string}).code==='SSH_PASSWORD_REQUIRED')setPasswordOpen(true);setRefreshNeeded(/^CONFIG_/.test(String((e as {code?:string}).code||'')));}}
   finally{if(serial===generation.current)setBusy(false);setConnectionSavePending(false);}
  }
  return createPortal(<dialog className="sidebar-dialog connection-editor" ref={dialog} aria-labelledby="connection-editor-title" onCancel={event=>{if(busy)event.preventDefault();else closed();}} onClose={closed}>
@@ -59,6 +60,13 @@ export function ConnectionEditor({api,flush,closed,initialConnection}:Connection
    </>:<>
     <label>名称<input required autoFocus maxLength={80} value={fields.alias} disabled={busy||!config} onChange={e=>change({alias:e.target.value})}/></label>
     {current&&<p className="subtle">{current.kind==='local'?'本机':`${current.user}@${current.address}`}{config?.defaultConnection===selected?' · 默认连接':''}</p>}
+   </>}
+   {(adding||current?.kind==='ssh')&&<>
+    {!passwordOpen?<button type="button" className="text-button connection-password-toggle" disabled={busy} onClick={()=>setPasswordOpen(true)}>{current?.hasPassword?'更换 SSH 密码':'使用密码登录'}</button>:<div className="connection-password-fields">
+     <label>SSH 密码<input type="password" autoComplete="off" value={password} disabled={busy} onChange={e=>setPassword(e.target.value)} placeholder={current?.hasPassword?'留空保留已保存密码':'目标机器的登录密码'}/></label>
+     <label className="connection-remember-password"><input type="checkbox" checked={rememberPassword} disabled={busy} onChange={e=>setRememberPassword(e.target.checked)}/>记住密码（保存到这台服务 Mac 的钥匙串）</label>
+     {!rememberPassword&&<p className="subtle">仅本次服务运行有效，重启网页服务后需重新输入。</p>}
+    </div>}
    </>}
    <details className="connection-editor-advanced"><summary>高级设置</summary><div className="connection-editor-fields">
     {adding&&<label>SSH 端口<input type="number" min={1} max={65535} placeholder="自动（通常为 22）" value={fields.port} disabled={busy} onChange={e=>change({port:e.target.value})}/></label>}

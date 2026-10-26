@@ -119,7 +119,7 @@ def backup(home,out,browser_files=(),recipient=None,config_path=None,state_dir=N
         installed_version=json.loads(installed_file.read_text()).get('commit')
         if not re.fullmatch(r'[0-9a-f]{40}',installed_version or ''):raise ValueError('已安装版本元数据无效')
     commit=installed_version or tool_version
-    manifest={'format':'rcm-backup','formatVersion':FORMAT,'machineId':config['machineId'],'createdAt':stamp(),'codeVersion':commit,'installedVersion':installed_version,'toolVersion':tool_version,'files':{n:{'sha256':digest(v),'size':len(v)} for n,v in files.items()},'databaseTables':tables,'missing':missing,'browserSnapshots':browsers,'browserCoverage':'仅包含显式提供的浏览器和标签页快照；其他浏览器、标签页未包含。','excluded':['Codex native databases and full history','Codex login files','SSH private keys','unrelated credentials','cookies','sockets','original WAL/SHM']}
+    manifest={'format':'rcm-backup','formatVersion':FORMAT,'machineId':config['machineId'],'createdAt':stamp(),'codeVersion':commit,'installedVersion':installed_version,'toolVersion':tool_version,'files':{n:{'sha256':digest(v),'size':len(v)} for n,v in files.items()},'databaseTables':tables,'missing':missing,'browserSnapshots':browsers,'browserCoverage':'仅包含显式提供的浏览器和标签页快照；其他浏览器、标签页未包含。','excluded':['Codex native databases and full history','Codex login files','SSH private keys','SSH passwords and macOS Keychain','unrelated credentials','cookies','sockets','original WAL/SHM']}
     buf=io.BytesIO()
     with tarfile.open(fileobj=buf,mode='w:gz') as archive:
         for name,content in [('manifest.json',jbytes(manifest))]+list(files.items()):
