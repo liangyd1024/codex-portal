@@ -56,3 +56,8 @@ test('failed vault writes attempt cleanup and never silently fall back to a pers
 test('file cancellation while authentication is being prepared never starts the remote read',async()=>{
  const {runFileReader}=await import('../lib/file-transfer.mjs');const controller=new AbortController();const pending=runFileReader({kind:'ssh',password:secret,address:'unused.invalid',port:22,user:'tester'},'not executed',{signal:controller.signal});controller.abort();await assert.rejects(pending,{name:'AbortError'});
 });
+
+test('parallel authentications reuse one private directory but keep independent one-use sockets',async()=>{
+ const first=await prepareSshAuth({password:secret}),second=await prepareSshAuth({password:'another-test-password'});
+ try{assert.equal(path.dirname(first.env.RCM_ASKPASS_SOCKET),path.dirname(second.env.RCM_ASKPASS_SOCKET));assert.notEqual(first.env.RCM_ASKPASS_SOCKET,second.env.RCM_ASKPASS_SOCKET);const run=promisify(execFile);const [a,b]=await Promise.all([run('/usr/bin/python3',[first.env.SSH_ASKPASS,'Password:'],{env:first.env}),run('/usr/bin/python3',[second.env.SSH_ASKPASS,'Password:'],{env:second.env})]);assert.equal(a.stdout.trim(),secret);assert.equal(b.stdout.trim(),'another-test-password');}finally{first.close();second.close();}
+});
