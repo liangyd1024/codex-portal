@@ -123,12 +123,19 @@ import {readDetailCache, writeDetailCache, clearDetailCache, outputBases, hydrat
 import {outputWindow, OUTPUT_WINDOW_SIZE} from '../../public/output-window.js';
 import {updateExtensionNotice, renderExtensionNotice, mergeLiveTurns, taskNotice, backgroundActivity} from '../../public/connection-state.js';
 const requestedHost = new URL(location.href).searchParams.get('host');
-let pendingNotification: {host?:string;threadId:string} | null = null, notificationNavigationReady=false;
+let pendingNotification: {host?:string;threadId:string;clickId?:string} | null = null, notificationNavigationReady=false;
 navigator.serviceWorker?.addEventListener('message',event=>{
   const data=event.data;
   if(data?.type!=='rcm-notification-click'||!data.threadId)return;
   if(notificationNavigationReady)openNotificationThread(data);else pendingNotification=data;
 });
+function requestNotificationTarget(){
+  if(!notificationNavigationReady||document.visibilityState==='hidden')return;
+  void navigator.serviceWorker?.getRegistration().then(registration=>registration?.active?.postMessage({type:'rcm-notification-ready'})).catch(recordError);
+}
+window.addEventListener('pageshow',requestNotificationTarget);
+document.addEventListener('visibilitychange',requestNotificationTarget);
+navigator.serviceWorker?.addEventListener('controllerchange',requestNotificationTarget);
 const connectionConfig=await readConnections();
 const connectionIds=connectionConfig.data.map(c=>c.id);
 const targetHost=selectTarget(connectionIds,requestedHost,connectionConfig.defaultConnection)!;
@@ -715,13 +722,17 @@ const setTaskNotifications=notificationPreferences.setEnabled;
 function notificationDiagnostic(message:string) {
   appendNotificationDiagnostic(dateTime(new Date()) + ' · ' + message);
 }
-function openNotificationThread({host,threadId}:{host?:string;threadId:string}) {
+async function openNotificationThread({host,threadId,clickId}:{host?:string;threadId:string;clickId?:string}) {
   if(host!==targetHost){
     if(!connectionIds.includes(host!))return;
     flushDrafts();
     const url=new URL(location.href);url.searchParams.set('host',host!);url.searchParams.set('thread',threadId);location.assign(url);return;
   }
-  selectThread(threadId);
+  await selectThread(threadId);
+  if(clickId&&state.selectedId===threadId&&state.detail?.thread?.id===threadId&&!state.historyError&&!state.busy.has('create')){
+    const registration=await navigator.serviceWorker?.getRegistration();
+    registration?.active?.postMessage({type:'rcm-notification-consumed',clickId});
+  }
 }
 const sendTaskNotification=notificationDelivery.send;
 const notifyTaskEvent=createTaskNotifications({enabled:()=>notificationPreferences.enabled()&&!pushSubscription.active(),
@@ -921,7 +932,7 @@ const init=createWorkspaceStartup({state,sidebar,document,location,sessionStorag
   installUsage:options=>refreshAccountUsage=installAccountUsage({details:options.details,api,connected,context:options.context}),showUsageDetails:text=>toast(text,false,3000,'account-usage',{information:true}),
   installBackup:imported=>installBrowserBackup(connectionConfig,flushDrafts,imported),suspendDraftWrites:()=>{draftWritesSuspended=true;},installNavigation:installInspectorNavigation,
   renderControls,renderThreads,renderStatus,renderThread,connected,connectionPending,loadThreads,wireEvents,setupEvents,dispatchReady:()=>window.dispatchEvent(new Event('rcm-ready')),
-  setNavigationReady:()=>{notificationNavigationReady=true;},pendingNotification:()=>pendingNotification,clearPendingNotification:()=>{pendingNotification=null;},
+  setNavigationReady:()=>{notificationNavigationReady=true;requestNotificationTarget();},pendingNotification:()=>pendingNotification,clearPendingNotification:()=>{pendingNotification=null;},
   openNotificationThread,restoreDetail,readCsrf:()=>api('/api/csrf'),loadStatus,refreshWorkspace,connectRemote,recordError,messageOf,publishConnectionBanner,finishStarting:()=>{workspaceStarting=false;}});
 
 if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
