@@ -15,7 +15,7 @@ assert.ok(notificationSetup,'notification controller initialization exists');
 function fixture(success=true){
  const values=new Map([['rcm.taskNotifications.local','true']]),sent=[],acks=[];let lock=Promise.resolve();
  const storage={getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)};
- const c=vm.createContext({createTaskNotifications,sideChat:null,authRecoveryMessage,taskNotificationsEnabled:true,window:{Notification:{}},Notification:{permission:'granted'},targetHost:'local',state:{threads:[{id:'a'}],status:{},selectedId:null,detail:null},currentThread:()=>null,threadName:()=> 'test',taskNotice,deliverNotice,localStorage:storage,navigator:{locks:{request:(_key,work)=>{const next=lock.then(work);lock=next.catch(()=>{});return next;}}},sendTaskNotification:async(...args)=>{sent.push(args);return success;},api:async(path,options)=>acks.push({path,options}),notificationDiagnostic(){},recordError(){},scheduleListRefresh(){}});
+ const c=vm.createContext({pushSubscription:{active:()=>false},createTaskNotifications,sideChat:null,authRecoveryMessage,taskNotificationsEnabled:true,window:{Notification:{}},Notification:{permission:'granted'},targetHost:'local',state:{threads:[{id:'a'}],status:{},selectedId:null,detail:null},currentThread:()=>null,threadName:()=> 'test',taskNotice,deliverNotice,localStorage:storage,navigator:{locks:{request:(_key,work)=>{const next=lock.then(work);lock=next.catch(()=>{});return next;}}},sendTaskNotification:async(...args)=>{sent.push(args);return success;},api:async(path,options)=>acks.push({path,options}),notificationDiagnostic(){},recordError(){},scheduleListRefresh(){}});
  c.notificationPreferences={enabled:()=>c.taskNotificationsEnabled};
  runController(notificationSetup.getText(ast)+'\nglobalThis.notifyTaskEvent=notifyTaskEvent;',c);
  c.handleEvent=createEventHandler({...c,sideChat:()=>c.sideChat,workspaceStarting:()=>true,refreshAccountUsage:()=>{}});
@@ -64,3 +64,5 @@ test('opening SSE never transmits stored historical task notifications',async()=
 });
 
 function runController(code,context){return vm.runInContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,context);}
+
+test('server push subscription suppresses duplicate page notifications',async()=>{const f=fixture();f.c.pushSubscription.active=()=>true;await f.emit('push');assert.equal(f.sent.length,0);assert.equal(f.acks.length,0);});

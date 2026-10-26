@@ -1,3 +1,5 @@
+import type {PushNotifications} from '../services/push-notifications';
+import {createHash} from 'node:crypto';
 import {discoverConnection} from '../../../lib/connection-discovery.mjs';
 import {probeConnection} from '../../../lib/connection-config.mjs';
 import type {ConnectionConfigStore} from '../../../lib/connection-config.mjs';
@@ -25,6 +27,7 @@ import {Manager,AppError} from '../../../lib/manager.mjs';
 import {NativeAutomations} from '../../../lib/native-automations.mjs';
 
 export interface RouteServices {
+ push?:PushNotifications;
  connectionWrites:Map<string,number>;registry:ConnectionConfigStore|null;changeConnections:((data:Record<string,unknown>)=>Promise<unknown>)|null;
  config:import('../types').Config; managers:Map<string,Manager>; automations:Map<string,NativeAutomations>;
  desktopSessions:Map<string,NativeAutomations>;desktopSession:(host:string,id:string)=>NativeAutomations;
@@ -43,7 +46,7 @@ export function createDispatcher(context:RouteServices){
  const workspaceRoutes=new WeakMap<Manager,ReturnType<typeof createWorkspaceRoutes>>();
  const workspaceRoutesFor=(manager:Manager)=>{let routes=workspaceRoutes.get(manager);if(!routes){routes=createWorkspaceRoutes(manager);workspaceRoutes.set(manager,routes);}return routes;};
  const desktopRoutes=new WeakMap<Manager,ReturnType<typeof createDesktopRoutes>>();
- const desktopRoutesFor=(host:string,manager:Manager)=>{let routes=desktopRoutes.get(manager);if(!routes){routes=createDesktopRoutes(manager,context.automations.get(host)!,id=>context.desktopSession(host,id));desktopRoutes.set(manager,routes);}return routes;};
+ const desktopRoutesFor=(host:string,manager:Manager)=>{let routes=desktopRoutes.get(manager);if(!routes){routes=createDesktopRoutes(manager,context.automations.get(host)!,id=>context.desktopSession(host,id),(id,turns)=>context.push?.observe(host,id,turns));desktopRoutes.set(manager,routes);}return routes;};
  const mediaRoutes=new WeakMap<Manager,ReturnType<typeof createMediaRoutes>>();
  const mediaRoutesFor=(manager:Manager)=>{let routes=mediaRoutes.get(manager);if(!routes){routes=createMediaRoutes(manager);mediaRoutes.set(manager,routes);}return routes;};
  const threadRoutes=new WeakMap<Manager,ReturnType<typeof createThreadRoutes>>();
@@ -76,6 +79,7 @@ export function createDispatcher(context:RouteServices){
       const targetKey=url.searchParams.get('host')||config.defaultConnection;
       const manager=managers.get(targetKey);
       if(!manager)throw new AppError('未知连接。',404,'UNKNOWN_HOST');
+      if(req.method==='GET'&&p==='/api/push/key')return json(res,200,{publicKey:context.push?.publicKey()});
       if(req.method==='GET'&&p==='/api/csrf')return json(res,200,{token:csrf});
       if(req.method==='GET'&&p==='/api/events'){
         openEvents(req,res,manager,targetKey,remote,url);return;
@@ -93,6 +97,12 @@ export function createDispatcher(context:RouteServices){
         if(typeof token!=='string'||Buffer.byteLength(token)!==Buffer.byteLength(csrf)||!timingSafeEqual(Buffer.from(token),Buffer.from(csrf)))throw new AppError('本机会话已变化。请刷新页面。',403,'CSRF');
         if(context.registry&&req.headers['x-rcm-config-revision']!==context.registry.revision)throw new AppError('连接配置已变化，请保存草稿并刷新页面。',409,'CONFIG_CONFLICT');
         const data=await body(req,/^\/api\/threads\/[A-Za-z0-9_-]+\/(message|steer|queue-add)$/.test(p)?6*1024*1024:1024*1024);
+        if(p.startsWith('/api/push/')&&context.push){
+          const owner=remote?createHash('sha256').update(access.token(req)).digest('hex'):'local';
+          if(p==='/api/push/subscribe')return json(res,200,context.push.subscribe(targetKey,owner,origin,data.subscription));
+          if(p==='/api/push/unsubscribe')return json(res,200,context.push.remove(targetKey,owner,data.endpoint));
+          if(p==='/api/push/test')return json(res,200,await context.push.test(targetKey,owner,data.endpoint));
+        }
         if(p==='/api/connection-discover'){if(!context.registry)throw new AppError('此入口不支持添加机器。',409);return json(res,200,await discoverConnection(data.connection||{}));}
         if(p==='/api/connection-probe'){if(!context.registry)throw new AppError('此预览不支持连接检测。',409);return json(res,200,await probeConnection(context.config,data));}
         if(p==='/api/connection-config'){if(!context.changeConnections)throw new AppError('此预览不支持修改连接配置。',409);return json(res,200,await context.changeConnections(data));}

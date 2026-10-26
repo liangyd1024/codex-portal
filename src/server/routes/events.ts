@@ -17,7 +17,7 @@ export function createEventRoute({clients,access,updater,registry}:EventServices
   res.write(`data: ${JSON.stringify({method:'manager/status',params:manager.status()})}\n\n`);res.targetKey=targetKey;clients.add(res);
   if(registry)res.write(`event: configuration/change\ndata: ${JSON.stringify({version:registry.revision})}\n\n`);
   for(const request of manager.status().pendingRequests||[])res.write(`data: ${JSON.stringify({method:'manager/request',params:request})}\n\n`);
-  const heartbeat=setInterval(()=>{if(remote&&!access.valid(req)){res.end();clients.delete(res);}else res.write(': ping\n\n');},15000);
+  const heartbeat=setInterval(()=>{if(remote&&!access.valid(req)){res.end();clients.delete(res);}else res.write('event: heartbeat\ndata: {}\n\n');},15000);
   res.mobileRequest=remote?req:null;
   const sendUpdate=(data:unknown)=>{if(res.destroyed||res.writableEnded)return;if(res.writableLength>8*1024*1024){res.destroy();return;}res.write(`event: system/update\ndata: ${JSON.stringify(data)}\n\n`);};
   const unsubscribe=updater.subscribe?.(sendUpdate);

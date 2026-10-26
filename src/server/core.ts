@@ -1,3 +1,4 @@
+import {PushNotifications} from './services/push-notifications';
 import {ConnectionConfigStore} from '../../lib/connection-config.mjs';
 import {WorkspaceManager} from './services/workspace-manager';
 import {createDispatcher} from './routes/dispatch';
@@ -37,11 +38,12 @@ export function createApp({connectionConfigFile,serverFactory=handler=>http.crea
    if(!desktopSessions.has(key))desktopSessions.set(key,new NativeAutomations(managers.get(host),{threadId:id}));
    return desktopSessions.get(key)!;
  };
+  const push=new PushNotifications(path.join(stateDir,'web-push.json'),access,undefined,async(host,id)=>{const manager=managers.get(host);if(!manager)throw Error('连接已移除');return manager.passive('history',{threadId:id,withOutputs:false});});
   const broadcasts=new Map<string,(event:unknown)=>void>();
   const staticResponse=createStaticResponse();
   const csrf=randomBytes(32).toString('hex'); const clients=new Set<Response>();
 
-  for(const [key,target] of managers){const listener=(event:unknown)=>{for(const client of clients){if(client.targetKey!==key)continue;if(client.writableLength>8*1024*1024){client.destroy();clients.delete(client);}else client.write(`data: ${JSON.stringify(event)}\n\n`);}};broadcasts.set(key,listener);target.on('event',listener);}
+  for(const [key,target] of managers){const listener=(event:unknown)=>{push.receive(key,event);for(const client of clients){if(client.targetKey!==key)continue;if(client.writableLength>8*1024*1024){client.destroy();clients.delete(client);}else client.write(`data: ${JSON.stringify(event)}\n\n`);}};broadcasts.set(key,listener);target.on('event',listener);}
   const connectionWrites=new Map<string,number>();
  const registry=connectionConfigFile?new ConnectionConfigStore(connectionConfigFile):null;
  const changeConnections=registry?async(data:Record<string,unknown>)=>registry.change(data,(next:Config,change:{action:string;id:string})=>{
@@ -61,19 +63,19 @@ export function createApp({connectionConfigFile,serverFactory=handler=>http.crea
    }
    if(added){
     managers.set(change.id,added);automations.set(change.id,new NativeAutomations(added));
-    const listener=(event:unknown)=>{for(const client of clients)if(client.targetKey===change.id){if(client.writableLength>8*1024*1024)client.destroy();else client.write(`data: ${JSON.stringify(event)}\n\n`);}};
+    const listener=(event:unknown)=>{push.receive(change.id,event);for(const client of clients)if(client.targetKey===change.id){if(client.writableLength>8*1024*1024)client.destroy();else client.write(`data: ${JSON.stringify(event)}\n\n`);}};
     broadcasts.set(change.id,listener);added.on('event',listener);
    }else if(old&&host){Object.assign(old.host,{alias:host.alias});if(old.expectedHost)Object.assign(old.expectedHost,{alias:host.alias});}
    Object.assign(config,next);
    for(const client of clients)client.write(`event: configuration/change\ndata: ${JSON.stringify({version:registry.revision})}\n\n`);
   };
  }):null;
- const handler=createDispatcher({connectionWrites,registry,changeConnections,config,managers,automations,desktopSessions,desktopSession,csrf,clients,staticResponse,access,setupMobile,updater,providedManagers,buildVersion,staticRoot,extraAssets,server:()=>server,mobileConfig:()=>mobileConfig,setMobileConfig:value=>{mobileConfig=value;}});
+ const handler=createDispatcher({push,connectionWrites,registry,changeConnections,config,managers,automations,desktopSessions,desktopSession,csrf,clients,staticResponse,access,setupMobile,updater,providedManagers,buildVersion,staticRoot,extraAssets,server:()=>server,mobileConfig:()=>mobileConfig,setMobileConfig:value=>{mobileConfig=value;}});
   const server=serverFactory((req,res)=>handler(req,res));
   const proxyServer=proxyFactory((req,res)=>handler(req,res,true));
   const createSecureServer=(options:ServerOptions)=>secureFactory(options,(req,res)=>handler(req,res,true));
   server.on('listening',()=>{for(const m of managers.values())Promise.resolve(m.restoreConnection?.()).catch(()=>{});});
-  server.on('close',()=>{for(const [key,m] of managers){m.off('event',broadcasts.get(key)!);m.disconnect({preserveIntent:true});}for(const client of clients)client.end();});
+  server.on('close',()=>{push.close();for(const [key,m] of managers){m.off('event',broadcasts.get(key)!);m.disconnect({preserveIntent:true});}for(const client of clients)client.end();});
   return {server,manager,managers,proxyServer,createSecureServer,closeStreams(){for(const client of clients)client.end();},setMobileConfig:(value:MobileConfig)=>{mobileConfig=value;}};
 }
 

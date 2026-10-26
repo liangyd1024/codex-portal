@@ -12,7 +12,7 @@ export interface ControllerState<Drafts extends Map<string,string>> extends Work
  model:string;effort:string;csrf:string;busy:Set<string>;loadingThreads:boolean;loadingModels:boolean;loadingProjects:boolean;threadListSource:string|null;
  runtimeNotices:Map<string,Map<string,NativeRecord>>;loadingDetail:boolean;
  errors:{message:string;stage:string;time:number}[];localRequests:NativeRequest[];drafts:Drafts;selectionVersion:number;
- listVersion:number;detailVersion:number;threadPageError:boolean;historyError:string;eventSource:EventSource|null;
+ listVersion:number;detailVersion:number;threadPageError:boolean;historyError:string;eventSource:EventSource|null;transportRecovering?:boolean;
  lastSync:Date|null;refreshScope:string;refreshMessage:string;refreshing:boolean;streamRender:boolean;requestSignature:string;
 }
 export function createControllerState<Drafts extends Map<string,string>>(

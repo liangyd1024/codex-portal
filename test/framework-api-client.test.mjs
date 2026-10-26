@@ -103,3 +103,11 @@ test('shared CSRF read preserves the current configuration revision on every wri
  assert.equal(calls[0].init.headers['X-RCM-Config-Revision'],undefined);
  assert.ok(calls.slice(1).every(c=>c.init.headers['X-RCM-Config-Revision']==='second'&&c.init.headers['X-CSRF-Token']==='shared'));
 });
+
+test('background suspension aborts reads but never cancels or replays a mutation',async()=>{
+ const document=new EventTarget();document.hidden=false;const calls=[];
+ const api=createApiClient({lifecycle:document,targetUrl:p=>p,csrf:{get:()=> 'token',set(){}},flushDrafts(){},reload(){},fetch:async(path,init)=>{calls.push(init);if(init.method==='POST')return json({ok:true});return new Promise((resolve,reject)=>init.signal.addEventListener('abort',()=>reject(Object.assign(Error('aborted'),{name:'AbortError'}))));}});
+ const reading=api('/api/status');const rejected=assert.rejects(reading,error=>error.code==='READ_SUSPENDED');
+ document.hidden=true;document.dispatchEvent(new Event('visibilitychange'));await rejected;
+ assert.deepEqual(await api('/api/message',{method:'POST',body:{text:'保留原消息'}}),{ok:true});assert.equal(calls.length,2);assert.equal(calls[1].signal.aborted,false);
+});

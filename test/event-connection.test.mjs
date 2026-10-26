@@ -30,9 +30,9 @@ test('report rejection does not block recovery and failures retain their stages'
 });
 test('named and unnamed events retain the complete message without parsing or copying',()=>{
  const f=fixture();f.setup();const es=f.sources[0];
- assert.deepEqual([...es.listeners.keys()],['system/update','configuration/change','manager/status','manager/error','manager/request','manager/requestResolved']);
+ assert.deepEqual([...es.listeners.keys()],['system/update','configuration/change','heartbeat','manager/status','manager/error','manager/request','manager/requestResolved']);
  const event={data:'{"unknown":{"raw":"原文"}}',type:'message',extra:42};es.onmessage(event);
- for(const name of [...es.listeners.keys()].slice(2)){assert.equal(es.listeners.get(name),es.onmessage);es.listeners.get(name)(event);}
+ for(const name of [...es.listeners.keys()].slice(3)){assert.equal(es.listeners.get(name),es.onmessage);es.listeners.get(name)(event);}
  assert.equal(f.calls.length,5);for(const call of f.calls)assert.equal(call[1],event);
 });
 test('replaced source cannot deliver update or parse its invalid JSON, new source can',()=>{
@@ -43,11 +43,22 @@ test('replaced source cannot deliver update or parse its invalid JSON, new sourc
  assert.deepEqual(f.calls,[['update',{version:'qa-version',extra:{unknown:true}}]]);
  assert.throws(()=>current.listeners.get('system/update')({data:'invalid'}),SyntaxError);
 });
-test('replacement preserves baseline transport callbacks until the caller closes the old source',async()=>{
+test('replaced stream cannot change transport or deliver stale messages',async()=>{
  const f=fixture();f.setup();const old=f.sources[0];f.setup();const current=f.sources[1];current.onopen();await settle();f.calls.length=0;
- old.onerror();assert.equal(f.state.transport,false);old.onopen();await settle();
- assert.equal(f.state.eventSource,current);
- assert.deepEqual(f.calls,[['status',false],'reset',['status',true],'report','resume']);
+ old.onerror();old.onopen();old.onmessage({data:'stale'});await settle();
+ assert.equal(f.state.transport,true);assert.equal(f.state.eventSource,current);assert.deepEqual(f.calls,[]);
 });
 
 test('configuration events ignore replaced streams and preserve their revision',()=>{const f=fixture();f.setup();const old=f.sources[0];f.setup();old.listeners.get('configuration/change')({data:'invalid'});f.sources[1].listeners.get('configuration/change')({data:'{"version":"new-revision"}'});assert.deepEqual(f.calls,[['configuration',{version:'new-revision'}]]);});
+
+test('foreground replaces suspended stream once and delayed old callbacks are ignored',async(t)=>{
+ t.mock.timers.enable({apis:['setTimeout','setInterval','Date'],now:100000});
+ const window=new EventTarget();window.navigator={onLine:true};const document=new EventTarget();document.hidden=false;
+ const f=fixture({lifecycle:{window,document}});f.setup();f.sources[0].onopen();await settle();
+ document.hidden=true;document.dispatchEvent(new Event('visibilitychange'));t.mock.timers.tick(60000);
+ document.hidden=false;document.dispatchEvent(new Event('visibilitychange'));window.dispatchEvent(new Event('focus'));
+ assert.equal(f.sources.length,2);assert.equal(f.state.transport,false);assert.equal(f.state.transportRecovering,true);
+ f.sources[1].onopen();await settle();f.sources[0].onerror();assert.equal(f.state.transport,true);assert.equal(f.state.transportRecovering,false);
+ t.mock.timers.tick(46000);assert.equal(f.sources.length,3);
+ window.dispatchEvent(new Event('pagehide'));t.mock.timers.reset();
+});

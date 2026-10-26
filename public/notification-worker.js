@@ -1,6 +1,10 @@
 // Notification delivery only: no fetch interception, offline cache or task execution.
 self.addEventListener('install',event=>event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
+self.addEventListener('push',event=>{
+  let message;try{message=event.data?.json();}catch{}
+  event.waitUntil(self.registration.showNotification(message?.title||'Codex · 新通知',{body:message?.body||'打开应用查看',tag:message?.tag,data:message?.data||{}}));
+});
 self.addEventListener('notificationclick',event=>{
   event.notification.close();
   const {host,threadId}=event.notification.data || {};

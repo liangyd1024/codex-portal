@@ -21,9 +21,10 @@ export interface ApiDependencies {
  flushDrafts:()=>void;
  reload:()=>void;
  fetch?:typeof globalThis.fetch;
+ lifecycle?:Pick<Document,'hidden'|'addEventListener'|'removeEventListener'>;
 }
 // Preserve wire payloads and browser-clock freshness; share only in-flight CSRF reads.
-export function createApiClient({targetUrl,configRevision,csrf,flushDrafts,reload,fetch=(...args:Parameters<typeof globalThis.fetch>)=>globalThis.fetch(...args)}:ApiDependencies) {
+export function createApiClient({lifecycle,targetUrl,configRevision,csrf,flushDrafts,reload,fetch=(...args:Parameters<typeof globalThis.fetch>)=>globalThis.fetch(...args)}:ApiDependencies) {
 const csrfReads=new Map<string,Promise<WireEnvelope>>();
 function api<T=WireEnvelope>(path:string,options:ApiOptions={}):Promise<T>{
   // Only identical default token reads can join. Explicit transport options
@@ -44,6 +45,9 @@ async function request<T=WireEnvelope>(path:string, options:ApiOptions = {}):Pro
     headers['Content-Type'] = 'application/json'; headers['X-CSRF-Token'] = csrf.get();
   }
   const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), options.timeout || 90000);
+  let suspended=false;
+  const pause=()=>{if(method==='GET'&&lifecycle?.hidden){suspended=true;controller.abort();}};
+  if(method==='GET')lifecycle?.addEventListener('visibilitychange',pause);
   let response;
   try {
     response = await fetch(path, {method, credentials:'same-origin', headers, signal:controller.signal, ...(method !== 'GET' ? {body:JSON.stringify(options.body || {})} : {})});
@@ -61,10 +65,11 @@ async function request<T=WireEnvelope>(path:string, options:ApiOptions = {}):Pro
     }
     return data as T;
   } catch (e) {
+    if(suspended)throw Object.assign(new Error('页面已暂停，返回后自动同步。'),{code:'READ_SUSPENDED',readOnly:true});
     if ((e as {name:string}).name === 'AbortError') throw new Error(method==='GET'?'读取超时，已有内容和草稿保留，请重试刷新。':'操作结果未确认，草稿已保留。请先核对会话记录，避免重复提交。');
     if (e instanceof TypeError) throw new Error('无法连接本机服务。请确认服务仍在运行。');
     throw e;
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer);lifecycle?.removeEventListener('visibilitychange',pause); }
 }
  return api;
 }

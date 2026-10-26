@@ -42,6 +42,7 @@ import {publishModelSelectAvailability,installModelSelectActions} from './compon
 import {createMessageInput} from './services/message-input';
 import {createUpdateScheduler} from './services/update-scheduler';
 import {createHistoryPagination} from './services/history-pagination';
+import {createPushSubscription} from './services/push-subscription';
 import {createNotificationDelivery} from './services/notification-delivery';
 import {createNotificationPreference} from './services/notification-preference';
 import {createTaskNotifications} from './services/task-notifications';
@@ -257,7 +258,7 @@ function recordError(error:unknown, stage = 'client') {
 let toastPresenter: ReturnType<typeof createToasts> | undefined;
 function toast(...args:Parameters<ReturnType<typeof createToasts>>) { return (toastPresenter??=createToasts({region:$('toasts'),make:el,icon}))(...args); }
 
-const api=createApiClient({targetUrl,configRevision:()=>connectionConfig.configRevision as string|undefined,csrf:{get:()=>state.csrf,set:token=>{state.csrf=token;}},flushDrafts,reload:()=>location.reload()});
+const api=createApiClient({lifecycle:document,targetUrl,configRevision:()=>connectionConfig.configRevision as string|undefined,csrf:{get:()=>state.csrf,set:token=>{state.csrf=token;}},flushDrafts,reload:()=>location.reload()});
 
 const action=createActionRunner({state,renderControls,renderStatus,usable,syncRequestCards,recordError,messageOf,toast});
 
@@ -290,7 +291,7 @@ function renderControlOverview() {
 }
 function renderConnectionBanner() {
   const s=state.status||{}, c=s.connection||{}, service=s.service||{}, conn=c.state||'disconnected';
-  publishConnectionBanner(connectionBanner({transport:state.transport,error:c.error?messageOf(c.error):'',connection:conn,
+  publishConnectionBanner(connectionBanner({recovering:state.transportRecovering,transport:state.transport,error:c.error?messageOf(c.error):'',connection:conn,
     stage:c.stage,stageLabel:stages[c.stage!],connected:connected(),desktopMode:state.desktopMode,loginRecovery:s.loginRecovery,
     limited:service.protocolValidation?.status==='limited',features:service.protocolValidation?.features,
     recoveryMessage:()=>selectedRecoveryMessage(s.recoveryFailures,newChatOpen?null:state.selectedId)}));
@@ -703,7 +704,9 @@ const notificationDelivery=createNotificationDelivery({host:()=>targetHost,worke
   prepareWorker:()=>prepareNotificationWorker(),submitWorker:submitWorkerNotification,
   createNative:(title,options)=>new Notification(title,options),submitNative:submitNotification,
   diagnostic:notificationDiagnostic,publish:publishNotificationView,focus:()=>window.focus(),open:openNotificationThread});
-const notificationPreferences=createNotificationPreference({host:()=>targetHost,support:()=>notificationSupport(),
+const pushSubscription=createPushSubscription({api});
+const notificationPreferences=createNotificationPreference({
+  setPushEnabled:pushSubscription.setEnabled,host:()=>targetHost,support:()=>notificationSupport(),
   permission:()=>Notification.permission,requestPermission:()=>Notification.requestPermission(),
   prepareWorker:notificationDelivery.prepare,
   read:key=>localStorage.getItem(key),save:(key,value)=>localStorage.setItem(key,value),
@@ -721,7 +724,7 @@ function openNotificationThread({host,threadId}:{host?:string;threadId:string}) 
   selectThread(threadId);
 }
 const sendTaskNotification=notificationDelivery.send;
-const notifyTaskEvent=createTaskNotifications({enabled:()=>notificationPreferences.enabled(),
+const notifyTaskEvent=createTaskNotifications({enabled:()=>notificationPreferences.enabled()&&!pushSubscription.active(),
   permitted:()=>('Notification' in window)&&Notification.permission==='granted',host:()=>targetHost,
   thread:id=>state.threads.find(t=>t.id===id)||(state.selectedId===id?currentThread():null),
   known:id=>state.status?.controlledThreads?.includes(id!)||state.status?.subscribedThreads?.includes(id!),
@@ -825,7 +828,7 @@ const handleEvent=createEventHandler({state,sideChat:()=>sideChat,accountVersion
   renderThreads,renderProjects,renderModels,refreshAccountUsage:force=>refreshAccountUsage?.(force),catalogs,loadThreads,loadModels,loadProjects,connected,recordError,
   scheduleListRefresh,scheduleDetailRefresh,scheduleStreamRender,authRecoveryMessage,notifyTaskEvent,applyStatus,renderStatus,renderRequests,renderThread,resumeWorkspace,
   notifyManagerError,toast,messageOf,requestKey,updateExtensionNotice,upsertTurn,upsertItem,ensureTurn,turns});
-const setupEvents=createEventConnection({state,url:()=>targetUrl('/api/events?viewId='+threadViewId),createSource:url=>new EventSource(url),
+const setupEvents=createEventConnection({lifecycle:{window,document},state,url:()=>targetUrl('/api/events?viewId='+threadViewId),createSource:url=>new EventSource(url),
   resetThreadView:()=>threadViewReporter.reset(),reconnectSideChat:()=>sideChat?.reconnect(),renderStatus,
   reportThreadView,resumeWorkspace,recordError,receiveWebUpdate,receiveConfiguration:data=>{configurationUpdate=data;configurationSync.receive(data);},handleEvent});
 const {saveLayout,readLayout,setupResizableLayout,toggleSidebar,toggleInspector}=createLayoutController({element:$,compact:compactLayout});
@@ -857,14 +860,14 @@ function wireEvents() {
   settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); settings.open = false; settings.querySelector('summary')!.focus(); } });
   setupResizableLayout();
   notificationPreferences.sync();
-  installNotificationActions({change:setTaskNotifications,test:() => { if (notificationPreferences.enabled() && Notification.permission === 'granted') sendTaskNotification('Codex · 测试通知','浏览器通知已接入。请检查设备通知中心。','codex-test'); }});
+  installNotificationActions({change:setTaskNotifications,test:() => { if (notificationPreferences.enabled() && Notification.permission === 'granted') void pushSubscription.test().then(()=>notificationDiagnostic('测试推送已提交，请检查通知中心。')).catch(error=>notificationDiagnostic(error.message)); }});
   installWorkspaceLifecycle({window,document,host:targetHost,syncNotificationPreference:notificationPreferences.sync,
     readPreference:key=>localStorage.getItem(key),autoRefreshInput:()=>$('auto-refresh'),setAutoRefresh,
     stopAutoRefresh:()=>autoRefreshController.stop(),flushDrafts});
   installThreadSync({window,document,
     canSync:()=>!automations?.opened&&!newChatOpen&&(state.desktopMode?state.transport:connected())&&!state.status?.service?.releasing&&!!state.selectedId&&!state.busy.has('handoff:'+state.selectedId),
     refresh:refreshSelected,resume:resumeWorkspace,
-    onError:(error:unknown)=>{const message='自动同步暂未成功，将自动重试：'+messageOf(error);if(state.historyError!==message){state.historyError=message;recordError(error,'sync');renderThread();}},
+    onError:(error:unknown)=>{if((error as {code?:string})?.code==='READ_SUSPENDED')return;const message='自动同步暂未成功，将自动重试：'+messageOf(error);if(state.historyError!==message){state.historyError=message;recordError(error,'sync');renderThread();}},
   });
   let composerWidth = 0;
   new ResizeObserver(entries => {

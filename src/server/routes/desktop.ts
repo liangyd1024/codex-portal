@@ -7,7 +7,7 @@ import {createDesktopService} from '../services/desktop';
 export const matchDesktopRoute=(path:string)=>path.match(/^\/api\/desktop\/threads\/([0-9a-f-]{36})(?:\/(history|message|interrupt|acknowledge))?$/i);
 type Match=ReturnType<typeof matchDesktopRoute>;
 type Route=(url:URL,data:Awaited<ReturnType<typeof body>>,res:Response)=>Promise<void>;
-export function createDesktopRoutes(manager:Manager,automations:NativeAutomations,sessionFor:(id:string)=>NativeAutomations) {
+export function createDesktopRoutes(manager:Manager,automations:NativeAutomations,sessionFor:(id:string)=>NativeAutomations,observe?:(id:string,turns:any[])=>void) {
  const service=createDesktopService(manager,automations,sessionFor);
  const reads=new Map<string,Route>([
   ['/api/desktop/candidates',async(url,_data,res)=>json(res,200,await service.candidates(url.searchParams.get('search')||'',url.searchParams.get('cursor')))],
@@ -24,7 +24,7 @@ export function createDesktopRoutes(manager:Manager,automations:NativeAutomation
    if(match){
     // Resolving even unsupported actions preserves the baseline's UUID validation.
     const session=service.session(match[1]);
-    if(!match[2])return async(_url,_data,res)=>json(res,200,await session.detail());
+    if(!match[2])return async(_url,_data,res)=>{const detail=await session.detail();observe?.(match[1],detail.turns||[]);json(res,200,detail);};
     if(match[2]==='history')return async(url,_data,res)=>json(res,200,await session.history(url.searchParams.get('cursor')));
    }
    return reads.get(path);

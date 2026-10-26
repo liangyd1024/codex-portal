@@ -8,12 +8,13 @@ export function protocolDiagnostics(validation:{features?:Record<string,{support
  return reasons;
 }
 interface Context {
- transport:boolean;error:string;connection:string;stage?:string;stageLabel?:string;
+ recovering?:boolean;transport:boolean;error:string;connection:string;stage?:string;stageLabel?:string;
  connected:boolean;desktopMode:boolean;loginRecovery?:string;limited:boolean;
  features?:Record<string,{supported?:boolean}>;recoveryMessage:()=>string;
 }
 export function connectionBanner(context:Context):Partial<BannerView>{
  const show=(text:string,error=false):BannerView=>({hidden:false,className:'connection-banner'+(error?' error':''),text});
+ if(!context.transport&&context.recovering)return show('正在恢复连接并同步消息…');
  if(!context.transport)return show('与网页服务的连接已中断，正在自动重连。已有内容和草稿保留，恢复后将自动同步。');
  if(context.error)return show(context.error,true);
  if(['connecting','reconnecting'].includes(context.connection))return show('正在连接目标机器。'+(context.stage?(context.stageLabel||context.stage)+'…':'正在核验连接状态…'));

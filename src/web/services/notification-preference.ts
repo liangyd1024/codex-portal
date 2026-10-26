@@ -1,5 +1,6 @@
 interface NotificationView {disabled: boolean; checked: boolean; testDisabled: boolean; status: string}
 interface Dependencies {
+  setPushEnabled?:(enabled:boolean)=>Promise<void>;
   host: () => string;
   support: () => {supported: boolean; message?: string; worker?: boolean};
   permission: () => NotificationPermission;
@@ -19,11 +20,12 @@ export function createNotificationPreference(deps: Dependencies) {
     deps.publish({disabled: !supported || pending, checked, testDisabled: !checked,
       status: (!supported ? message : deps.permission() === 'denied'
         ? '通知已被阻止。请在浏览器网站设置中允许通知。'
-        : checked ? '已开启。页面保持打开时提醒新发生的任务完成和待处理事项；不补发历史通知。' : '通知未开启') || '—'});
+        : checked ? '已开启后台推送。切换应用或锁屏后也可接收；需保持电脑服务联网。' : '通知未开启') || '—'});
   }
   function sync() {
     try { enabled = deps.read('rcm.taskNotifications.' + deps.host()) === 'true'; } catch {}
     render();
+    if(enabled&&deps.permission()==='granted'&&deps.setPushEnabled&&!pending){pending=true;void deps.setPushEnabled(true).catch(error=>deps.publish({status:'后台推送连接失败，请重新开启通知：'+error.message})).finally(()=>{pending=false;});}
   }
   async function setEnabled(value: boolean) {
     if (pending) return;
@@ -37,6 +39,7 @@ export function createNotificationPreference(deps: Dependencies) {
       if (value && deps.permission() === 'default') await deps.requestPermission();
       const allowed = value && deps.permission() === 'granted';
       if (allowed && deps.support().worker) await deps.prepareWorker();
+      await deps.setPushEnabled?.(allowed);
       if (host !== deps.host()) return;
       enabled = allowed;
       deps.save('rcm.taskNotifications.' + host, String(allowed));
