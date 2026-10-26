@@ -860,7 +860,7 @@ function wireEvents() {
   settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); settings.open = false; settings.querySelector('summary')!.focus(); } });
   setupResizableLayout();
   notificationPreferences.sync();
-  installNotificationActions({change:setTaskNotifications,test:() => { if (notificationPreferences.enabled() && Notification.permission === 'granted') void pushSubscription.test().then(()=>notificationDiagnostic('测试推送已提交，请检查通知中心。')).catch(error=>notificationDiagnostic(error.message)); }});
+  installNotificationActions({change:setTaskNotifications,test:() => { if (notificationPreferences.enabled() && Notification.permission === 'granted') {notificationDiagnostic('正在检查接收器并等待手机回执…');void pushSubscription.test().then(message=>notificationDiagnostic(message)).catch(error=>notificationDiagnostic(error.message));} }});
   installWorkspaceLifecycle({window,document,host:targetHost,syncNotificationPreference:notificationPreferences.sync,
     readPreference:key=>localStorage.getItem(key),autoRefreshInput:()=>$('auto-refresh'),setAutoRefresh,
     stopAutoRefresh:()=>autoRefreshController.stop(),flushDrafts});

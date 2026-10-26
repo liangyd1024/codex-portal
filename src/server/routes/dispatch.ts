@@ -101,7 +101,7 @@ export function createDispatcher(context:RouteServices){
           const owner=remote?createHash('sha256').update(access.token(req)).digest('hex'):'local';
           if(p==='/api/push/subscribe')return json(res,200,context.push.subscribe(targetKey,owner,origin,data.subscription));
           if(p==='/api/push/unsubscribe')return json(res,200,context.push.remove(targetKey,owner,data.endpoint));
-          if(p==='/api/push/test')return json(res,200,await context.push.test(targetKey,owner,data.endpoint));
+          if(p==='/api/push/test')return json(res,200,await context.push.test(targetKey,owner,data.endpoint,data.testId));
         }
         if(p==='/api/connection-discover'){if(!context.registry)throw new AppError('此入口不支持添加机器。',409);return json(res,200,await discoverConnection(data.connection||{}));}
         if(p==='/api/connection-probe'){if(!context.registry)throw new AppError('此预览不支持连接检测。',409);return json(res,200,await probeConnection(context.config,data));}
