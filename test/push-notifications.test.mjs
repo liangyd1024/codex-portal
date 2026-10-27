@@ -112,3 +112,24 @@ test('worker metadata is sanitized and endpoint hashes associate only the matchi
   assert.doesNotMatch(JSON.stringify(own),/password|secret|private/);
  }finally{f.push.close();}
 });
+
+test('device diagnostic modes are per call, validated and traced; all default sends retain four transport arguments',async()=>{
+ const calls=[],f=fixture(async(...args)=>{calls.push(args);return 201;});
+ try{
+  const device=f.push.devices('host')[0].id,thread='00000000-0000-4000-8000-000000000001',before=f.state().devices;
+  for(const mode of ['declarative','legacy']){
+   const testId='fixture-mode-'+mode;
+   await f.push.testDevice('host',device,testId,thread,true,mode);
+   const call=calls.at(-1);assert.equal(call[5],mode);assert.equal(call[4],undefined);assert.equal(call[1].data.testId,testId);assert.equal(call[1].data.threadId,thread);
+   assert.match(call[1].title,mode==='legacy'?/^\[原始·L点击处理\] /:/^\[原始·D系统跳转\] /);
+   assert.equal(f.push.traces('owner').at(-1).mode,mode);assert.equal(f.push.traces('owner').at(-1).testId,testId);
+  }
+  for(const [diagnostic,testId,mode] of [[true,'fixture-valid-test','bad'],[true,'fixture-valid-test',null],[true,'fixture-valid-test',{}],[true,'fixture-valid-test',['legacy']],[false,'fixture-valid-test','legacy'],['true','fixture-valid-test','legacy'],[true,undefined,'legacy'],[true,'short','declarative'],[true,123,'legacy']]){
+   await assert.rejects(f.push.testDevice('host',device,testId,thread,diagnostic,mode),e=>e.status===400);
+  }
+  assert.equal(calls.length,2);assert.deepEqual(f.state().devices,before);
+  await f.push.testDevice('host',device,'fixture-default-001',thread);assert.equal(calls.at(-1).length,4);assert.doesNotMatch(calls.at(-1)[1].title,/原始/);
+  await f.push.test('host','owner',subscription().endpoint,'fixture-default-002',thread);assert.equal(calls.at(-1).length,4);
+  f.push.receive('host',complete('ordinary'));await f.push.drain();assert.equal(calls.at(-1).length,4);assert.equal(calls.at(-1)[1].data.diagnostic,undefined);
+ }finally{f.push.close();}
+});

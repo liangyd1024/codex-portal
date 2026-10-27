@@ -194,7 +194,7 @@ test('declarative validation failure records show error and leaves fallback elig
   vm.runInNewContext(worker,{URL,self:{addEventListener:(n,fn)=>handlers[n]=fn,registration:{showNotification:async(title,options)=>{if(!options.navigate||!URL.canParse(options.navigate))throw new TypeError('valid navigate required');shown.push({title,options});}},clients:{matchAll:async()=>[]}}});
   handlers.push({data:null,notification:payload.notification,waitUntil:p=>pending.push(p)});
   const results=await Promise.allSettled(pending);assert.equal(results.some(r=>r.status==='rejected'),invalid);
-  if(!invalid){assert.equal(shown[0].title,(diagnostic?'[接收器] ':'')+'会话 · 测试通知');assert.equal(shown[0].options.navigate,payload.notification.navigate);}
+  if(!invalid){assert.equal(shown[0].title,(diagnostic?'[接收器·系统跳转] ':'')+'会话 · 测试通知');assert.equal(shown[0].options.navigate,payload.notification.navigate);}
  }
 });
 
@@ -259,4 +259,27 @@ test('worker trace fetch failure relays routing diagnostics to an authenticated 
  await Promise.all(pending);await Promise.all(pending);
  assert.deepEqual(messages.map(m=>m.stage).sort(),['worker-push','worker-shown']);assert.equal(messages[0].threadId,'target');assert.equal(messages[0].type,'rcm-navigation-trace');
  assert.equal(JSON.stringify(messages).includes('private'),false);
+});
+
+test('diagnostic receiver titles reflect the native event branch, never the requested mode or JSON wrapper',async()=>{
+ for(const kind of ['native-declarative','plain-legacy','wrapped-legacy'])for(const diagnostic of [false,true]){
+  const handlers={},shown=[],messages=[],pending=[],declarative=kind==='native-declarative';
+  // Deliberately contradict the requested title with the delivered native branch.
+  const title=declarative?'[原始·L点击处理] 会话 · 测试编号':'[原始·D系统跳转] 会话 · 测试编号';
+  const data={host:'local',threadId:'target',testId:'fixture-actual-branch',diagnostic,deliveryMode:declarative?'legacy':'declarative'};
+  const payload=notificationPayload({title,body:'正文',tag:'one',data},'https://rcm.test');
+  const client={url:'https://rcm.test/',focus:async()=>client,postMessage:m=>messages.push(m)};
+  vm.runInNewContext(worker,{URL,crypto,Response,caches:clickStorage(),self:{location:{origin:'https://rcm.test'},addEventListener:(n,fn)=>handlers[n]=fn,registration:{showNotification:async(title,options)=>{if(declarative&&!URL.canParse(options.navigate))throw new TypeError('valid navigate required');shown.push({title,options});}},clients:{matchAll:async()=>[client]}}});
+  const event=declarative?{notification:payload.notification,data:null}:{data:{json:()=>kind==='wrapped-legacy'?payload:{title,body:'正文',tag:'one',data}}};
+  handlers.push({...event,waitUntil:p=>pending.push(p)});for(let i=0;i<pending.length;i++)await pending[i];
+  assert.equal(shown[0].title,diagnostic?'[接收器·'+(declarative?'系统跳转':'点击处理')+'] 会话 · 测试编号':title);
+  assert.equal(Object.hasOwn(shown[0].options,'navigate'),declarative);
+  assert.equal(shown[0].options.data.testId,'fixture-actual-branch');
+  assert.deepEqual(JSON.parse(JSON.stringify(shown[0].options)),{body:'正文',tag:'one',data,silent:false,...(declarative?{navigate:payload.notification.navigate}:{})});
+  if(declarative){assert.equal(shown[0].options.navigate,payload.notification.navigate);assert.equal(messages.filter(m=>m.type==='rcm-notification-click').length,0);}
+  else{
+   const clicks=[];handlers.notificationclick({notification:{...shown[0].options,close(){}},waitUntil:p=>clicks.push(p)});for(let i=0;i<clicks.length;i++)await clicks[i];
+   const target=messages.find(m=>m.type==='rcm-notification-click');assert.equal(target.threadId,'target');assert.equal(target.testId,data.testId);assert.ok(target.clickId);
+  }
+ }
 });

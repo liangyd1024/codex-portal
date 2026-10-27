@@ -5,7 +5,7 @@ let clickWork=Promise.resolve(), fallbackClick=null;
 function serializeClick(work){const next=clickWork.then(work);clickWork=next.catch(()=>{});return next;}
 // Immutable per-event keys prevent one worker's stale snapshot overwriting another.
 // Only routing IDs and bounded runtime metadata are persisted; never bodies or keys.
-const workerVersion=7,instanceId=globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+const workerVersion=8,instanceId=globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
 const journalName='rcm-notification-journal-v2',journalPrefix='/__notification-event/';
 let sequence=0,journal=[],journalStorage='available',journalWork,journalGeneration=0,savedGeneration=0;
 function bounded(promise,fallback,ms=800){
@@ -151,7 +151,7 @@ self.addEventListener('push',event=>{
     // Notification fields may be prototype getters. WebKit requires a valid
     // navigate for declarative replacements; it handles their activation itself.
     if(declarative)options.navigate=notice.navigate;
-    try{await self.registration.showNotification(diagnostic?'[接收器] '+title.replace(/^\[原始\] /,''):title,options);}
+    try{await self.registration.showNotification(diagnostic?'[接收器·'+(declarative?'系统跳转':'点击处理')+'] '+title.replace(/^\[原始(?:·[^\]]+)?\] /,''):title,options);}
     catch(caught){error=String(caught?.name||'Error')+': '+String(caught?.message||caught).replace(/https?:\/\/\S+/g,'[URL]').slice(0,200);}
     observe(event,error?'worker-show-failed':'worker-shown',data,context,{mode,...(error?{error}: {})});
     if(data.testId){
@@ -166,9 +166,9 @@ self.addEventListener('notificationclick',event=>{
   event.notification.close();
   const {host,threadId}=event.notification.data || {};
   const context=diagnosticContext();
-  observe(event,'worker-click',event.notification.data,context,{mode:'legacy'});
   event.waitUntil((async()=>{
     const target={type:'rcm-notification-click',host,threadId,testId:event.notification.data?.testId,clickId:crypto.randomUUID()};
+    observe(event,'worker-click',target,context,{mode:'legacy'});
     // Keep storage ordering separate from window startup: the new page may ask
     // for its target before openWindow/focus resolves.
     if(threadId)await serializeClick(async()=>{
