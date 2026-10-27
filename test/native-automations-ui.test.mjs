@@ -4,7 +4,7 @@ import {installAutomations,configureAutomationViews,scheduleLabel} from '../publ
 import {matchingTasks,taskPresentation} from '../src/web/services/automation-view.ts';
 // Minimal DOM surface used by the task browser. No native or engine writes.
 class Element {
- constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.value='';this.classList={add(){},remove(){}};}
+ constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.value='';this.classList={add(){},remove(){},contains(){return false;}};}
  append(...nodes){for(const n of nodes){n.parent=this;this.children.push(n);}}
  insertBefore(node){this.append(node);}
  replaceChildren(...nodes){this.children=[];this.append(...nodes);}
@@ -16,19 +16,20 @@ class Element {
  focus(){}
  add(node){this.append(node);}
  closest(tag){return this.tag===tag?this:this.parent?.closest(tag);}
+ querySelector(){return null;}
  querySelectorAll(selector){return this.children.flatMap(n=>[...(selector==='details[open]'&&n.tag==='details'&&n.open?[n]:[]),...n.querySelectorAll(selector)]);}
 }
 test('task editing only opens the bound management chat after the explicit action',async t=>{
- const body=new Element('body'),main=new Element('main'),footer=new Element('footer'),calls=[],opened=[],threads=[];let broken=false,name='Task',rows,showTask,taskView,controls,controlsState={loading:false,feedback:""},search=new Element("input"),disposed=0;
+ const body=new Element('body'),main=new Element('main'),inspector=new Element('aside'),shell=new Element('div'),footer=new Element('footer'),calls=[],opened=[],threads=[];let broken=false,name='Task',rows,showTask,taskView,controls,controlsState={loading:false,feedback:""},search=new Element("input"),disposed=0;
  const previousDocument=globalThis.document,previousOption=globalThis.Option;
- globalThis.document={body,createElement:tag=>new Element(tag),querySelector:s=>s==='.main-panel'?main:footer};
+ globalThis.document={body,createElement:tag=>new Element(tag),querySelector:s=>s==='#inspector'?inspector:s==='#app-shell'?shell:s==='.main-panel'?main:footer};
  globalThis.Option=class extends Element {constructor(text,value){super('option');this.textContent=text;this.value=value;}};
  configureAutomationViews({controls(options){controls=options;return {search,createButton:new Element("button"),setState(update){Object.assign(controlsState,update);}};},list(options){showTask=options.showTask;return {render(value){rows=value;}};},task(options){taskView=options;return {closeButton:new Element('button'),dispose(){disposed++;}};}});
  t.after(()=>{globalThis.document=previousDocument;globalThis.Option=previousOption;configureAutomationViews(undefined);});
  const view=installAutomations({onOpen(){},openSession:async(...args)=>opened.push(args),openThread:id=>threads.push(id),api:async(path)=>{
   calls.push(path);if(broken)throw Error('offline');return {threadId:'management',items:[{id:'native-id',name,status:'PAUSED',rrule:'FREQ=DAILY;BYHOUR=8',prompt:'native prompt',kind:'heartbeat',target_thread_id:'execution',unknown:{keep:true}}],runs:[],observedAt:Date.now()};
  }});
- view.open();assert.equal(controlsState.loading,true);assert.match(controlsState.feedback,/正在同步/);await new Promise(r=>setImmediate(r));
+ view.open();assert.equal(inspector.children[0].id,'automations-page');assert.equal(main.children.length,0);assert.equal(view.opened,true);shell.classList.contains=()=>true;assert.equal(view.opened,false);shell.classList.contains=()=>false;assert.equal(controlsState.loading,true);assert.match(controlsState.feedback,/正在同步/);await new Promise(r=>setImmediate(r));
  assert.equal(controlsState.loading,false);assert.match(controlsState.feedback,/与目标机器 Codex 共用任务/);
  assert.equal(rows.length,1);const task=rows[0].task;assert.equal(task.id,'native-id');assert.equal(task.name,'Task');assert.deepEqual(task.unknown,{keep:true});
  showTask(task,'edit');assert.equal(opened.length,0);assert.equal(body.children.length,1);
@@ -38,7 +39,7 @@ test('task editing only opens the bound management chat after the explicit actio
  taskView.edit();assert.equal(taskView.view.mode,'edit');assert.equal(opened.length,1);taskView.dialog.close();
  showTask(task,'delete');assert.equal(taskView.view.heading,'删除任务');assert.equal(opened.length,1);taskView.manage();assert.match(opened[1][1],/只删除这一项/);
  showTask(task);taskView.openThread(taskView.view.targetThreadId);assert.deepEqual(threads,['execution']);assert.equal(opened.length,2);
- name='Renamed';await view.refresh();assert.equal(rows[0].task.name,'Renamed');
+ view.close();assert.equal(view.opened,false);assert.equal(inspector.children[0].hidden,true);view.open();await new Promise(r=>setImmediate(r));name='Renamed';await view.refresh();assert.equal(rows[0].task.name,'Renamed');
  const previous=rows;broken=true;await view.refresh();assert.equal(rows,previous);assert.match(controlsState.feedback,/同步失败/);assert.equal(controlsState.loading,false);
  search.value='missing';controls.onSearch();assert.equal(rows.length,0);search.value='';controls.onSearch();assert.equal(rows.length,1);controls.onFilter('ACTIVE');assert.equal(rows.length,0);controls.onFilter('all');assert.equal(rows.length,1);await controls.onCreate();assert.equal(opened.at(-1)[0],'management');assert.equal(opened.at(-1)[1],'请帮我创建一个定时任务。');
 });
@@ -54,10 +55,10 @@ test('task filtering keeps raw identities, stable native order and unknown run s
 
 
 test('management picker retains input after failure and blocks duplicate binding',async t=>{
- const body=new Element('body'),main=new Element('main'),footer=new Element('footer'),query=new Element('input'),choices=new Element('select'),state={},opened=[],writes=[];
+ const body=new Element('body'),main=new Element('main'),inspector=new Element('aside'),shell=new Element('div'),footer=new Element('footer'),query=new Element('input'),choices=new Element('select'),state={},opened=[],writes=[];
  let picker,resolveBinding,rejectBinding,disposed=0;
  const previousDocument=globalThis.document;
- globalThis.document={body,createElement:tag=>new Element(tag),querySelector:s=>s==='.main-panel'?main:footer};
+ globalThis.document={body,createElement:tag=>new Element(tag),querySelector:s=>s==='#inspector'?inspector:s==='#app-shell'?shell:s==='.main-panel'?main:footer};
  t.after(()=>{globalThis.document=previousDocument;configureAutomationViews(undefined);});
  // Capture the actual create callback through the view boundary; no DOM shape assumptions.
  let create;

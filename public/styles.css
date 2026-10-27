@@ -613,3 +613,21 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .connection-password-fields{display:grid;gap:8px}
 .connection-editor .connection-remember-password{display:flex;align-items:center;gap:8px;min-height:44px;font-size:13px}
 .connection-editor .connection-remember-password input{width:20px;height:20px;min-height:20px;flex:none}
+
+/* Shared reading hierarchy for settings, access, tasks and supporting text. */
+:root{--ink:#171717;--muted:#6b6b6b}
+.subtle{color:var(--muted);line-height:1.625}
+.inspector{color:var(--ink);font-size:16px;line-height:1.625;background:#fafafa}
+.inspector-heading,.inspector-nav{background:#fafafa}
+.inspector-heading h2,.inspector-section>summary,.inspector .section-title h3{font-size:16px;font-weight:600;line-height:1.625;color:var(--ink)}
+.inspector .section-title{color:var(--ink)}
+.inspector-nav button{font-family:var(--font-ui);color:var(--ink)}
+.inspector-nav button:hover{background:var(--control-hover-background)}
+.inspector-nav button[aria-pressed="true"]{color:var(--control-foreground);background:#e9e9e9}
+.inspector :is(.subtle,.detail-list,.detail-list dd,.connection-summary>span:last-child,.system-update-versions,.system-update-steps,.settings-help,#notification-status,.inspector-footer){font-size:13px;line-height:1.625;color:var(--muted)}
+.inspector .detail-list dt{color:var(--muted)}
+.inspector .detail-list dd{color:var(--ink);overflow-wrap:anywhere}
+.inspector :is(.notification-controls,.connection-summary strong,.connection-maintenance>summary){font-size:14px;line-height:1.625}
+.inspector .notification-controls input{accent-color:var(--control-foreground)}
+.inspector :is(.primary-button,.secondary-button){font-size:14px;line-height:1.625;border-radius:var(--control-radius)}
+.inspector .text-button:not(.danger){color:var(--control-foreground)}

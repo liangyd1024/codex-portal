@@ -19,7 +19,9 @@ export function scheduleLabel(rule:unknown){
 }
 export function installAutomations({api,onOpen,openSession,openThread,notify}:Options){
   const page=node('section','automations-page');page.id='automations-page';page.hidden=true;
-  document.querySelector<HTMLElement>('.main-panel')!.insertBefore(page,document.querySelector('.workspace-footer'));
+  const inspector=document.querySelector<HTMLElement>('#inspector')!;
+  inspector.insertBefore(page,inspector.querySelector('.inspector-footer'));
+  page.setAttribute('aria-label','定时任务');
   const header=node('div','automations-heading');
   const feedback=node('p','subtle');feedback.setAttribute('role','status');
   const list=node('div','automation-list');
@@ -65,9 +67,9 @@ export function installAutomations({api,onOpen,openSession,openThread,notify}:Op
     async function find(){const version=++request;view.setState({confirmDisabled:true});try{const result=await api<{data:AutomationCandidate[]}>('/api/automations/candidates?search='+encodeURIComponent(query.value));if(version!==request)return;view.setCandidates(result.data,threadId);view.setState({confirmDisabled:!choices.value,error:result.data.length?'':'没有匹配的会话。'});}catch(e){if(version===request)view.setState({error:(e as Error).message});}}
     await find();
   }
-  return {get threadId(){return threadId;},get opened(){return !page.hidden;},
-    open(){onOpen();page.hidden=false;document.querySelector<HTMLElement>('.main-panel')!.classList.add('automations-open');void load();},
-    close(){activeDialog?.close();page.hidden=true;document.querySelector<HTMLElement>('.main-panel')!.classList.remove('automations-open');},refresh:load};
+  return {get threadId(){return threadId;},get opened(){return !page.hidden&&!document.querySelector('#app-shell')!.classList.contains('inspector-hidden');},
+    open(){onOpen();page.hidden=false;void load();},
+    close(){activeDialog?.close();page.hidden=true;},refresh:load};
 }
 
 let automationViews:AutomationViewsRenderer|undefined;

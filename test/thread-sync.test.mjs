@@ -185,7 +185,10 @@ test('native management replies cannot replace a newly selected ordinary chat',a
   f.state.desktopMode=false;f.state.selectedId='b';f.state.selectionVersion++;
   f.requests[0].resolve({thread:{id:'a'},turns:[],desktop:{receipts:{}}});await old;
   assert.equal(f.applied.length,0);
-  f.context.automations={opened:true};await f.read();assert.equal(f.requests.length,1);
+  f.context.automations={opened:true};
+  const current=f.read();assert.equal(f.requests.length,2);
+  f.requests[1].resolve({thread:{id:'b'},turns:[]});await current;
+  assert.equal(f.state.detail.thread.id,'b');
 });
 
 
@@ -272,7 +275,7 @@ test('presence hides thread selection on non-thread pages and skips disconnected
  const f=viewReportFixture();f.state.transport=false;await f.report();assert.equal(f.requests.length,0);f.state.transport=true;
  for(const mode of ['new','desktop','automations']){
   f.reconnect();f.context.newChatOpen=mode==='new';f.state.desktopMode=mode==='desktop';f.context.automations={opened:mode==='automations'};
-  const pending=f.report();assert.equal(f.requests.at(-1).body.threadId,null);f.requests.at(-1).resolve({ok:true});await pending;
+  const pending=f.report();assert.equal(f.requests.at(-1).body.threadId,mode==='automations'?'a':null);f.requests.at(-1).resolve({ok:true});await pending;
  }
  assert.deepEqual(f.requests.map(r=>r.body.revision),[1,2,3]);
 });

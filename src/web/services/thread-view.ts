@@ -4,9 +4,9 @@ interface Dependencies {viewId:string;host:string;context:()=>Context;request:(p
 export function createThreadViewReporter({viewId:threadViewId,host:targetHost,context,request:api,refresh:scheduleDetailRefresh}:Dependencies){
  let threadViewRevision=0,threadViewReport:{key:string;promise?:Promise<unknown>}|null=null;
  function reportThreadView(){
-  const {state,newChatOpen,automations,sideChat}=context();
+  const {state,newChatOpen,sideChat}=context();
   if(!state.transport)return Promise.resolve();
-  const threadId=newChatOpen||state.desktopMode||automations?.opened?null:state.selectedId||null;
+  const threadId=newChatOpen||state.desktopMode?null:state.selectedId||null;
   const sideThreadId=sideChat?.visibleId||null;
   const key=JSON.stringify([targetHost,threadId,sideThreadId,state.status?.instanceId,state.status?.connection?.connectedAt]);
   if(threadViewReport?.key===key)return threadViewReport.promise!;

@@ -1,5 +1,5 @@
 import type {NotificationTarget} from './notification-target';
-type InspectorView='settings'|'mobile';
+import type {InspectorView} from '../components/InspectorNavigation';
 type RefreshUsage=(force?:boolean)=>Promise<unknown>;
 interface Elements {'messages':HTMLElement;'inspector':HTMLElement;'app-shell':HTMLElement}
 interface Dependencies {

@@ -53,3 +53,10 @@ test('cold notification trace uploads after CSRF while status is still blocked, 
  assert.deepEqual(sent,[{host:'original',stage:'page-target',threadId:'other-thread',clickId:'cold',testId:'cold-test',selectedId:'saved',visibility:'hidden',version:'page-5',observedAt:10}]);
  resolveStatus();await start;assert.deepEqual(order,['notification','read-csrf','csrf-ready','load-status','trace','status-ready','refresh','finished']);
 });
+
+test('automation category stays in the inspector and hides settings without loading other categories',async()=>{
+ const f=fixture();await f.init();f.calls.length=0;f.showInspector();f.select('automations');
+ assert.ok(f.groups.every(group=>group.hidden));assert.deepEqual(f.calls,[['selected','automations']]);
+ assert.equal(f.state.selectedId,'saved');assert.equal(f.state.selectionVersion,7);
+ f.select('settings');assert.equal(f.groups[0].hidden,false);assert.equal(f.groups[3].hidden,true);
+});

@@ -416,7 +416,6 @@ function renderControls() {
   }
   publishDesktopControls(desktopView);
   publishSendActions(buttonView);
-  if(automations?.opened){publishWorkspaceLabel('thread-title',{hidden:false});setWorkspaceText('thread-title','定时任务');}
 }
 function controlReason(id:'new-thread'|'takeover',text:string){
   const button=$(id),hidden=Boolean(!button.disabled||button.hidden);
@@ -730,7 +729,7 @@ const readSelectedDetail=async(id:string,current:()=>boolean)=>{
   if(!current()||state.desktopMode)return detail;
   return threadAccess.resolve(id,detail,current);
 };
-const selectedRefresh=createSelectedRefresh({state,blocked:()=>automations?.opened||newChatOpen,
+const selectedRefresh=createSelectedRefresh({state,blocked:()=>newChatOpen,
   newChatOpen:()=>newChatOpen,restore:restoreDetail,read:readSelectedDetail,turns,merge:mergeLiveTurns,
   apply:applyDetail,updated:()=>{turnNavigation?.update();if(!openingNotification)void finishNotificationNavigation().catch(recordError);}});
 const refreshSelected=selectedRefresh.refresh;
@@ -914,10 +913,10 @@ const setupEvents=createEventConnection({lifecycle:{window,document},state,url:(
   reportThreadView,resumeWorkspace,recordError,receiveWebUpdate,receiveConfiguration:data=>{configurationUpdate=data;configurationSync.receive(data);},handleEvent});
 const {saveLayout,readLayout,setupResizableLayout,toggleSidebar,toggleInspector}=createLayoutController({element:$,compact:compactLayout});
 function wireEvents() {
-  automations=installAutomations({api,onOpen:()=>{flushDrafts();closeNewChat();state.selectionVersion++;toggleInspector(false);if(compactLayout())toggleSidebar(false,false);queueMicrotask(renderControls);},
+  automations=installAutomations({api,onOpen:()=>{},
     openSession:async(id,prompt)=>{await selectThread(id,{desktop:true});if(prompt&&state.selectedId===id){const previous=$('message-input').value;if(previous&&previous!==prompt){toast('管理会话已有未发送草稿，请先处理草稿，再返回定时任务继续。',true);$('message-input').focus();return;}$('message-input').value=prompt;state.drafts.set(id,$('message-input').value);resizeInput();renderControls();}$('message-input').focus();},
     openThread:id=>selectThread(id),notify:toast});
-  installAutomationNavigation(()=>automations!.open());
+  installAutomationNavigation(()=>automations!.open(),()=>automations!.close());
   installDesktopControls({enter:()=>action('desktop-recover',async()=>{
       const id=state.selectedId,selection=state.selectionVersion;
       const detail=await api('/api/desktop/threads/'+encodeURIComponent(id!)+'/recover',{method:'POST'});
@@ -950,7 +949,7 @@ function wireEvents() {
     readPreference:key=>localStorage.getItem(key),autoRefreshInput:()=>$('auto-refresh'),setAutoRefresh,
     stopAutoRefresh:()=>autoRefreshController.stop(),flushDrafts});
   installThreadSync({window,document,
-    canSync:()=>!automations?.opened&&!newChatOpen&&(state.desktopMode?state.transport:connected())&&!state.status?.service?.releasing&&!!state.selectedId&&!state.busy.has('handoff:'+state.selectedId),
+    canSync:()=>!newChatOpen&&(state.desktopMode?state.transport:connected())&&!state.status?.service?.releasing&&!!state.selectedId&&!state.busy.has('handoff:'+state.selectedId),
     refresh:refreshSelected,resume:resumeWorkspace,
     onError:(error:unknown)=>{if((error as {code?:string})?.code==='READ_SUSPENDED')return;const message='自动同步暂未成功，将自动重试：'+messageOf(error);if(state.historyError!==message){state.historyError=message;recordError(error,'sync');renderThread();}},
   });
