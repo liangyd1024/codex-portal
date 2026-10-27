@@ -22,3 +22,12 @@
 body.side-chat-open .skill-suggestions{z-index:70}.side-chat-panel .composer-tools .composer-options-panel [data-tool=execution-mode],.side-chat-panel .composer-tools .composer-options-panel [data-tool=goal-settings]{display:flex;align-items:center;justify-content:space-between}.side-chat-panel [data-tool=execution-mode][aria-pressed=true]::after{content:'✓';color:#346ba8}
 
 .annotation-draft textarea{border:1px solid var(--control-border-color);border-radius:var(--control-radius);background:var(--control-background);color:var(--control-foreground)}
+
+/* Keep touch selection actions in the composer flow, away from native selection menus. */
+.selection-actions-host{display:contents}.selection-cancel{display:none}
+.mobile-layout .selection-actions-host{display:block;width:100%;max-width:var(--conversation-width);margin:0 auto}
+.mobile-layout .selection-actions-host:has(.selection-actions[hidden]){display:none}
+.mobile-layout .selection-actions{position:static;width:100%;max-width:none;max-height:none!important;margin:0 0 8px;display:flex;justify-content:space-between;gap:4px;box-shadow:none;border-radius:var(--panel-radius);user-select:none;-webkit-user-select:none}
+.mobile-layout .selection-actions[hidden]{display:none}
+.mobile-layout .selection-actions button{font-size:14px;padding:6px 8px;white-space:nowrap}
+.mobile-layout .selection-actions .selection-cancel{display:block;color:var(--muted)}

@@ -1,3 +1,4 @@
+import {compactLayout} from '../../../public/mobile-ui.js';
 import type {SideFragment} from './side-chat';
 interface Source {messageId?:string;threadId?:string|null;turnId?:string;startOffset?:number;[field:string]:unknown}
 export interface Annotation {id:string;text:string;annotation:string;source?:Source;range?:Range}
@@ -6,7 +7,7 @@ interface Capture {id:string|null;items:Annotation[]}
 export interface AnnotationViewState {menuHidden:boolean;editorHidden:boolean;chipHidden:boolean;chipText:string;detailsHidden:boolean;expanded:boolean;excerpt:string}
 export interface Marker {label:string;text:string;left:number;top:number;activate:()=>void}
 export interface DraftRow {item:Annotation;edit:(value:string)=>void;remove:()=>void}
-export interface AnnotationActions {toggle:()=>void;add:()=>void;side:()=>void;commit:()=>void;dismiss:()=>void}
+export interface AnnotationActions {toggle:()=>void;add:()=>void;side:()=>void;commit:()=>void;dismiss:()=>void;cancel:()=>void}
 export interface AnnotationView {menu:HTMLDivElement;editor:HTMLDivElement;comment:HTMLTextAreaElement;chip:HTMLButtonElement;details:HTMLDivElement;patch:(patch:Partial<AnnotationViewState>)=>void;drafts:(rows:DraftRow[])=>void;markers:(rows:Marker[])=>void}
 interface Options {host:string;context:()=>{id:string|null};onSideChat:(selection:Selection)=>void;sideSelections?:()=>SideFragment[];changed:()=>void;notify:(message:string,error:boolean)=>unknown}
 let viewInstaller:((actions:AnnotationActions)=>AnnotationView)|undefined;
@@ -25,7 +26,7 @@ export function installResponseAnnotations({context,host,onSideChat,sideSelectio
  const save=()=>{try{sessionStorage.setItem(key,JSON.stringify(drafts));}catch{notify('注释暂时仅保留在当前页面，刷新可能丢失。',true);}};
  let selection:Selection|null=null,editing:Selection|null=null,version:string|null=null,lastDraftKey:string|null=null,ranges=new Map<string,Range>(),dismissedSelection='';const comments=new Map<string,string>();
  if(!viewInstaller)throw Error('注释视图未安装。');
- const view=viewInstaller({toggle:()=>{const show=Boolean(details.hidden);view.patch({detailsHidden:!show,expanded:show});},commit:()=>commit(),dismiss:()=>dismiss(),
+ const view=viewInstaller({toggle:()=>{const show=Boolean(details.hidden);view.patch({detailsHidden:!show,expanded:show});},commit:()=>commit(),dismiss:()=>dismiss(),cancel:()=>{dismiss();getSelection()?.removeAllRanges();},
   add:()=>{if(!selection)return;editing=selection;comment.value=comments.get(selectionKey(editing))||'';view.patch({excerpt:editing.text,menuHidden:true,editorHidden:false});position(editor,editing.range.getBoundingClientRect());comment.focus();},
   side:()=>{if(!selection)return;const chosen=selection;dismiss();onSideChat(chosen);}});
  const {menu,editor,comment,chip,details}=view;
@@ -57,18 +58,18 @@ export function installResponseAnnotations({context,host,onSideChat,sideSelectio
  const selectionKey=(s:Selection|null)=>s?JSON.stringify([s.context,s.source,s.text]):'';
  function dismiss(){if(editing){comments.set(selectionKey(editing),comment.value);if(comments.size>50)comments.delete(comments.keys().next().value!);}dismissedSelection=getSelection()?.toString()||'';view.patch({menuHidden:true});view.patch({editorHidden:true});editing=null;selection=null;}
  document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target as Node)&&!editor.contains(e.target as Node)){dismiss();if(!details.contains(e.target as Node)&&!chip.contains(e.target as Node)&&!(e.target as Element).closest('.annotation-marker')){view.patch({detailsHidden:true,expanded:false});}}});
- const reposition=()=>{if(editing&&!editor.hidden)position(editor,editing.range.getBoundingClientRect());};window.visualViewport?.addEventListener('resize',reposition);window.visualViewport?.addEventListener('scroll',reposition);window.addEventListener('resize',reposition);
+ const reposition=()=>{if(editing&&!editor.hidden)position(editor,editing.range.getBoundingClientRect());};window.visualViewport?.addEventListener('resize',reposition);window.visualViewport?.addEventListener('scroll',reposition);window.addEventListener('resize',()=>{reposition();select();});
  function commit(){if(!editing||editing.context!==context().id)return dismiss();const list=current();if(list.length>=20){notify('每条消息最多添加 20 条注释。',true);return;}drafts[context().id as string]=[...list,{id:crypto.randomUUID(),text:editing.text,annotation:comment.value,source:editing.source}];ranges.set(drafts[context().id as string].at(-1)!.id,editing.range);save();dismiss();render();changed();input.focus();}
  function select(){
   if(!editor.hidden)return;if(document.activeElement?.closest('.side-chat-panel')){view.patch({menuHidden:true});return;}
-  const s=getSelection();if(!s?.rangeCount||s.isCollapsed){view.patch({menuHidden:true});return;}
+  const s=getSelection();if(!s?.rangeCount||s.isCollapsed){selection=null;dismissedSelection='';view.patch({menuHidden:true});return;}
   const r=s.getRangeAt(0),element=(n:Node)=>n.nodeType===1?n as Element:n.parentElement;
   const first=element(r.startContainer)?.closest<HTMLElement>('.message.agent'),last=element(r.endContainer)?.closest<HTMLElement>('.message.agent');
   if(!first||first!==last||!messages.contains(first)){view.patch({menuHidden:true});return;}
   const text=s.toString();if(text===dismissedSelection||!text.trim()||text.length>20000){view.patch({menuHidden:true});return;}
   const prefix=r.cloneRange();prefix.selectNodeContents(first);prefix.setEnd(r.startContainer,r.startOffset);
   selection={context:context().id,text,range:r.cloneRange(),source:{startOffset:prefix.toString().length,threadId:context().id,messageId:first.dataset.messageId,turnId:first.closest<HTMLElement>('[data-turn-id]')?.dataset.turnId}};
-  view.patch({menuHidden:false});position(menu,r.getBoundingClientRect());
+  view.patch({menuHidden:false});if(!compactLayout())position(menu,r.getBoundingClientRect());
  }
  menu.addEventListener('pointerdown',e=>e.preventDefault());
  messages.addEventListener('pointerup',()=>{dismissedSelection='';select();});
