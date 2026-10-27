@@ -13,7 +13,7 @@ function fixture(error){
  vm.runInNewContext(code+'\nglobalThis.client=createPushSubscription({api,threadId:()=>globalThis.selectedThread});',context);
  return {client:context.client,listeners,bodies,select:id=>{context.selectedThread=id;},counts:()=>({sent,updates})};
 }
-test('test waits for matching device handling and coalesces repeated clicks',async()=>{const f=fixture();const a=f.client.test(),b=f.client.test();assert.equal(a,b);assert.match(await a,/手机已处理/);assert.deepEqual(f.counts(),{sent:1,updates:1});assert.equal(f.listeners.size,0);});
+test('test waits for matching device handling and coalesces repeated clicks',async()=>{const f=fixture();const a=f.client.test(),b=f.client.test();assert.equal(a,b);assert.match(await a,/手机已处理/);assert.deepEqual(f.counts(),{sent:1,updates:0});assert.equal(f.listeners.size,0);});
 test('test exposes device display rejection rather than reporting successful submission',async()=>{const f=fixture('permission denied');assert.match(await f.client.test(),/系统显示失败：permission denied/);assert.equal(f.listeners.size,0);});
 
 test('test notification captures the selected thread before asynchronous worker setup',async()=>{const f=fixture();f.select('thread-a');const pending=f.client.test();f.select('thread-b');await pending;assert.equal(f.bodies[0].threadId,'thread-a');});

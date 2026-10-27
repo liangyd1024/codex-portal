@@ -37,3 +37,10 @@ test('storage failures preserve baseline in-memory state; unsupported environmen
  const unsupported=fixture({support:()=>({supported:false,message:'不支持通知'}),permission:()=>{throw Error('不能读取权限');}});
  unsupported.controller.sync();assert.equal(unsupported.views.at(-1).status,'不支持通知');await unsupported.controller.setEnabled(true);assert.deepEqual(unsupported.errors,['不支持通知']);assert.equal(unsupported.controller.enabled(),false);
 });
+
+test('saved preference cannot report background push ready before receiver verification and subscription succeed',async()=>{
+ let release,reject;const f=fixture({setPushEnabled:()=>new Promise((yes,no)=>{release=yes;reject=no;})});f.permission('granted');f.values.set('rcm.taskNotifications.qa-local','true');
+ f.controller.sync();assert.equal(f.views.at(-1).status,'正在检查通知接收器…');assert.equal(f.views.at(-1).testDisabled,true);
+ reject(Error('旧版本'));await new Promise(resolve=>setImmediate(resolve));f.controller.render();assert.match(f.views.at(-1).status,/旧版本/);assert.equal(f.views.at(-1).testDisabled,true);
+ f.controller.sync();release();await new Promise(resolve=>setImmediate(resolve));assert.match(f.views.at(-1).status,/已开启后台推送/);assert.equal(f.views.at(-1).testDisabled,false);
+});

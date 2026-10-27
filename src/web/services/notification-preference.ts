@@ -13,19 +13,22 @@ interface Dependencies {
 }
 
 export function createNotificationPreference(deps: Dependencies) {
-  let enabled = false, pending = false;
+  let enabled = false, pending = false, pushReady = !deps.setPushEnabled, pushError = '';
   function render() {
     const {supported, message} = deps.support();
     const checked = enabled && supported && deps.permission() === 'granted';
-    deps.publish({disabled: !supported || pending, checked, testDisabled: !checked,
+    deps.publish({disabled: !supported || pending, checked, testDisabled: !checked || pending || !pushReady,
       status: (!supported ? message : deps.permission() === 'denied'
         ? '通知已被阻止。请在浏览器网站设置中允许通知。'
-        : checked ? '已开启后台推送。切换应用或锁屏后也可接收；需保持电脑服务联网。' : '通知未开启') || '—'});
+        : checked && pending ? '正在检查通知接收器…' : checked && !pushReady ? pushError || '后台推送尚未连接，请重试。' : checked ? '已开启后台推送。切换应用或锁屏后也可接收；需保持电脑服务联网。' : '通知未开启') || '—'});
   }
   function sync() {
     try { enabled = deps.read('rcm.taskNotifications.' + deps.host()) === 'true'; } catch {}
+    if(enabled&&deps.permission()==='granted'&&deps.setPushEnabled&&!pending){
+      const host=deps.host();pending=true;pushReady=false;pushError='';
+      void deps.setPushEnabled(true).then(()=>{if(host===deps.host())pushReady=true;}).catch(error=>{if(host===deps.host())pushError='后台推送连接失败，请重新开启通知：'+error.message;}).finally(()=>{pending=false;if(host===deps.host())render();});
+    }
     render();
-    if(enabled&&deps.permission()==='granted'&&deps.setPushEnabled&&!pending){pending=true;void deps.setPushEnabled(true).catch(error=>deps.publish({status:'后台推送连接失败，请重新开启通知：'+error.message})).finally(()=>{pending=false;});}
   }
   async function setEnabled(value: boolean) {
     if (pending) return;
@@ -38,10 +41,10 @@ export function createNotificationPreference(deps: Dependencies) {
       // Keep the permission call in the synchronous user-gesture portion.
       if (value && deps.permission() === 'default') await deps.requestPermission();
       const allowed = value && deps.permission() === 'granted';
-      if (allowed && deps.support().worker) await deps.prepareWorker();
+      if (allowed && deps.support().worker && !deps.setPushEnabled) await deps.prepareWorker();
       await deps.setPushEnabled?.(allowed);
       if (host !== deps.host()) return;
-      enabled = allowed;
+      enabled = allowed;pushReady=allowed;pushError='';
       deps.save('rcm.taskNotifications.' + host, String(allowed));
     } catch (error) {
       failure = (error as Error).message;
