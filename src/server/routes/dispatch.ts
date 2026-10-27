@@ -105,6 +105,7 @@ export function createDispatcher(context:RouteServices){
         if(p.startsWith('/api/push/')&&context.push){
           const owner=remote?createHash('sha256').update(access.token(req)).digest('hex'):'local';
           if(p==='/api/push/trace')return json(res,200,context.push.trace(targetKey,owner,data));
+          if(p==='/api/push/delivery-failure')return json(res,200,await context.push.deliveryFailure(targetKey,owner,data));
           if(p==='/api/push/subscribe')return json(res,200,context.push.subscribe(targetKey,owner,origin,data.subscription));
           if(p==='/api/push/unsubscribe')return json(res,200,context.push.remove(targetKey,owner,data.endpoint));
           if(p==='/api/push/device-delivery'){

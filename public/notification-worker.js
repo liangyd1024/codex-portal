@@ -1,11 +1,19 @@
 // Notification delivery and durable click intent only; no fetch interception or task execution.
 const clickCache=()=>caches.open('rcm-notification-click');
 const clickKey='/__notification-click';
-let clickWork=Promise.resolve(), fallbackClick=null;
+let clickWork=Promise.resolve(), fallbackClick=null, clickGeneration=0;
 function serializeClick(work){const next=clickWork.then(work);clickWork=next.catch(()=>{});return next;}
+function clearClickIntent(expectedId,current){return serializeClick(async()=>{
+  if(!current())return;
+  if(!expectedId||fallbackClick?.clickId===expectedId)fallbackClick=null;
+  try{
+    const cache=await clickCache(),saved=await cache.match(clickKey),target=saved?await saved.json():null;
+    if(current()&&target&&(!expectedId||target.clickId===expectedId))await cache.delete(clickKey);
+  }catch{}
+});}
 // Immutable per-event keys prevent one worker's stale snapshot overwriting another.
 // Only routing IDs and bounded runtime metadata are persisted; never bodies or keys.
-const workerVersion=8,instanceId=globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+const workerVersion=9,instanceId=globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
 const journalName='rcm-notification-journal-v2',journalPrefix='/__notification-event/';
 let sequence=0,journal=[],journalStorage='available',journalWork,journalGeneration=0,savedGeneration=0;
 function bounded(promise,fallback,ms=800){
@@ -96,13 +104,25 @@ async function recordNavigation(stage,data={},extra={}){
   return entry;
 }
 let traceContext;
+function getTraceContext(){
+  return traceContext ||= Promise.all([fetch('/api/csrf',{cache:'no-store',signal:AbortSignal.timeout(1500)}).then(r=>{if(!r.ok)throw Error('csrf unavailable');return r.json();}),fetch('/api/connections',{cache:'no-store',signal:AbortSignal.timeout(1500)}).then(r=>{if(!r.ok)throw Error('config unavailable');return r.json();})]).catch(error=>{traceContext=null;throw error;});
+}
+function reportDeliveryFailure(event,data,stage,error){
+  if(typeof data?.deliveryId!=='string'||!data.host||['AbortError','TimeoutError','NetworkError'].includes(error?.name)||globalThis.navigator?.onLine===false||typeof fetch!=='function')return;
+  event.waitUntil(bounded((async()=>{
+    try{
+      const [csrf,config]=await getTraceContext();
+      const response=await fetch('/api/push/delivery-failure?host='+encodeURIComponent(data.host),{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf.token,'X-RCM-Config-Revision':config.configRevision},body:JSON.stringify({deliveryId:data.deliveryId,stage}),signal:AbortSignal.timeout(1500)});
+      if(!response.ok)traceContext=null;
+    }catch{traceContext=null;} // No retry or fallback for a failed/late report.
+  })(),undefined,2500));
+}
 async function reportNavigation(stage,data={},extra={}){
   data ||= {};
   const entry=await recordNavigation(stage,data,extra);
   if(typeof fetch!=='function')return;
   try{
-    traceContext ||= Promise.all([fetch('/api/csrf',{cache:'no-store',signal:AbortSignal.timeout(1500)}).then(r=>r.json()),fetch('/api/connections',{cache:'no-store',signal:AbortSignal.timeout(1500)}).then(r=>r.json())]).catch(error=>{traceContext=null;throw error;});
-    const [csrf,config]=await traceContext;
+    const [csrf,config]=await getTraceContext();
     const result=await fetch('/api/push/trace?host='+encodeURIComponent(data.host||config.defaultConnection),{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf.token,'X-RCM-Config-Revision':config.configRevision},body:JSON.stringify({...entry,observedAt:entry.at}),signal:AbortSignal.timeout(1500)});
     if(result.ok)return;
     traceContext=null;
@@ -152,7 +172,7 @@ self.addEventListener('push',event=>{
     // navigate for declarative replacements; it handles their activation itself.
     if(declarative)options.navigate=notice.navigate;
     try{await self.registration.showNotification(diagnostic?'[接收器·'+(declarative?'系统跳转':'点击处理')+'] '+title.replace(/^\[原始(?:·[^\]]+)?\] /,''):title,options);}
-    catch(caught){error=String(caught?.name||'Error')+': '+String(caught?.message||caught).replace(/https?:\/\/\S+/g,'[URL]').slice(0,200);}
+    catch(caught){error=String(caught?.name||'Error')+': '+String(caught?.message||caught).replace(/https?:\/\/\S+/g,'[URL]').slice(0,200);if(!declarative)reportDeliveryFailure(event,data,'show',caught);}
     observe(event,error?'worker-show-failed':'worker-shown',data,context,{mode,...(error?{error}: {})});
     if(data.testId){
       // A hung client lookup must not turn a successfully shown notice into fallback.
@@ -163,40 +183,53 @@ self.addEventListener('push',event=>{
   })());
 });
 self.addEventListener('notificationclick',event=>{
-  event.notification.close();
+  const generation=++clickGeneration;
+  try{event.notification.close();}catch{} // Closing the banner is auxiliary to navigation.
   const {host,threadId}=event.notification.data || {};
   const context=diagnosticContext();
   event.waitUntil((async()=>{
     const target={type:'rcm-notification-click',host,threadId,testId:event.notification.data?.testId,clickId:crypto.randomUUID()};
+    const current=()=>generation===clickGeneration&&(!threadId||fallbackClick?.clickId===target.clickId);
     observe(event,'worker-click',target,context,{mode:'legacy'});
+    if(!threadId)await bounded(clearClickIntent(null,()=>generation===clickGeneration),undefined);
     // Keep storage ordering separate from window startup: the new page may ask
     // for its target before openWindow/focus resolves.
     if(threadId)await serializeClick(async()=>{
       fallbackClick=target;
       try{await (await clickCache()).put(clickKey,new Response(JSON.stringify(target)));}catch{}
     });
-    const windows=(await self.clients.matchAll({type:'window',includeUncontrolled:true})).filter(item=>new URL(item.url).origin===self.location.origin);
-    if(threadId&&fallbackClick?.clickId!==target.clickId)return;
+    let windows=[];
+    try{windows=(await self.clients.matchAll({type:'window',includeUncontrolled:true})).filter(item=>new URL(item.url).origin===self.location.origin);}catch{}
+    if(!current())return;
     observe(event,'worker-window',target,context,{mode:'legacy',windows:windows.length});
     const sameHost=item=>new URL(item.url).searchParams.get('host')===(host||null);
     const client=windows.find(item=>item.focused&&sameHost(item))||windows.find(item=>item.focused)||windows.find(item=>item.visibilityState==='visible'&&sameHost(item))||windows.find(item=>item.visibilityState==='visible')||windows.find(sameHost)||windows[0];
-    const url=new URL('/index.html',self.location.origin);
+    const url=new URL(threadId?'/index.html':'/',self.location.origin);
     if(host)url.searchParams.set('host',host);
     if(threadId){url.searchParams.set('thread',threadId);url.searchParams.set('notification-click',target.clickId);}
     if(client){
       // Delivery must not wait for focus: iOS can leave that promise pending.
       try{
-        const received=deliverTarget(client,target);
+        const received=threadId?deliverTarget(client,target):Promise.resolve(false);
         event.waitUntil(client.focus().catch(()=>{}));
         if(await received)return;
-        if(threadId&&fallbackClick?.clickId!==target.clickId)return;
+        if(!current())return;
         // A stale page or lost message must not silently keep the old thread.
         const navigated=await client.navigate(url.href);
         if(navigated)return;
       }catch{}
     }
-    if(threadId&&fallbackClick?.clickId!==target.clickId)return;
-    const opened=await self.clients.openWindow(url.href);opened?.postMessage?.(target);
+    if(!current())return;
+    let opened;
+    try{opened=await self.clients.openWindow(url.href);}
+    catch(error){
+      if(current()){
+        await bounded(clearClickIntent(target.clickId,()=>generation===clickGeneration),undefined);
+        if(generation===clickGeneration)reportDeliveryFailure(event,event.notification.data,'click',error);
+      }
+      throw error;
+    }
+    try{opened?.postMessage?.(target);}catch{} // Navigation already succeeded; relay failure is not a fallback trigger.
   })());
 });
 function deliverTarget(client,target){

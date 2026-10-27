@@ -73,7 +73,7 @@ test('only local numbered diagnostic device tests may select a strictly enumerat
  const traces=(await request(local,'/api/push/trace')).body.data;assert.deepEqual(traces.map(r=>r.mode),['declarative','legacy']);
  assert.equal((await request(local,'/api/push/test-device',headers,{deviceId,testId:'fixture-default-device'})).status,200);
  assert.equal((await request(remote,'/api/push/test',phone,{endpoint:subscription.endpoint,testId:'fixture-default-phone'})).status,200);
- assert.deepEqual(requests.slice(-2).map(r=>r.headers['Content-Type']),['application/notification+json','application/notification+json']);
+ assert.deepEqual(requests.slice(-2).map(r=>r.headers['Content-Type']),['application/octet-stream','application/octet-stream']);
 });
 
 test('device delivery settings require local Origin, CSRF, revision and a live device on the selected host',async t=>{
@@ -105,6 +105,29 @@ test('device delivery settings require local Origin, CSRF, revision and a live d
  assert.equal((await request(remote,'/api/push/subscribe',phone,{subscription})).status,200);
  assert.equal((await request(local,'/api/push/devices')).body.data[0].deliveryMode,'legacy');
  for(const deliveryMode of ['declarative','default']){assert.equal((await request(local,url,headers,{deviceId,deliveryMode})).status,200);assert.equal((await request(local,'/api/push/devices')).body.data[0].deliveryMode,deliveryMode==='default'?undefined:deliveryMode);}
+ // Failure reports are writable from the owning paired worker, with the same
+ // Origin/CSRF/revision protection, and can only reference a real send.
+ const requests=[],originalFetch=globalThis.fetch;
+ globalThis.fetch=async(endpoint,options)=>{assert.equal(endpoint,subscription.endpoint);requests.push(options);return {status:201};};
+ t.after(()=>{globalThis.fetch=originalFetch;});
+ assert.equal((await request(remote,'/api/push/test',phone,{endpoint:subscription.endpoint})).status,200);
+ const {readFileSync}=await import('node:fs');const deliveryId=Object.keys(JSON.parse(readFileSync(path.join(directory,'web-push.json'),'utf8')).deliveries)[0];
+ const failure={deliveryId,stage:'show'},failureUrl='/api/push/delivery-failure';
+ assert.equal((await request(remote,failureUrl,{Host:'phone.test',Origin:'https://phone.test'},failure)).status,401);
+ assert.equal((await request(remote,failureUrl,{...phone,Origin:'https://evil.test'},failure)).status,403);
+ assert.equal((await request(remote,failureUrl,{...phone,'X-CSRF-Token':'wrong'},failure)).status,403);
+ assert.equal((await request(remote,failureUrl,{...phone,'X-RCM-Config-Revision':'old'},failure)).status,409);
+ assert.equal((await request(remote,failureUrl+'?host=other',phone,failure)).status,404);
+ assert.equal((await request(remote,failureUrl+'?host=missing',phone,failure)).status,404);
+ assert.equal((await request(local,failureUrl,headers,failure)).status,404);
+ const another=access.login(access.createCode().code);
+ assert.equal((await request(remote,failureUrl,{...phone,Cookie:'rcm_mobile='+another},failure)).status,404);
+ for(const change of [{stage:'timeout'},{stage:undefined},{payload:{title:'arbitrary'}},{url:'https://evil.test/'}])assert.equal((await request(remote,failureUrl,phone,{...failure,...change})).status,400);
+ assert.equal((await request(remote,failureUrl,phone,{...failure,deliveryId:crypto.randomUUID()})).status,404);
+ assert.equal(requests.length,1);
+ assert.equal((await request(remote,failureUrl,phone,failure)).status,200);
+ assert.equal((await request(remote,failureUrl,phone,failure)).status,200);
+ assert.deepEqual(requests.map(r=>r.headers['Content-Type']),['application/octet-stream','application/notification+json']);
  // Revoking the pairing makes the formerly valid device unmodifiable.
  for(const key of Object.keys(access.sessions))delete access.sessions[key];
  assert.equal((await request(local,url,headers,data)).status,404);

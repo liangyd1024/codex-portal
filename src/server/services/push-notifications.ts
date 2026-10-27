@@ -1,4 +1,4 @@
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {readFileSync,mkdirSync,writeFileSync,renameSync} from 'node:fs';
 import path from 'node:path';
 import {createPushKeys,validateSubscription,sendPush} from '../../../lib/web-push.mjs';
@@ -9,6 +9,7 @@ import type {MobileAccess} from './mobile-access';
 type Subscription={endpoint:string;keys:{auth:string;p256dh:string}};
 type DeliveryMode='declarative'|'legacy';
 type Device={subscription:Subscription;owner:string;host:string;subject:string;updatedAt?:number;deliveryMode?:DeliveryMode};
+type Delivery={device:string;host:string;owner:string;subject:string;expires:number;payload:Record<string,unknown>;claimed?:boolean};
 type Job={device:string;payload:Record<string,unknown>;attempt:number;next:number;expires:number;context?:{key:string;threadId:string;turnId?:string;label:string;needsBody:boolean}};
 type Watch={host:string;threadId:string;seen:string[];expires:number;next?:number};
 type WorkerContext={instanceId?:string;version?:string;script?:string;scope?:string;endpointHash?:string;windows?:number;id?:string;mode?:string;error?:string};
@@ -23,12 +24,45 @@ function workerContext(value:Record<string,unknown>):WorkerContext{
  if(typeof value.windows==='number'&&Number.isFinite(value.windows))result.windows=Math.max(0,Math.min(100,value.windows));
  return result;
 }
-type State={navigation?:NavigationTrace[];watches?:Record<string,Watch>;keys:ReturnType<typeof createPushKeys>;devices:Record<string,Device>;jobs:Record<string,Job>;seen:Record<string,number>};
+type State={deliveries?:Record<string,Delivery>;navigation?:NavigationTrace[];watches?:Record<string,Watch>;keys:ReturnType<typeof createPushKeys>;devices:Record<string,Device>;jobs:Record<string,Job>;seen:Record<string,number>};
 export class PushNotifications {
  private state:State|undefined;private timer:ReturnType<typeof setTimeout>|undefined;private running=false;private closed=false;private watchTimer:ReturnType<typeof setTimeout>|undefined;
  constructor(private file:string,private access:MobileAccess,private send=sendPush,private readHistory?:(host:string,id:string)=>Promise<{data?:any[]}>,private readNotice?:(host:string,id:string,turnId?:string|null)=>Promise<{name?:string;turn?:any}>){try{this.state=JSON.parse(readFileSync(file,'utf8'));this.compactDevices();this.schedule();this.scheduleWatch();}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}}
  private data(){return this.state ||= {keys:createPushKeys(),devices:{},jobs:{},seen:{}};}
- private save(){mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});writeFileSync(this.file+'.tmp',JSON.stringify(this.data()),{mode:0o600});renameSync(this.file+'.tmp',this.file);}
+ private save(){this.pruneDeliveries();mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});writeFileSync(this.file+'.tmp',JSON.stringify(this.data()),{mode:0o600});renameSync(this.file+'.tmp',this.file);}
+ private pruneDeliveries(){
+  const records=this.state?.deliveries;if(!records)return;
+  for(const [id,d] of Object.entries(records))if(d.expires<=Date.now())delete records[id];
+  for(const id of Object.keys(records).slice(0,-512))delete records[id];
+ }
+ private rememberDelivery(device:string,d:Device,payload:Record<string,unknown>){
+  this.pruneDeliveries();const records=this.data().deliveries ||= {},data=(payload.data||{}) as Record<string,unknown>;
+  // A retry keeps its original identity even after bounded evidence is evicted.
+  // Never grant that same notification a fresh fallback allowance.
+  if(typeof data.deliveryId==='string')return;
+  const id=randomUUID();payload.data={...data,deliveryId:id};
+  records[id]={device,host:d.host,owner:d.owner,subject:d.subject,expires:Date.now()+3600000,payload:{title:payload.title,body:payload.body,tag:payload.tag,data:{host:d.host}}};
+  this.save();
+ }
+ async deliveryFailure(host:string,owner:string,value:Record<string,unknown>){
+  if(Object.keys(value).some(key=>!['deliveryId','stage'].includes(key))||typeof value.deliveryId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value.deliveryId)||!['show','click'].includes(value.stage as string))throw Object.assign(Error('通知失败报告无效。'),{status:400});
+  this.pruneDeliveries();const record=this.data().deliveries?.[value.deliveryId],d=record&&this.data().devices[record.device];
+  if(!record||record.host!==host||record.owner!==owner||!d||d.owner!==owner||d.host!==host||d.subject!==record.subject||!this.valid(d))throw Object.assign(Error('通知投递记录不存在或已过期。'),{status:404});
+  if(record.claimed)return {ok:true};
+  // Claim durably before network I/O: concurrent reports and restarts never retry fallback.
+  record.claimed=true;
+  const state=this.data();
+  for(const [key,job] of Object.entries(state.jobs))if(job.device===record.device&&(job.payload.data as Record<string,unknown>)?.deliveryId===value.deliveryId){delete state.jobs[key];state.seen[key]=Date.now();}
+  this.save();
+  const trace={endpoint:d.subscription.endpoint,mode:'declarative'};
+  this.trace(host,owner,{...trace,stage:value.stage==='show'?'fallback-show-requested':'fallback-click-requested'});
+  try{
+   const status=await this.send(d.subscription,record.payload,state.keys,d.subject,undefined,'declarative',true);
+   if(status<200||status>=300)throw Error('provider rejected fallback');
+  }catch{this.trace(host,owner,{...trace,stage:'fallback-failed'});throw Object.assign(Error('系统兜底通知投递失败，不再重复补发。'),{status:502});}
+  this.trace(host,owner,{...trace,stage:'fallback-sent'});
+  return {ok:true};
+ }
  hasDevices(host:string){return !!this.state&&Object.values(this.state.devices).some(d=>d.host===host&&this.valid(d));}
  observe(host:string,threadId:string,turns:any[]){
   if(!this.hasDevices(host))return;
@@ -50,7 +84,7 @@ export class PushNotifications {
    try{const snapshot=await this.readHistory(w.host,w.threadId);const expiry=w.expires;this.observe(w.host,w.threadId,snapshot.data||[]);if(this.state.watches?.[key])this.state.watches[key].expires=expiry;}catch{w.next=Date.now()+60000;}
   }this.save();}finally{this.watchTimer=undefined;this.scheduleWatch();}}
  trace(host:string,owner:string,value:Record<string,unknown>){
-  const stages=['send-test','send-task','worker-push','worker-shown','worker-show-failed','worker-click','worker-window','page-ready','page-receiver','page-target','page-opened','page-failed'];
+  const stages=['send-test','send-task','fallback-show-requested','fallback-click-requested','fallback-sent','fallback-failed','worker-push','worker-shown','worker-show-failed','worker-click','worker-window','page-ready','page-receiver','page-target','page-opened','page-failed'];
   if(typeof value.stage!=='string'||!stages.includes(value.stage))throw Error('通知诊断阶段无效。');
   const entry:NavigationTrace={...workerContext(value),at:Date.now(),host,owner,stage:value.stage};
   if(typeof value.observedAt==='number'&&Number.isSafeInteger(value.observedAt)&&value.observedAt>=0)entry.observedAt=value.observedAt;
@@ -123,7 +157,7 @@ export class PushNotifications {
 
  remove(host:string,owner:string,endpoint:string){const s=this.data(),id=this.id(host,endpoint);if(s.devices[id]?.owner===owner){delete s.devices[id];for(const [key,job] of Object.entries(s.jobs))if(job.device===id)delete s.jobs[key];this.save();}return {ok:true};}
  async test(host:string,owner:string,endpoint:string,testId?:string,threadId?:string,diagnostic=false){return this.sendTest(host,owner,endpoint,testId,threadId,diagnostic);}
- private async sendTest(host:string,owner:string,endpoint:string,testId?:string,threadId?:string,diagnostic=false,deliveryMode?:'declarative'|'legacy'){if(typeof diagnostic!=='boolean'||diagnostic&&!testId)throw Error('诊断测试需要有效编号。');if(threadId!==undefined&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(threadId))throw Error('测试会话标识无效。');if(testId!==undefined&&!/^[a-zA-Z0-9-]{16,80}$/.test(testId))throw Error('测试标识无效。');const id=this.id(host,endpoint),d=this.data().devices[id];if(!d||d.owner!==owner||!this.valid(d))throw Error('请先开启此设备的后台通知。');const context=threadId?await this.noticeContext(host,threadId,null):{name:undefined,turn:undefined};const mode=deliveryMode||d.deliveryMode;this.trace(host,owner,{stage:'send-test',threadId,testId,endpoint,version:'navigation-3',mode:mode||'declarative'});const payload={title:(diagnostic?(deliveryMode?'[原始·'+(deliveryMode==='legacy'?'L点击处理':'D系统跳转')+'] ':'[原始] '):'')+notificationTitle(diagnostic?'测试 '+testId:'测试通知',context.name,threadId),body:notificationPreview('turn/completed',{turn:context.turn})||(threadId?'这是此会话的测试通知。点按应打开对应会话正文。':'通知接收测试。请先选择会话，再测试点击定位。'),tag:'codex-test-'+(testId||Date.now()),data:{host,testId,threadId,...(diagnostic?{diagnostic:true}:{})}};const status=mode?await this.send(d.subscription,payload,this.data().keys,d.subject,undefined,mode):await this.send(d.subscription,payload,this.data().keys,d.subject);if(status<200||status>=300)throw Error('推送服务未接受测试通知（HTTP '+status+'），请重新开启通知后重试。');return {ok:true};}
+ private async sendTest(host:string,owner:string,endpoint:string,testId?:string,threadId?:string,diagnostic=false,deliveryMode?:'declarative'|'legacy'){if(typeof diagnostic!=='boolean'||diagnostic&&!testId)throw Error('诊断测试需要有效编号。');if(threadId!==undefined&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(threadId))throw Error('测试会话标识无效。');if(testId!==undefined&&!/^[a-zA-Z0-9-]{16,80}$/.test(testId))throw Error('测试标识无效。');const id=this.id(host,endpoint),d=this.data().devices[id];if(!d||d.owner!==owner||!this.valid(d))throw Error('请先开启此设备的后台通知。');const context=threadId?await this.noticeContext(host,threadId,null):{name:undefined,turn:undefined};const mode=deliveryMode||d.deliveryMode;this.trace(host,owner,{stage:'send-test',threadId,testId,endpoint,version:'navigation-3',mode:mode||'legacy'});const payload={title:(diagnostic?(deliveryMode?'[原始·'+(deliveryMode==='legacy'?'L点击处理':'D系统跳转')+'] ':'[原始] '):'')+notificationTitle(diagnostic?'测试 '+testId:'测试通知',context.name,threadId),body:notificationPreview('turn/completed',{turn:context.turn})||(threadId?'这是此会话的测试通知。点按应打开对应会话正文。':'通知接收测试。请先选择会话，再测试点击定位。'),tag:'codex-test-'+(testId||Date.now()),data:{host,testId,threadId,...(diagnostic?{diagnostic:true}:{})}};if(!mode||mode==='legacy')this.rememberDelivery(id,d,payload);const status=mode?await this.send(d.subscription,payload,this.data().keys,d.subject,undefined,mode):await this.send(d.subscription,payload,this.data().keys,d.subject);if(status<200||status>=300)throw Error('推送服务未接受测试通知（HTTP '+status+'），请重新开启通知后重试。');return {ok:true};}
  receive(host:string,event:unknown){if(!this.state)return;const {method,params,replayed}=(event||{}) as {method:string;params:any;replayed?:boolean};if(!params||replayed)return;
  const notice=taskNotice(method,params,{host,known:true});if(!notice)return;
  const threadId=params.threadId||params.thread?.id||(params.request||params).params?.threadId;
@@ -136,10 +170,12 @@ export class PushNotifications {
   if(!this.readNotice)return {};let timer:ReturnType<typeof setTimeout>|undefined;
   try{return await Promise.race([this.readNotice(host,threadId,turnId),new Promise<{}>(resolve=>{timer=setTimeout(()=>resolve({}),4000);})]);}catch{return {};}finally{clearTimeout(timer);}
  }
- async drain(){if(this.running||this.closed||!this.state)return;this.running=true;const contexts=new Map<string,Promise<{name?:string;turn?:any}>>();try{const s=this.state;for(const [id,j] of Object.entries(s.jobs)){if(this.closed)break;const d=s.devices[j.device];if(!d||!this.valid(d)||j.expires<Date.now()){delete s.jobs[id];if(d&&!this.valid(d))delete s.devices[j.device];continue;}if(j.next>Date.now())continue;
+ async drain(){if(this.running||this.closed||!this.state)return;this.running=true;const contexts=new Map<string,Promise<{name?:string;turn?:any}>>();try{const s=this.state;for(const [id,j] of Object.entries(s.jobs)){if(this.closed)break;if(s.jobs[id]!==j)continue;const d=s.devices[j.device];if(!d||!this.valid(d)||j.expires<Date.now()){delete s.jobs[id];if(d&&!this.valid(d))delete s.devices[j.device];continue;}if(j.next>Date.now())continue;
  if(j.context){const c=j.context;let pending=contexts.get(c.key);if(!pending){pending=this.noticeContext(d.host,c.threadId,c.needsBody?c.turnId:undefined);contexts.set(c.key,pending);}const detail=await pending;if(this.closed)break;if(s.devices[j.device]!==d||s.jobs[id]!==j)continue;if(detail.name)j.payload.title=notificationTitle(c.label,detail.name,c.threadId);if(c.needsBody&&detail.turn?.id===c.turnId){const preview=notificationPreview('turn/completed',{turn:detail.turn});if(preview)j.payload.body=preview;}delete j.context;}
- this.trace(d.host,d.owner,{stage:'send-task',...(j.payload.data as Record<string,unknown>),endpoint:d.subscription.endpoint,version:'navigation-3',mode:d.deliveryMode||'declarative'});
+ this.trace(d.host,d.owner,{stage:'send-task',...(j.payload.data as Record<string,unknown>),endpoint:d.subscription.endpoint,version:'navigation-3',mode:d.deliveryMode||'legacy'});
+ if(!d.deliveryMode||d.deliveryMode==='legacy')this.rememberDelivery(j.device,d,j.payload);
  let status=0;try{status=d.deliveryMode?await this.send(d.subscription,j.payload,s.keys,d.subject,undefined,d.deliveryMode):await this.send(d.subscription,j.payload,s.keys,d.subject);}catch{}
+ if(s.jobs[id]!==j)continue; // A claimed fallback may have removed this job while send was pending.
  if(status===404||status===410){delete s.devices[j.device];delete s.jobs[id];}
  else if(status>=200&&status<300){s.seen[id]=Date.now();delete s.jobs[id];}
  else if((status===0||status===429||status>=500)&&++j.attempt<6){j.next=Date.now()+Math.min(300000,5000*2**j.attempt);}

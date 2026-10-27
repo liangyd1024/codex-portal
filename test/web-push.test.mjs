@@ -11,7 +11,7 @@ test('push payload decrypts on the user agent and VAPID signature matches public
  const prk=hmac(Buffer.from(subscription.keys.auth,'base64url'),ua.computeSecret(pub));
  const ikm=hmac(prk,Buffer.concat([Buffer.from('WebPush: info\0'),ua.getPublicKey(),pub,Buffer.from([1])]));
  const secret=hmac(salt,ikm),key=hmac(secret,Buffer.from('Content-Encoding: aes128gcm\0\x01')).subarray(0,16),nonce=hmac(secret,Buffer.from('Content-Encoding: nonce\0\x01')).subarray(0,12);
- const decipher=createDecipheriv('aes-128-gcm',key,nonce);decipher.setAuthTag(wire.subarray(-16));const plain=Buffer.concat([decipher.update(wire.subarray(86,-16)),decipher.final()]);assert.equal(plain.at(-1),2);assert.equal(JSON.parse(plain.subarray(0,-1)).title,'完成');assert.equal(JSON.parse(plain.subarray(0,-1)).web_push,8030);assert.equal(JSON.parse(plain.subarray(0,-1)).mutable,true);assert.equal(JSON.parse(plain.subarray(0,-1)).notification.mutable,true);assert.equal(JSON.parse(plain.subarray(0,-1)).notification.navigate,'https://portal.example.com/');
+ const decipher=createDecipheriv('aes-128-gcm',key,nonce);decipher.setAuthTag(wire.subarray(-16));const plain=Buffer.concat([decipher.update(wire.subarray(86,-16)),decipher.final()]);assert.equal(plain.at(-1),2);assert.equal(JSON.parse(plain.subarray(0,-1)).title,'完成');assert.equal(JSON.parse(plain.subarray(0,-1)).web_push,undefined);assert.equal(request.headers['Content-Type'],'application/octet-stream');
  const token=request.headers.Authorization.match(/t=([^,]+)/)[1],parts=token.split('.'),p=Buffer.from(keys.publicKey,'base64url');
  const publicKey=createPublicKey({key:{kty:'EC',crv:'P-256',x:p.subarray(1,33).toString('base64url'),y:p.subarray(33).toString('base64url')},format:'jwk'});
  assert.ok(verify('sha256',Buffer.from(parts.slice(0,2).join('.')),{key:publicKey,dsaEncoding:'ieee-p1363'},Buffer.from(parts[2],'base64url')));assert.equal(JSON.parse(Buffer.from(parts[1],'base64url')).aud,'https://web.push.apple.com');assert.equal(request.redirect,'error');
@@ -52,21 +52,29 @@ function decryptRequest(ua,subscription,request){
  const plain=Buffer.concat([decipher.update(wire.subarray(21+wire[20],-16)),decipher.final()]);assert.equal(plain.at(-1),2);
  return JSON.parse(plain.subarray(0,-1));
 }
-test('actual encrypted fetch bodies distinguish diagnostic transports and leave default declarative wire format unchanged',async()=>{
+test('actual encrypted fetch bodies distinguish diagnostic transports and use legacy by default and retain explicit declarative',async()=>{
  const {ua,subscription}=fixture(),keys=createPushKeys(),requests=[];
  const payload={title:'测试',body:'目标正文',tag:'fixture',data:{host:'local',threadId:'other-thread',testId:'fixture-wire-test-001',diagnostic:true}};
  const fetcher=async(url,options)=>{assert.equal(url,subscription.endpoint);requests.push(options);return {status:201};};
  for(const mode of [undefined,'declarative','legacy'])await sendPush(subscription,payload,keys,'https://portal.example.com',fetcher,mode);
  const [normal,declarative,legacy]=requests.map(r=>decryptRequest(ua,subscription,r));
- assert.deepEqual(normal,declarative);assert.deepEqual(legacy,payload);
+ assert.deepEqual(normal,legacy);assert.deepEqual(legacy,payload);
  assert.deepEqual(Object.keys(legacy).sort(),['body','data','tag','title']);
  for(const property of ['web_push','notification','mutable','navigate'])assert.equal(Object.hasOwn(legacy,property),false);
  assert.equal(declarative.web_push,8030);assert.equal(declarative.mutable,true);assert.equal(declarative.notification.mutable,true);
  assert.equal(declarative.notification.navigate,'https://portal.example.com/index.html?host=local&thread=other-thread&notification-click=fixture-wire-test-001');
- assert.equal(requests[0].headers['Content-Type'],'application/notification+json');assert.equal(requests[1].headers['Content-Type'],'application/notification+json');assert.equal(requests[2].headers['Content-Type'],'application/octet-stream');
+ assert.equal(requests[0].headers['Content-Type'],'application/octet-stream');assert.equal(requests[1].headers['Content-Type'],'application/notification+json');assert.equal(requests[2].headers['Content-Type'],'application/octet-stream');
  for(const request of requests){assert.equal(request.headers['Content-Encoding'],'aes128gcm');assert.equal(request.headers.TTL,'3600');assert.equal(request.redirect,'error');}
  // Changing the ordinary payload's metadata never selects the transport.
- await sendPush(subscription,{...payload,data:{...payload.data,deliveryMode:'legacy'}},keys,'https://portal.example.com',fetcher);
- assert.equal(decryptRequest(ua,subscription,requests.at(-1)).web_push,8030);
+ await sendPush(subscription,{...payload,data:{...payload.data,deliveryMode:'declarative'}},keys,'https://portal.example.com',fetcher);
+ assert.equal(decryptRequest(ua,subscription,requests.at(-1)).web_push,undefined);
  await assert.rejects(sendPush(subscription,payload,keys,'https://portal.example.com',fetcher,'invalid'),e=>e.status===400);assert.equal(requests.length,4);
+});
+
+test('every supported provider defaults to encrypted legacy payload without a declarative envelope',async()=>{
+ for(const endpoint of ['https://web.push.apple.com/provider','https://fcm.googleapis.com/provider','https://updates.push.services.mozilla.com/provider']){
+  const {ua,subscription}=fixture();subscription.endpoint=endpoint;const payload={title:'会话完成',body:'实际回复',tag:'same',data:{host:'local',threadId:'target'}};let request;
+  await sendPush(subscription,payload,createPushKeys(),'https://portal.example.com',async(url,value)=>{assert.equal(url,endpoint);request=value;return {status:201};});
+  assert.equal(request.headers['Content-Type'],'application/octet-stream');assert.deepEqual(decryptRequest(ua,subscription,request),payload);
+ }
 });

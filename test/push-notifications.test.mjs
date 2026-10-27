@@ -150,11 +150,11 @@ test('delivery override is device isolated, persistent, strictly validated and r
   f.push.receive('host',complete('isolated'));await f.push.drain();
   assert.equal(calls.find(c=>c[0].endpoint===subscription().endpoint)[5],'legacy');
   assert.equal(calls.find(c=>c[0].endpoint.endsWith('/independent')).length,4);
-  assert.deepEqual(f.push.traces().filter(r=>r.stage==='send-task').map(r=>r.mode),['legacy','declarative']);
+  assert.deepEqual(f.push.traces().filter(r=>r.stage==='send-task').map(r=>r.mode),['legacy','legacy']);
   const restored=new PushNotifications(f.file,f.access,async()=>201);try{assert.equal(restored.devices('host').find(d=>d.id===id).deliveryMode,'legacy');}finally{restored.close();}
   f.push.setDeliveryMode('host',id,'declarative');await f.push.testDevice('host',id);assert.equal(calls.at(-1)[5],'declarative');
   f.push.setDeliveryMode('host',id,'default');assert.equal(Object.hasOwn(f.state().devices[id],'deliveryMode'),false);
-  await f.push.testDevice('host',id);assert.equal(calls.at(-1).length,4);assert.equal(f.push.traces().at(-1).mode,'declarative');
+  await f.push.testDevice('host',id);assert.equal(calls.at(-1).length,4);assert.equal(f.push.traces().at(-1).mode,'legacy');
  }finally{f.push.close();}
 });
 
@@ -193,12 +193,12 @@ function decodeDelivery(ua,sub,request){
 
 test('ordinary test and task delivery encrypt the device format; explicit diagnostics override without persisting',async()=>{
  const ua=createECDH('prime256v1');ua.generateKeys();const sub={...subscription(),keys:{p256dh:ua.getPublicKey().toString('base64url'),auth:Buffer.alloc(16,4).toString('base64url')}};
- const sent=[],f=fixture((s,p,k,origin,_fetch,mode)=>sendPush(s,p,k,origin,async(url,request)=>{assert.equal(url,sub.endpoint);sent.push({request,payload:decodeDelivery(ua,sub,request)});return {status:201};},mode));
+ const sent=[],f=fixture((s,p,k,origin,_fetch,mode,fallback)=>sendPush(s,p,k,origin,async(url,request)=>{assert.equal(url,sub.endpoint);sent.push({request,payload:decodeDelivery(ua,sub,request)});return {status:201};},mode,fallback));
  try{
   f.push.subscribe('host','owner','https://portal.example.com',sub);const id=f.push.devices('host')[0].id;
   const assertWire=mode=>{const {request,payload}=sent.at(-1);assert.equal(request.headers['Content-Type'],mode==='legacy'?'application/octet-stream':'application/notification+json');if(mode==='legacy'){assert.deepEqual(Object.keys(payload).sort(),['body','data','tag','title']);}else{assert.equal(payload.web_push,8030);assert.equal(payload.mutable,true);assert.equal(payload.notification.mutable,true);assert.ok(payload.notification.navigate.startsWith('https://portal.example.com/'));}return payload;};
   for(const preference of ['default','legacy','declarative']){
-   f.push.setDeliveryMode('host',id,preference);const effective=preference==='default'?'declarative':preference;
+   f.push.setDeliveryMode('host',id,preference);const effective=preference==='default'?'legacy':preference;
    await f.push.test('host','owner',sub.endpoint,'fixture-ordinary-'+preference);assertWire(effective);assert.equal(f.push.traces().at(-1).mode,effective);
    await f.push.testDevice('host',id,'fixture-device-'+preference);assertWire(effective);
    f.push.receive('host',complete('format-'+preference));await f.push.drain();assert.equal(assertWire(effective).data.threadId,'thread');assert.equal(f.push.traces().at(-1).mode,effective);
@@ -206,4 +206,92 @@ test('ordinary test and task delivery encrypt the device format; explicit diagno
    for(const diagnostic of ['declarative','legacy']){await f.push.testDevice('host',id,'fixture-override-'+diagnostic,undefined,true,diagnostic);assertWire(diagnostic);assert.equal(f.push.traces().at(-1).mode,diagnostic);assert.deepEqual(f.state().devices,before);}
   }
  }finally{f.push.close();}
+});
+
+test('old persisted and new unconfigured devices both use legacy without changing explicit declarative override',async()=>{
+ const f=fixture();f.push.close();const calls=[],p=new PushNotifications(f.file,f.access,async(...args)=>{calls.push(args);return 201;});
+ try{
+  p.subscribe('host','local','http://localhost',{...subscription(),endpoint:'https://fcm.googleapis.com/new'});
+  p.receive('host',complete('defaults'));await p.drain();assert.equal(calls.length,2);assert.ok(calls.every(c=>c.length===4&&c[1].data.deliveryId));assert.ok(p.traces().every(r=>r.mode==='legacy'));
+  const id=p.devices('host').find(d=>d.remote).id,records=Object.keys(JSON.parse(readFileSync(f.file)).deliveries).length;
+  await p.testDevice('host',id,'fixture-explicit-declarative',undefined,true,'declarative');assert.equal(calls.at(-1)[5],'declarative');assert.equal(calls.at(-1)[1].data.deliveryId,undefined);assert.equal(Object.keys(JSON.parse(readFileSync(f.file)).deliveries).length,records);
+ }finally{p.close();}
+});
+
+test('fallback decrypts as immutable original notification at home and concurrent/restarted reports never resend',async()=>{
+ const ua=createECDH('prime256v1');ua.generateKeys();const sub={...subscription(),keys:{p256dh:ua.getPublicKey().toString('base64url'),auth:Buffer.alloc(16,3).toString('base64url')}};
+ const sent=[];let release,entered;const started=new Promise(r=>entered=r),gate=new Promise(r=>release=r);
+ const sender=(s,p,k,origin,_fetch,mode,fallback)=>sendPush(s,p,k,origin,async(url,request)=>{assert.equal(url,sub.endpoint);sent.push({request,payload:decodeDelivery(ua,sub,request)});if(fallback){entered();await gate;}return {status:201};},mode,fallback);
+ const f=fixture(sender);
+ try{
+  f.push.subscribe('host','owner','https://portal.example.com',sub);await f.push.test('host','owner',sub.endpoint,'fixture-original-send','00000000-0000-4000-8000-000000000001');
+  const original=sent[0].payload,deliveryId=original.data.deliveryId;assert.match(deliveryId,/^[a-f0-9-]{36}$/);
+  const first=f.push.deliveryFailure('host','owner',{deliveryId,stage:'show'});await started;
+  await f.push.deliveryFailure('host','owner',{deliveryId,stage:'click'});assert.equal(sent.length,2);assert.equal(f.state().deliveries[deliveryId].claimed,true);
+  release();await first;
+  const {request,payload}=sent[1];assert.equal(request.headers['Content-Type'],'application/notification+json');assert.equal(payload.web_push,8030);assert.equal(payload.mutable,false);assert.equal(payload.notification.mutable,false);
+  assert.equal(payload.notification.navigate,'https://portal.example.com/?host=host');assert.deepEqual(payload.data,{host:'host'});assert.deepEqual(payload.notification.data,{host:'host'});assert.equal(JSON.stringify(payload).includes(deliveryId),false);
+  for(const key of ['title','body','tag'])assert.equal(payload[key],original[key]);
+  const traces=f.push.traces().filter(r=>r.stage.startsWith('fallback-'));assert.deepEqual(traces.map(r=>r.stage),['fallback-show-requested','fallback-sent']);assert.ok(traces.every(r=>r.mode==='declarative'&&r.device));assert.equal(JSON.stringify(traces).includes(deliveryId),false);assert.equal(JSON.stringify(traces).includes(original.body),false);
+  f.push.close();const restarted=new PushNotifications(f.file,f.access,sender);try{await restarted.deliveryFailure('host','owner',{deliveryId,stage:'show'});assert.equal(sent.length,2);}finally{restarted.close();}
+ }finally{release();f.push.close();}
+});
+
+test('fallback accepts only a live delivery for its owner host and exact device, never arbitrary payloads',async()=>{
+ const sent=[],f=fixture(async(...args)=>{sent.push(args);return 201;});
+ try{
+  await f.push.test('host','owner',subscription().endpoint);const deliveryId=sent[0][1].data.deliveryId,report={deliveryId,stage:'show'};
+  for(const value of [{...report,stage:'timeout'},{...report,stage:'page-failed'},{...report,stage:['show']},{...report,deliveryId:'fake'},{...report,payload:{title:'injection'}},{...report,url:'https://evil.test/'}])await assert.rejects(f.push.deliveryFailure('host','owner',value),e=>e.status===400);
+  for(const [host,owner,value] of [['other','owner',report],['host','other',report],['host','owner',{...report,deliveryId:crypto.randomUUID()}]])await assert.rejects(f.push.deliveryFailure(host,owner,value),e=>e.status===404);
+  f.access.sessions.owner=Date.now()-1;await assert.rejects(f.push.deliveryFailure('host','owner',report),e=>e.status===404);f.access.sessions.owner=null;
+  f.push.subscribe('host','owner','https://portal.example.com',{...subscription(),endpoint:'https://web.push.apple.com/replaced'});await assert.rejects(f.push.deliveryFailure('host','owner',report),e=>e.status===404);
+  assert.equal(sent.length,1);
+ }finally{f.push.close();}
+});
+
+test('fallback send failure is durably claimed, never queued or recursively retried',async()=>{
+ for(const failure of [503,new Error('network unavailable')]){
+  let count=0;const f=fixture(async(...args)=>{count++;if(args[6]){if(failure instanceof Error)throw failure;return failure;}return 201;});
+  try{await f.push.test('host','owner',subscription().endpoint);const deliveryId=Object.keys(f.state().deliveries)[0];await assert.rejects(f.push.deliveryFailure('host','owner',{deliveryId,stage:'click'}),e=>e.status===502);await f.push.deliveryFailure('host','owner',{deliveryId,stage:'show'});await f.push.drain();assert.equal(count,2);assert.deepEqual(f.state().jobs,{});assert.equal(f.state().deliveries[deliveryId].claimed,true);assert.deepEqual(f.push.traces().filter(r=>r.stage.startsWith('fallback-')).map(r=>r.stage),['fallback-click-requested','fallback-failed']);}finally{f.push.close();}
+ }
+});
+
+test('a claimed fallback stops queued and in-flight original retries after ambiguous network failure',async()=>{
+ for(const inFlight of [false,true])for(const rejected of [false,true]){
+  let release,entered,calls=0,originalId;const started=new Promise(r=>entered=r),gate=new Promise(r=>release=r);
+  const send=async(...args)=>{calls++;if(args[6])return 201;originalId=args[1].data.deliveryId;entered();if(inFlight)await gate;if(rejected)throw Error('network timeout');return 503;};
+  const f=fixture(send);
+  try{
+   f.push.receive('host',complete('ambiguous'));const pending=f.push.drain();await started;if(!inFlight)await pending;
+   await f.push.deliveryFailure('host','owner',{deliveryId:originalId,stage:'show'});release();await pending;
+   assert.deepEqual(f.state().jobs,{});f.push.receive('host',complete('ambiguous'));await f.push.drain();assert.equal(calls,2);
+   f.push.close();const restarted=new PushNotifications(f.file,f.access,send);try{await restarted.drain();restarted.receive('host',complete('ambiguous'));await restarted.drain();assert.equal(calls,2);}finally{restarted.close();}
+  }finally{release();f.push.close();}
+ }
+});
+
+test('capacity or expiry eviction never grants an old job a fresh delivery ID or fallback allowance',async()=>{
+ const {writeFileSync}=await import('node:fs');
+ for(const reason of ['capacity','expiry']){
+  const calls=[],f=fixture(async(...args)=>{calls.push(args);return args[1].data.threadId==='thread'?503:201;});
+  try{
+   f.push.receive('host',complete('old'));await f.push.drain();const id=calls[0][1].data.deliveryId;
+   if(reason==='capacity'){for(let i=0;i<512;i++)await f.push.test('host','owner',subscription().endpoint);assert.equal(Object.keys(f.state().deliveries).length,512);assert.equal(f.state().deliveries[id],undefined);}
+   f.push.close();const state=f.state();Object.values(state.jobs)[0].next=0;if(reason==='expiry')state.deliveries[id].expires=Date.now()-1;writeFileSync(f.file,JSON.stringify(state));
+   const p=new PushNotifications(f.file,f.access,async(...args)=>{calls.push(args);return 503;});
+   try{await p.drain();assert.equal(calls.at(-1)[1].data.deliveryId,id);await assert.rejects(p.deliveryFailure('host','owner',{deliveryId:id,stage:'show'}),e=>e.status===404);const saved=JSON.parse(readFileSync(f.file));assert.equal(saved.deliveries[id],undefined);assert.ok(Object.keys(saved.deliveries).length<=512);}finally{p.close();}
+  }finally{f.push.close();}
+ }
+});
+
+test('a fallback cancels a later context-free retry already present in the drain snapshot',async()=>{
+ const {writeFileSync}=await import('node:fs');const f=fixture(async()=>503);
+ f.push.receive('host',complete('first'));f.push.receive('host',complete('second'));await f.push.drain();f.push.close();
+ const state=f.state(),jobs=Object.values(state.jobs);assert.equal(jobs.length,2);assert.equal(jobs[1].context,undefined);for(const j of jobs)j.next=0;writeFileSync(f.file,JSON.stringify(state));
+ let release,entered;const gate=new Promise(r=>release=r),started=new Promise(r=>entered=r),calls=[];
+ const p=new PushNotifications(f.file,f.access,async(...args)=>{calls.push(args);if(args[6])return 201;entered();await gate;return 201;});
+ try{
+  const draining=p.drain();await started;await p.deliveryFailure('host','owner',{deliveryId:jobs[1].payload.data.deliveryId,stage:'show'});release();await draining;
+  assert.equal(calls.length,2);assert.equal(calls.filter(a=>!a[6]).length,1);assert.equal(calls[0][1].data.deliveryId,jobs[0].payload.data.deliveryId);assert.deepEqual(JSON.parse(readFileSync(f.file)).jobs,{});
+ }finally{release();p.close();}
 });
