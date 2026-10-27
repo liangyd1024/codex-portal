@@ -40,3 +40,11 @@ test('search omits empty projects and empty sections, retaining custom empty gro
  assert.equal(treePresentation(groups,c).length,2);assert.equal(treePresentation(groups,c)[1].items[0].createDisabled,true);
  c.view.search='测试';assert.deepEqual(treePresentation(groups,c),[]);
 });
+
+test('running rows show project and waiting/uncertain status and cannot reorder native pinned items',()=>{
+ const {c,raw,groups}=presentationFixture();c.running=true;c.snapshot.projects=[{id:'p',name:'示例项目'}];raw.projectId='p';
+ c.runningView={rows:[{thread:raw,uncertain:false}]};c.o.needsAnswer=()=>true;
+ let row=treePresentation(groups,c)[0].items[0];assert.equal(row.context,'示例项目 · 需要你回答');assert.equal(row.draggable,false);
+ c.o.needsAnswer=()=>false;c.runningView.rows[0].uncertain=true;
+ row=treePresentation(groups,c)[0].items[0];assert.equal(row.context,'示例项目 · 状态待确认');assert.equal(row.raw,raw);
+});

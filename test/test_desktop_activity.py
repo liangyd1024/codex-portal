@@ -62,6 +62,27 @@ class DesktopActivityTest(unittest.TestCase):
             self.assertTrue(all(m.get('targetClientIds') == ['test-owner'] for m in following))
         self.assertTrue(all(m['method'] in ('initialize', 'thread-owner-discovery', 'thread-stream-following-changed') for m in client.sent))
         return result
+    def test_sidebar_question_flag_does_not_expose_request_contents(self):
+        request = {'method': 'item/tool/requestUserInput', 'params': {'threadId': 'test', 'questions': [{'question': 'fixture'}]}}
+        result = self.observe(Client(extra={'requests': [request]}))['test']
+        self.assertTrue(result['needsAnswer'])
+        self.assertNotIn('pendingRequests', result)
+        request['params']['threadId'] = 'other'
+        self.assertFalse(self.observe(Client(extra={'requests': [request]}))['test']['needsAnswer'])
+
+    def test_sidebar_missing_live_candidate_is_unknown(self):
+        from unittest.mock import MagicMock
+        db = MagicMock()
+        db.execute.return_value = [('candidate',)]
+        rows = [{'id': 'candidate'}, {'id': 'done'}]
+        with patch.object(store, 'connect_store', return_value=db), patch.object(store, 'desktop_activity', return_value={}):
+            store.sidebar_activity(rows)
+        self.assertEqual(rows[0]['activity'], {'state': 'unknown'})
+        self.assertNotIn('activity', rows[1])
+        with patch.object(store, 'connect_store', side_effect=RuntimeError('unavailable')):
+            store.sidebar_activity(rows)
+        self.assertTrue(all(t['activity']['state'] == 'unknown' for t in rows))
+
     def test_live_active_and_idle(self):
         self.assertEqual(self.observe(Client())['test']['state'], 'running')
         self.assertEqual(self.observe(Client(status='idle'))['test']['state'], 'idle')

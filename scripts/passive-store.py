@@ -223,7 +223,8 @@ def desktop_activity(identifiers, include_requests=False):
             state = change.get('conversationState', {})
             status = state.get('threadRuntimeStatus', {}).get('type')
             if state.get('id') == identifier and status in ('active', 'idle'):
-                result[identifier] = {'source': 'desktop', 'state': 'running' if status == 'active' else 'idle', 'observedAt': int(time.time() * 1000)}
+                result[identifier] = {'source': 'desktop', 'state': 'running' if status == 'active' else 'idle', 'observedAt': int(time.time() * 1000),
+                                      'needsAnswer': any(isinstance(request, dict) and request.get('method') == 'item/tool/requestUserInput' and request.get('params', {}).get('threadId') == identifier for request in state.get('requests', []))}
                 if status == 'active':
                     result[identifier]['activeTurnId'] = desktop_active_turn(state)
                 if include_requests:
@@ -262,8 +263,11 @@ def sidebar_activity(threads):
         for thread in threads:
             if thread['id'] in activity:
                 thread['activity'] = activity[thread['id']]
+            elif thread['id'] in candidates:
+                thread['activity'] = {'state': 'unknown'}
     except (RuntimeError, sqlite3.Error):
-        pass
+        for thread in threads:
+            thread['activity'] = {'state': 'unknown'}
 
 
 def thread_select_columns(connection):

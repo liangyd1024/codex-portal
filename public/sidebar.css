@@ -38,3 +38,18 @@
 .backup-selection input{flex:0 0 20px;width:20px;height:20px;accent-color:#000}
 .backup-selection .settings-actions{display:flex;flex-wrap:wrap;gap:8px}
 .backup-selection button{min-height:44px}
+
+.sidebar-tools{flex-wrap:wrap;padding:4px 0 8px;gap:4px}
+.sidebar-tools>.sidebar-view{min-height:44px;margin-left:auto}
+.sidebar-running-filter{min-height:44px;padding:6px 10px;border:1px solid var(--control-border-color);border-radius:var(--control-radius);background:var(--control-background);color:var(--control-foreground);font-size:13px;white-space:nowrap}
+.sidebar-running-filter:hover:not(:disabled){background:var(--soft)}
+.sidebar-running-filter[aria-pressed=true]{background:#000;color:#fff}
+.sidebar-running-filter[aria-pressed=true]:hover{background:#262626}
+.sidebar-tools>.sidebar-progress,.sidebar-running-notice{flex-basis:100%;font-size:12px;color:var(--muted)}
+.sidebar-running-notice{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.sidebar-running-notice button{min-width:44px;min-height:44px;background:transparent;color:var(--control-foreground);text-decoration:underline}
+.sidebar-running-notice button:hover{background:var(--soft)}
+.sidebar .sidebar-running-thread .thread-row{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;min-height:56px}
+.sidebar-running-thread .thread-meta{display:none}
+.thread-context{display:block;text-align:left;font-size:12px;line-height:1.625;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar-empty .secondary-button{min-height:44px}

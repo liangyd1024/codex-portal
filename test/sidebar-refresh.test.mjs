@@ -62,7 +62,7 @@ test('late activity is ignored after a new snapshot, account, disconnect or conn
   const pending=c.loadSidebarActivity(snapshot,1);await tick();
   if(change==='snapshot')state.sidebar={...snapshot};if(change==='disconnect')connected=false;if(change==='connection')state.status.connection.connectedAt=2;
   d.resolve({accountScope:change==='account'?'other':'account',data:[{id:'a',activity:{observedAt:123}}]});await pending;
-  assert.equal(renders,change==='none'?1:0);assert.equal(state.threads[0].activity?.observedAt,change==='none'?123:undefined);
+  assert.equal(renders,['none','account'].includes(change)?1:0);if(change==='account')assert.equal(snapshot.activityPhase,'error');assert.equal(state.threads[0].activity?.observedAt,change==='none'?123:undefined);
  }
 });
 
@@ -112,3 +112,13 @@ test('activity batches keep raw extension fields and remove an explicitly absent
 });
 
 function runController(code,context){return vm.runInContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,context);}
+
+test('activity batches remain pending until the final batch, and failure can be retried',async()=>{
+ const last=gate(),ids=Array.from({length:201},(_,i)=>({id:String(i)}));let n=0;
+ const f=readerFixture(async()=>++n===1?{accountScope:'same',data:[]}:last.promise);
+ const snapshot={accountScope:'same',data:ids,activityPhase:'loading'};f.state.sidebar=snapshot;f.state.threads=ids;f.state.listVersion=1;
+ const pending=f.loadSidebarActivity(snapshot,1);await tick();assert.equal(snapshot.activityPhase,'loading');
+ last.reject(Error('offline'));await pending;assert.equal(snapshot.activityPhase,'error');
+ const empty={accountScope:'same',data:[],activityPhase:'loading'};f.state.sidebar=empty;
+ await f.loadSidebarActivity(empty,1);assert.equal(empty.activityPhase,'ready');
+});

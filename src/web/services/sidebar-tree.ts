@@ -21,16 +21,22 @@ function threadBadge(thread:Thread,running:string|null,waiting:boolean):Badge{
  const created=creationSource(thread),source=running||created;
  return {className:'activity-icon activity-'+source+(running?' activity-running':''),title:({web:'网页端创建',desktop:'桌面端创建',unknown:'创建来源未知'})[created]+(running?' · '+(running==='web'?'网页端':'桌面端')+'正在运行':''),icon:source==='desktop'?'monitor':source==='web'?'globe':'mark'};
 }
-export interface ThreadView {kind:'thread';raw:Thread;name:string;time:string;selected:boolean;unread:boolean;badge:Badge;menu:boolean;draggable:boolean}
+export interface ThreadView {kind:'thread';raw:Thread;name:string;time:string;context?:string;selected:boolean;unread:boolean;badge:Badge;menu:boolean;draggable:boolean}
 export interface ProjectView {kind:'project';raw:Project;expanded:boolean;badges:Badge[];children:ItemView[];createDisabled:boolean}
 export type ItemView=ThreadView|ProjectView;
 export interface GroupView {id:string;name:string;section?:Section;expanded:boolean;badges:Badge[];items:ItemView[];menu:boolean;menuLabel:string}
 export function treePresentation(groups:Group[],c:Controller):GroupView[]{
- const summary=(items:Item[])=>activitySummary(items,t=>c.source(t),c.o.needsAnswer);
+ const waiting=(t:Thread)=>c.waiting?c.waiting(t):!!c.o.needsAnswer?.(t.id);
+ const byId=new Map(c.snapshot?.data?.map(t=>[t.id,t])||[]);
+ const summary=(items:Item[])=>activitySummary(items,t=>c.source(t),id=>byId.has(id)?waiting(byId.get(id)!):!!c.o.needsAnswer?.(id));
+ const runningRows=new Map(c.runningView?.rows.map(r=>[r.thread.id,r])||[]);
+ const projects=new Map(c.snapshot?.projects?.map(p=>[p.id,p.name])||[]);
  const itemView=(item:Item):ItemView=>{
   if(item.kind==='project')return {kind:'project',raw:item.value,expanded:c.isExpanded('project:'+item.value.id),badges:summary(item.children),children:item.children.map(itemView),createDisabled:!c.o.connected()||!item.value.roots[0]};
   const t=item.value;
-  return {kind:'thread',raw:t,name:c.o.threadName(t),time:c.o.relativeTime(t.recencyAt||t.updatedAt),selected:c.o.selectedId()===t.id,unread:!!t.isUnread,badge:threadBadge(t,c.source(t),!!c.o.needsAnswer?.(t.id)),menu:c.threadMenu(t).some(e=>!e.hidden),draggable:!!(t.isPinned&&c.snapshot!.preferences.pinned==='manual'&&c.snapshot!.capabilities.reorderThread.supported&&!c.snapshot!.archived)};
+  const row=runningRows.get(t.id);
+  const context=c.running?[projects.get(t.projectId||'')||'未关联项目',row?.uncertain?'状态待确认':waiting(t)?'需要你回答':'正在运行'].join(' · '):undefined;
+  return {kind:'thread',raw:t,name:c.o.threadName(t),context,time:c.o.relativeTime(t.recencyAt||t.updatedAt),selected:c.o.selectedId()===t.id,unread:!!t.isUnread,badge:threadBadge(t,c.source(t),waiting(t)),menu:c.threadMenu(t).some(e=>!e.hidden),draggable:!c.running&&!!(t.isPinned&&c.snapshot!.preferences.pinned==='manual'&&c.snapshot!.capabilities.reorderThread.supported&&!c.snapshot!.archived)};
  };
  return groups.flatMap(group=>{const items=group.items.filter(i=>!c.view!.search||i.kind==='thread'||i.children.length);if(c.view!.search&&!items.length)return[];const badges=summary(group.items);return[{id:group.id,name:group.name,section:group.section,expanded:c.isExpanded('section:'+group.id),badges,items:items.map(itemView),menu:!!group.section&&c.sectionMenu(group.section).some(e=>!e.hidden),menuLabel:group.name+badges.map(b=>b.count??'').join('')}];});
 }

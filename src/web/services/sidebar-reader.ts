@@ -25,7 +25,7 @@ async function readThreads(append = false, reportFailure = false) {
     if(state.sidebar?.accountScope===d.accountScope){const previous=new Map(state.threads.map(t=>[t.id,t.activity]));for(const t of d.data||[])if(!t.activity&&previous.has(t.id))t.activity=previous.get(t.id);}
     const accountChanged=state.sidebar&&state.sidebar.accountScope!==d.accountScope;
     if(accountChanged){createdThreads.clear();if(append){void loadThreads(false,false,true);return;}}
-    state.sidebar=d;state.projects=d.projects||[];if(d.selectedThread?.id===state.selectedId)state.selectedArchived=!!d.selectedThread.archived;
+    d.activityPhase='loading';state.sidebar=d;state.projects=d.projects||[];if(d.selectedThread?.id===state.selectedId)state.selectedArchived=!!d.selectedThread.archived;
     state.threadListSource = d.historySource || null;
     for (const thread of d.data || []) createdThreads.delete(thread.id);
     const pending = state.sidebarArchived?[]:[...createdThreads.values()].filter(t => !state.search || threadName(t).includes(state.search));
@@ -42,12 +42,14 @@ async function loadSidebarActivity(snapshot:SidebarSnapshot,seq:number){
   for(let offset=0;offset<ids.length&&current();offset+=200){
     try{
       const data=await api('/api/sidebar/activity?'+new URLSearchParams({ids:JSON.stringify(ids.slice(offset,offset+200))}));
-      if(!current()||data.accountScope!==snapshot.accountScope)return;
+      if(!current())return;
+      if(data.accountScope!==snapshot.accountScope){snapshot.activityPhase='error';renderThreads();return;}
       const activity=new Map((data.data||[]).map(t=>[t.id,t.activity]));
       for(const t of state.threads)if(activity.has(t.id)){if(activity.get(t.id))t.activity=activity.get(t.id);else delete t.activity;}
-      renderThreads();
-    }catch(error){if(current())recordError(error,'sidebar-activity');return;}
+      if(offset+200<ids.length)renderThreads();
+    }catch(error){if(current()){snapshot.activityPhase='error';recordError(error,'sidebar-activity');renderThreads();}return;}
   }
+  if(current()){snapshot.activityPhase='ready';renderThreads();}
 }
 function loadVisibleThreads() {
   const list = $('project-list');

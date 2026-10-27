@@ -429,12 +429,13 @@ const sidebar: Sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon
   select:(t:NativeThread)=>{state.projectId=t.projectId!;state.selectedArchived=!!t.archived;saveView();selectThread(t.id);},
   onArchiveView:(archived:boolean)=>{state.sidebarArchived=archived;state.threadCursor=null;state.threads=[];loadThreads();},
   refresh:()=>loadThreads(false,true),
+  retry:async()=>{if(!connected())await connectRemote();else await refreshWorkspace();},
   changed:async(action:string,t:import('./services/sidebar').SidebarThread|import('./services/sidebar').SidebarSection|null)=>{if(t?.id===state.selectedId&&['archive','restore'].includes(action))state.selectedArchived=action==='archive';await Promise.all([loadThreads(false,true,true),loadStatus()]);if(t?.id===state.selectedId)await refreshSelected();renderControls();},
 });
 function renderProjects() { renderThreads(); if(newChatOpen&&!state.busy.has('create')){updateNewProjects();renderControls();} }
 function renderThreads() {
   setWorkspaceText('projects-heading','工作区');
-  if(state.sidebar)sidebar.render({...state.sidebar,data:state.threads},{search:state.search,loading:state.loadingThreads});
+  sidebar.render(state.sidebar?{...state.sidebar,data:state.threads}:null,{search:state.search,loading:state.loadingThreads,failed:state.threadPageError});
   setWorkspaceText('breadcrumb-project',state.projects.find(p=>p.id===state.projectId)?.name||'工作区');
   publishWorkspaceControl('more-threads',{ hidden:!state.threadPageError&&!state.threadCursor&&(!state.loadingThreads||state.threads.length>0) });
   publishWorkspaceControl('more-threads',{ text:state.threadPageError?'加载失败，点击重试':state.loadingThreads?'正在加载会话…':'加载更多会话' });

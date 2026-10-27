@@ -1,3 +1,4 @@
+import {RunningFilter,type RunningView} from './running-filter.ts';
 import type {NativeThread,NativeProject} from '../../contracts/native';
 import type {ApiOptions} from './api';
 import type {Group,Item,MenuEntry} from './sidebar-tree';
@@ -10,8 +11,8 @@ export interface SidebarThread extends NativeThread {recencyAt?:number;updatedAt
 export interface SidebarProject extends NativeProject {name:string;threadIds:string[];legacyId?:string;recencyAt?:number;updatedAt?:number;aliasIds?:string[]}
 export interface SidebarSection {id:string;name:string;desktopId?:string;projectIds:string[];threadIds:string[];itemOrder?:string[];revision?:unknown;[field:string]:unknown}
 export interface SidebarSnapshot {selectedThread?:SidebarThread;historySource?:string;accountScope:string;data:SidebarThread[];projects:SidebarProject[];sections:SidebarSection[];pinnedProjectIds:string[];pinnedThreadIds:string[];rootProjectIds:string[];rootThreadIds:string[];pinnedOrder?:string[];chatOrder?:string[];sectionOrder?:string[];hostName?:string;archived?:boolean;nextCursor?:string|null;preferences:{chats?:string;pinned?:string;grouping?:string};capabilities:Record<string,{supported:boolean;reason?:string}>;[field:string]:unknown}
-interface View {search?:string;loading?:boolean}
-interface Options {node:HTMLElement;host:string;connected:()=>boolean;onArchiveView:(archived:boolean)=>void;api:<T=SidebarSnapshot>(path:string,options?:ApiOptions)=>Promise<T>;toast:(message:string,error?:boolean)=>unknown;selectedId:()=>string|null;newThread:(root?:string)=>unknown;needsAnswer?:(id:string)=>boolean;activitySource?:(thread:SidebarThread)=>string|null;relativeTime:(time:number|undefined)=>string;threadName:(thread:SidebarThread)=>string;select:(thread:SidebarThread)=>unknown;changed:(action:string,target:SidebarThread|SidebarSection|null)=>Promise<unknown>;refresh:()=>Promise<unknown>;icon?:unknown}
+interface View {search?:string;loading?:boolean;failed?:boolean}
+interface Options {node:HTMLElement;host:string;connected:()=>boolean;onArchiveView:(archived:boolean)=>void;api:<T=SidebarSnapshot>(path:string,options?:ApiOptions)=>Promise<T>;toast:(message:string,error?:boolean)=>unknown;selectedId:()=>string|null;newThread:(root?:string)=>unknown;needsAnswer?:(id:string)=>boolean;activitySource?:(thread:SidebarThread)=>string|null;relativeTime:(time:number|undefined)=>string;threadName:(thread:SidebarThread)=>string;select:(thread:SidebarThread)=>unknown;changed:(action:string,target:SidebarThread|SidebarSection|null)=>Promise<unknown>;refresh:()=>Promise<unknown>;retry?:()=>Promise<unknown>;icon?:unknown}
 type Target=SidebarThread|SidebarSection|null;
 import {activitySource} from '../../../public/activity.js';
 function orderItems<T extends Item>(items:T[],keys:string[]=[],orderedThreadIds:string[]|null=null):T[]{
@@ -75,6 +76,7 @@ export function sidebarGroups(snapshot:SidebarSnapshot):Group[]{
   return groups.filter(g=>g.items.length||g.section);
 }
 export class Sidebar {
+ running=false;runningFilter=new RunningFilter();runningView:RunningView|null=null;private savedScroll=0;
  declare o:Options;declare node:HTMLElement;declare snapshot:SidebarSnapshot|null;declare pending:boolean;declare menu:HTMLElement|null;declare dialog:HTMLDialogElement|null;declare scope:string|null;declare expanded:Set<string>;declare searchOverrides:Map<string,boolean>;declare searchExpanded:boolean;
  declare treeView:ReturnType<typeof installReactSidebarTree>;declare dialogView:ReturnType<typeof installReactSidebarDialog>;declare menuView:ReturnType<typeof installReactSidebarMenu>;declare toolbarView:ReturnType<typeof installReactSidebarToolbar>;declare undoView:ReturnType<typeof installReactSidebarUndo>;
  declare toolbar:HTMLDivElement;declare progress:ReturnType<typeof installReactSidebarToolbar>['progress'];declare menuAnchor:HTMLElement|undefined;declare view:View|undefined;declare drag:SidebarThread|null|undefined;declare archiving:Map<string,SidebarThread>|undefined;declare operations:Map<string,string>|undefined;declare renderShape:string|undefined;declare operationQueue:Promise<unknown>|undefined;declare undoId:string|undefined;
@@ -84,7 +86,7 @@ export class Sidebar {
     this.treeView=installSidebarTree(this);
     this.dialogView=installSidebarDialog();
     this.menuView=installSidebarMenu(item=>{this.closeMenu(false);item.run?.();});
-    this.toolbarView=installSidebarToolbar({before:this.node,onArchive:()=>options.onArchiveView(!this.snapshot?.archived),onMore:more=>this.openMenu(more,[
+    this.toolbarView=installSidebarToolbar({before:this.node.parentElement!,onRunning:()=>this.toggleRunning(),onRetry:()=>{void (this.o.retry?this.o.retry():this.o.refresh()).catch(e=>this.o.toast(String(e.message||e),true));},onArchive:()=>{if(this.running)this.toggleRunning();options.onArchiveView(!this.snapshot?.archived);},onMore:more=>this.openMenu(more,[
       {label:'全部折叠',run:()=>{this.collapseAll();more.focus({preventScroll:true});}},
       this.entry('新建分区','createSection',()=>this.edit('createSection',null,'新建分区')),
     ])});
@@ -106,24 +108,42 @@ export class Sidebar {
     if(item)this.expanded.add('project:'+item.value.id);
     this.expanded.add('section:'+(group?.id||'threads'));this.save();
   }
-  isExpanded(key:string):boolean{return this.view?.search?(this.searchOverrides.get(key)??this.searchExpanded):this.expanded.has(key);}
+  toggleRunning(){
+    if(!this.running&&!this.o.connected())return;
+    const scroll=this.node.parentElement!;
+    if(!this.running)this.savedScroll=scroll.scrollTop;
+    this.running=!this.running;this.closeMenu(false);this.render(this.snapshot,this.view);
+    scroll.scrollTop=this.running?0:this.savedScroll;
+    this.toolbar?.querySelector<HTMLButtonElement>('.sidebar-running-filter')?.focus({preventScroll:true});
+  }
+  waiting(t:SidebarThread):boolean{
+    if(!this.o.connected())return false;
+    const activity=t.activity as {needsAnswer?:boolean;observedAt?:number}|undefined;
+    return !!this.o.needsAnswer?.(t.id)||!!(this.source(t)==='desktop'&&activity?.needsAnswer);
+  }
+  isExpanded(key:string):boolean{if(this.running)return true;return this.view?.search?(this.searchOverrides.get(key)??this.searchExpanded):this.expanded.has(key);}
   collapseAll(){this.expanded.clear();this.searchOverrides.clear();this.searchExpanded=false;this.save();this.render(this.snapshot,this.view);}
   entry(label:string,action:string,run:()=>unknown,extra:Partial<MenuEntry>={}):MenuEntry{const c=this.snapshot?.capabilities[action];return {label,run,disabled:!this.o.connected()||!c?.supported,reason:!this.o.connected()?'连接目标机器后可操作。':c?.reason,...extra,hidden:!c?.supported};}
   render(snapshot:SidebarSnapshot|null,view:View={}){
     if(this.view?.search!==view.search){this.searchOverrides.clear();this.searchExpanded=true;}
-    this.view=view;if(!snapshot)return;if(this.drag){this.snapshot=snapshot;return;}
+    this.view=view;if(!snapshot){this.running=false;this.runningView=null;this.runningFilter=new RunningFilter();this.renderShape=undefined;this.snapshot=null;this.closeMenu(false);this.toolbarView.setRunning({active:false,disabled:true,hidden:false,count:0,pending:false,uncertain:true,search:false});this.treeView.render([],'正在读取会话…');return;}if(this.drag){this.snapshot=snapshot;return;}
     this.snapshot=snapshot;
     if(!snapshot.archived&&!view.search&&!snapshot.nextCursor)for(const [key,t] of this.archiving||[]){
       if(key===snapshot.accountScope+':'+t.id&&!this.operations?.has(key)&&!snapshot.data.some(row=>row.id===t.id))this.archiving!.delete(key);
     }
-    if(this.scope!==snapshot.accountScope){this.scope=snapshot.accountScope;try{const saved=JSON.parse(localStorage.getItem(this.key())||'[]');this.expanded=new Set(Array.isArray(saved)?saved.filter(k=>typeof k==='string'):[]);}catch{this.expanded=new Set();}this.searchOverrides.clear();this.searchExpanded=true;this.closeMenu(false);this.undoView?.hide();}
+    if(this.scope!==snapshot.accountScope){this.scope=snapshot.accountScope;this.running=false;this.savedScroll=0;try{const saved=JSON.parse(localStorage.getItem(this.key())||'[]');this.expanded=new Set(Array.isArray(saved)?saved.filter(k=>typeof k==='string'):[]);}catch{this.expanded=new Set();}this.searchOverrides.clear();this.searchExpanded=true;this.closeMenu(false);this.undoView?.hide();}
     this.toolbarView.setArchived(snapshot.archived);
     const display=this.archiveDisplay(snapshot);
-    const shape=JSON.stringify([display,view.search,display.data.length?false:view.loading,this.o.selectedId(),this.o.connected(),[...this.expanded],[...this.searchOverrides],this.searchExpanded,display.data.map(t=>[this.source(t),this.o.needsAnswer?.(t.id),this.o.relativeTime(t.recencyAt||t.updatedAt)])],(key,value)=>key==='observedAt'?undefined:value);
+    if(snapshot.archived)this.running=false;
+    this.runningView=this.runningFilter.read(display,{connected:this.o.connected(),source:t=>this.source(t),waiting:t=>this.waiting(t),failed:view.failed});
+    this.toolbarView.setRunning({active:this.running,disabled:!this.o.connected()&&!this.running,hidden:!!snapshot.archived,count:this.runningView.count,pending:this.runningView.pending,uncertain:this.runningView.uncertain,search:!!view.search});
+    const shape=JSON.stringify([display,this.running,this.runningView.rows.map(r=>[r.thread.id,r.waiting,r.uncertain]),this.runningView.pending,this.runningView.uncertain,view.failed,view.search,display.data.length?false:view.loading,this.o.selectedId(),this.o.connected(),[...this.expanded],[...this.searchOverrides],this.searchExpanded,display.data.map(t=>[this.source(t),this.waiting(t),this.o.relativeTime(t.recencyAt||t.updatedAt)])],(key,value)=>key==='observedAt'?undefined:value);
     if(shape===this.renderShape){this.setBusy(this.pending);return;}
     this.renderShape=shape;
     const focused=(document.activeElement as HTMLElement|null)?.dataset?.focusKey,scroll=this.node.parentElement!.scrollTop;
-    this.treeView.render(sidebarGroups(display),view.loading?'正在读取…':view.search?'没有匹配的会话':snapshot.archived?'暂无已归档会话':'暂无会话');
+    const groups=this.running?(this.runningView.rows.length?[{id:'running',name:'运行中',items:this.runningView.rows.map(row=>({kind:'thread' as const,value:row.thread}))}]:[]):sidebarGroups(display);
+    const empty=this.running?(this.runningView.pending?'正在确认运行状态…':this.runningView.uncertain?'运行状态待确认':view.search?'没有匹配的运行会话':'当前没有正在运行的会话'):view.loading?'正在读取…':view.search?'没有匹配的会话':snapshot.archived?'暂无已归档会话':'暂无会话';
+    this.treeView.render(groups,empty);
     if(focused)[...this.node.querySelectorAll<HTMLElement>('[data-focus-key]')].find(n=>n.dataset.focusKey===focused)?.focus({preventScroll:true});
     this.node.parentElement!.scrollTop=scroll;this.setBusy(this.pending);
   }
