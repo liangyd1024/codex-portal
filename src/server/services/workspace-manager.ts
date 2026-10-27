@@ -1,4 +1,3 @@
-import {sharedDesktopState} from '../../../lib/shared-desktop.mjs';
 import {Manager} from '../../../lib/manager.mjs';
 import {taskNotice} from '../../../shared/connection-state.js';
 import {summarizeTitle} from '../../../lib/thread-title.mjs';
@@ -14,7 +13,7 @@ export class WorkspaceManager extends Manager {
  declare titleJobs:Map<string,Promise<unknown>>;
   override status() {
     const live=this.connection.state==='connected'&&this.rpc?.connected;
-    return {instanceId:this.instanceId,revision:this.statusRevision,loginRecovery:this.loginRecovery||null,host: this.host, connection: this.connection, service: {...this.service,sharedDesktop:sharedDesktopState(this.expectedHost).configured,sharedDesktopReady:sharedDesktopState(this.expectedHost).activated,releasing:this.releasing},
+    return {instanceId:this.instanceId,revision:this.statusRevision,loginRecovery:this.loginRecovery||null,host: this.host, connection: this.connection, service: {...this.service,releasing:this.releasing},
       controlledSessions:[...this.controlled].map(([id,info])=>({id,...info,status:live?info.status||{type:'unknown'}:{type:'unknown'},pendingRequests:[...this.requests.values()].filter(request=>request.threadId===id).length})),
       subscribedThreads:[...this.subscriptions].filter(([,v])=>!v.handoff).map(([id])=>id), handoffs:this.handoffs.entries().filter(v=>!v.automatic), controlledThreads: [...this.controlled.keys()], pendingRequests: [...this.requests.values(),...this.pendingQuestions.entries.values()], recoveryFailures:[...this.recoveryFailures.values()], errors: this.errors};
   }

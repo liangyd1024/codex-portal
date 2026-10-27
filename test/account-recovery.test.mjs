@@ -74,6 +74,3 @@ test('metadata-less login is rechecked after its cooldown and can recover from l
   const f=fixture(t);f.set({stamp:'absent',saved:{account:null,requiresOpenaiAuth:true}});await f.r.tick();
   f.set({saved:account()});f.r.probedAt=Date.now()-61000;await f.r.tick();assert.equal(f.calls.filter(c=>c[0]==='reload').length,1);
 });
-
-test('shared service never probes login or interrupts native work',async t=>{const f=fixture(t);f.m.service={sharedDesktop:true};await f.r.tick();assert.deepEqual(f.calls,[]);});
-test('late shared activation blocks automatic quiesce before any native interruption',async t=>{const f=fixture(t);f.m.assertExclusiveService=async()=>{throw Error('shared engine')};await assert.rejects(f.r.quiesce(f.m.rpc,f.m.generation),/shared engine/);assert.deepEqual(f.calls,[]);});

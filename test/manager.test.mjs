@@ -56,7 +56,6 @@ function fixture(t, handlers = {}) {
   manager.serviceAction = async (action) => {
     serviceCalls.push(action);
     if (action === 'projects') return { data: [] };
-    if (action === 'ownership') return {sharedDesktop:false};
     return { running: action !== 'release', pid: 123, version: '0.162.fake', startedAt: 'fixed-start' };
   };
   manager.passive = async(action, payload)=>{
@@ -320,7 +319,7 @@ test('release stays connected when the queued input check fails or is malformed'
 
 test('intentional service shutdown does not trigger reconnect or retain a connection error', async (t) => {
   const {manager,rpc}=fixture(t);
-  manager.serviceAction=async action=>{if(action==='ownership')return {sharedDesktop:false};assert.equal(action,'release');rpc.connected=false;manager.onDisconnect('socket closed');return {running:false};};
+  manager.serviceAction=async action=>{assert.equal(action,'release');rpc.connected=false;manager.onDisconnect('socket closed');return {running:false};};
   const result=await manager.release({allEntrancesDisconnected:true});
   assert.equal(result.connection.state,'disconnected');
   assert.equal(result.connection.error,null);
@@ -388,7 +387,7 @@ test('maintenance accepts the native ephemeral queue exclusion for release and l
       'thread/queue/list':({threadId})=>{if(threadId==='temporary')throw new Error('ephemeral thread does not support queued submissions: temporary');return {data:[]};},
     });
     await manager.release({allEntrancesDisconnected:true},reloadLogin);
-    assert.deepEqual(serviceCalls,['ownership',reloadLogin?'reload-login':'release']);
+    assert.deepEqual(serviceCalls,[reloadLogin?'reload-login':'release']);
     assert.equal(rpc.calls.filter(c=>c.method==='thread/backgroundTerminals/list').length,2);
     assert.equal(rpc.calls.filter(c=>c.method==='thread/queue/list').length,2);
   }
@@ -410,7 +409,7 @@ test('ephemeral queue exclusion preserves maintenance blockers and fails closed 
       'thread/queue/list':()=>{throw new Error(exclusion);},...handlers,
     });
     await assert.rejects(manager.release({allEntrancesDisconnected:true},reloadLogin));
-    assert.deepEqual(serviceCalls,['ownership']);
+    assert.deepEqual(serviceCalls,[]);
     assert.equal(manager.connection.state,'connected');
     assert.equal(manager.releasing,false);
   }

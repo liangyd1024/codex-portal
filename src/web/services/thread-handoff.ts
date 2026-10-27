@@ -1,5 +1,5 @@
 import type {NativeHandoff} from '../../contracts/native';
-export interface HandoffState {id?:string|null;context?:string|null;owned?:boolean;sharedDesktop?:boolean;handoff?:NativeHandoff|null;connected?:boolean;supported?:boolean;busy?:boolean;archived?:boolean;conflict?:boolean;running?:boolean}
+export interface HandoffState {id?:string|null;context?:string|null;owned?:boolean;handoff?:NativeHandoff|null;connected?:boolean;supported?:boolean;busy?:boolean;archived?:boolean;conflict?:boolean;running?:boolean}
 export interface HandoffView {buttonHidden:boolean;buttonDisabled:boolean;buttonText:string;buttonTitle:string;bannerHidden:boolean;message:string;retryHidden:boolean;retryDisabled:boolean;closeHidden:boolean;error:boolean;busy:boolean}
 interface Options {endUse:()=>unknown;publish:(view:HandoffView)=>void;focus:(banner:boolean)=>void;restoreFocus:()=>void}
 export function handoffMessage(handoff:NativeHandoff|null|undefined,connected:boolean|undefined) {
@@ -20,13 +20,13 @@ export function createHandoffController({endUse,publish,focus,restoreFocus}:Opti
  const controls={
   focus(){focus(!bannerHidden);},
   showError(text:string){notice={kind:'error',text};controls.render(current);},
-  run(){if(current.sharedDesktop)return;if(current.running){notice={kind:'running',text:'当前任务正在运行，请在任务结束后再交还桌面端。你可以继续补充要求。'};controls.render(current);return;}notice=null;void endUse();},
+  run(){if(current.running){notice={kind:'running',text:'当前任务正在运行，请在任务结束后再交还桌面端。你可以继续补充要求。'};controls.render(current);return;}notice=null;void endUse();},
   dismiss(){notice=null;controls.render(current);restoreFocus();},
-  render({id,context=id,owned,handoff,connected,supported,busy,archived,conflict,sharedDesktop=false,running=false}:HandoffState){
+  render({id,context=id,owned,handoff,connected,supported,busy,archived,conflict,running=false}:HandoffState){
    if(id!==current.id||context!==current.context||notice?.kind==='running'&&!running)notice=null;
-   current={id,context,owned,handoff,connected,supported,busy,archived,conflict,sharedDesktop,running};
-   bannerHidden=sharedDesktop||!id||(!notice&&!handoff);
-   publish({buttonHidden:Boolean(sharedDesktop||!id||archived||(!owned&&!['unknown','checking'].includes(handoff?.state!))),
+   current={id,context,owned,handoff,connected,supported,busy,archived,conflict,running};
+   bannerHidden=!id||(!notice&&!handoff);
+   publish({buttonHidden:Boolean(!id||archived||(!owned&&!['unknown','checking'].includes(handoff?.state!))),
     buttonDisabled:Boolean(!connected||!supported||busy||handoff?.state==='checking'||(!owned&&handoff?.state!=='unknown')),
     buttonText:busy||handoff?.state==='checking'?'正在检查…':handoff?.state==='unknown'?'重试交还':'交还桌面端',
     buttonTitle:!supported?'当前引擎尚未核验交还能力，请重连后检查。':'只结束此会话的网页使用，其他会话继续运行。',

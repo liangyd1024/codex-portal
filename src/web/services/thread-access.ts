@@ -4,7 +4,6 @@ interface Dependencies {
  desktop:(id:string)=>Promise<Detail>;
  resume:(id:string)=>Promise<Detail>;
  ready:()=>boolean;
- sharedEngine?:()=>boolean;
  messageOf:(error:unknown)=>string;
 }
 // Resolve once per selection/connection. Only explicit retry may repeat a failed resume.
@@ -12,12 +11,10 @@ export function createThreadAccess(d:Dependencies){
  let attempted='',error='';
  async function resolve(id:string,detail:Detail,current:()=>boolean):Promise<Detail>{
   if(!current()||!d.ready()||detail.controlled||detail.recovering||detail.thread?.archived)return detail;
-  const shared=d.sharedEngine?.()===true;
-  if(!shared&&detail.handoff&&detail.handoff.state!=='released')return detail;
-  const key=JSON.stringify([d.key(),shared]);
+  if(detail.handoff&&detail.handoff.state!=='released')return detail;
+  const key=d.key();
   if(attempted===key)return {...detail,accessError:error};
   attempted=key;error='';
-  if(!shared){
   let desktop:Detail;
   try{desktop=await d.desktop(id);}
   catch(caught){if(current())error=d.messageOf(caught);return {...detail,accessError:d.messageOf(caught)};}
@@ -27,7 +24,6 @@ export function createThreadAccess(d:Dependencies){
   if(desktop.desktop?.available)return desktop;
   // A deliberate handoff must never be undone by browsing or refresh.
   if(detail.handoff){error=desktop.desktop?.error||'请在电脑端打开此会话，然后重试。';return {...detail,accessError:error};}
-  }
   try{
    const resumed=await d.resume(id);
    return current()?resumed:detail;

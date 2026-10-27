@@ -343,7 +343,7 @@ function renderControls() {
   const stopLabel=stopping?(state.transport&&(state.desktopMode?state.detail?.desktop?.available:ready)?'停止中…':'停止状态待确认'):'停止';
   const handoff=currentHandoff(),handing=state.busy.has('handoff:'+state.selectedId)||handoff?.state==='checking';
   handoffControls??=createHandoffControls({endUse:endThreadUse});
-  handoffControls!.render({sharedDesktop:state.status?.service?.sharedDesktopReady===true,id:newChatOpen||state.desktopMode?null:state.selectedId,context:targetHost+':'+state.selectedId+':'+state.selectionVersion,running:active,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId!)),handoff,connected:ready,
+  handoffControls!.render({id:newChatOpen||state.desktopMode?null:state.selectedId,context:targetHost+':'+state.selectedId+':'+state.selectionVersion,running:active,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId!)),handoff,connected:ready,
     supported:state.status?.service?.protocolValidation?.features?.handoff?.supported===true,busy:handing,archived:state.selectedArchived,conflict:state.detail?.controlState==='conflict'});
   const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
   publishConnectionSelect({disabled:creating});
@@ -709,14 +709,13 @@ const readDetail=createDetailReader({state,sends:desktopSends,acknowledgeAttachm
   decode:data=>decodeOutputs(data),hydrate:(data,bases)=>hydrateOutputs(data,bases),
   recordTiming:value=>{document.body.dataset.logRecovery=value;},defer:(run,delay)=>setTimeout(run,delay),refreshSoon:()=>scheduleDetailRefresh()});
 const threadAccess=createThreadAccess({
-  sharedEngine:()=>state.status?.service?.sharedDesktopReady===true,
   key:()=>JSON.stringify([targetHost,state.selectedId,state.selectionVersion,state.detailVersion]),
   ready:()=>usable()&&!state.busy.size,
   desktop:id=>api('/api/desktop/threads/'+encodeURIComponent(id)),
   resume:id=>api('/api/threads/'+encodeURIComponent(id)+'/takeover',{method:'POST'}),messageOf});
 const readSelectedDetail=async(id:string,current:()=>boolean)=>{
   const detail=await readDetail(id,current);
-  if(!current()||(state.desktopMode&&state.status?.service?.sharedDesktopReady!==true))return detail;
+  if(!current()||state.desktopMode)return detail;
   return threadAccess.resolve(id,detail,current);
 };
 const selectedRefresh=createSelectedRefresh({state,blocked:()=>automations?.opened||newChatOpen,
