@@ -6,7 +6,7 @@ import {createStore,useStore,type StoreApi} from 'zustand';
 import {completedPlan} from '../../../public/composer.js';
 interface Plan {turnId:string;text:string}
 interface RecordState {turnId:string;state:'open'|'dismissed'|'sent'|'uncertain';error?:string}
-interface Context {id:string|null;draft?:boolean;desktop?:boolean;turns:NativeTurn[];active:boolean;ready:boolean;busy:boolean}
+interface Context {id:string|null;draft?:boolean;desktop?:boolean;planSupported?:boolean;turns:NativeTurn[];active:boolean;ready:boolean;busy:boolean}
 interface Options {host:string;context:()=>Context;resetMode:()=>void;send:(id:string,plan:Plan)=>Promise<unknown>;notify:(message:string,negative:boolean)=>void;input?:HTMLTextAreaElement}
 interface View {hidden:boolean;sending:boolean;uncertain:boolean;yesDisabled:boolean;reviewDisabled:boolean;status:string}
 function Card({card,store,dismiss,review,submit}:{card:HTMLElement;store:StoreApi<{view:View|null}>;dismiss:()=>void;review:()=>void;submit:()=>Promise<void>}){
@@ -24,7 +24,7 @@ export function installReactPlanCompletion({host,context,resetMode,send,notify,i
  let current:{id:string;plan:Plan}|null=null,pending:string|null=null;
  const record=(id:string,plan:Plan)=>records[id]?.turnId===plan.turnId?records[id]:null;
  function render(){
-  const c=context(),plan:Plan|null=c.draft||c.desktop?null:completedPlan(c.turns);
+  const c=context(),plan:Plan|null=c.draft||c.desktop&&!c.planSupported?null:completedPlan(c.turns);
   current=plan?{id:c.id!,plan}:null;
   if(plan&&!record(c.id!,plan)){records[c.id!]={turnId:plan.turnId,state:'open'};resetMode();save();}
   const r=plan&&record(c.id!,plan),sending=pending===c.id,uncertain=r?.state==='uncertain'&&!sending;

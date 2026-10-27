@@ -149,7 +149,8 @@ def run(payload):
                 time.sleep(.25)
         settings = desktop.settings(identifier, owner)
         if action in ('probe', 'recover'):
-            return {'available': True, 'threadId': identifier, 'settings': settings, 'threadReferencesSupported': reference_capability(home, identifier)}
+            return {'available': True, 'threadId': identifier, 'settings': settings, 'threadReferencesSupported': reference_capability(home, identifier),
+                    'planSupported': isinstance(settings.get('settings', {}).get('model'), str)}
         if action == 'interrupt':
             turn_id = str(uuid.UUID(payload.get('turnId', '')))
             reply = desktop.request('thread-follower-interrupt-turn', {
@@ -203,6 +204,18 @@ def run(payload):
                 normalized.insert(0, reference_input)
             else:
                 normalized[first_text] = reference_input
+        mode = payload.get('mode')
+        if mode is not None and mode not in ('default', 'plan'):
+            raise DesktopError('执行模式无效。', 'INVALID_REQUEST')
+        if mode is not None and payload.get('steer'):
+            raise DesktopError('请等待当前轮次结束后切换执行模式。', 'INVALID_REQUEST')
+        collaboration = None
+        if mode is not None:
+            native = settings.get('settings') or {}
+            if not isinstance(native.get('model'), str) or not native['model']:
+                raise DesktopError('桌面模型设置未确认，请刷新后重试。', 'INVALID_REQUEST')
+            collaboration = {'mode': mode, 'settings': {'model': native['model'],
+                             'reasoning_effort': native.get('reasoningEffort')}}
         message_id = str(uuid.UUID(payload.get('messageId', '')))
         if payload.get('steer'):
             cwd = payload.get('cwd')
@@ -224,6 +237,7 @@ def run(payload):
                 'request': {'threadId': identifier,
                             'input': normalized,
                             'clientUserMessageId': message_id,
+                            **({'collaborationMode': collaboration} if collaboration else {}),
                             'approvalPolicy': 'never', 'sandboxPolicy': {'type': 'dangerFullAccess'}},
                 'context': {'inheritThreadSettings': True}
             }

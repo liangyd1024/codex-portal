@@ -154,3 +154,29 @@ class DesktopSessionTest(unittest.TestCase):
         self.assertEqual(calls, ['discover','discover'])
         self.assertEqual(open_url.call_count, 1)
         self.assertEqual(open_url.call_args.args[0], ['/usr/bin/open','-a','/Applications/Example.app','codex://threads/'+identifier])
+
+
+class DesktopPlanTest(unittest.TestCase):
+    def test_explicit_modes_use_native_model_and_effort_without_changing_global_settings(self):
+        requests = []
+        class Fake:
+            def __init__(self, *_a, **_kw): pass
+            def __enter__(self): return self
+            def __exit__(self, *_a): pass
+            def owner(self, _id): return 'owner'
+            def settings(self, *_a): return {'settings': {'model': 'native-model', 'reasoningEffort': 'high'}}
+            def request(self, method, params, version, owner, mutation):
+                requests.append((method, params, version))
+                return {'result': {}}
+        identifier = '00000000-0000-0000-0000-000000000001'
+        with patch.object(session, 'DesktopSession', Fake):
+            for mode in ['plan', 'default']:
+                session.run({'action':'send','threadId':identifier,'messageId':identifier,'text':'test','mode':mode})
+            with self.assertRaisesRegex(session.DesktopError, '结束后'):
+                session.run({'action':'send','threadId':identifier,'messageId':identifier,'text':'test','mode':'plan','steer':True})
+        self.assertEqual(len(requests), 2)
+        for index, mode in enumerate(['plan', 'default']):
+            self.assertEqual(requests[index][0], 'thread-follower-start-turn')
+            self.assertEqual(requests[index][2], 2)
+            self.assertEqual(requests[index][1]['turnStart']['request']['collaborationMode'],
+                             {'mode':mode,'settings':{'model':'native-model','reasoning_effort':'high'}})

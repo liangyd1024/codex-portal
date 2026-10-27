@@ -8,7 +8,7 @@ import type {installReactComposerDialog} from '../components/ComposerDialog';
 type Kind='skills'|'plugins'|'threads';
 interface Reference {kind:Kind;key:string;token:string}
 interface Selection {mode:'default'|'plan';skills:string[];plugins:string[];threads?:string[];references?:Reference[];goalPending?:boolean;goalUncertain?:string;goalEdit?:{base:string;text:string;uncertain?:string};[field:string]:unknown}
-export interface ComposerContext {id:string|null;cwd?:string;ready:boolean;busy:boolean;active:boolean;draft?:boolean;desktop?:boolean;ephemeral?:boolean;threadReferencesSupported?:boolean;turns:NativeTurn[];goal?:NativeGoal|null;goalError?:unknown}
+export interface ComposerContext {id:string|null;cwd?:string;ready:boolean;busy:boolean;active:boolean;draft?:boolean;desktop?:boolean;planSupported?:boolean;ephemeral?:boolean;threadReferencesSupported?:boolean;turns:NativeTurn[];goal?:NativeGoal|null;goalError?:unknown}
 interface Options {host:string;api:<T=unknown>(path:string,options?:ApiOptions)=>Promise<T>;context:()=>ComposerContext;refresh:()=>Promise<unknown>;notify:(message:string,error?:boolean)=>unknown;implementPlan:(id:string,plan:{turnId:string;text:string})=>Promise<unknown>;input?:HTMLTextAreaElement;images:AttachmentButtonControl;prefix?:string}
 type Entry=Parameters<Parameters<typeof installReactComposerCatalog>[0]['insertReference']>[0];
 import {installGoalToolbar,installGoalEditor} from '../../../public/goal-toolbar.js';
@@ -26,8 +26,8 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
   const save=()=>{try{sessionStorage.setItem(selectionKey,JSON.stringify([...selections]));}catch{notify('输入工具选择暂未保存，刷新后请重新核对。',true);}};
   const choice=()=>{const id=context().id;if(!selections.has(id))selections.set(id,{mode:'default',skills:[],plugins:[]});return selections.get(id)!;};
   const controls=installComposerControls({bar,images,prefix,actions:{
-    mode:()=>{choice().mode=choice().mode==='plan'?'default':'plan';choice().goalPending=false;save();render();controls.closeMenu();controls.focusMenu();},
-    cancelPlan:()=>{choice().mode='default';save();render();controls.focusMenu();},
+    mode:()=>{choice().mode=choice().mode==='plan'?'default':'plan';choice().modeExplicit=true;choice().goalPending=false;save();render();controls.closeMenu();controls.focusMenu();},
+    cancelPlan:()=>{choice().mode='default';choice().modeExplicit=true;save();render();controls.focusMenu();},
     cancelGoal:()=>{choice().goalPending=false;save();render();controls.focusMenu();},
     goal:()=>selectGoal(),pick:(kind,button)=>void picker(kind,button)
   }});
@@ -67,7 +67,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
   const editGoal=(button:HTMLElement)=>goalEditor!.edit(button);
   const goalToolbar=installGoalToolbar({input,context:()=>({...context(),busy:context().busy||goalUpdating}),api,refresh,edit:editGoal});
   const suggestions=installSkillSuggestions({input,api,context,select:(entry:Entry,range:{start:number;end:number},kind:Kind)=>insertReference(entry,kind,range)});
-  const planCompletion=installPlanCompletion({host,context,input,notify,send:implementPlan,resetMode:()=>{choice().mode='default';save();}});
+  const planCompletion=installPlanCompletion({host,context,input,notify,send:implementPlan,resetMode:()=>{choice().mode='default';choice().modeExplicit=true;save();}});
   function render(){
     planCompletion.render();goalToolbar.render();
     const c=context();if(selected!==JSON.stringify([c.id,c.cwd])){selected=JSON.stringify([c.id,c.cwd]);suggestions.close();if(dialog.open)dialog.close();}
@@ -75,13 +75,13 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
     reconcileGoalSelection(choice(),c,save);
     syncReferences();mirror.render();
     const currentGoal=Boolean(c.goal),disabled=!c.ready||c.busy||goalUpdating;
-    controls.render({desktop:Boolean(c.desktop),plan:!c.desktop&&choice().mode==='plan',goalPending:Boolean(choice().goalPending),currentGoal,ephemeral:Boolean(c.ephemeral),disabled,menuDisabled:Boolean(!c.ready||c.busy),active:Boolean(c.active),status:[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ')});
+    controls.render({desktop:Boolean(c.desktop),planSupported:c.planSupported,plan:choice().mode==='plan',goalPending:!c.desktop&&Boolean(choice().goalPending),currentGoal,ephemeral:Boolean(c.ephemeral),disabled,menuDisabled:Boolean(!c.ready||c.busy),active:Boolean(c.active),status:[choice().skills.length?'技能 '+choice().skills.length:'',choice().plugins.length?'插件 '+choice().plugins.length:''].filter(Boolean).join(' · ')});
     // Attachments can accompany a native turn/steer while the current turn runs.
     images.setDisabled(disabled);
 
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
-  return {render,dismiss:()=>{suggestions.close();controls.closeMenu();if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending&&!context().goal),validateSend:(text:string,active:boolean)=>validateGoalDraft(choice(),text,active,context().goal),prepareSend:async(id:string,text:string,active:boolean)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,goal:context().id===id?context().goal:null,api,save}):false;render();return started;},moveDraft:(from:string,to:string)=>{if(selections.has(from)){selections.set(to,selections.get(from)!);selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();return {mode,skills:[...skills],plugins:[...plugins],threads:[...threads!],access:WEB_ACCESS};},isLoading:()=>loading};
+  return {render,dismiss:()=>{suggestions.close();controls.closeMenu();if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending&&!context().goal),validateSend:(text:string,active:boolean)=>validateGoalDraft(choice(),text,active,context().goal),prepareSend:async(id:string,text:string,active:boolean)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,goal:context().id===id?context().goal:null,api,save}):false;render();return started;},moveDraft:(from:string,to:string)=>{if(selections.has(from)){selections.set(to,selections.get(from)!);selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();const c=context();return {...(!c.desktop&&c.goal?.status==='blocked'&&mode!=='plan'?{resumeBlockedGoal:{createdAt:c.goal.createdAt,objective:c.goal.objective}}:{}),mode,desktopExecutionMode:c.desktop&&!c.active&&choice().modeExplicit?mode:undefined,skills:[...skills],plugins:[...plugins],threads:[...threads!],access:WEB_ACCESS};},isLoading:()=>loading};
 }
 
 // Match the desktop's completed native plan item, never infer plans from prose.

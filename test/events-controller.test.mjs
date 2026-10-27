@@ -41,3 +41,4 @@ test('replayed events skip notifications and connection changes resume only afte
  f.emit('manager/status',{status:{instanceId:'new',connection:{state:'connected',connectedAt:'two'},pendingRequests:[]}});await settle();assert.equal(f.calls.filter(c=>c.name==='resume').length,1);
  f.emit('manager/status',{status:f.state.status});await settle();assert.equal(f.calls.filter(c=>c.name==='resume').length,1);
 });
+test('native goal resume updates the visible goal immediately without waiting for a detail reload',()=>{const f=fixture();f.state.detail.goal={status:'blocked'};const goal={status:'active',objective:'native',updatedAt:2};f.emit('thread/goal/updated',{threadId:'a',goal});assert.deepEqual(f.state.detail.goal,goal);f.emit('thread/goal/updated',{threadId:'other',goal:{status:'blocked'}});assert.equal(f.state.detail.goal.status,'active');f.emit('thread/goal/cleared',{threadId:'a'});assert.equal(f.state.detail.goal,null);});

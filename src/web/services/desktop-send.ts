@@ -15,14 +15,14 @@ interface Dependencies<Annotation, Draft extends {text: string}> {
   attachmentsPending: () => boolean | undefined;
   captureAttachments: () => CapturedAttachments;
   acknowledgeAttachments: (pictures: CapturedAttachments) => void;
-  options: () => {skills: unknown[]; plugins: unknown[]; threads: unknown[]};
+  options: () => {desktopExecutionMode?:'default'|'plan';skills: unknown[]; plugins: unknown[]; threads: unknown[]};
   captureDraft: (id: string, text: string) => Draft;
   acknowledgeDraft: (draft: Draft) => boolean;
   sends: Record<string, {messageId: string; text: string; pictures?:{id:string|null;items:{id:string}[]}} | undefined>;
   saveSends: () => void;
   uuid: () => string;
   action: (key: string, run: () => Promise<void>) => Promise<unknown>;
-  post: (path: string, body: {messageId: string; text: string; threads: unknown[]; images:{url:string}[];skills:unknown[];plugins:unknown[]}) => Promise<unknown>;
+  post: (path: string, body: {mode?:'default'|'plan';messageId: string; text: string; threads: unknown[]; images:{url:string}[];skills:unknown[];plugins:unknown[]}) => Promise<unknown>;
   refresh: () => Promise<unknown>;
   resize: () => void;
   toast: (message: string, error: boolean) => void;
@@ -42,7 +42,7 @@ export function createDesktopSend<Annotation, Draft extends {text: string}>(d: D
     sends[id] = {messageId, text: sent.text, ...(pictures.items.length?{pictures:{id:pictures.id,items:pictures.items.map(({id})=>({id}))}}:{})}; d.saveSends();
     await d.action('message', async () => {
       try {
-        await d.post('/api/desktop/threads/' + encodeURIComponent(id) + '/message', {messageId, text, threads: options.threads,images:pictures.items.map(({url})=>({url})),skills:options.skills,plugins:options.plugins});
+        await d.post('/api/desktop/threads/' + encodeURIComponent(id) + '/message', {messageId, text, ...(options.desktopExecutionMode?{mode:options.desktopExecutionMode}:{}), threads: options.threads,images:pictures.items.map(({url})=>({url})),skills:options.skills,plugins:options.plugins});
         d.acknowledgeAnnotation(annotation);
         d.acknowledgeAttachments(pictures);
         delete sends[id]; d.saveSends();

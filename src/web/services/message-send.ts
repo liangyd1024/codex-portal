@@ -63,7 +63,7 @@ export function createMessageSend<Annotation, Draft extends {text: string}, Pict
    const options = d.options();
    if(options.threads.length && followUp==='queue') throw new Error('排队暂不支持会话引用，请使用“引导”发送。草稿已保留。');
    if(options.threads.length && !active && d.goalPending()) throw new Error('暂不能同时启动目标并发送会话引用，请先发送引用或取消目标模式。草稿已保留。');
-   const payload: Payload = active ? {text,images,skills:options.skills,plugins:options.plugins,threads:options.threads} : {text,images,model:state.model,effort:state.effort,...options};
+   const payload: Payload = active ? {text,images,skills:options.skills,plugins:options.plugins,threads:options.threads,...(options.resumeBlockedGoal?{resumeBlockedGoal:options.resumeBlockedGoal}:{})} : {text,images,model:state.model,effort:state.effort,...options};
    const scope = d.host()+':'+id;
    const content = [...(text?[{type:'text',text}]:[]),...images.map(i=>({type:'image',url:i.url}))];
    const receipt = d.receipts.begin(scope,content,d.turns());
@@ -80,6 +80,7 @@ export function createMessageSend<Annotation, Draft extends {text: string}, Pict
     if(scope===d.host()+':'+state.selectedId)d.renderMessages();
     throw error;
    }
+   if(result.goalResumeError)d.toast(String(result.goalResumeError),true);
    d.acknowledgeAttachments(pictures);d.acknowledgeAnnotation(annotation);
    const cleared=d.acknowledgeDraft(sent);
    if(scope===d.host()+':'+state.selectedId&&cleared&&d.input().value===sent.text){d.input().value='';d.resize();}

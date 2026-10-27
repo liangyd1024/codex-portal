@@ -47,5 +47,5 @@ export async function sendAfterGoal({goalStarted,id,payload,active,api}:Submissi
   const route='/api/threads/'+encodeURIComponent(id);
   let steering=active;
   if(goalStarted){const detail=await api<NativeDetail>(route);steering=(detail.thread?.status as {type?:string}|undefined)?.type==='active';}
-  return api(route+(steering?'/steer':'/message'),{method:'POST',body:steering?{text:payload.text,images:payload.images,...(payload.skills?{skills:payload.skills}:{}),...(payload.plugins?{plugins:payload.plugins}:{}),...(payload.threads?{threads:payload.threads}:{})}:payload});
+  return api(route+(steering?'/steer':'/message'),{method:'POST',body:steering?{text:payload.text,images:payload.images,...(payload.resumeBlockedGoal?{resumeBlockedGoal:payload.resumeBlockedGoal}:{}),...(payload.skills?{skills:payload.skills}:{}),...(payload.plugins?{plugins:payload.plugins}:{}),...(payload.threads?{threads:payload.threads}:{})}:payload});
 }

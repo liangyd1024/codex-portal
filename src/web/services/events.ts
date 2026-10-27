@@ -67,7 +67,8 @@ return function handleEvent(event:{data:string;type?:string}) {
   }
   if (threadId !== state.selectedId || !state.detail) return;
   if (method === 'thread/tokenUsage/updated' || method === 'turn/moderationMetadata') return;
-  if (method === 'thread/goal/cleared') { scheduleDetailRefresh(); return; }
+  if (method === 'thread/goal/updated' && p.goal) { state.detail.goal=p.goal;state.detail.goalError=null;renderThread();return; }
+  if (method === 'thread/goal/cleared') { state.detail.goal=null;state.detail.goalError=null;renderThread();scheduleDetailRefresh(); return; }
   if (method === 'thread/queue/changed') { scheduleDetailRefresh(); return; }
   if (method === 'thread/status/changed') { state.detail.thread!.status = p.status; scheduleStreamRender(); return; }
   if (method === 'thread/name/updated') { state.detail.thread!.name = p.threadName || p.name; renderThread(); return; }

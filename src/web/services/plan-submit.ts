@@ -4,6 +4,8 @@ interface Dependencies<Turn> {
   newChatOpen: () => boolean;
   usable: () => boolean;
   controlled: () => boolean;
+  desktopReady?: () => boolean;
+  desktopSend?: (id:string,plan:Plan)=>Promise<{turn?:Turn}>;
   running: () => boolean;
   completed: () => Plan | null;
   text: (plan: Plan) => string;
@@ -18,13 +20,13 @@ interface Dependencies<Turn> {
 export function createPlanSubmit<Turn>(d: Dependencies<Turn>) {
   const {state} = d;
   return async function implementPlan(id: string, plan: Plan) {
-    if (id !== state.selectedId || d.newChatOpen() || state.desktopMode || !d.usable() || !d.controlled() || d.running() || state.busy.size || d.completed()?.turnId !== plan.turnId) {
+    if (id !== state.selectedId || d.newChatOpen() || (state.desktopMode ? !d.desktopReady?.() || !d.desktopSend : !d.usable() || !d.controlled()) || d.running() || state.busy.size || d.completed()?.turnId !== plan.turnId) {
       throw Object.assign(new Error('会话状态已变化，请重新核对计划。'), {status: 409});
     }
     const selection = state.selectionVersion;
     state.busy.add('message'); d.renderControls();
     try {
-      const result = await d.post('/api/threads/' + encodeURIComponent(id) + '/message', {text: d.text(plan), mode: 'default', access: d.access, model: state.model, effort: state.effort});
+      const result = state.desktopMode ? await d.desktopSend!(id,plan) : await d.post('/api/threads/' + encodeURIComponent(id) + '/message', {text: d.text(plan), mode: 'default', access: d.access, model: state.model, effort: state.effort});
       if (id === state.selectedId && selection === state.selectionVersion) {
         if (result.turn) d.upsert(result.turn);
         d.renderThread();

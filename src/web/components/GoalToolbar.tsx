@@ -6,7 +6,7 @@ import {goalPresentation,goalDuration} from '../../../public/goal-toolbar.js';
 interface Goal {status?:string;objective?:string;timeUsedSeconds?:number;[key:string]:unknown}
 interface Context {id:string|null;goal?:Goal|null;goalError?:unknown;draft?:boolean;ephemeral?:boolean;ready:boolean;busy:boolean;active:boolean}
 interface Options {input:HTMLTextAreaElement;context:()=>Context;api:(path:string,options:{method:'POST';body:{clear:true}|{status:string}})=>Promise<unknown>;refresh:()=>Promise<unknown>;edit:(anchor:HTMLButtonElement)=>void}
-interface View {hidden:boolean;pending:boolean;label:string;objective:string;duration:string;disabled:boolean;action:string|null;toggleDisabled:boolean;feedback:string}
+interface View {hidden:boolean;pending:boolean;label:string;objective:string;duration:string;disabled:boolean;action:string|null;toggleDisabled:boolean;feedback:string;feedbackError:boolean}
 function Icon({kind}:{kind:'goal'|'clear'|'paused'|'active'}){
  return <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">{kind==='goal'?<><circle cx="11" cy="13" r="8"/><circle cx="11" cy="13" r="4"/><path d="m11 13 9-9m-5 0h5v5"/></>:kind==='clear'?<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7m4-7v7"/>:<><circle cx="12" cy="12" r="9"/><path d={kind==='paused'?'M10 8v8m4-8v8':'m10 8 6 4-6 4Z'}/></>}</svg>;
 }
@@ -16,7 +16,7 @@ function Toolbar({bar,store,edit,mutate}:{bar:HTMLElement;store:StoreApi<{view:V
  // and availability properties, preserving transient disabled/focus behavior.
  useLayoutEffect(()=>{
   const editButton=bar.querySelector<HTMLButtonElement>('.goal-edit')!,clear=bar.querySelector<HTMLButtonElement>('.goal-clear')!,toggle=bar.querySelector<HTMLButtonElement>('.goal-toggle')!,label=bar.querySelector<HTMLElement>('strong')!,duration=bar.querySelector<HTMLElement>('.goal-toolbar-usage')!,feedback=bar.querySelector<HTMLElement>('.goal-toolbar-feedback')!;
-  const apply=()=>{const v=store.getState().view;if(!v)return;bar.hidden=v.hidden;bar.setAttribute('aria-busy',String(v.pending));editButton.disabled=clear.disabled=v.disabled;toggle.disabled=v.toggleDisabled;toggle.hidden=!v.action;toggle.title=v.action==='paused'?'暂停目标':'继续目标';toggle.setAttribute('aria-label',toggle.title);toggle.dataset.action=v.action||'';label.title=v.objective;label.textContent=v.label;duration.textContent=v.duration;feedback.textContent=v.feedback;};
+  const apply=()=>{const v=store.getState().view;if(!v)return;bar.hidden=v.hidden;bar.setAttribute('aria-busy',String(v.pending));editButton.disabled=clear.disabled=v.disabled;toggle.disabled=v.toggleDisabled;toggle.hidden=!v.action;toggle.title=v.action==='paused'?'暂停目标':'继续目标';toggle.setAttribute('aria-label',toggle.title);toggle.dataset.action=v.action||'';label.title=v.objective;label.textContent=v.label;duration.textContent=v.duration;feedback.textContent=v.feedback;feedback.dataset.kind=v.feedbackError?'error':'hint';};
   apply();return store.subscribe(apply);
  },[bar,store]);
  return <><button type="button" className="goal-edit" aria-label="编辑目标" title="编辑目标" onClick={e=>{if(!e.currentTarget.disabled)edit(e.currentTarget);}}><Icon kind="goal"/><span className="goal-toolbar-info"><strong></strong><span className="goal-toolbar-usage"></span></span></button><button type="button" className="goal-clear" aria-label="删除目标" title="删除目标" onClick={()=>void mutate(true)}><Icon kind="clear"/></button><button type="button" className="goal-toggle" onClick={()=>void mutate(false)}>{action!==undefined&&<Icon kind={action==='paused'?'paused':'active'}/>}</button><span className="goal-toolbar-feedback" role="status"></span></>;
@@ -27,7 +27,7 @@ export function installReactGoalToolbar({input,context,api,refresh,edit}:Options
  let pending=false,error='',errorId:string|null=null;
  function render(){
   const c=context(),presentation=goalPresentation(c.goal,c.goalError),disabled=pending||!c.ready||c.busy||Boolean(c.goalError)||!c.goal;
-  const view:View={hidden:Boolean(c.draft||c.ephemeral||!presentation.visible),pending,label:presentation.label,objective:c.goal?.objective||'',duration:goalDuration(c.goal?.timeUsedSeconds),disabled,action:presentation.action,toggleDisabled:disabled||(presentation.action==='active'&&c.active),feedback:errorId===c.id?error:''};
+  const view:View={hidden:Boolean(c.draft||c.ephemeral||!presentation.visible),pending,label:presentation.label,objective:c.goal?.objective||'',duration:goalDuration(c.goal?.timeUsedSeconds),disabled,action:presentation.action,toggleDisabled:disabled||(presentation.action==='active'&&c.active),feedbackError:errorId===c.id&&!!error,feedback:(errorId===c.id?error:'')||(c.goal?.status==='blocked'?(c.busy?'补充信息发送后将恢复目标…':c.active?'当前消息正在执行；目标尚未恢复。发送补充信息后将继续目标。':'发送补充信息后将自动继续目标。'):'')};
   const previous=store.getState().view;if(previous&&Object.entries(view).every(([key,value])=>Object.is(previous[key as keyof View],value)))return;
   flushSync(()=>store.setState({view}));
  }

@@ -32,3 +32,4 @@ test('desktop structured input sends images, skills and plugins and keeps pictur
 test('desktop rejection preserves image draft',async()=>{
  const f=fixture();f.addPicture({id:'one',url:'picture'});const sending=f.send();f.reject({status:400});await assert.rejects(sending);assert.equal(f.pictures().length,1);
 });
+test('desktop explicitly selected plan mode is forwarded with the accepted message',async()=>{const f=fixture();f.options.desktopExecutionMode='plan';const pending=f.send();assert.equal(f.calls[0].body.mode,'plan');f.resolve({});await pending;});

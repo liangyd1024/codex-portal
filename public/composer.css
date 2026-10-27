@@ -134,3 +134,5 @@
 .plan-completion button:not(:first-child):hover:not(:disabled){background:var(--control-hover-background)}
 
 .goal-toolbar .goal-edit{display:flex;align-items:center;gap:8px;flex:1;min-width:0;width:auto;height:auto;min-height:44px;padding:0;text-align:left;font:inherit}
+
+.goal-toolbar-feedback[data-kind="hint"]{color:var(--text-muted,#666)}

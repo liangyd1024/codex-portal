@@ -121,3 +121,15 @@ test('desktop stop capability requires a live native turn id, independent of per
  activity={state:'running'};detail=await a.detail();assert.equal(detail.desktop.canStop,false);assert.equal(detail.desktop.canSend,true);
  activity={state:'idle',activeTurnId:tid};detail=await a.detail();assert.equal(detail.desktop.canStop,false);assert.equal(detail.desktop.activeTurnId,null);
 });
+
+test('desktop plan sends are capability-gated and mode is part of idempotency',async()=>{
+ const f=fixture();const original=f.a.call;f.a.call=async(s,p)=>({...await original(s,p),...(p.action==='probe'?{planSupported:true}:{})});
+ await f.a.send({threadId:id,messageId:mid,text:'plan',mode:'plan'});assert.equal(f.calls.find(p=>p.action==='send').mode,'plan');
+ await assert.rejects(f.a.send({threadId:id,messageId:mid,text:'plan',mode:'default'}),/不同消息/);
+ const g=fixture();await assert.rejects(g.a.send({threadId:id,messageId:mid,text:'plan',mode:'plan'}),/切换模式/);assert.equal(g.calls.some(p=>p.action==='send'),false);
+});
+test('running desktop cannot change mode and stale plan cannot execute',async()=>{
+ const f=fixture();const original=f.a.call;f.a.call=async(s,p)=>({...await original(s,p),planSupported:true});
+ f.m.passive=async action=>action==='history'?{data:[]}:{thread:{id,activity:{state:'running'}}};await assert.rejects(f.a.send({threadId:id,messageId:mid,text:'plan',mode:'plan'}),/切换模式/);
+ f.m.passive=async action=>action==='history'?{data:[]}:{thread:{id,activity:{state:'idle'}}};await assert.rejects(f.a.send({threadId:id,messageId:mid,text:'implement',mode:'default',planTurnId:tid}),/计划已变化/);assert.equal(f.calls.some(p=>p.action==='send'),false);
+});
