@@ -17,7 +17,7 @@ interface Dependencies {
  wireEvents:()=>void;setupEvents:()=>void;dispatchReady:()=>void;setNavigationReady:()=>void;
  pendingNotification:()=>NotificationTarget|null;clearPendingNotification:()=>void;
  openNotificationThread:(notification:NotificationTarget)=>unknown;restoreDetail:(id:string,selection:number)=>unknown;
- readCsrf:()=>Promise<{token:string}>;loadStatus:()=>Promise<unknown>;refreshWorkspace:(force:boolean,ready:boolean)=>Promise<unknown>;connectRemote:()=>Promise<unknown>;
+ csrfReady?:()=>void;readCsrf:()=>Promise<{token:string}>;loadStatus:()=>Promise<unknown>;refreshWorkspace:(force:boolean,ready:boolean)=>Promise<unknown>;connectRemote:()=>Promise<unknown>;
  recordError:(error:unknown,stage:string)=>void;messageOf:(error:unknown)=>string;
  publishConnectionBanner:(view:{hidden:boolean;className:string;text:string})=>void;finishStarting:()=>void;
 }
@@ -61,7 +61,7 @@ export function createWorkspaceStartup(d:Dependencies){
   clearPendingNotification();
   if(notification)openNotificationThread(notification);
   else if(state.selectedId)restoreDetail(state.selectedId,state.selectionVersion);
-  try{const c=await readCsrf();state.csrf=c.token;await loadStatus();if(connected())await refreshWorkspace(false,true);else if(!connectionPending())await connectRemote();}
+  try{const c=await readCsrf();state.csrf=c.token;d.csrfReady?.();await loadStatus();if(connected())await refreshWorkspace(false,true);else if(!connectionPending())await connectRemote();}
   catch(e){recordError(e,'init');publishConnectionBanner({hidden:false,className:'connection-banner error',text:messageOf(e)});}
   finally{finishStarting();}
  };

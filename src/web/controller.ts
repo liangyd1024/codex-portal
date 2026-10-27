@@ -1,3 +1,4 @@
+import {createNotificationTraceQueue,createNotificationTraceSender} from './services/notification-trace';
 import {readWorkspaceView,saveWorkspaceView} from './services/workspace-view';
 import {pendingNotificationTarget,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl} from './services/notification-target';
 import {installConnectionManager,connectionSavePending} from './components/ConnectionManager';
@@ -127,10 +128,16 @@ import {updateExtensionNotice, renderExtensionNotice, mergeLiveTurns, taskNotice
 const requestedHost = new URL(location.href).searchParams.get('host');
 let pendingNotification=pendingNotificationTarget(localStorage,location.href), notificationNavigationReady=false;
 let openingNotification:string|null=null,notificationWaitingForCreate=false;
+let navigationStateReady=false,navigationHost=requestedHost;
+const navigationTraces=createNotificationTraceQueue({ready:()=>notificationNavigationReady&&!!state.csrf,
+  send:createNotificationTraceSender({
+    lookupEndpoint:async()=>{const registration=await navigator.serviceWorker?.getRegistration();return (await registration?.pushManager?.getSubscription())?.endpoint;},
+    api:(path,options)=>navigationTraceApi(path,options),
+  })});
 navigator.serviceWorker?.addEventListener('message',event=>{
   const data=event.data;
   if(data?.type==='rcm-navigation-trace'){
-    if(notificationNavigationReady&&['worker-push','worker-shown','worker-show-failed','worker-click','worker-window'].includes(data.stage))void reportPageNavigation(data.stage,data,data.version);
+    if(['worker-push','worker-shown','worker-show-failed','worker-click','worker-window'].includes(data.stage))void reportPageNavigation(data.stage,data,data.version);
     return;
   }
   if(data?.type!=='rcm-notification-click'||!data.threadId)return;
@@ -139,6 +146,7 @@ navigator.serviceWorker?.addEventListener('message',event=>{
   if(notificationNavigationReady)openNotificationThread(data);else pendingNotification=data;
 });
 function requestNotificationTarget(){
+  void navigationTraces.flush();
   if(!notificationNavigationReady||document.visibilityState==='hidden')return;
   const linked=pendingNotificationTarget(localStorage,location.href);
   if(linked){void openNotificationThread(linked);return;}
@@ -153,6 +161,7 @@ navigator.serviceWorker?.addEventListener('controllerchange',requestNotification
 const connectionConfig=await readConnections();
 const connectionIds=connectionConfig.data.map(c=>c.id);
 const targetHost=selectTarget(connectionIds,requestedHost,connectionConfig.defaultConnection)!;
+navigationHost=targetHost;
 renderSelectOptions(document.querySelector<HTMLSelectElement>('#connection-select')!,connectionConfig.data.map(c=>({value:c.id,label:c.host.alias})),connectionConfig.data[0]?.id||'');
 const standaloneApp=matchMedia('(display-mode: standalone)').matches||(navigator as Navigator & {standalone?:boolean}).standalone===true;
 function savedView(){return readWorkspaceView(sessionStorage,localStorage,targetHost,standaloneApp);}
@@ -174,6 +183,7 @@ const state = createControllerState({
   desktopMode:Boolean(savedView().desktopMode),selectedId:savedView().selectedId||null,projectId:savedView().projectId||null,
   drafts:new DraftStore({storage:()=>sessionStorage,host:targetHost,onError:()=>toast('浏览器无法保存草稿，请先复制重要内容。',true)}),
 });
+navigationStateReady=true;
 const {typeOf,currentThread,turns,connected,connectionPending,featureReady,sessionLabel,usable,controlled,currentHandoff,snapshotHistory,uncertainHistory,running}=createSessionContext({state,statusNames});
 const {upsertTurn,ensureTurn,upsertItem}=createLiveTurns({state,turns});
 const questionDrafts=new QuestionDrafts(sessionStorage,targetHost,()=>toast('问题草稿暂未保存，请先复制回答。',true));
@@ -281,6 +291,8 @@ let toastPresenter: ReturnType<typeof createToasts> | undefined;
 function toast(...args:Parameters<ReturnType<typeof createToasts>>) { return (toastPresenter??=createToasts({region:$('toasts'),make:el,icon}))(...args); }
 
 const api=createApiClient({lifecycle:document,targetUrl,configRevision:()=>connectionConfig.configRevision as string|undefined,csrf:{get:()=>state.csrf,set:token=>{state.csrf=token;}},flushDrafts,reload:()=>location.reload()});
+// Trace URLs already contain their captured host; do not append the current host.
+const navigationTraceApi=createApiClient({targetUrl:path=>path,configRevision:()=>connectionConfig.configRevision as string|undefined,csrf:{get:()=>state.csrf,set:token=>{state.csrf=token;}},flushDrafts,reload:()=>location.reload()});
 
 const action=createActionRunner({state,renderControls,renderStatus,usable,syncRequestCards,recordError,messageOf,toast});
 
@@ -738,14 +750,10 @@ const setTaskNotifications=notificationPreferences.setEnabled;
 function notificationDiagnostic(message:string) {
   appendNotificationDiagnostic(dateTime(new Date()) + ' · ' + message);
 }
-async function reportPageNavigation(stage:string,target?:{threadId?:string;clickId?:string;testId?:string},version='page-4'){
-  if(!state.csrf)return;
-  const selectedId=state.selectedId,visibility=document.visibilityState;
-  try{
-    const registration=await navigator.serviceWorker?.getRegistration();
-    const subscription=await registration?.pushManager?.getSubscription();
-    await api('/api/push/trace',{method:'POST',body:{stage,threadId:target?.threadId,clickId:target?.clickId,testId:target?.testId,selectedId,endpoint:subscription?.endpoint,version,visibility}});
-  }catch{}
+async function reportPageNavigation(stage:string,target?:{host?:string;threadId?:string;clickId?:string;testId?:string;instanceId?:string;id?:string;script?:string;scope?:string;endpointHash?:string;windows?:number;mode?:string;error?:string;observedAt?:number},version='page-5'){
+  navigationTraces.report({host:target?.host||navigationHost,stage,threadId:target?.threadId,clickId:target?.clickId,testId:target?.testId,
+    selectedId:navigationStateReady?state.selectedId:null,visibility:document.visibilityState,version,observedAt:target?.observedAt||Date.now(),
+    instanceId:target?.instanceId,id:target?.id,script:target?.script,scope:target?.scope,endpointHash:target?.endpointHash,windows:target?.windows,mode:target?.mode,error:target?.error});
 }
 async function openNotificationThread(target:{host?:string;threadId:string;clickId?:string}) {
   const {threadId,clickId}=target,host=target.host||targetHost;
@@ -985,7 +993,7 @@ const init=createWorkspaceStartup({state,sidebar,document,location,sessionStorag
   installBackup:imported=>installBrowserBackup(connectionConfig,flushDrafts,imported),suspendDraftWrites:()=>{draftWritesSuspended=true;},installNavigation:installInspectorNavigation,
   renderControls,renderThreads,renderStatus,renderThread,connected,connectionPending,loadThreads,wireEvents,setupEvents,dispatchReady:()=>window.dispatchEvent(new Event('rcm-ready')),
   setNavigationReady:()=>{notificationNavigationReady=true;},pendingNotification:()=>pendingNotification,clearPendingNotification:()=>{pendingNotification=null;},
-  openNotificationThread,restoreDetail,readCsrf:()=>api('/api/csrf'),loadStatus,refreshWorkspace,connectRemote,recordError,messageOf,publishConnectionBanner,finishStarting:()=>{workspaceStarting=false;void reportPageNavigation('page-ready');requestNotificationTarget();}});
+  openNotificationThread,restoreDetail,readCsrf:()=>api('/api/csrf'),csrfReady:()=>{void navigationTraces.flush();},loadStatus,refreshWorkspace,connectRemote,recordError,messageOf,publishConnectionBanner,finishStarting:()=>{workspaceStarting=false;void reportPageNavigation('page-ready');requestNotificationTarget();}});
 
 if(state.selectedId)$('message-input').value=state.drafts.get(state.selectedId)||'';
 await init();

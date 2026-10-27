@@ -36,7 +36,7 @@ export function createPushSubscription({api,threadId}:Dependencies){
   void reportReceiver(registration,subscription.endpoint).catch(()=>{});
  }
  async function reportReceiver(registration:ServiceWorkerRegistration,endpoint:string){
-  let diagnostics:{version?:string|number;journal?:unknown[];capabilities?:string}={version:'unavailable'};
+  let diagnostics:{version?:string|number;journal?:unknown[];capabilities?:string;context?:Record<string,unknown>}={version:'unavailable'};
   if(registration.active)diagnostics=await new Promise<typeof diagnostics>(resolve=>{
     const channel=new MessageChannel();
     const finish=(value:typeof diagnostics)=>{clearTimeout(timer);channel.port1.close();channel.port2.close();resolve(value);};
@@ -44,7 +44,7 @@ export function createPushSubscription({api,threadId}:Dependencies){
     channel.port1.onmessage=event=>finish(event.data||{version:'unknown'});
     try{registration.active!.postMessage({type:'rcm-push-diagnostics'},[channel.port2]);}catch{finish({version:'failed'});}
   });
-  try{await api('/api/push/trace',{method:'POST',body:{stage:'page-receiver',endpoint,version:'worker-'+diagnostics.version,visibility:document.visibilityState,journal:diagnostics.journal,capabilities:diagnostics.capabilities,userAgent:navigator.userAgent}});}catch{}
+  try{await api('/api/push/trace',{method:'POST',body:{stage:'page-receiver',endpoint,version:'worker-'+diagnostics.version,visibility:document.visibilityState,journal:diagnostics.journal,context:diagnostics.context,capabilities:diagnostics.capabilities,userAgent:navigator.userAgent}});}catch{}
  }
  let testing:Promise<string>|undefined;
  function test(){

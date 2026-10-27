@@ -39,6 +39,6 @@ test('worker confirms matching test only after display succeeds and reports disp
   vm.runInNewContext(readFileSync(new URL('../public/notification-worker.js',import.meta.url),'utf8'),{self:{addEventListener:(name,handler)=>handlers.set(name,handler),registration:{showNotification:async()=>{if(fail)throw Error('display denied');}},clients:{matchAll:async()=>[{postMessage:message=>received.push(message)}]}}});
   handlers.get('push')({data:{json:()=>({web_push:8030,notification:{title:'test',data:{testId:'fixture-test-id'}}})},waitUntil:p=>{completion=p;}});
   if(fail)await assert.rejects(completion,/display denied/);else await completion;
-  assert.equal(received[0].testId,'fixture-test-id');assert.equal(received[0].type,'rcm-push-receipt');assert.equal(received[0].error,fail?'display denied':undefined);
+  assert.equal(received[0].testId,'fixture-test-id');assert.equal(received[0].type,'rcm-push-receipt');assert.equal(received[0].error,fail?'Error: display denied':undefined);
  }
 });

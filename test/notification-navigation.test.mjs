@@ -29,7 +29,7 @@ test('running icon follows execution entrance while idle retains original creati
  }finally{globalThis.document=old;}
 });
 
-test('worker replacement uses click handling while payload retains declarative fallback',async()=>{const handlers={},shown=[];let done;vm.runInNewContext(worker,{self:{addEventListener:(name,fn)=>handlers[name]=fn,registration:{showNotification:async(title,options)=>shown.push(options)}}});const navigate='https://rcm.test/?host=local&thread=fixture';handlers.push({data:{json:()=>({web_push:8030,notification:{title:'test',navigate,data:{host:'local',threadId:'fixture'}}})},waitUntil:p=>done=p});await done;assert.equal(Object.hasOwn(shown[0],'navigate'),false);assert.equal(shown[0].data.threadId,'fixture');});
+test('legacy delivery of web_push JSON keeps custom click semantics without navigate',async()=>{const handlers={},shown=[];let done;vm.runInNewContext(worker,{self:{addEventListener:(name,fn)=>handlers[name]=fn,registration:{showNotification:async(title,options)=>shown.push(options)}}});const navigate='https://rcm.test/?host=local&thread=fixture';handlers.push({data:{json:()=>({web_push:8030,notification:{title:'test',navigate,data:{host:'local',threadId:'fixture'}}})},waitUntil:p=>done=p});await done;assert.equal(Object.hasOwn(shown[0],'navigate'),false);assert.equal(shown[0].data.threadId,'fixture');});
 
  test('click survives worker restart and lost message; only matching acknowledgement clears it',async()=>{
  const caches=clickStorage(),messages=[];
@@ -87,7 +87,7 @@ test('foreground link change and resumed legacy URL both route without worker me
  const code=source.slice(source.indexOf('function requestNotificationTarget(){'),source.indexOf('const connectionConfig=await readConnections();'));
  const events={},opened=[],values=new Map(),location={href:'https://rcm.test/?host=local#notification-thread=foreground'};
  const storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
- const context={pendingNotificationTarget,localStorage:storage,location,notificationNavigationReady:true,document:{visibilityState:'visible',addEventListener:(name,fn)=>events[name]=fn},window:{addEventListener:(name,fn)=>events[name]=fn},navigator:{},openNotificationThread:target=>opened.push(target),recordError:error=>{throw error;}};
+ const context={navigationTraces:{flush:async()=>{}},pendingNotificationTarget,localStorage:storage,location,notificationNavigationReady:true,document:{visibilityState:'visible',addEventListener:(name,fn)=>events[name]=fn},window:{addEventListener:(name,fn)=>events[name]=fn},navigator:{},openNotificationThread:target=>opened.push(target),recordError:error=>{throw error;}};
  vm.createContext(context);vm.runInContext(ts.transpile(code),context);
  events.hashchange();assert.equal(opened[0].threadId,'foreground');
  location.href='https://rcm.test/?host=local&thread=legacy';events.pageshow();assert.equal(opened[1].threadId,'legacy');
@@ -168,19 +168,34 @@ test('manual navigation cancels an offline target so reconnect cannot hijack the
  assert.equal(page.sent[0].clickId,'cancelled');
 });
 
-test('Apple mutable declarative dispatch retains the native Notification target with null event data',async()=>{
+test('declarative replacement reads native getters and preserves required navigation without a synthetic click',async()=>{
  const payload=notificationPayload({title:'测试会话 · 本次执行已完成',body:'已经完成。',data:{host:'local',threadId:'other-thread'}},'https://rcm.test');
- const handlers={},shown=[],messages=[],pending=[],storage=clickStorage();
- // Notification properties are WebIDL getters, not enumerable JSON members.
- const notification=Object.create(Object.fromEntries(Object.entries(payload.notification).map(([key,value])=>[key,value])));
- const client={url:'https://rcm.test/?host=local',focus:async()=>client,postMessage:m=>messages.push(m)};
- vm.runInNewContext(worker,{URL,Response,crypto,caches:storage,self:{location:{origin:'https://rcm.test'},addEventListener:(n,fn)=>handlers[n]=fn,registration:{showNotification:async(title,options)=>shown.push({title,options})},clients:{matchAll:async()=>[client]}}});
- // The actual parser defaults mutable to false: in that case it never invokes push.
- if(payload.mutable===true&&payload.notification.mutable===true)handlers.push({data:null,notification,waitUntil:p=>pending.push(p)});
- await Promise.all(pending);assert.equal(shown.length,1,'Apple must run our receiver, not only display an immutable fallback');
- assert.equal(shown[0].title,payload.title);assert.equal(shown[0].options.body,payload.body);assert.equal(shown[0].options.data.threadId,'other-thread');assert.equal(Object.hasOwn(shown[0].options,'navigate'),false);
- let done;handlers.notificationclick({notification:{...shown[0].options,close(){}},waitUntil:p=>done=p});await done;
- assert.equal(messages.at(-1).threadId,'other-thread');assert.ok(messages.at(-1).clickId);
+ const handlers={},shown=[],pending=[];
+ const notification=Object.create(Object.defineProperties({},Object.fromEntries(Object.entries(payload.notification).map(([key,value])=>[key,{get:()=>value}]))));
+ vm.runInNewContext(worker,{URL,Response,crypto,caches:clickStorage(),self:{location:{origin:'https://rcm.test'},addEventListener:(n,fn)=>handlers[n]=fn,registration:{showNotification:async(title,options)=>{
+  if(!options.navigate||!URL.canParse(options.navigate))throw new TypeError('Declarative notification requires a valid navigate');
+  shown.push({title,options});
+ }},clients:{matchAll:async()=>[]}}});
+ // This models an already delivered native event, not Apple's event dispatch.
+ handlers.push({data:null,notification,waitUntil:p=>pending.push(p)});
+ for(let i=0;i<pending.length;i++)await pending[i];
+ assert.equal(shown.length,1);assert.equal(shown[0].title,payload.title);assert.equal(shown[0].options.body,payload.body);
+ assert.equal(shown[0].options.navigate,payload.notification.navigate);
+ // Model native navigate -> page startup only. Declarative activation does NOT
+ // dispatch notificationclick. This is a protocol regression, not device proof.
+ const page=await pageNavigation();await page.context.openNotificationThread(notificationLink(shown[0].options.navigate));
+ assert.equal(page.state.selectedId,'other-thread');
+});
+test('declarative validation failure records show error and leaves fallback eligible; diagnostic title is opt-in',async()=>{
+ for(const invalid of [false,true])for(const diagnostic of [false,true]){
+  const handlers={},shown=[],pending=[];
+  const payload=notificationPayload({title:(diagnostic?'[原始] ':'')+'会话 · 测试通知',data:{host:'local',threadId:'target',testId:'numbered-test',...(diagnostic?{diagnostic:true}:{})}},'https://rcm.test');
+  if(invalid)delete payload.notification.navigate;
+  vm.runInNewContext(worker,{URL,self:{addEventListener:(n,fn)=>handlers[n]=fn,registration:{showNotification:async(title,options)=>{if(!options.navigate||!URL.canParse(options.navigate))throw new TypeError('valid navigate required');shown.push({title,options});}},clients:{matchAll:async()=>[]}}});
+  handlers.push({data:null,notification:payload.notification,waitUntil:p=>pending.push(p)});
+  const results=await Promise.allSettled(pending);assert.equal(results.some(r=>r.status==='rejected'),invalid);
+  if(!invalid){assert.equal(shown[0].title,(diagnostic?'[接收器] ':'')+'会话 · 测试通知');assert.equal(shown[0].options.navigate,payload.notification.navigate);}
+ }
 });
 
 test('declarative test receipts use notification data and replacement failure remains eligible for system fallback',async()=>{

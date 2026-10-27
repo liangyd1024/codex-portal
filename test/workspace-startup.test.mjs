@@ -30,3 +30,26 @@ test('disconnected startup connects once, connecting startup waits, and csrf fai
 test('details persist the pre-toggle intent under the current thread key and tolerate storage failure',async()=>{
  const f=fixture();await f.init();const a={open:true,dataset:{itemId:'a'}},b={open:false,dataset:{itemId:'b'}};f.clickDetail(b,[a]);assert.deepEqual(f.calls.at(-1),['store','rcm.openDetails.qa-local.saved','["a","b"]']);f.state.selectedId='next';b.open=true;f.clickDetail(b,[a,b]);assert.deepEqual(f.calls.at(-1),['store','rcm.openDetails.qa-local.next','["a"]']);f.d.sessionStorage.setItem=()=>{throw Error('quota');};assert.doesNotThrow(()=>f.clickDetail(b,[a,b]));
 });
+
+test('cold notification trace uploads after CSRF while status is still blocked, without changing recovery order',async()=>{
+ const {createNotificationTraceQueue}=await import('../src/web/services/notification-trace.ts');
+ let resolveCsrf,resolveStatus;const csrf=new Promise(r=>resolveCsrf=r),status=new Promise(r=>resolveStatus=r),sent=[],order=[];
+ let navigationReady=false,host='original',visibility='hidden';
+ const f=fixture({
+  readCsrf:()=>{order.push('read-csrf');return csrf;},setNavigationReady:()=>{navigationReady=true;},
+  openNotificationThread:target=>{order.push('notification');queue.report({host,stage:'page-target',...target,selectedId:f.state.selectedId,visibility,version:'page-5',observedAt:10});},
+  csrfReady:()=>{order.push('csrf-ready');void queue.flush();},
+  loadStatus:async()=>{order.push('load-status');await status;order.push('status-ready');},
+  refreshWorkspace:async(...args)=>{assert.deepEqual(args,[false,true]);order.push('refresh');},
+  finishStarting:()=>order.push('finished'),
+ });
+ f.state.csrf='';const queue=createNotificationTraceQueue({ready:()=>navigationReady&&!!f.state.csrf,send:async e=>{assert.equal(f.state.csrf,'ready');sent.push(e);order.push('trace');}});
+ f.setNotification({host:'original',threadId:'other-thread',clickId:'cold',testId:'cold-test'});
+ const start=f.init();await Promise.resolve();assert.deepEqual(sent,[]);
+ host='later-host';visibility='visible';f.state.selectedId='later-thread';resolveCsrf({token:'ready'});
+ // Let the CSRF continuation and send microtasks run. Do NOT manually flush.
+ await new Promise(r=>setImmediate(r));
+ assert.equal(f.state.csrf,'ready');assert.deepEqual(order,['notification','read-csrf','csrf-ready','load-status','trace']);
+ assert.deepEqual(sent,[{host:'original',stage:'page-target',threadId:'other-thread',clickId:'cold',testId:'cold-test',selectedId:'saved',visibility:'hidden',version:'page-5',observedAt:10}]);
+ resolveStatus();await start;assert.deepEqual(order,['notification','read-csrf','csrf-ready','load-status','trace','status-ready','refresh','finished']);
+});

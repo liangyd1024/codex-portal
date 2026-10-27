@@ -10,8 +10,18 @@ type Subscription={endpoint:string;keys:{auth:string;p256dh:string}};
 type Device={subscription:Subscription;owner:string;host:string;subject:string;updatedAt?:number};
 type Job={device:string;payload:Record<string,unknown>;attempt:number;next:number;expires:number;context?:{key:string;threadId:string;turnId?:string;label:string;needsBody:boolean}};
 type Watch={host:string;threadId:string;seen:string[];expires:number;next?:number};
-type WorkerTrace={at:number;stage:string;host?:string;threadId?:string;clickId?:string;testId?:string;windows?:number};
-type NavigationTrace={at:number;host:string;owner:string;stage:string;device?:string;threadId?:string;selectedId?:string;clickId?:string;testId?:string;version?:string;visibility?:string;windows?:number;journal?:WorkerTrace[];capabilities?:string;userAgent?:string};
+type WorkerContext={instanceId?:string;version?:string;script?:string;scope?:string;endpointHash?:string;windows?:number;id?:string;mode?:string;error?:string};
+type WorkerTrace=WorkerContext&{at:number;stage:string;host?:string;threadId?:string;clickId?:string;testId?:string};
+type NavigationTrace=WorkerContext&{at:number;host:string;owner:string;stage:string;device?:string;threadId?:string;selectedId?:string;clickId?:string;testId?:string;visibility?:string;journal?:WorkerTrace[];context?:WorkerContext;capabilities?:string;userAgent?:string;observedAt?:number};
+function workerContext(value:Record<string,unknown>):WorkerContext{
+ const result:WorkerContext={};
+ for(const key of ['id','instanceId','version','mode'] as const)if(typeof value[key]==='string')result[key]=value[key].slice(0,100);
+ for(const key of ['script','scope'] as const)if(typeof value[key]==='string')try{const url=new URL(value[key]);if(['https:','http:'].includes(url.protocol))result[key]=(url.origin+url.pathname+(url.searchParams.has('v')?'?v='+encodeURIComponent(url.searchParams.get('v')!):'')).slice(0,256);}catch{}
+ if(typeof value.endpointHash==='string'&&/^[a-f0-9]{64}$/.test(value.endpointHash))result.endpointHash=value.endpointHash;
+ if(typeof value.error==='string')result.error=value.error.replace(/https?:\/\/\S+/g,'[URL]').slice(0,240);
+ if(typeof value.windows==='number'&&Number.isFinite(value.windows))result.windows=Math.max(0,Math.min(100,value.windows));
+ return result;
+}
 type State={navigation?:NavigationTrace[];watches?:Record<string,Watch>;keys:ReturnType<typeof createPushKeys>;devices:Record<string,Device>;jobs:Record<string,Job>;seen:Record<string,number>};
 export class PushNotifications {
  private state:State|undefined;private timer:ReturnType<typeof setTimeout>|undefined;private running=false;private closed=false;private watchTimer:ReturnType<typeof setTimeout>|undefined;
@@ -41,20 +51,23 @@ export class PushNotifications {
  trace(host:string,owner:string,value:Record<string,unknown>){
   const stages=['send-test','send-task','worker-push','worker-shown','worker-show-failed','worker-click','worker-window','page-ready','page-receiver','page-target','page-opened','page-failed'];
   if(typeof value.stage!=='string'||!stages.includes(value.stage))throw Error('通知诊断阶段无效。');
-  const entry:NavigationTrace={at:Date.now(),host,owner,stage:value.stage};
+  const entry:NavigationTrace={...workerContext(value),at:Date.now(),host,owner,stage:value.stage};
+  if(typeof value.observedAt==='number'&&Number.isSafeInteger(value.observedAt)&&value.observedAt>=0)entry.observedAt=value.observedAt;
   for(const key of ['threadId','selectedId','clickId','testId','version','visibility'] as const)if(typeof value[key]==='string')entry[key]=(value[key] as string).slice(0,160);
   if(typeof value.windows==='number'&&Number.isFinite(value.windows))entry.windows=Math.max(0,Math.min(100,value.windows));
   if(value.stage==='page-receiver'){
+   if(value.context&&typeof value.context==='object')entry.context=workerContext(value.context as Record<string,unknown>);
    for(const key of ['capabilities','userAgent'] as const)if(typeof value[key]==='string')entry[key]=value[key].slice(0,256);
    if(Array.isArray(value.journal))entry.journal=value.journal.slice(-32).flatMap(row=>{
     if(!row||typeof row!=='object'||!['worker-install','worker-activate','worker-push','worker-shown','worker-show-failed','worker-click','worker-window'].includes(row.stage)||!Number.isSafeInteger(row.at)||row.at<0)return [];
-    const item:WorkerTrace={at:row.at,stage:row.stage};
+    const item:WorkerTrace={...workerContext(row),at:row.at,stage:row.stage};
     for(const key of ['host','threadId','clickId','testId'] as const)if(typeof row[key]==='string')item[key]=row[key].slice(0,160);
     if(typeof row.windows==='number'&&Number.isFinite(row.windows))item.windows=Math.max(0,Math.min(100,row.windows));
     return [item];
    });
   }
   if(typeof value.endpoint==='string'){const id=this.id(host,value.endpoint),device=this.data().devices[id];if(device?.owner===owner)entry.device=id.slice(0,12);}
+  if(!entry.device&&entry.endpointHash){const match=Object.entries(this.data().devices).find(([,d])=>d.host===host&&d.owner===owner&&createHash('sha256').update(d.subscription.endpoint).digest('hex')===entry.endpointHash);if(match)entry.device=match[0].slice(0,12);}
   const state=this.data();state.navigation=[...(state.navigation||[]),entry].slice(-160);this.save();return {ok:true};
  }
  traces(owner?:string){return (this.data().navigation||[]).filter(row=>!owner||row.owner===owner).map(({owner,...row})=>row);}
@@ -93,10 +106,10 @@ export class PushNotifications {
   s.devices[id]=device;this.compactDevices();this.save();return {ok:true};
  }
  devices(host:string){return Object.entries(this.data().devices).filter(([,d])=>d.host===host&&this.valid(d)).map(([id,d])=>({id,provider:new URL(d.subscription.endpoint).hostname,remote:d.owner!=='local',updatedAt:d.updatedAt}));}
- async testDevice(host:string,id:string,testId?:string,threadId?:string){const d=this.data().devices[id];if(!d||d.host!==host)throw Error('推送设备不存在。');return this.test(host,d.owner,d.subscription.endpoint,testId,threadId);}
+ async testDevice(host:string,id:string,testId?:string,threadId?:string,diagnostic=false){const d=this.data().devices[id];if(!d||d.host!==host)throw Error('推送设备不存在。');return this.test(host,d.owner,d.subscription.endpoint,testId,threadId,diagnostic);}
 
  remove(host:string,owner:string,endpoint:string){const s=this.data(),id=this.id(host,endpoint);if(s.devices[id]?.owner===owner){delete s.devices[id];for(const [key,job] of Object.entries(s.jobs))if(job.device===id)delete s.jobs[key];this.save();}return {ok:true};}
- async test(host:string,owner:string,endpoint:string,testId?:string,threadId?:string){if(threadId!==undefined&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(threadId))throw Error('测试会话标识无效。');if(testId!==undefined&&!/^[a-zA-Z0-9-]{16,80}$/.test(testId))throw Error('测试标识无效。');const id=this.id(host,endpoint),d=this.data().devices[id];if(!d||d.owner!==owner||!this.valid(d))throw Error('请先开启此设备的后台通知。');const context=threadId?await this.noticeContext(host,threadId,null):{name:undefined,turn:undefined};this.trace(host,owner,{stage:'send-test',threadId,testId,endpoint,version:'navigation-3'});const status=await this.send(d.subscription,{title:notificationTitle('测试通知',context.name,threadId),body:notificationPreview('turn/completed',{turn:context.turn})||(threadId?'这是此会话的测试通知。点按应打开对应会话正文。':'通知接收测试。请先选择会话，再测试点击定位。'),tag:'codex-test-'+(testId||Date.now()),data:{host,testId,threadId}},this.data().keys,d.subject);if(status<200||status>=300)throw Error('推送服务未接受测试通知（HTTP '+status+'），请重新开启通知后重试。');return {ok:true};}
+ async test(host:string,owner:string,endpoint:string,testId?:string,threadId?:string,diagnostic=false){if(typeof diagnostic!=='boolean'||diagnostic&&!testId)throw Error('诊断测试需要有效编号。');if(threadId!==undefined&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(threadId))throw Error('测试会话标识无效。');if(testId!==undefined&&!/^[a-zA-Z0-9-]{16,80}$/.test(testId))throw Error('测试标识无效。');const id=this.id(host,endpoint),d=this.data().devices[id];if(!d||d.owner!==owner||!this.valid(d))throw Error('请先开启此设备的后台通知。');const context=threadId?await this.noticeContext(host,threadId,null):{name:undefined,turn:undefined};this.trace(host,owner,{stage:'send-test',threadId,testId,endpoint,version:'navigation-3'});const status=await this.send(d.subscription,{title:(diagnostic?'[原始] ':'')+notificationTitle(diagnostic?'测试 '+testId:'测试通知',context.name,threadId),body:notificationPreview('turn/completed',{turn:context.turn})||(threadId?'这是此会话的测试通知。点按应打开对应会话正文。':'通知接收测试。请先选择会话，再测试点击定位。'),tag:'codex-test-'+(testId||Date.now()),data:{host,testId,threadId,...(diagnostic?{diagnostic:true}:{})}},this.data().keys,d.subject);if(status<200||status>=300)throw Error('推送服务未接受测试通知（HTTP '+status+'），请重新开启通知后重试。');return {ok:true};}
  receive(host:string,event:unknown){if(!this.state)return;const {method,params,replayed}=(event||{}) as {method:string;params:any;replayed?:boolean};if(!params||replayed)return;
  const notice=taskNotice(method,params,{host,known:true});if(!notice)return;
  const threadId=params.threadId||params.thread?.id||(params.request||params).params?.threadId;

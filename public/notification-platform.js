@@ -8,7 +8,7 @@ export function notificationSupport(env=window) {
   return {supported:true,worker:!!nav.serviceWorker};
 }
 
-export const NOTIFICATION_WORKER_VERSION=6;
+export const NOTIFICATION_WORKER_VERSION=7;
 const preparingWorkers=new WeakMap();
 export function prepareNotificationWorker(nav=navigator) {
   const container=nav.serviceWorker;

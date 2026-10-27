@@ -107,8 +107,8 @@ export function createDispatcher(context:RouteServices){
           if(p==='/api/push/trace')return json(res,200,context.push.trace(targetKey,owner,data));
           if(p==='/api/push/subscribe')return json(res,200,context.push.subscribe(targetKey,owner,origin,data.subscription));
           if(p==='/api/push/unsubscribe')return json(res,200,context.push.remove(targetKey,owner,data.endpoint));
-          if(p==='/api/push/test-device'){if(remote)throw new AppError('仅本机可测试指定设备。',403);return json(res,200,await context.push.testDevice(targetKey,data.deviceId,data.testId,data.threadId));}
-          if(p==='/api/push/test')return json(res,200,await context.push.test(targetKey,owner,data.endpoint,data.testId,data.threadId));
+          if(p==='/api/push/test-device'){if(remote)throw new AppError('仅本机可测试指定设备。',403);return json(res,200,await context.push.testDevice(targetKey,data.deviceId,data.testId,data.threadId,data.diagnostic));}
+          if(p==='/api/push/test')return json(res,200,await context.push.test(targetKey,owner,data.endpoint,data.testId,data.threadId,data.diagnostic));
         }
         if(p==='/api/connection-discover'){if(!context.registry)throw new AppError('此入口不支持添加机器。',409);return json(res,200,await discoverConnection(data.connection||{}));}
         if(p==='/api/connection-probe'){if(!context.registry)throw new AppError('此预览不支持连接检测。',409);return json(res,200,await probeConnection(context.config,data));}

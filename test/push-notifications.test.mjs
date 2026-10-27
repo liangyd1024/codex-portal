@@ -87,3 +87,28 @@ test('receiver journal snapshots are bounded and sanitized without expanding acc
   const entry=f.push.traces('owner')[0];assert.equal(entry.journal.length,30);assert.equal(entry.journal[0].threadId,'t10');assert.equal(entry.journal.at(-1).windows,100);assert.equal(entry.userAgent.length,256);assert.equal(JSON.stringify(entry).includes('private text'),false);assert.equal(JSON.stringify(entry).includes('secret'),false);assert.deepEqual(f.push.traces('another'),[]);
  }finally{f.push.close();}
 });
+
+test('only explicit numbered diagnostics mark server title and worker replacement, preserving normal notifications',async()=>{
+ const sent=[],f=fixture(async(_s,payload)=>{sent.push(payload);return 201;});
+ try{
+  const endpoint=subscription().endpoint,threadId='00000000-0000-4000-8000-000000000001';
+  await f.push.test('host','owner',endpoint,'fixture-diagnostic-001',threadId,true);
+  assert.match(sent[0].title,/^\[原始\] .*测试 fixture-diagnostic-001/);assert.equal(sent[0].data.diagnostic,true);assert.equal(sent[0].data.threadId,threadId);
+  await f.push.test('host','owner',endpoint,'fixture-normal-001',threadId);
+  assert.doesNotMatch(sent[1].title,/\[原始\]/);assert.equal(sent[1].data.diagnostic,undefined);
+  f.push.receive('host',complete());await f.push.drain();assert.doesNotMatch(sent[2].title,/\[原始\]/);assert.equal(sent[2].data.diagnostic,undefined);
+  await assert.rejects(f.push.test('host','owner',endpoint,undefined,threadId,true),/编号/);
+ }finally{f.push.close();}
+});
+test('worker metadata is sanitized and endpoint hashes associate only the matching owner and host',async()=>{
+ const {createHash}=await import('node:crypto');const f=fixture();
+ try{
+  const endpointHash=createHash('sha256').update(subscription().endpoint).digest('hex');
+  const value={stage:'worker-shown',instanceId:'background',endpointHash,observedAt:123,script:'https://user:password@portal.test/notification-worker.js?v=7&secret=hidden',scope:'https://portal.test/?secret=hidden',error:'Failed https://push.test/private',windows:200};
+  f.push.trace('host','owner',value);f.push.trace('host','another',value);f.push.trace('another-host','owner',value);
+  const [own,otherHost]=f.push.traces('owner'),otherOwner=f.push.traces('another')[0];
+  assert.ok(own.device);assert.equal(otherOwner.device,undefined);assert.equal(otherHost.device,undefined);
+  assert.equal(own.endpointHash,endpointHash);assert.equal(own.observedAt,123);assert.equal(own.script,'https://portal.test/notification-worker.js?v=7');assert.equal(own.scope,'https://portal.test/');assert.equal(own.error,'Failed [URL]');assert.equal(own.windows,100);
+  assert.doesNotMatch(JSON.stringify(own),/password|secret|private/);
+ }finally{f.push.close();}
+});
