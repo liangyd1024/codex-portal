@@ -28,3 +28,12 @@ test('normal subscription sync records the actual active receiver version withou
  const trace=requests.find(x=>x.path==='/api/push/trace');assert.equal(trace.body.version,'worker-3');assert.equal(trace.body.stage,'page-receiver');assert.equal(context.client.active(),true);
  assert.equal(requests.some(x=>x.path==='/api/push/test'),false);
 });
+
+test('receiver refresh keeps existing push delivery ownership and avoids enabling duplicate local notifications',async()=>{
+ let release,calls=0;const subscription={endpoint:'https://web.push.apple.com/fixture',toJSON:()=>({endpoint:'https://web.push.apple.com/fixture'})};
+ const registration={active:{postMessage:(_data,ports)=>ports[0].postMessage({version:5})},pushManager:{getSubscription:async()=>subscription}};
+ const context={prepareNotificationWorker:async()=>{if(calls++)await new Promise(resolve=>release=resolve);return registration;},MessageChannel,setTimeout,clearTimeout,Uint8Array,atob,navigator:{serviceWorker:{}},window:{PushManager:{}},document:{visibilityState:'visible'},api:async()=>({publicKey:'YQ'})};
+ vm.runInNewContext(code+'\nglobalThis.client=createPushSubscription({api});',context);
+ await context.client.setEnabled(true);const refresh=context.client.setEnabled(true);
+ assert.equal(context.client.active(),true);release();await refresh;assert.equal(context.client.active(),true);
+});

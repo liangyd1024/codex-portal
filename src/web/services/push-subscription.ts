@@ -5,7 +5,8 @@ export function createPushSubscription({api,threadId}:Dependencies){
  async function setEnabled(value:boolean){
   if(!('serviceWorker' in navigator)||!('PushManager' in window)){if(value)throw Error('当前浏览器不支持后台推送');return;}
   if(!value){const registration=await navigator.serviceWorker.getRegistration();const subscription=await registration?.pushManager.getSubscription();if(subscription)await api('/api/push/unsubscribe',{method:'POST',body:{endpoint:subscription.endpoint}});active=false;return;}
-  active=false;
+  // A verified subscription remains registered server-side during a receiver refresh.
+  // Keep delivery ownership so foreground fallback cannot emit a duplicate.
   const registration=await prepareNotificationWorker();
   let subscription=await registration.pushManager.getSubscription();
   const {publicKey}=await api<{publicKey:string}>('/api/push/key');
