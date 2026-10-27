@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createFilePreview} from '../src/web/services/file-preview.ts';
 function fixture(t,read){
  const original=Object.getOwnPropertyDescriptor(globalThis,'document');
- const make=tag=>({tag,children:[],events:{},paused:0,loads:0,setAttribute(k,v){this[k]=v;},removeAttribute(k){delete this[k];},addEventListener(k,fn){this.events[k]=fn;},pause(){this.paused++;},load(){this.loads++;},append(n){this.children.push(n);},replaceChildren(){this.children=[];},querySelectorAll(){return this.children.filter(n=>['video','audio'].includes(n.tag));}});
+ const make=tag=>({tag,children:[],events:{},paused:0,loads:0,setAttribute(k,v){this[k]=v;},removeAttribute(k){delete this[k];},addEventListener(k,fn){this.events[k]=fn;},pause(){this.paused++;},load(){this.loads++;},append(n){this.children.push(n);},prepend(n){this.children.unshift(n);},replaceChildren(){this.children=[];},querySelectorAll(){return this.children.filter(n=>['video','audio'].includes(n.tag));}});
  Object.defineProperty(globalThis,'document',{configurable:true,value:{createElement:make}});
  t.after(()=>{if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;});
  t.mock.method(globalThis,'fetch',read);
@@ -48,9 +48,20 @@ test('a failed text read keeps download available and honors nonretryable errors
  await f.controller.load();assert.equal(f.view.downloadHidden,false);assert.equal(f.view.retryHidden,true);assert.equal(f.view.status,'文件已移动');
 });
 
-test('verified HTML exposes a separate browser view without executing or refetching source',async t=>{
- let html=true;const calls=[];
- const f=fixture(t,async mode=>{calls.push(mode);return mode==='meta'?json({name:html?'page.HTML':'sample.txt',size:50,kind:'text',htmlPreview:html}):json({text:'<script>throw Error("source must remain inert")</script>'});});
- await f.controller.load();assert.deepEqual(calls,['meta','text']);assert.equal(f.view.externalHidden,false);assert.equal(f.view.externalMode,'html');assert.match(f.content.children[0].textContent,/<script>/);assert.match(f.view.status,/仅加载内嵌资源/);
- html=false;await f.controller.load();assert.equal(f.view.externalHidden,true);assert.equal(f.view.externalMode,'content');
+test('HTML preview stays in a sandboxed frame and toggles source without repeated requests',async t=>{
+ const calls=[];
+ const f=fixture(t,async mode=>{calls.push(mode);return mode==='meta'?json({name:'page.html',size:50,kind:'text',htmlPreview:true}):json({text:'<script>example()</script>'});});
+ await f.controller.load();assert.deepEqual(calls,['meta','text']);assert.equal(f.view.externalHidden,true);
+ const toggle=f.content.children[0].children[0],source=f.content.children[1];
+ assert.match(source.textContent,/<script>/);toggle.onclick();
+ const frame=f.content.children[2];assert.equal(frame.tag,'iframe');assert.equal(frame.src,'html');assert.equal(frame.sandbox,'allow-scripts');assert.equal(source.hidden,true);
+ toggle.onclick();assert.equal(frame.hidden,true);assert.equal(source.hidden,false);
+ toggle.onclick();assert.equal(frame.hidden,false);assert.equal(f.content.children.length,3);assert.deepEqual(calls,['meta','text']);
+ f.controller.close();toggle.onclick();assert.equal(f.content.children.length,0);
+});
+for(const kind of ['image','video','audio','pdf','download'])test(kind+' keeps the preview in the app and offers download',async t=>{
+ const f=fixture(t,async()=>json({name:'sample',kind,size:50}));
+ await f.controller.load();assert.equal(f.view.externalHidden,true);assert.equal(f.view.downloadHidden,false);
+ if(kind==='download')assert.match(f.view.status,/不支持预览/);
+ else assert.equal(f.content.children.length,1);
 });

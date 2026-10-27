@@ -15,8 +15,7 @@ function Panel({instance:i}:{instance:Instance}){
   {path&&<p className="file-viewer-path">{path}</p>}
   <div className="file-viewer-actions">
    {path&&<button type="button" className="secondary-button" onClick={event=>void copyText(path,{button:event.currentTarget,status:i.copyStatus.current!,failure:'复制失败，请选择上方路径复制。'})}>复制路径</button>}
-   <a className="secondary-button" href={i.url('download')} hidden={v.downloadHidden}>下载文件</a>
-   <a className="secondary-button" href={i.url(v.externalMode||'content')} target="_blank" rel="noopener noreferrer" hidden={v.externalHidden}>{v.externalMode==='html'?'浏览器打开':'新标签页打开'}</a>
+   <a className="secondary-button" href={i.url('download')} download={v.title||i.label} target="_blank" rel="noopener noreferrer" hidden={v.downloadHidden}>下载文件</a>
    <span ref={i.copyStatus} role="status" className="file-copy-status"/>
   </div>
   <p className="file-viewer-status" role="status" hidden={v.statusHidden}>{v.status}</p>

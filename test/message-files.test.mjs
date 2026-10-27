@@ -76,7 +76,7 @@ test('HTML browser view is opt-in, sandboxed, noncacheable, and leaves source an
   const response=await fetch(url('html'));
   assert.equal(response.status,200);assert.match(response.headers.get('content-type'),/^text\/html/);assert.equal(await response.text(),html.toString());
   const csp=response.headers.get('content-security-policy');assert.match(csp,/sandbox allow-scripts/);assert.doesNotMatch(csp,/allow-same-origin|allow-popups|allow-forms/);
-  for(const rule of ["default-src 'none'","connect-src 'none'","frame-src 'none'","frame-ancestors 'none'","form-action 'none'","base-uri 'none'","script-src 'unsafe-inline'"])assert.ok(csp.includes(rule),rule);
+  for(const rule of ["default-src 'none'","connect-src 'none'","frame-src 'none'","frame-ancestors 'self'","form-action 'none'","base-uri 'none'","script-src 'unsafe-inline'"])assert.ok(csp.includes(rule),rule);
   assert.equal(response.headers.get('cache-control'),'no-store');assert.equal(response.headers.get('referrer-policy'),'no-referrer');assert.equal(response.headers.get('cross-origin-opener-policy'),'same-origin');assert.equal(response.headers.get('accept-ranges'),null);
   const head=await fetch(url('html'),{method:'HEAD'});assert.equal(await head.text(),'');assert.equal(head.headers.get('content-length'),String(html.length));
   const source=await fetch(url('content'));assert.match(source.headers.get('content-type'),/^text\/plain/);assert.doesNotMatch(source.headers.get('content-security-policy'),/allow-scripts/);await source.text();
