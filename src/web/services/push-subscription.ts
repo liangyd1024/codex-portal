@@ -1,7 +1,17 @@
-import {prepareNotificationWorker} from '../../../public/notification-platform.js';
+import {prepareNotificationWorker,NOTIFICATION_WORKER_VERSION} from '../../../public/notification-platform.js';
 interface Dependencies {threadId?:()=>string|null;api:<T>(path:string,options?:{method?:string;body?:unknown})=>Promise<T>}
 export function createPushSubscription({api,threadId}:Dependencies){
  let active=false;
+ const bindingKey='rcm.push-binding-version';
+ let bindingVerified=false;
+ function needsBindingRefresh(subscription:PushSubscription|null){
+  if(bindingVerified||!subscription||!new URL(subscription.endpoint).hostname.endsWith('.push.apple.com'))return false;
+  try{return window.localStorage.getItem(bindingKey)!==String(NOTIFICATION_WORKER_VERSION);}catch{return false;}
+ }
+ function rememberBinding(){
+  bindingVerified=true;
+  try{window.localStorage.setItem(bindingKey,String(NOTIFICATION_WORKER_VERSION));}catch{}
+ }
  async function setEnabled(value:boolean){
   if(!('serviceWorker' in navigator)||!('PushManager' in window)){if(value)throw Error('当前浏览器不支持后台推送');return;}
   if(!value){const registration=await navigator.serviceWorker.getRegistration();const subscription=await registration?.pushManager.getSubscription();if(subscription)await api('/api/push/unsubscribe',{method:'POST',body:{endpoint:subscription.endpoint}});active=false;return;}
@@ -11,7 +21,14 @@ export function createPushSubscription({api,threadId}:Dependencies){
   let subscription=await registration.pushManager.getSubscription();
   const {publicKey}=await api<{publicKey:string}>('/api/push/key');
   const key=Uint8Array.from(atob(publicKey.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
+  // Older Apple subscriptions can outlive their receiver registration. Rebind
+  // once after the verified receiver migration; never unregister the worker.
+  if(needsBindingRefresh(subscription)){
+    if(!await subscription!.unsubscribe())throw Error('旧通知订阅未能更新，请重试');
+    subscription=null;
+  }
   subscription ||= await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+  rememberBinding();
   await api('/api/push/subscribe',{method:'POST',body:{subscription:subscription.toJSON()}});active=true;
   void reportReceiver(registration,subscription.endpoint).catch(()=>{});
  }
