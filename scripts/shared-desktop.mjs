@@ -22,7 +22,7 @@ try {
  if(process.platform!=='darwin')throw Error('当前共享桌面安装仅支持 macOS 本机。');
  if(command==='prepare'){
   const installed=JSON.parse(await readFile(path.join(supportDir,'installed.json'),'utf8'));
-  const runtime=path.join(installed.app,'runtime'),bridgeScript=path.join(runtime,'scripts/shared-engine-bridge.mjs'),launcherScript=path.join(runtime,'scripts/shared-desktop.mjs');
+  const runtime=installed.app,bridgeScript=path.join(runtime,'scripts/shared-engine-bridge.mjs'),launcherScript=path.join(runtime,'scripts/shared-desktop.mjs');
   await access(bridgeScript);await access(launcherScript);
   let settings;
   try{settings=JSON.parse(await readFile(file,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
