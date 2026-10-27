@@ -42,3 +42,10 @@ test('manual selection cancels pending notification but notification routing doe
  let work=f.selectThread('b',{notification:true});f.pending[0].resolve();await work;assert.equal(cancelled,0);
  work=f.selectThread('a');f.pending[1].resolve();await work;assert.equal(cancelled,1);
 });
+
+test('confirmed native control clears desktop mode without changing draft or selection',()=>{
+ const f=fixture();f.state.desktopMode=true;const selection=f.state.selectionVersion;
+ f.applyDetail({thread:{id:'a'},controlled:true});
+ assert.equal(f.state.desktopMode,false);assert.equal(f.state.selectionVersion,selection);assert.equal(f.input.value,'草稿 A');
+ const cached=fixture();cached.state.desktopMode=true;cached.applyDetail({thread:{id:'a'},controlled:true,recovering:true});assert.equal(cached.state.desktopMode,true);
+});

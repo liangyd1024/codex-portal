@@ -5,9 +5,10 @@ interface Dependencies {cancelNotification?:()=>void;state:SelectionState;locati
 export function createThreadSelection({cancelNotification,state,location,history,document,closeNewChat,automations,toggleInspector,element:$,inputId,saveView,resizeInput,renderModels,renderThread,renderThreads,renderRequests,saveDetailSoon,compactLayout,toggleSidebar,refreshSelected,scrollFollow,messageOf,recordError}:Dependencies){
 function applyDetail(data:SelectionDetail, resetModels = false) {
   if(data.goalError&&state.detail?.thread?.id===data.thread?.id)data.goal=state.detail!.goal;
-  if(!state.desktopMode&&!data.recovering&&data.controlState==='desktop'&&data.desktop){
-    state.desktopMode=true;
-    document.querySelector<HTMLElement>('.main-panel')!.classList.toggle('desktop-chat',true);
+  const desktopMode=data.controlled===true?false:data.controlState==='desktop'&&data.desktop?true:state.desktopMode;
+  if(!data.recovering&&state.desktopMode!==desktopMode){
+    state.desktopMode=desktopMode;
+    document.querySelector<HTMLElement>('.main-panel')!.classList.toggle('desktop-chat',desktopMode);
     saveView();
   }
   state.detail = {...data, turns:data.turns || data.thread?.turns || []};

@@ -45,3 +45,17 @@ test('a temporary busy state during discovery defers native resume and permits a
  const pending=f.resolve();ready=false;finish({thread:{id:'a'},desktop:{available:false}});await pending;assert.deepEqual(f.calls,[]);
  ready=true;f.deps.desktop=async()=>f.desktop;assert.equal(await f.resolve(),f.desktop);
 });
+
+test('verified shared engine resumes directly including previous handoffs',async()=>{
+ for(const handoff of [undefined,{state:'released'},{state:'waiting'}]){
+  const f=fixture({sharedEngine:()=>true});f.detail.handoff=handoff;
+  assert.equal((await f.resolve()).controlled,true);await f.resolve();
+  assert.deepEqual(f.calls,[['resume','a']]);
+ }
+});
+test('shared activation retries desktop selection once; native failures preserve history',async()=>{
+ let shared=false;const f=fixture({sharedEngine:()=>shared,resume:async()=>{f.calls.push('resume');throw Error('offline');}});
+ await f.resolve();shared=true;const result=await f.resolve();await f.resolve();
+ assert.equal(result.thread,f.detail.thread);assert.equal(result.accessError,'offline');
+ assert.deepEqual(f.calls,[['desktop','a'],'resume']);
+});
