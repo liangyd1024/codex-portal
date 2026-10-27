@@ -9,6 +9,7 @@ function fixture(loadApp,fetch=async()=>new Response('{}'),storage=new Map()){
  const sessionStorage={getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
  const nodes=Object.fromEntries(['startup-status','startup-title','startup-message','startup-retry'].map(id=>[id,{hidden:false,setAttribute(name,value){this[name]=value;}}]));
  const events={},timers=new Map(),state={reloads:0};let seq=0;
+ nodes['startup-retry'].onclick=()=>events.click({target:{closest:()=>nodes['startup-retry']}});
  const document={body:{classList:{remove(){}}},hidden:false,getElementById:id=>nodes[id],addEventListener:(name,fn)=>events[name]=fn};
  vm.runInNewContext(source,{sessionStorage,document,window:{addEventListener:(name,fn)=>events[name]=fn},navigator:{onLine:true},location:{reload:()=>state.reloads++},setTimeout:(fn,delay)=>{fn.delay=delay;timers.set(++seq,fn);return seq;},clearTimeout:id=>timers.delete(id),loadApp,fetch,AbortController});
  return {nodes,events,timers,state,document,storage,runTimer(delay){const [id,fn]=[...timers].find(([,f])=>f.delay===delay)||[];assert.ok(fn,'missing timer '+delay);timers.delete(id);fn();}};
@@ -71,4 +72,17 @@ test('transient recovery request failure backs off and late readiness cancels re
  let calls=0;const f=fixture(()=>new Promise(()=>{}),async()=>{if(++calls===1)throw Error('offline');return new Response('{}');});
  f.runTimer(15000);f.runTimer(1000);await tick();assert.equal(f.state.reloads,0);f.runTimer(3000);await tick();assert.equal(f.state.reloads,1);
  const g=fixture(()=>new Promise(()=>{}));g.runTimer(15000);g.events['rcm-ready']();assert.equal(g.timers.size,0);
+});
+
+test('hydration replacement keeps failure feedback and retry on the live shell',async()=>{
+ const f=fixture(()=>new Promise(()=>{}));
+ const old=f.nodes['startup-status'];
+ for(const id of Object.keys(f.nodes))f.nodes[id]={hidden:false,setAttribute(name,value){this[name]=value;}};
+ f.runTimer(15000);
+ assert.equal(f.nodes['startup-status']['aria-busy'],'false');
+ assert.equal(old['aria-busy'],undefined);
+ assert.equal(f.nodes['startup-retry'].disabled,false);
+ f.events.click({target:{closest:()=>f.nodes['startup-retry']}});await tick();
+ assert.equal(f.state.reloads,1);
+ f.events['rcm-ready']();assert.equal(f.nodes['startup-status'].hidden,true);
 });

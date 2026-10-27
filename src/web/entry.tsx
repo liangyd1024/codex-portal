@@ -41,9 +41,8 @@ import { useLayoutEffect } from 'react';
 import { WorkspaceShell } from './components/Shell';
 import {readInitialConnections} from './startup-connections';
 let mounted!: () => void;
-let hydrationFailure: unknown;
-const ready = new Promise<void>((resolve,reject) => {
-  mounted = () => queueMicrotask(() => hydrationFailure ? reject(hydrationFailure) : resolve());
+const ready = new Promise<void>((resolve) => {
+  mounted = () => queueMicrotask(resolve);
 });
 function Application() {
   useLayoutEffect(() => { mounted(); }, []);
@@ -54,7 +53,7 @@ if(!shell)throw new Error('工作台结构缺失。');
 // Configuration is independent of DOM hydration. Observe an early rejection;
 // the controller awaits this same promise and reports the original error.
 void readInitialConnections().catch(()=>{});
-hydrateRoot(shell,<Application/>,{onRecoverableError(error){hydrationFailure=error;console.error('工作台结构不一致',error);}});
+hydrateRoot(shell,<Application/>,{onRecoverableError(error){console.error('工作台结构不一致',error);}});
 await ready;
 configureTurnNavigationView(installReactTurnNavigation);
 configureAnnotationView(installReactAnnotations);
