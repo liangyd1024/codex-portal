@@ -479,7 +479,7 @@ test('reconnect restores an unloaded subscription without rebroadcasting missed 
  assert.equal(next.calls.filter(c=>c.method==='thread/resume').length,1);
  assert.equal(events.filter(e=>e.method==='thread/goal/updated').length,0);
  assert.deepEqual(events.filter(e=>e.method==='turn/completed'),[]);
- assert.ok([...manager.notices.values()].some(e=>e.params.turn?.id==='missed'));
+ assert.equal([...manager.notices.values()].some(e=>e.params.turn?.id==='missed'),false);
  assert.equal(next.calls.some(c=>['turn/start','turn/steer','turn/interrupt'].includes(c.method)),false);
 });
 test('failed resume keeps the desired subscription for a later retry',async(t)=>{
@@ -507,6 +507,10 @@ test('terminal notices survive restart, acknowledge durably, and ignore unknown 
   a.publish('turn/completed',{threadId:'t',turn:{id:'fail',status:'failed'}});
   const b=new Manager({host:{id:"test",alias:"test",user:"example",home:"/Users/example"},titleStore});assert.equal(b.replayNotices().length,2);
   for(const notice of b.replayNotices())b.acknowledgeNotice(notice.params.key);
+  const replayEvents=[];b.on('event',event=>replayEvents.push(event));
+  b.publish('turn/completed',{threadId:'t',turn:{id:'ok',status:'completed'}},{replayed:true});
+  b.publish('turn/completed',{threadId:'t',turn:{id:'previously-missed',status:'failed'}},{replayed:true});
+  assert.equal(b.replayNotices().length,0);assert.equal(replayEvents.length,0);
   assert.equal(new Manager({host:{id:"test",alias:"test",user:"example",home:"/Users/example"},titleStore}).replayNotices().length,0);
   let connects=0;b.connect=()=>{connects++;};b.restoreConnection();assert.equal(connects,1);
   b.disconnect({preserveIntent:true});assert.equal(new Manager({host:{id:"test",alias:"test",user:"example",home:"/Users/example"},titleStore}).restoreOnStart,true);

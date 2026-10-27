@@ -21,7 +21,7 @@ export class WorkspaceManager extends Manager {
     if(method==='manager/status')params={...params,revision:++this.statusRevision};
     const threadId=params.threadId||params.thread?.id;
     const notice=taskNotice(method,params,{host:this.expectedHost.id || this.expectedHost.alias,known:this.subscriptions.has(threadId)});
-    if(notice&&method!=='manager/request'&&!this.notices.has(notice.key)){
+    if(!replayed&&notice&&method!=='manager/request'&&!this.notices.has(notice.key)){
       this.notices.set(notice.key,{method,params});
       this.saveState(this.noticeStore,[...this.notices]);
     }

@@ -19,12 +19,12 @@ test('goal completion does not duplicate terminal turn; blockers still notify',(
  assert.equal(taskNotice('thread/goal/updated',{threadId:'chat',goal:{createdAt:1,status:'complete'}},context),null);
  assert.ok(taskNotice('thread/goal/updated',{threadId:'chat',goal:{createdAt:1,status:'blocked'}},context));
 });
-test('reconnect recovers all recent terminal turns across pages, excluding old and active turns',async()=>{
+test('reconnect history across pages does not recreate terminal notification records',async()=>{
  const manager=new Manager({host:{alias:'test'}});manager.service={};manager.subscriptions.set('chat',{});
  const rpc={request:async(method,p)=>method==='thread/goal/get'?{goal:null}:p.cursor?{data:[{id:'stopped',status:'interrupted',completedAt:105},{id:'old',status:'completed',completedAt:90}]}:{data:[{id:'ok',status:'completed',completedAt:115},{id:'failed',status:'failed',completedAt:112},{id:'active',status:'inProgress'}],nextCursor:'next'}};
  manager.rpc=rpc;await manager.recoverNotices(rpc,'chat',100);
- assert.deepEqual([...manager.notices.values()].map(e=>e.params.turn.id),['ok','failed','stopped']);
- await manager.recoverNotices(rpc,'chat',100);assert.equal(manager.notices.size,3);
+ assert.equal(manager.notices.size,0);
+ await manager.recoverNotices(rpc,'chat',100);assert.equal(manager.notices.size,0);
 });
 
 test('server keys use stable connection ID and acknowledge legacy alias records',()=>{
