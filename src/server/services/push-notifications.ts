@@ -84,7 +84,7 @@ export class PushNotifications {
    try{const snapshot=await this.readHistory(w.host,w.threadId);const expiry=w.expires;this.observe(w.host,w.threadId,snapshot.data||[]);if(this.state.watches?.[key])this.state.watches[key].expires=expiry;}catch{w.next=Date.now()+60000;}
   }this.save();}finally{this.watchTimer=undefined;this.scheduleWatch();}}
  trace(host:string,owner:string,value:Record<string,unknown>){
-  const stages=['send-test','send-task','fallback-show-requested','fallback-click-requested','fallback-sent','fallback-failed','worker-push','worker-shown','worker-show-failed','worker-click','worker-window','page-ready','page-receiver','page-target','page-opened','page-failed'];
+  const stages=['local-test-requested','local-test-shown','local-test-verified','local-test-mismatch','local-test-failed','send-test','send-task','fallback-show-requested','fallback-click-requested','fallback-sent','fallback-failed','worker-push','worker-shown','worker-show-failed','worker-click','worker-window','page-ready','page-receiver','page-target','page-opened','page-failed'];
   if(typeof value.stage!=='string'||!stages.includes(value.stage))throw Error('通知诊断阶段无效。');
   const entry:NavigationTrace={...workerContext(value),at:Date.now(),host,owner,stage:value.stage};
   if(typeof value.observedAt==='number'&&Number.isSafeInteger(value.observedAt)&&value.observedAt>=0)entry.observedAt=value.observedAt;

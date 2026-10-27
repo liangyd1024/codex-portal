@@ -1,3 +1,4 @@
+import {createLocalNotificationTest} from './services/local-notification-test';
 import {createNotificationTraceQueue,createNotificationTraceSender} from './services/notification-trace';
 import {readWorkspaceView,saveWorkspaceView} from './services/workspace-view';
 import {pendingNotificationTarget,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl} from './services/notification-target';
@@ -747,6 +748,8 @@ const notificationPreferences=createNotificationPreference({
   read:key=>localStorage.getItem(key),save:(key,value)=>localStorage.setItem(key,value),
   publish:publishNotificationView,recordError});
 const setTaskNotifications=notificationPreferences.setEnabled;
+const localNotificationContext=()=>({host:targetHost,selectedId:state.selectedId,threads:state.threads.map(thread=>({id:thread.id,name:threadName(thread)}))});
+const localNotificationTest=createLocalNotificationTest({context:localNotificationContext,prepare:()=>prepareNotificationWorker(),uuid:()=>crypto.randomUUID(),trace:(stage,target)=>reportPageNavigation(stage,target)});
 function notificationDiagnostic(message:string) {
   appendNotificationDiagnostic(dateTime(new Date()) + ' · ' + message);
 }
@@ -929,7 +932,7 @@ function wireEvents() {
   settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); settings.open = false; settings.querySelector('summary')!.focus(); } });
   setupResizableLayout();
   notificationPreferences.sync();
-  installNotificationActions({change:setTaskNotifications,test:() => { if (notificationPreferences.enabled() && Notification.permission === 'granted') {notificationDiagnostic('正在检查接收器并等待手机回执…');void pushSubscription.test().then(message=>notificationDiagnostic(message)).catch(error=>notificationDiagnostic(error.message));} }});
+  installNotificationActions({change:setTaskNotifications,localContext:localNotificationContext,localTest:localNotificationTest.test,test:() => { if (notificationPreferences.enabled() && Notification.permission === 'granted') {notificationDiagnostic('正在检查接收器并等待手机回执…');void pushSubscription.test().then(message=>notificationDiagnostic(message)).catch(error=>notificationDiagnostic(error.message));} }});
   installWorkspaceLifecycle({window,document,host:targetHost,syncNotificationPreference:notificationPreferences.sync,
     readPreference:key=>localStorage.getItem(key),autoRefreshInput:()=>$('auto-refresh'),setAutoRefresh,
     stopAutoRefresh:()=>autoRefreshController.stop(),flushDrafts});
