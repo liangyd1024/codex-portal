@@ -78,13 +78,23 @@
 .mobile-layout .sidebar-menu{padding:8px;max-height:calc(var(--visual-height,100dvh) - 16px)}
 .mobile-layout .sidebar-menu>button{font-size:15px;padding:10px 12px;margin-bottom:8px}
 .mobile-layout .sidebar-undo{gap:8px}
-.mobile-layout .inspector{position:fixed;inset:var(--visual-top,0px) 0 auto auto;z-index:50;width:min(380px,calc(100vw - 48px));height:var(--visual-height,100dvh);padding:env(safe-area-inset-top) 0 max(12px,env(safe-area-inset-bottom));overscroll-behavior:contain;scroll-padding-top:128px}
-.mobile-layout .inspector-heading{height:56px;min-height:56px;padding:0 12px}
-.mobile-layout .inspector-nav{top:56px;gap:8px;padding:8px;flex-wrap:wrap}
+.mobile-layout .inspector{position:fixed;inset:var(--visual-top,0px) 0 auto auto;z-index:50;width:min(380px,calc(100vw - 48px));height:var(--visual-height,100dvh);padding:env(safe-area-inset-top) 0 max(12px,env(safe-area-inset-bottom));overscroll-behavior:contain;scroll-padding-top:104px}
+.mobile-layout .inspector-heading{height:48px;min-height:48px;padding:0 12px}
+.mobile-layout .inspector-nav{top:48px;gap:4px;padding:4px 8px;flex-wrap:wrap}
 .mobile-layout .inspector-nav button{font-size:14px;min-width:44px;flex:1}
-.mobile-layout .inspector-section{padding:12px}
+.mobile-layout .inspector-section{padding:8px 12px}
 .mobile-layout .inspector-section>summary{align-content:center}
-.mobile-layout .inspector-section>:is(button,a){margin-bottom:8px}
+.mobile-layout .inspector-group[open]>summary{margin-bottom:4px}
+.mobile-layout .inspector :is(#system-update-body,#browser-backup-body)>p{margin:6px 0}
+.mobile-layout .inspector-section>:is(button,a){margin-bottom:4px}
+.mobile-layout .inspector :is(.primary-button,.secondary-button,.text-button){min-height:44px!important;padding:6px 10px}
+.mobile-layout .inspector .connection-management-actions{gap:6px;margin-bottom:8px}
+.mobile-layout .inspector .connection-summary{margin-bottom:8px}
+.mobile-layout .inspector .detail-list{gap:4px;margin-bottom:8px}
+.mobile-layout .inspector .connection-maintenance{margin-top:4px}
+.mobile-layout .inspector .settings-actions{gap:6px}
+.mobile-layout .inspector .notification-controls{gap:4px}
+.mobile-layout .inspector .notification-controls label{padding:4px 0}
 .mobile-layout .messages-scroller{padding:8px 16px 16px;scroll-behavior:auto}
 .mobile-layout :is(.message-body,.user-bubble){font-size:16px;line-height:1.7}
 .mobile-layout :is(.tool-block,.process-group,.request-detail)>summary{padding:10px 4px;gap:8px}

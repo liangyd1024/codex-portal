@@ -613,5 +613,3 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .connection-password-fields{display:grid;gap:8px}
 .connection-editor .connection-remember-password{display:flex;align-items:center;gap:8px;min-height:44px;font-size:13px}
 .connection-editor .connection-remember-password input{width:20px;height:20px;min-height:20px;flex:none}
-
-.notification-controls .notification-local{width:100%;min-width:0;margin-top:12px;font-size:16px}.notification-local summary{min-height:44px;cursor:pointer;padding:10px 0}.notification-controls .notification-local label{display:block;padding:8px 0;min-height:0}.notification-local select{width:100%;min-width:0;min-height:44px;font:inherit;font-size:16px;background:var(--control-background);color:var(--control-foreground);border:1px solid var(--control-border-color);border-radius:var(--control-radius);padding:8px}.notification-local button{min-height:44px;margin-top:12px}.notification-local p{overflow-wrap:anywhere}

@@ -1,4 +1,3 @@
-import {createLocalNotificationTest} from './services/local-notification-test';
 import {createNotificationTraceQueue,createNotificationTraceSender} from './services/notification-trace';
 import {readWorkspaceView,saveWorkspaceView} from './services/workspace-view';
 import {pendingNotificationTarget,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl} from './services/notification-target';
@@ -57,7 +56,7 @@ import {connectionBanner,protocolDiagnostics} from './services/connection-banner
 import {publishConnectionSummary} from './components/ConnectionSummary';
 import {publishConnectionBanner} from './components/ConnectionIndicators';
 import {publishConnectionSettings,installConnectionActions} from './components/ConnectionSettings';
-import {publishNotificationView,installNotificationActions,appendNotificationDiagnostic} from './components/NotificationControls';
+import {publishNotificationView,installNotificationActions} from './components/NotificationControls';
 import {createWorkspaceRefresh} from './services/workspace-refresh.ts';
 import {createDetailReader} from './services/detail-reader.ts';
 import {createApiClient} from './services/api.ts';
@@ -739,7 +738,7 @@ const setAutoRefresh=autoRefreshController.setEnabled;
 const notificationDelivery=createNotificationDelivery({host:()=>targetHost,worker:()=>notificationSupport().worker,
   prepareWorker:()=>prepareNotificationWorker(),submitWorker:submitWorkerNotification,
   createNative:(title,options)=>new Notification(title,options),submitNative:submitNotification,
-  diagnostic:notificationDiagnostic,publish:publishNotificationView,focus:()=>window.focus(),open:openNotificationThread});
+  diagnostic:()=>{},publish:publishNotificationView,focus:()=>window.focus(),open:openNotificationThread});
 const pushSubscription=createPushSubscription({api,threadId:()=>newChatOpen?null:state.selectedId});
 const notificationPreferences=createNotificationPreference({
   setPushEnabled:pushSubscription.setEnabled,host:()=>targetHost,support:()=>notificationSupport(),
@@ -748,11 +747,6 @@ const notificationPreferences=createNotificationPreference({
   read:key=>localStorage.getItem(key),save:(key,value)=>localStorage.setItem(key,value),
   publish:publishNotificationView,recordError});
 const setTaskNotifications=notificationPreferences.setEnabled;
-const localNotificationContext=()=>({host:targetHost,selectedId:state.selectedId,threads:state.threads.map(thread=>({id:thread.id,name:threadName(thread)}))});
-const localNotificationTest=createLocalNotificationTest({context:localNotificationContext,prepare:()=>prepareNotificationWorker(),uuid:()=>crypto.randomUUID(),trace:(stage,target)=>reportPageNavigation(stage,target)});
-function notificationDiagnostic(message:string) {
-  appendNotificationDiagnostic(dateTime(new Date()) + ' · ' + message);
-}
 async function reportPageNavigation(stage:string,target?:{host?:string;threadId?:string;clickId?:string;testId?:string;instanceId?:string;id?:string;script?:string;scope?:string;endpointHash?:string;windows?:number;mode?:string;error?:string;observedAt?:number},version='page-5'){
   navigationTraces.report({host:target?.host||navigationHost,stage,threadId:target?.threadId,clickId:target?.clickId,testId:target?.testId,
     selectedId:navigationStateReady?state.selectedId:null,visibility:document.visibilityState,version,observedAt:target?.observedAt||Date.now(),
@@ -804,7 +798,7 @@ const notifyTaskEvent=createTaskNotifications({enabled:()=>notificationPreferenc
   lock:(key,work)=>navigator.locks.request(key,work),preference:key=>localStorage.getItem(key),
   deliver:(key,send)=>deliverNotice(localStorage,key,send),send:(...args)=>sendTaskNotification(...args),
   acknowledge:key=>api('/api/notices/ack',{method:'POST',body:{key}}),
-  diagnostic:notificationDiagnostic,recordError});
+  diagnostic:()=>{},recordError});
 
 const {connectRemote,disconnectRemote,takeoverThread,endThreadUse}=createConnectionActions({
   state,api,action,feedback:maintenanceFeedback,applyStatus,renderStatus,loadStatus,connected,refreshWorkspace,renderThread,usable,
@@ -932,7 +926,7 @@ function wireEvents() {
   settings.addEventListener('keydown',event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); settings.open = false; settings.querySelector('summary')!.focus(); } });
   setupResizableLayout();
   notificationPreferences.sync();
-  installNotificationActions({change:setTaskNotifications,localContext:localNotificationContext,localTest:localNotificationTest.test,readRemote:localNotificationTest.readRemote,copyRemote:localNotificationTest.copyRemote,test:() => { if (notificationPreferences.enabled() && Notification.permission === 'granted') {notificationDiagnostic('正在检查接收器并等待手机回执…');void pushSubscription.test().then(message=>notificationDiagnostic(message)).catch(error=>notificationDiagnostic(error.message));} }});
+  installNotificationActions({change:setTaskNotifications});
   installWorkspaceLifecycle({window,document,host:targetHost,syncNotificationPreference:notificationPreferences.sync,
     readPreference:key=>localStorage.getItem(key),autoRefreshInput:()=>$('auto-refresh'),setAutoRefresh,
     stopAutoRefresh:()=>autoRefreshController.stop(),flushDrafts});
