@@ -17,6 +17,6 @@
    return json({resolved:true});
   }
   if(p.endsWith('/message'))return json({accepted:true,turnId:'desktop-turn'});
-  return json({thread:{...f.threads[0],status:{type:'active'}},turns:f.turns.get(id),controlled:false,controlState:'desktop',desktop:{available:f.desktopAvailable,canSend:f.desktopAvailable,canAnswer:f.desktopAvailable,receipts:{},error:f.desktopAvailable?null:'桌面尚未加载此会话，请恢复桌面连接。'},pendingRequests:[]});
+  return json({thread:{...f.threads[0],status:{type:'active'}},turns:f.turns.get(id),controlled:false,controlState:'desktop',desktop:{available:f.desktopAvailable,canSend:f.desktopAvailable,canAnswer:f.desktopAvailable,canStop:f.desktopAvailable,activeTurnId:'desktop-turn',receipts:{},error:f.desktopAvailable?null:'桌面尚未加载此会话，请恢复桌面连接。'},pendingRequests:[]});
  };
 })();

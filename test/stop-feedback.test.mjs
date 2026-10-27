@@ -6,11 +6,11 @@ import {createStopFeedback} from '../public/feedback.js';
 const source=readFileSync(new URL('../src/web/services/stop-request.ts',import.meta.url),'utf8');
 const output=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const {createStopRequest}=await import('data:text/javascript;base64,'+Buffer.from(output).toString('base64'));
-function fixture(desktop=false){
+function fixture(desktop=false,live=false){
  const state={busy:new Set(),desktopMode:desktop,selectedId:'one',selectionVersion:1};
  const calls=[],feedback=createStopFeedback(),errors=[];let refreshes=0;
  const c={state,newChatOpen:false,stopFeedback:feedback,stopContext:()=>String(state.desktopMode)+':'+state.selectedId,turns:()=>[{id:'turn-one',status:'inProgress'}],typeOf:s=>s?.type||s,controlled:()=>true,running:()=>true,api:async(path,options)=>calls.push({path,options}),action:async(_key,work)=>{try{await work();}catch(e){errors.push(e);}},refreshSelected:async()=>{refreshes++;},recordError:e=>errors.push(e)};
- c.interruptThread=createStopRequest({state,newChatOpen:()=>c.newChatOpen,context:()=>c.stopContext(),turns:()=>c.turns(),kind:v=>c.typeOf(v),controlled:()=>c.controlled(),running:()=>c.running(),feedback,action:(...v)=>c.action(...v),api:(...v)=>c.api(...v),refresh:()=>c.refreshSelected(),recordError:(...v)=>c.recordError(...v)});
+ c.interruptThread=createStopRequest({state,newChatOpen:()=>c.newChatOpen,context:()=>c.stopContext(),turns:()=>c.turns(),desktopTurnId:live?()=>c.liveTurnId:undefined,kind:v=>c.typeOf(v),controlled:()=>c.controlled(),running:()=>c.running(),feedback,action:(...v)=>c.action(...v),api:(...v)=>c.api(...v),refresh:()=>c.refreshSelected(),recordError:(...v)=>c.recordError(...v)});
  return {c,state,calls,feedback,errors,refreshes:()=>refreshes};
 }
 test('native and desktop stop requests stay pending after acknowledgement and are not duplicated',async()=>{
@@ -42,4 +42,11 @@ test('late failures settle the original context and never refresh another select
 });
 test('native background stop has no turn payload and remains pending until background completion is observed',async()=>{
  const f=fixture();f.c.turns=()=>[];f.c.running=()=>false;await f.c.interruptThread();assert.deepEqual(f.calls[0].options,{method:'POST'});assert.equal(f.feedback.observe('false:one',{confirmed:true,status:'idle',turns:[],background:'running'}),true);assert.equal(f.feedback.observe('false:one',{confirmed:true,status:'idle',turns:[],background:'idle'}),false);
+});
+
+
+test('desktop stop uses the owner turn id when history is stale and never guesses if it is unknown',async()=>{
+ const f=fixture(true,true);f.c.liveTurnId='live-native-turn';f.c.turns=()=>[{id:'stale-turn',status:'inProgress'}];await f.c.interruptThread();assert.deepEqual(f.calls[0].options.body,{turnId:'live-native-turn'});
+ const g=fixture(true,true);g.c.liveTurnId='live-not-persisted';g.c.turns=()=>[];await g.c.interruptThread();assert.deepEqual(g.calls[0].options.body,{turnId:'live-not-persisted'});
+ const h=fixture(true,true);h.c.liveTurnId=null;await h.c.interruptThread();assert.equal(h.calls.length,0);
 });

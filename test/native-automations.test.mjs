@@ -30,8 +30,8 @@ test('concurrent sends and changed binding cannot dispatch twice',async()=>{
  a.state.threadId=tid;release({desktop:{canSend:true}});await assert.rejects(one,/状态未确认/);
  assert.equal(calls.length,0);
 });
-test('busy or unobserved desktop never sends or falls back to engine',async()=>{
- for(const activity of [{state:'running'},undefined]){
+test('unobserved or unsupported desktop states never send or fall back to engine',async()=>{
+ for(const activity of [{state:'unknown'},{state:'notLoaded'},undefined]){
   const {a,m,calls}=fixture();m.passive=async action=>action==='history'?{data:[]}:{thread:{id,activity}};
   await assert.rejects(a.send({threadId:id,messageId:mid,text:'task'}),/状态未确认/);
   assert.equal(calls.filter(p=>p.action==='send').length,0);
@@ -103,4 +103,21 @@ test('desktop recovery is explicit, rejects controlled/archived threads, and nev
 test('undelivered native request clears receipt; lost write reply remains blocked',async()=>{
  const {a}=fixture();a.call=async(_s,p)=>{if(p.action==='send')throw Object.assign(Error('not routed'),{code:'DESKTOP_NOT_SENT'});return {};};
  await assert.rejects(a.send({threadId:id,messageId:mid,text:'draft'}),/not routed/);assert.equal(a.unconfirmed(),undefined);
+});
+
+
+test('live desktop owner can accept supplemental input before history persists the active turn',async()=>{
+ const {a,m,calls}=fixture();m.passive=async action=>action==='history'?{data:[{id:tid,status:'completed',items:[]}]}:{thread:{id,cwd:'/test/project',activity:{source:'desktop',state:'running'}}};
+ a.call=async(_s,p)=>{calls.push(p);return p.action==='send'?{result:{result:{turnId:tid}}}:{};};
+ assert.equal((await a.detail()).desktop.canSend,true);await a.send({threadId:id,messageId:mid,text:'补充'});assert.equal(calls.find(p=>p.action==='send').steer,true);
+});
+test('live owner idle overrides completed historical turns and starts the next turn without steering',async()=>{
+ const {a,m,calls}=fixture();m.passive=async action=>action==='history'?{data:[{id:tid,status:'completed',items:[]}]}:{thread:{id,cwd:'/test/project',activity:{source:'desktop',state:'idle'}}};
+ const detail=await a.detail();assert.equal(detail.thread.status.type,'idle');assert.equal(detail.desktop.canSend,true);await a.send({threadId:id,messageId:mid,text:'下一条'});assert.equal(calls.find(p=>p.action==='send').steer,undefined);
+});
+test('desktop stop capability requires a live native turn id, independent of persisted history',async()=>{
+ const {a,m}=fixture();let activity={state:'running',activeTurnId:tid};m.passive=async action=>action==='history'?{data:[]}:{thread:{id,activity}};
+ let detail=await a.detail();assert.equal(detail.desktop.canStop,true);assert.equal(detail.desktop.activeTurnId,tid);
+ activity={state:'running'};detail=await a.detail();assert.equal(detail.desktop.canStop,false);assert.equal(detail.desktop.canSend,true);
+ activity={state:'idle',activeTurnId:tid};detail=await a.detail();assert.equal(detail.desktop.canStop,false);assert.equal(detail.desktop.activeTurnId,null);
 });

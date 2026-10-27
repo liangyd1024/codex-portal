@@ -5,6 +5,7 @@ interface Dependencies<Request> {
   context: () => string;
   turns: () => {id?: string; status?: NativeStatus}[];
   kind: (status: NativeStatus|undefined) => string;
+  desktopTurnId?: () => string | null | undefined;
   controlled: () => boolean;
   running: () => boolean;
   feedback: {
@@ -23,7 +24,7 @@ export function createStopRequest<Request>(d: Dependencies<Request>) {
   return async function interruptThread() {
     if (state.busy.has('interrupt') || feedback.has(d.context()) || !state.selectedId || d.newChatOpen()) return;
     const desktop = state.desktopMode, id = state.selectedId, selection = state.selectionVersion, key = d.context();
-    const turnId = [...d.turns()].reverse().find(turn => ['inProgress', 'in_progress', 'running'].includes(d.kind(turn.status)))?.id;
+    const turnId = desktop&&d.desktopTurnId?d.desktopTurnId()||undefined:[...d.turns()].reverse().find(turn => ['inProgress', 'in_progress', 'running'].includes(d.kind(turn.status)))?.id;
     if (desktop ? !turnId : !d.controlled()) return;
     const current = () => key === d.context() && selection === state.selectionVersion && !d.newChatOpen();
     const request = feedback.begin(key, turnId, !desktop && !d.running());

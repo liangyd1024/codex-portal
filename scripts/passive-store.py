@@ -91,6 +91,24 @@ def archived_flag(payload):
     raise ValueError('archived 必须是布尔值。')
 
 
+def desktop_active_turn(state):
+    """Extract a unique native turn ID from the owner's versioned snapshot."""
+    history = state.get('turnHistory', {})
+    if history.get('kind') == 'canonical':
+        data = history.get('history', {})
+        entities = data.get('entitiesByKey', {})
+        # Only referenced entries are current. The entity map can retain old tails.
+        turns = [entities.get(entry.get('value'), {})
+                 for island in data.get('islands', []) for entry in island.get('entries', [])]
+    else:
+        turns = state.get('turns', [])
+    identifiers = {turn.get('turnId') or turn.get('id') for turn in turns
+                   if isinstance(turn, dict) and turn.get('status') == 'inProgress'}
+    identifiers = {identifier for identifier in identifiers if isinstance(identifier, str)
+                   and re.fullmatch(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}', identifier)}
+    return next(iter(identifiers)) if len(identifiers) == 1 else None
+
+
 def desktop_activity(identifiers):
     """Observe existing desktop owners briefly; never resume or claim a thread.
 
@@ -107,6 +125,9 @@ def desktop_activity(identifiers):
     if not identifiers:
         return {}
     result = {}
+    owners = {}
+    following_ids = set()
+    discoveries = {}
     client = None
     source = None
     try:
@@ -148,9 +169,15 @@ def desktop_activity(identifiers):
             return json.loads(exact(size))
 
         def following(identifier, value):
-            send({'type': 'broadcast', 'sourceClientId': source, 'version': 1,
+            if identifier not in owners:
+                return
+            send({'type': 'broadcast', 'sourceClientId': source, 'targetClientIds': [owners[identifier]], 'version': 1,
                   'method': 'thread-stream-following-changed',
                   'params': {'hostId': 'local', 'conversationId': identifier, 'following': value}})
+            if value:
+                following_ids.add(identifier)
+            else:
+                following_ids.discard(identifier)
 
         request = str(uuid.uuid4())
         send({'type': 'request', 'requestId': request, 'sourceClientId': 'initializing-client',
@@ -165,27 +192,42 @@ def desktop_activity(identifiers):
         if source is None:
             return {}
         for identifier in identifiers:
-            following(identifier, True)
-        while time.monotonic() < deadline and len(result) < len(identifiers):
+            request = str(uuid.uuid4())
+            discoveries[request] = identifier
+            send({'type': 'request', 'requestId': request, 'sourceClientId': source,
+                  'version': 1, 'method': 'thread-owner-discovery',
+                  'params': {'hostId': 'local', 'conversationId': identifier}})
+        while time.monotonic() < deadline and (discoveries or len(result) < len(owners)):
             message = receive()
+            if message.get('type') == 'response' and message.get('requestId') in discoveries:
+                identifier = discoveries.pop(message['requestId'])
+                owner = message.get('handledByClientId')
+                if message.get('resultType') == 'success' and isinstance(owner, str) and owner:
+                    owners[identifier] = owner
+                    following(identifier, True)
+                continue
             if message.get('type') != 'broadcast' or message.get('method') != 'thread-stream-state-changed' or message.get('version') != 11:
                 continue
             params = message.get('params', {})
             identifier = params.get('conversationId')
             change = params.get('change', {})
-            if identifier not in identifiers or params.get('hostId') != 'local' or change.get('type') != 'snapshot':
+            # Other windows may retain stale snapshots for the same thread. Only
+            # the discovered native owner is authoritative, in either arrival order.
+            if identifier not in owners or message.get('sourceClientId') != owners[identifier] or params.get('hostId') != 'local' or change.get('type') != 'snapshot':
                 continue
             state = change.get('conversationState', {})
             status = state.get('threadRuntimeStatus', {}).get('type')
-            if state.get('id') == identifier and status in ('active', 'idle', 'systemError', 'notLoaded'):
+            if state.get('id') == identifier and status in ('active', 'idle'):
                 result[identifier] = {'source': 'desktop', 'state': 'running' if status == 'active' else 'idle', 'observedAt': int(time.time() * 1000)}
+                if status == 'active':
+                    result[identifier]['activeTurnId'] = desktop_active_turn(state)
                 following(identifier, False)
     except (OSError, EOFError, ValueError, KeyError, TypeError, AttributeError):
         pass
     finally:
         if client is not None:
             if source is not None:
-                for identifier in identifiers:
+                for identifier in list(following_ids):
                     try:
                         following(identifier, False)
                     except OSError:

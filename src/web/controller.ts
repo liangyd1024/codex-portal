@@ -339,7 +339,7 @@ function renderControls() {
   renderConnectionBanner();
   const ready = usable(), own = newChatOpen||controlled()&&!state.selectedArchived, active = !newChatOpen&&running();
   const background = backgroundActivity(state.detail,{controlled:own,connected:ready});
-  const stopping=!newChatOpen&&stopFeedback.observe(stopContext(),{confirmed:!state.detail?.recovering&&(state.desktopMode?state.transport&&state.detail?.desktop?.available:ready&&own&&!uncertainHistory()),turns:turns(),status:currentThread()?.status,background:Array.isArray(state.detail?.backgroundTerminals?.data)?background.state:'unknown'});
+  const stopping=!newChatOpen&&stopFeedback.observe(stopContext(),{confirmed:!state.detail?.recovering&&(state.desktopMode?state.transport&&state.detail?.desktop?.available:ready&&own&&!uncertainHistory()),turns:state.desktopMode?[]:turns(),status:currentThread()?.status,background:Array.isArray(state.detail?.backgroundTerminals?.data)?background.state:'unknown'});
   const stopLabel=stopping?(state.transport&&(state.desktopMode?state.detail?.desktop?.available:ready)?'停止中…':'停止状态待确认'):'停止';
   const handoff=currentHandoff(),handing=state.busy.has('handoff:'+state.selectedId)||handoff?.state==='checking';
   handoffControls??=createHandoffControls({endUse:endThreadUse});
@@ -406,7 +406,8 @@ function renderControls() {
     publishWorkspaceControl('takeover',{ hidden:true });
     buttonView.send.disabled=!online||!desktop?.canSend||!!unconfirmed||posting||answering||attachments?.pending()||(!input.value.trim()&&!annotations?.has()&&!attachments?.has());
     buttonView.send.title='发送消息';buttonView.send.label='发送消息';
-    buttonView.stop.hidden=!active&&!stopping;buttonView.stop.disabled=!online||state.busy.has('interrupt')||stopping;
+    buttonView.stop.hidden=!active&&!stopping;buttonView.stop.disabled=!online||desktop?.canStop!==true||state.busy.has('interrupt')||stopping;
+    if(active&&desktop?.canStop!==true)buttonView.stop.title='当前轮次尚未确认，请刷新后重试。';
     const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(answering?'正在提交回答…':posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，可以发送补充要求。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     publishWorkspaceControl('composer-availability',{text:reason,hidden:!reason});
     desktopView.reviewHidden=!unconfirmed||answering;desktopView.reviewDisabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
@@ -864,6 +865,7 @@ const sendDesktopMessage=createDesktopSend({state,input:()=>$('message-input'),
 const historyPagination=createHistoryPagination({state,busy:value=>publishWorkspaceRegion('messages-scroller',{busy:value}),
   action:(...args)=>action(...args),read:path=>api(path),turns,render:()=>renderThread()});
 const interruptThread=createStopRequest({state,newChatOpen:()=>newChatOpen,context:stopContext,turns,kind:typeOf,
+  desktopTurnId:()=>typeof state.detail?.desktop?.activeTurnId==='string'?state.detail.desktop.activeTurnId:null,
   controlled,running,feedback:stopFeedback,action:(...args)=>action(...args),api:(...args)=>api(...args),
   refresh:()=>refreshSelected(),recordError:(...args)=>recordError(...args)});
 async function moreHistory(options={}) { return historyPagination(options); }

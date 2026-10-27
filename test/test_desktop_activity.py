@@ -13,9 +13,10 @@ spec.loader.exec_module(store)
 
 
 class Client:
-    def __init__(self, status='active', version=11, host='local', fail=False):
+    def __init__(self, status='active', version=11, host='local', fail=False, stale=None, owner=True, source='test-owner'):
         self.status, self.version, self.host, self.fail = status, version, host, fail
         self.sent, self.buffer, self.closed = [], b'', False
+        self.stale, self.owner, self.source = stale, owner, source
     def settimeout(self, value): pass
     def connect(self, path): pass
     def close(self): self.closed = True
@@ -23,8 +24,15 @@ class Client:
         message = json.loads(frame[4:]); self.sent.append(message)
         if message.get('method') == 'initialize':
             response = dict(type='response', requestId=message['requestId'], resultType='success', result=dict(clientId='test-observer'))
+        elif message.get('method') == 'thread-owner-discovery':
+            response = dict(type='response', requestId=message['requestId'], resultType='success' if self.owner else 'error',
+                            handledByClientId='test-owner' if self.owner else None, result={})
         elif message['params']['following'] and not self.fail:
-            response = dict(type='broadcast', method='thread-stream-state-changed', version=self.version,
+            if self.stale is not None:
+                old = dict(type='broadcast', method='thread-stream-state-changed', sourceClientId='old-window', version=11,
+                           params=dict(hostId='local', conversationId='test', change=dict(type='snapshot', conversationState=dict(id='test', threadRuntimeStatus=dict(type=self.stale)))))
+                data = json.dumps(old).encode(); self.buffer += struct.pack('<I', len(data)) + data
+            response = dict(type='broadcast', method='thread-stream-state-changed', sourceClientId=self.source, version=self.version,
                             params=dict(hostId=self.host, conversationId='test', change=dict(type='snapshot', conversationState=dict(id='test', threadRuntimeStatus=dict(type=self.status)))))
         else: return
         data = json.dumps(response).encode(); self.buffer += struct.pack('<I', len(data)) + data
@@ -46,17 +54,49 @@ class DesktopActivityTest(unittest.TestCase):
         with patch('socket.socket', return_value=client):
             result = store.desktop_activity(['test'])
         self.assertTrue(client.closed)
-        self.assertFalse(client.sent[-1]['params']['following'])
-        self.assertTrue(all(m['method'] in ('initialize', 'thread-stream-following-changed') for m in client.sent))
+        following = [m for m in client.sent if m['method'] == 'thread-stream-following-changed']
+        if following:
+            self.assertFalse(following[-1]['params']['following'])
+            self.assertEqual(sum(not m['params']['following'] for m in following), 1)
+            self.assertTrue(all(m.get('targetClientIds') == ['test-owner'] for m in following))
+        self.assertTrue(all(m['method'] in ('initialize', 'thread-owner-discovery', 'thread-stream-following-changed') for m in client.sent))
         return result
     def test_live_active_and_idle(self):
         self.assertEqual(self.observe(Client())['test']['state'], 'running')
         self.assertEqual(self.observe(Client(status='idle'))['test']['state'], 'idle')
     def test_timeout_wrong_host_and_unsupported_version_do_not_claim_running(self):
-        for client in [Client(fail=True), Client(host='other'), Client(version=10), Client(status='unknown')]:
+        for client in [Client(fail=True), Client(host='other'), Client(version=10), Client(status='unknown'), Client(status='notLoaded'), Client(status='systemError'), Client(source='stale-window'), Client(owner=False)]:
             self.assertEqual(self.observe(client), {})
     def test_unsafe_socket_directory_is_rejected(self):
         (self.root / 'ipc').chmod(0o777)
         with patch('socket.socket') as client:
             self.assertEqual(store.desktop_activity(['test']), {})
             client.assert_not_called()
+
+    def test_stale_window_cannot_override_the_actual_owner_in_either_state(self):
+        self.assertEqual(self.observe(Client(status='idle', stale='active'))['test']['state'], 'idle')
+        self.assertEqual(self.observe(Client(status='active', stale='idle'))['test']['state'], 'running')
+
+    def test_missing_owner_does_not_follow_or_trust_a_stale_window(self):
+        client = Client(owner=False, stale='active')
+        self.assertEqual(self.observe(client), {})
+        self.assertFalse(any(m['method'] == 'thread-stream-following-changed' for m in client.sent))
+
+    def test_active_turn_only_uses_current_canonical_entries(self):
+        old = '00000000-0000-0000-0000-000000000001'
+        current = '00000000-0000-0000-0000-000000000002'
+        history = {'entitiesByKey': {'old': {'turnId': old, 'status': 'inProgress'},
+                                    'current': {'turnId': current, 'status': 'inProgress'}},
+                   'islands': [{'entries': [{'value': 'current'}]}]}
+        state = {'turnHistory': {'kind': 'canonical', 'history': history}}
+        self.assertEqual(store.desktop_active_turn(state), current)
+        history['islands'][0]['entries'].append({'value': 'old'})
+        self.assertIsNone(store.desktop_active_turn(state))
+        history['entitiesByKey']['old']['status'] = 'completed'
+        self.assertEqual(store.desktop_active_turn(state), current)
+
+    def test_legacy_turn_snapshot_requires_unique_real_turn_id(self):
+        current = '00000000-0000-0000-0000-000000000002'
+        self.assertEqual(store.desktop_active_turn({'turns': [{'turnId': current, 'status': 'inProgress'}]}), current)
+        self.assertIsNone(store.desktop_active_turn({'turns': [{'turnId': 'optimistic-id', 'status': 'inProgress'}]}))
+        self.assertIsNone(store.desktop_active_turn({'turns': [{'turnId': current, 'status': 'completed'}]}))
