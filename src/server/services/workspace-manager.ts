@@ -1,3 +1,4 @@
+import {TaskNotificationPolicy} from './task-notification-policy.ts';
 import {Manager} from '../../../lib/manager.mjs';
 import {taskNotice} from '../../../shared/connection-state.js';
 import {summarizeTitle} from '../../../lib/thread-title.mjs';
@@ -17,7 +18,17 @@ export class WorkspaceManager extends Manager {
       controlledSessions:[...this.controlled].map(([id,info])=>({id,...info,status:live?info.status||{type:'unknown'}:{type:'unknown'},pendingRequests:[...this.requests.values()].filter(request=>request.threadId===id).length})),
       subscribedThreads:[...this.subscriptions].filter(([,v])=>!v.handoff).map(([id])=>id), handoffs:this.handoffs.entries().filter(v=>!v.automatic), controlledThreads: [...this.controlled.keys()], pendingRequests: [...this.requests.values(),...this.pendingQuestions.entries.values()], recoveryFailures:[...this.recoveryFailures.values()], errors: this.errors};
   }
+  private notificationPolicy?:TaskNotificationPolicy;
   override publish(method:string, params:EventParams, {replayed=false}={}) {
+    if(!replayed){
+      this.notificationPolicy??=new TaskNotificationPolicy({context:()=>this.rpc,
+        readGoal:async id=>{
+          if(!this.rpc?.connected)throw Error('通知目标状态未连接');
+          try{return await this.rpc.request('thread/goal/get',{threadId:id},{timeoutMs:3000});}
+          catch(error){if(/ephemeral thread does not support goals|unknown method|method not found/i.test((error as Error).message))return {goal:null};throw error;}
+        },emit:(method,params)=>this.publish(method,params),onError:error=>this.record(error,'任务通知')});
+      params=this.notificationPolicy.prepare(method,params);
+    }
     if(method==='manager/status')params={...params,revision:++this.statusRevision};
     const threadId=params.threadId||params.thread?.id;
     const notice=taskNotice(method,params,{host:this.expectedHost.id || this.expectedHost.alias,known:this.subscriptions.has(threadId)});

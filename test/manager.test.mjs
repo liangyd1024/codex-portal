@@ -501,10 +501,12 @@ test('terminal notices survive restart, acknowledge durably, and ignore unknown 
   const {mkdtempSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
   const dir=mkdtempSync(join(tmpdir(),'rcm-notices-'));t.diagnostic('Retained isolated fixture: '+dir);
   const titleStore=join(dir,'titles.json');const a=new Manager({host:{id:"test",alias:"test",user:"example",home:"/Users/example"},titleStore});a.subscriptions.set('t',{since:1});a.saveSubscriptions();
+  a.rpc={connected:true,request:async()=>({goal:null})};
   a.publish('turn/completed',{threadId:'t',turn:{id:'ok',status:'completed'}});
   a.publish('turn/completed',{threadId:'unknown',turn:{id:'bad',status:'failed'}});
   a.publish('turn/completed',{threadId:'t',turn:{id:'fail',status:'failed'}});
   a.publish('turn/completed',{threadId:'t',turn:{id:'fail',status:'failed'}});
+  await a.notificationPolicy.settled();
   const b=new Manager({host:{id:"test",alias:"test",user:"example",home:"/Users/example"},titleStore});assert.equal(b.replayNotices().length,2);
   for(const notice of b.replayNotices())b.acknowledgeNotice(notice.params.key);
   const replayEvents=[];b.on('event',event=>replayEvents.push(event));

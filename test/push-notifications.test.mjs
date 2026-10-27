@@ -311,3 +311,17 @@ test('a fallback cancels a later context-free retry already present in the drain
   assert.equal(calls.length,2);assert.equal(calls.filter(a=>!a[6]).length,1);assert.equal(calls[0][1].data.deliveryId,jobs[0].payload.data.deliveryId);assert.deepEqual(JSON.parse(readFileSync(f.file)).jobs,{});
  }finally{release();p.close();}
 });
+
+test('background push suppresses intermediate goal turns and sends completion or actionable requests once',async()=>{
+ const {TaskNotificationPolicy}=await import('../src/server/services/task-notification-policy.ts');
+ const sent=[],f=fixture(async(_subscription,payload)=>{sent.push(payload);return 201;});
+ const policy=new TaskNotificationPolicy({context:()=>1,readGoal:async()=>({goal:{createdAt:1,status:'active'}}),emit:(method,params)=>f.push.receive('host',{method,params})});
+ try{
+  for(const id of ['one','two','retry']){const e=complete(id);if(id==='retry')e.params.turn.status='failed';e.params=policy.prepare(e.method,e.params);f.push.receive('host',e);await policy.settled();}
+  await f.push.drain();assert.equal(sent.length,0);
+  const event={method:'thread/goal/updated',params:{threadId:'thread',goal:{createdAt:1,status:'complete',objective:'original goal'}}};
+  f.push.receive('host',event);f.push.receive('host',event);await f.push.drain();assert.equal(sent.length,1);assert.match(sent[0].title,/目标已完成/);assert.equal(sent[0].body,'original goal');
+  const request={method:'manager/request',params:{id:'pending',kind:'question',params:{threadId:'thread',questions:[{question:'choose'}]}}};
+  f.push.receive('host',request);f.push.receive('host',request);await f.push.drain();assert.equal(sent.length,2);assert.match(sent[1].title,/需要你回答/);
+ }finally{f.push.close();}
+});

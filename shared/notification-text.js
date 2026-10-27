@@ -9,6 +9,7 @@ export function notificationTitle(label,name,threadId) {
   return title+' · '+label;
 }
 export function notificationPreview(method,params) {
+  if(method==='manager/notification')method=params.sourceMethod;
   if(method==='turn/completed'){
     const turn=params.turn||{};
     if(turn.status==='failed')return notificationExcerpt(turn.error?.message);

@@ -15,8 +15,8 @@ test('every terminal turn notifies once, with independent sessions and turns',()
  assert.equal(taskNotice('turn/completed',event('unknown','completed'),{...context,known:false}),null);
  assert.equal(taskNotice('turn/completed',{threadId:'chat',turn:{status:'completed'}},context),null);
 });
-test('goal completion does not duplicate terminal turn; blockers still notify',()=>{
- assert.equal(taskNotice('thread/goal/updated',{threadId:'chat',goal:{createdAt:1,status:'complete'}},context),null);
+test('goal completion and blockers notify by goal identity',()=>{
+ assert.equal(taskNotice('thread/goal/updated',{threadId:'chat',goal:{createdAt:1,status:'complete'}},context).label,'目标已完成');
  assert.ok(taskNotice('thread/goal/updated',{threadId:'chat',goal:{createdAt:1,status:'blocked'}},context));
 });
 test('reconnect history across pages does not recreate terminal notification records',async()=>{
@@ -27,9 +27,9 @@ test('reconnect history across pages does not recreate terminal notification rec
  await manager.recoverNotices(rpc,'chat',100);assert.equal(manager.notices.size,0);
 });
 
-test('server keys use stable connection ID and acknowledge legacy alias records',()=>{
+test('server keys use stable connection ID and acknowledge legacy alias records',async()=>{
  const manager=new Manager({host:{id:'local',alias:'Display name'}});manager.subscriptions.set('chat',{});
- const p=event('stable','completed');manager.publish('turn/completed',p);
+ const p=event('stable','completed');manager.rpc={connected:true,request:async()=>({goal:null})};manager.publish('turn/completed',p);await manager.notificationPolicy.settled();
  const key=taskNotice('turn/completed',p,{host:'local',known:true}).key;
  assert.ok(manager.notices.has(key));assert.deepEqual(manager.acknowledgeNotice(key),{acknowledged:true});
  const legacy=taskNotice('turn/completed',p,{host:'Old display name',known:true}).key;

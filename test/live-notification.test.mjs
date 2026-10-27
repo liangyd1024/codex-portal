@@ -66,3 +66,13 @@ test('opening SSE never transmits stored historical task notifications',async()=
 function runController(code,context){return vm.runInContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,context);}
 
 test('server push subscription suppresses duplicate page notifications',async()=>{const f=fixture();f.c.pushSubscription.active=()=>true;await f.emit('push');assert.equal(f.sent.length,0);assert.equal(f.acks.length,0);});
+
+test('goal notification policy is shared by browser delivery and deduplicates the final goal',async()=>{
+ const {TaskNotificationPolicy}=await import('../src/server/services/task-notification-policy.ts');
+ const f=fixture();const policy=new TaskNotificationPolicy({context:()=>1,readGoal:async()=>({goal:{createdAt:1,status:'active'}}),emit:(method,params)=>f.c.handleEvent({data:JSON.stringify({method,params})})});
+ for(const id of ['one','two']){const p=policy.prepare('turn/completed',{threadId:'a',turn:{id,status:'completed'}});await f.c.notifyTaskEvent('turn/completed',p);await policy.settled();}
+ assert.equal(f.sent.length,0);
+ const params={threadId:'a',goal:{createdAt:1,objective:'original objective',status:'complete'}};
+ await f.c.notifyTaskEvent('thread/goal/updated',params);await f.c.notifyTaskEvent('thread/goal/updated',params);
+ assert.equal(f.sent.length,1);assert.equal(f.sent[0][0],'test · 目标已完成');assert.equal(f.sent[0][1],'original objective');
+});

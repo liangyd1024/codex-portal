@@ -70,13 +70,19 @@ export function mergeLiveTurns(current = [], incoming = []) {
   return result;
 }
 
-// Notify for each native terminal turn; never infer completion from message text.
+// Goal state, not assistant wording, determines whether a terminal turn should alert.
 export function taskNotice(method, params, {host, known}) {
+  if(params.notificationSuppressed)return null;
+  if(method==='manager/notification')method=params.sourceMethod;
   const request = params.request || params;
   const threadId = params.threadId || params.thread?.id || request.params?.threadId;
   if (!known || !threadId) return null;
   const notice = (identity,label,urgent=false) => ({key:JSON.stringify([host,threadId,...identity]),label,urgent});
   if (method === 'turn/completed') {
+    const goal=params.notificationGoal;
+    if(goal&&!(goal.status==='paused'&&params.turn?.status==='interrupted'))return null;
+    // If the native read failed, never claim completion. Failures still need attention.
+    if(params.notificationGoalKnown===false&&params.turn?.status==='completed')return null;
     const labels = {completed:'本次执行已完成',failed:'执行失败',interrupted:'本次执行已停止'};
     const label = labels[params.turn?.status];
     if (!label || !params.turn.id) return null;
@@ -92,7 +98,7 @@ export function taskNotice(method, params, {host, known}) {
   if (method === 'thread/goal/updated') {
     const goal = params.goal;
     if (!goal || goal.createdAt == null) return null;
-    const labels = {blocked:'任务受阻，需要你处理',usageLimited:'用量受限，需要你处理',budgetLimited:'预算已用完，需要你处理'};
+    const labels = {complete:'目标已完成',blocked:'任务受阻，需要你处理',usageLimited:'用量受限，需要你处理',budgetLimited:'预算已用完，需要你处理'};
     const label = labels[goal.status];
     if (!label) return null;
     // Usage updates and replayed terminal states must not cause another alert.
