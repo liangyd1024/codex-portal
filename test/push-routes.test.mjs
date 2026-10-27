@@ -75,3 +75,37 @@ test('only local numbered diagnostic device tests may select a strictly enumerat
  assert.equal((await request(remote,'/api/push/test',phone,{endpoint:subscription.endpoint,testId:'fixture-default-phone'})).status,200);
  assert.deepEqual(requests.slice(-2).map(r=>r.headers['Content-Type']),['application/notification+json','application/notification+json']);
 });
+
+test('device delivery settings require local Origin, CSRF, revision and a live device on the selected host',async t=>{
+ const {writeFileSync}=await import('node:fs'),{homedir,userInfo}=await import('node:os'),{createPushKeys}=await import('../lib/web-push.mjs');
+ const directory=mkdtempSync(path.join(tmpdir(),'portal-device-delivery-')),file=path.join(directory,'connections.json');
+ const config={formatVersion:1,machineId:'fixture-machine',defaultConnection:'test',connections:[{id:'test',machineId:'fixture-machine',kind:'local',alias:'Fixture',user:userInfo().username,home:homedir(),binary:process.execPath}]};
+ writeFileSync(file,JSON.stringify(config));
+ const access=new MobileAccess(null),token=access.login(access.createCode().code);
+ const manager=Object.assign(new EventEmitter(),{disconnect(){},status:()=>({pendingRequests:[]})});
+ const app=await createApp({stateDir:directory,connectionConfigFile:file,access,mobileConfig:{origins:['https://phone.test']},config,managers:new Map([['test',manager],['other',manager]])});
+ app.server.listen(0,'127.0.0.1');app.proxyServer.listen(0,'127.0.0.1');await Promise.all([once(app.server,'listening'),once(app.proxyServer,'listening')]);
+ t.after(()=>app.close());
+ const local=app.server.address().port,remote=app.proxyServer.address().port,csrf=(await request(local,'/api/csrf')).body.token,revision=(await request(local,'/api/connection-config')).body.revision;
+ const headers={'X-CSRF-Token':csrf,'X-RCM-Config-Revision':revision},phone={...headers,Host:'phone.test',Origin:'https://phone.test',Cookie:'rcm_mobile='+token};
+ const subscription={endpoint:'https://web.push.apple.com/setting-fixture',keys:{p256dh:createPushKeys().publicKey,auth:Buffer.alloc(16,2).toString('base64url')}};
+ assert.equal((await request(remote,'/api/push/subscribe',phone,{subscription})).status,200);
+ const deviceId=(await request(local,'/api/push/devices')).body.data[0].id,data={deviceId,deliveryMode:'legacy'},url='/api/push/device-delivery';
+ assert.equal((await request(remote,url,{Host:'phone.test',Origin:'https://phone.test'},data)).status,401);
+ assert.equal((await request(remote,url,phone,data)).status,403);
+ assert.equal((await request(local,url,{...headers,Origin:'https://evil.test'},data)).status,403);
+ assert.equal((await request(local,url,{'X-RCM-Config-Revision':revision},data)).status,403);
+ assert.equal((await request(local,url,{...headers,'X-RCM-Config-Revision':'old'},data)).status,409);
+ assert.equal((await request(local,url+'?host=missing',headers,data)).status,404);
+ assert.equal((await request(local,url+'?host=other',headers,data)).status,404);
+ for(const change of [{deliveryMode:undefined},{deliveryMode:null},{deliveryMode:'auto'},{deliveryMode:['legacy']},{deliveryMode:{}},{deviceId:123},{deviceId:'0'.repeat(64)},{payload:{title:'injected'}},{url:'https://evil.test/'}])assert.equal((await request(local,url,headers,{...data,...change})).status,change.deviceId==='0'.repeat(64)?404:400);
+ assert.equal((await request(local,'/api/push/devices')).body.data[0].deliveryMode,undefined);
+ assert.equal((await request(local,url,headers,data)).status,200);
+ assert.equal((await request(local,'/api/push/devices')).body.data[0].deliveryMode,'legacy');
+ assert.equal((await request(remote,'/api/push/subscribe',phone,{subscription})).status,200);
+ assert.equal((await request(local,'/api/push/devices')).body.data[0].deliveryMode,'legacy');
+ for(const deliveryMode of ['declarative','default']){assert.equal((await request(local,url,headers,{deviceId,deliveryMode})).status,200);assert.equal((await request(local,'/api/push/devices')).body.data[0].deliveryMode,deliveryMode==='default'?undefined:deliveryMode);}
+ // Revoking the pairing makes the formerly valid device unmodifiable.
+ for(const key of Object.keys(access.sessions))delete access.sessions[key];
+ assert.equal((await request(local,url,headers,data)).status,404);
+});

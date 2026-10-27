@@ -107,6 +107,11 @@ export function createDispatcher(context:RouteServices){
           if(p==='/api/push/trace')return json(res,200,context.push.trace(targetKey,owner,data));
           if(p==='/api/push/subscribe')return json(res,200,context.push.subscribe(targetKey,owner,origin,data.subscription));
           if(p==='/api/push/unsubscribe')return json(res,200,context.push.remove(targetKey,owner,data.endpoint));
+          if(p==='/api/push/device-delivery'){
+            if(remote)throw new AppError('仅本机可设置设备通知投递方式。',403);
+            if(Object.keys(data).some(key=>!['deviceId','deliveryMode'].includes(key)))throw new AppError('仅接受设备标识和通知投递方式。',400);
+            return json(res,200,context.push.setDeliveryMode(targetKey,data.deviceId,data.deliveryMode));
+          }
           if(p==='/api/push/test-device'){if(remote)throw new AppError('仅本机可测试指定设备。',403);return json(res,200,await context.push.testDevice(targetKey,data.deviceId,data.testId,data.threadId,data.diagnostic,data.deliveryMode));}
           if(p==='/api/push/test'){if(Object.hasOwn(data,'deliveryMode'))throw new AppError('投递模式仅供本机指定设备诊断使用。',400);return json(res,200,await context.push.test(targetKey,owner,data.endpoint,data.testId,data.threadId,data.diagnostic));}
         }

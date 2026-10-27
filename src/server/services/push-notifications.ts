@@ -7,7 +7,8 @@ import {notificationTitle,notificationPreview} from '../../../shared/notificatio
 import {taskNotice} from '../../../shared/connection-state.js';
 import type {MobileAccess} from './mobile-access';
 type Subscription={endpoint:string;keys:{auth:string;p256dh:string}};
-type Device={subscription:Subscription;owner:string;host:string;subject:string;updatedAt?:number};
+type DeliveryMode='declarative'|'legacy';
+type Device={subscription:Subscription;owner:string;host:string;subject:string;updatedAt?:number;deliveryMode?:DeliveryMode};
 type Job={device:string;payload:Record<string,unknown>;attempt:number;next:number;expires:number;context?:{key:string;threadId:string;turnId?:string;label:string;needsBody:boolean}};
 type Watch={host:string;threadId:string;seen:string[];expires:number;next?:number};
 type WorkerContext={instanceId?:string;version?:string;script?:string;scope?:string;endpointHash?:string;windows?:number;id?:string;mode?:string;error?:string};
@@ -101,11 +102,19 @@ export class PushNotifications {
   if(changed)this.save();
  }
  subscribe(host:string,owner:string,subject:string,value:unknown){const subscription=validateSubscription(value);const s=this.data(),id=this.id(host,subscription.endpoint);
-  const device={subscription,owner,host,subject,updatedAt:Date.now()};
+  const device:Device={subscription,owner,host,subject,updatedAt:Date.now()};
+  const previous=Object.entries(s.devices).find(([key,d])=>d.owner===owner&&d.host===host&&d.subject===subject&&this.valid(d)&&this.recipient(key,d)===this.recipient(id,device))?.[1];
+  if(previous?.deliveryMode)device.deliveryMode=previous.deliveryMode;
   if(Object.keys(s.devices).length>=100&&!s.devices[id]&&!Object.entries(s.devices).some(([key,d])=>this.recipient(key,d)===this.recipient(id,device)))throw Error('推送设备数量已达上限。');
   s.devices[id]=device;this.compactDevices();this.save();return {ok:true};
  }
- devices(host:string){return Object.entries(this.data().devices).filter(([,d])=>d.host===host&&this.valid(d)).map(([id,d])=>({id,provider:new URL(d.subscription.endpoint).hostname,remote:d.owner!=='local',updatedAt:d.updatedAt}));}
+ devices(host:string){return Object.entries(this.data().devices).filter(([,d])=>d.host===host&&this.valid(d)).map(([id,d])=>({id,provider:new URL(d.subscription.endpoint).hostname,remote:d.owner!=='local',updatedAt:d.updatedAt,...(d.deliveryMode?{deliveryMode:d.deliveryMode}:{})}));}
+ setDeliveryMode(host:string,id:unknown,mode:unknown){
+  if(typeof id!=='string'||!/^[a-f0-9]{64}$/.test(id)||!['default','declarative','legacy'].includes(mode as string))throw Object.assign(Error('设备标识或通知投递方式无效。'),{status:400});
+  const d=this.data().devices[id];if(!d||d.host!==host||!this.valid(d))throw Object.assign(Error('推送设备不存在或已过期。'),{status:404});
+  if(mode==='default')delete d.deliveryMode;else d.deliveryMode=mode as DeliveryMode;
+  this.save();return {ok:true,deliveryMode:d.deliveryMode||'default'};
+ }
  async testDevice(host:string,id:string,testId?:string,threadId?:string,diagnostic=false,deliveryMode?:unknown){
   if(deliveryMode!==undefined&&(diagnostic!==true||typeof testId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(testId)||!['declarative','legacy'].includes(deliveryMode as string)))throw Object.assign(Error('诊断投递模式须为 declarative 或 legacy，并提供 diagnostic:true 和有效测试编号。'),{status:400});
   const d=this.data().devices[id];if(!d||d.host!==host)throw Error('推送设备不存在。');
@@ -114,7 +123,7 @@ export class PushNotifications {
 
  remove(host:string,owner:string,endpoint:string){const s=this.data(),id=this.id(host,endpoint);if(s.devices[id]?.owner===owner){delete s.devices[id];for(const [key,job] of Object.entries(s.jobs))if(job.device===id)delete s.jobs[key];this.save();}return {ok:true};}
  async test(host:string,owner:string,endpoint:string,testId?:string,threadId?:string,diagnostic=false){return this.sendTest(host,owner,endpoint,testId,threadId,diagnostic);}
- private async sendTest(host:string,owner:string,endpoint:string,testId?:string,threadId?:string,diagnostic=false,deliveryMode?:'declarative'|'legacy'){if(typeof diagnostic!=='boolean'||diagnostic&&!testId)throw Error('诊断测试需要有效编号。');if(threadId!==undefined&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(threadId))throw Error('测试会话标识无效。');if(testId!==undefined&&!/^[a-zA-Z0-9-]{16,80}$/.test(testId))throw Error('测试标识无效。');const id=this.id(host,endpoint),d=this.data().devices[id];if(!d||d.owner!==owner||!this.valid(d))throw Error('请先开启此设备的后台通知。');const context=threadId?await this.noticeContext(host,threadId,null):{name:undefined,turn:undefined};this.trace(host,owner,{stage:'send-test',threadId,testId,endpoint,version:'navigation-3',...(deliveryMode?{mode:deliveryMode}:{})});const payload={title:(diagnostic?(deliveryMode?'[原始·'+(deliveryMode==='legacy'?'L点击处理':'D系统跳转')+'] ':'[原始] '):'')+notificationTitle(diagnostic?'测试 '+testId:'测试通知',context.name,threadId),body:notificationPreview('turn/completed',{turn:context.turn})||(threadId?'这是此会话的测试通知。点按应打开对应会话正文。':'通知接收测试。请先选择会话，再测试点击定位。'),tag:'codex-test-'+(testId||Date.now()),data:{host,testId,threadId,...(diagnostic?{diagnostic:true}:{})}};const status=deliveryMode?await this.send(d.subscription,payload,this.data().keys,d.subject,undefined,deliveryMode):await this.send(d.subscription,payload,this.data().keys,d.subject);if(status<200||status>=300)throw Error('推送服务未接受测试通知（HTTP '+status+'），请重新开启通知后重试。');return {ok:true};}
+ private async sendTest(host:string,owner:string,endpoint:string,testId?:string,threadId?:string,diagnostic=false,deliveryMode?:'declarative'|'legacy'){if(typeof diagnostic!=='boolean'||diagnostic&&!testId)throw Error('诊断测试需要有效编号。');if(threadId!==undefined&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(threadId))throw Error('测试会话标识无效。');if(testId!==undefined&&!/^[a-zA-Z0-9-]{16,80}$/.test(testId))throw Error('测试标识无效。');const id=this.id(host,endpoint),d=this.data().devices[id];if(!d||d.owner!==owner||!this.valid(d))throw Error('请先开启此设备的后台通知。');const context=threadId?await this.noticeContext(host,threadId,null):{name:undefined,turn:undefined};const mode=deliveryMode||d.deliveryMode;this.trace(host,owner,{stage:'send-test',threadId,testId,endpoint,version:'navigation-3',mode:mode||'declarative'});const payload={title:(diagnostic?(deliveryMode?'[原始·'+(deliveryMode==='legacy'?'L点击处理':'D系统跳转')+'] ':'[原始] '):'')+notificationTitle(diagnostic?'测试 '+testId:'测试通知',context.name,threadId),body:notificationPreview('turn/completed',{turn:context.turn})||(threadId?'这是此会话的测试通知。点按应打开对应会话正文。':'通知接收测试。请先选择会话，再测试点击定位。'),tag:'codex-test-'+(testId||Date.now()),data:{host,testId,threadId,...(diagnostic?{diagnostic:true}:{})}};const status=mode?await this.send(d.subscription,payload,this.data().keys,d.subject,undefined,mode):await this.send(d.subscription,payload,this.data().keys,d.subject);if(status<200||status>=300)throw Error('推送服务未接受测试通知（HTTP '+status+'），请重新开启通知后重试。');return {ok:true};}
  receive(host:string,event:unknown){if(!this.state)return;const {method,params,replayed}=(event||{}) as {method:string;params:any;replayed?:boolean};if(!params||replayed)return;
  const notice=taskNotice(method,params,{host,known:true});if(!notice)return;
  const threadId=params.threadId||params.thread?.id||(params.request||params).params?.threadId;
@@ -129,8 +138,8 @@ export class PushNotifications {
  }
  async drain(){if(this.running||this.closed||!this.state)return;this.running=true;const contexts=new Map<string,Promise<{name?:string;turn?:any}>>();try{const s=this.state;for(const [id,j] of Object.entries(s.jobs)){if(this.closed)break;const d=s.devices[j.device];if(!d||!this.valid(d)||j.expires<Date.now()){delete s.jobs[id];if(d&&!this.valid(d))delete s.devices[j.device];continue;}if(j.next>Date.now())continue;
  if(j.context){const c=j.context;let pending=contexts.get(c.key);if(!pending){pending=this.noticeContext(d.host,c.threadId,c.needsBody?c.turnId:undefined);contexts.set(c.key,pending);}const detail=await pending;if(this.closed)break;if(s.devices[j.device]!==d||s.jobs[id]!==j)continue;if(detail.name)j.payload.title=notificationTitle(c.label,detail.name,c.threadId);if(c.needsBody&&detail.turn?.id===c.turnId){const preview=notificationPreview('turn/completed',{turn:detail.turn});if(preview)j.payload.body=preview;}delete j.context;}
- this.trace(d.host,d.owner,{stage:'send-task',...(j.payload.data as Record<string,unknown>),endpoint:d.subscription.endpoint,version:'navigation-3'});
- let status=0;try{status=await this.send(d.subscription,j.payload,s.keys,d.subject);}catch{}
+ this.trace(d.host,d.owner,{stage:'send-task',...(j.payload.data as Record<string,unknown>),endpoint:d.subscription.endpoint,version:'navigation-3',mode:d.deliveryMode||'declarative'});
+ let status=0;try{status=d.deliveryMode?await this.send(d.subscription,j.payload,s.keys,d.subject,undefined,d.deliveryMode):await this.send(d.subscription,j.payload,s.keys,d.subject);}catch{}
  if(status===404||status===410){delete s.devices[j.device];delete s.jobs[id];}
  else if(status>=200&&status<300){s.seen[id]=Date.now();delete s.jobs[id];}
  else if((status===0||status===429||status>=500)&&++j.attempt<6){j.next=Date.now()+Math.min(300000,5000*2**j.attempt);}

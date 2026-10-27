@@ -4,7 +4,8 @@ import {mkdtempSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import ts from 'typescript';
-import {createPushKeys} from '../lib/web-push.mjs';
+import {createPushKeys,sendPush} from '../lib/web-push.mjs';
+import {createECDH,createHmac,createDecipheriv} from 'node:crypto';
 const source=readFileSync(new URL('../src/server/services/push-notifications.ts',import.meta.url),'utf8').replaceAll("'../../../shared/notification-text.js'",JSON.stringify(new URL('../shared/notification-text.js',import.meta.url).href)).replaceAll("'../../../lib/web-push.mjs'",JSON.stringify(new URL('../lib/web-push.mjs',import.meta.url).href)).replaceAll("'../../../shared/questions.js'",JSON.stringify(new URL('../shared/questions.js',import.meta.url).href)).replaceAll("'../../../shared/connection-state.js'",JSON.stringify(new URL('../shared/connection-state.js',import.meta.url).href));
 const {PushNotifications}=await import('data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText).toString('base64'));
 const subscription=()=>({endpoint:'https://web.push.apple.com/device',keys:{p256dh:createPushKeys().publicKey,auth:Buffer.alloc(16,1).toString('base64url')}});
@@ -131,5 +132,78 @@ test('device diagnostic modes are per call, validated and traced; all default se
   await f.push.testDevice('host',device,'fixture-default-001',thread);assert.equal(calls.at(-1).length,4);assert.doesNotMatch(calls.at(-1)[1].title,/原始/);
   await f.push.test('host','owner',subscription().endpoint,'fixture-default-002',thread);assert.equal(calls.at(-1).length,4);
   f.push.receive('host',complete('ordinary'));await f.push.drain();assert.equal(calls.at(-1).length,4);assert.equal(calls.at(-1)[1].data.diagnostic,undefined);
+ }finally{f.push.close();}
+});
+
+test('delivery override is device isolated, persistent, strictly validated and resettable',async()=>{
+ const calls=[],f=fixture(async(...args)=>{calls.push(args);return 201;});
+ try{
+  const id=f.push.devices('host')[0].id;
+  f.push.subscribe('host','local','http://localhost',{...subscription(),endpoint:'https://web.push.apple.com/independent'});
+  for(const mode of [undefined,null,'',{},['legacy'],'LEGACY'])assert.throws(()=>f.push.setDeliveryMode('host',id,mode),e=>e.status===400);
+  assert.throws(()=>f.push.setDeliveryMode('host','bad','legacy'),e=>e.status===400);
+  assert.throws(()=>f.push.setDeliveryMode('host','0'.repeat(64),'legacy'),e=>e.status===404);
+  assert.throws(()=>f.push.setDeliveryMode('other',id,'legacy'),e=>e.status===404);
+  f.access.sessions.owner=Date.now()-1;assert.throws(()=>f.push.setDeliveryMode('host',id,'legacy'),e=>e.status===404);f.access.sessions.owner=null;
+  assert.equal(f.push.devices('host').find(d=>d.id===id).deliveryMode,undefined);
+  f.push.setDeliveryMode('host',id,'legacy');
+  f.push.receive('host',complete('isolated'));await f.push.drain();
+  assert.equal(calls.find(c=>c[0].endpoint===subscription().endpoint)[5],'legacy');
+  assert.equal(calls.find(c=>c[0].endpoint.endsWith('/independent')).length,4);
+  assert.deepEqual(f.push.traces().filter(r=>r.stage==='send-task').map(r=>r.mode),['legacy','declarative']);
+  const restored=new PushNotifications(f.file,f.access,async()=>201);try{assert.equal(restored.devices('host').find(d=>d.id===id).deliveryMode,'legacy');}finally{restored.close();}
+  f.push.setDeliveryMode('host',id,'declarative');await f.push.testDevice('host',id);assert.equal(calls.at(-1)[5],'declarative');
+  f.push.setDeliveryMode('host',id,'default');assert.equal(Object.hasOwn(f.state().devices[id],'deliveryMode'),false);
+  await f.push.testDevice('host',id);assert.equal(calls.at(-1).length,4);assert.equal(f.push.traces().at(-1).mode,'declarative');
+ }finally{f.push.close();}
+});
+
+test('same-installation resubscribe and remote renewal retain override without crossing owner, host, subject or local endpoints',()=>{
+ const f=fixture();try{
+  const origin='https://portal.example.com',id=f.push.devices('host')[0].id;
+  f.push.setDeliveryMode('host',id,'legacy');
+  f.push.subscribe('host','owner',origin,subscription());assert.equal(f.push.devices('host')[0].deliveryMode,'legacy');
+  const renewed={...subscription(),endpoint:'https://web.push.apple.com/renewed'};
+  f.push.subscribe('host','owner',origin,renewed);assert.equal(f.push.devices('host').length,1);assert.equal(f.push.devices('host')[0].deliveryMode,'legacy');
+  f.access.sessions.second=null;
+  for(const [host,owner,subject,suffix] of [['host','second',origin,'owner'],['other','owner',origin,'host'],['host','owner','https://different.test','subject']]){
+   f.push.subscribe(host,owner,subject,{...subscription(),endpoint:'https://web.push.apple.com/'+suffix});
+   assert.equal(Object.values(f.state().devices).find(d=>d.subscription.endpoint.endsWith('/'+suffix)).deliveryMode,undefined);
+  }
+  const local={...subscription(),endpoint:'https://web.push.apple.com/local-one'};
+  f.push.subscribe('host','local',origin,local);const localId=Object.entries(f.state().devices).find(([,d])=>d.subscription.endpoint===local.endpoint)[0];
+  f.push.setDeliveryMode('host',localId,'legacy');f.push.subscribe('host','local',origin,local);assert.equal(f.state().devices[localId].deliveryMode,'legacy');
+  f.push.subscribe('host','local',origin,{...local,endpoint:'https://web.push.apple.com/local-two'});assert.equal(Object.values(f.state().devices).find(d=>d.subscription.endpoint.endsWith('/local-two')).deliveryMode,undefined);
+  // Even an identical endpoint cannot carry a preference across ownership changes.
+  f.push.subscribe('host','second',origin,local);assert.equal(f.state().devices[localId].deliveryMode,undefined);
+  f.push.setDeliveryMode('host',f.push.devices('host').find(d=>d.id!==localId&&d.deliveryMode==='legacy').id,'default');
+  f.push.subscribe('host','owner',origin,{...renewed,endpoint:'https://web.push.apple.com/renewed-again'});
+  assert.equal(Object.values(f.state().devices).find(d=>d.subscription.endpoint.endsWith('/renewed-again')).deliveryMode,undefined);
+ }finally{f.push.close();}
+});
+
+function decodeDelivery(ua,sub,request){
+ const hmac=(key,data)=>createHmac('sha256',key).update(data).digest(),wire=request.body,salt=wire.subarray(0,16),pub=wire.subarray(21,21+wire[20]);
+ const prk=hmac(Buffer.from(sub.keys.auth,'base64url'),ua.computeSecret(pub));
+ const ikm=hmac(prk,Buffer.concat([Buffer.from('WebPush: info\0'),ua.getPublicKey(),pub,Buffer.from([1])]));
+ const secret=hmac(salt,ikm),key=hmac(secret,Buffer.from('Content-Encoding: aes128gcm\0\x01')).subarray(0,16),nonce=hmac(secret,Buffer.from('Content-Encoding: nonce\0\x01')).subarray(0,12);
+ const decipher=createDecipheriv('aes-128-gcm',key,nonce);decipher.setAuthTag(wire.subarray(-16));
+ const plain=Buffer.concat([decipher.update(wire.subarray(21+wire[20],-16)),decipher.final()]);assert.equal(plain.at(-1),2);return JSON.parse(plain.subarray(0,-1));
+}
+
+test('ordinary test and task delivery encrypt the device format; explicit diagnostics override without persisting',async()=>{
+ const ua=createECDH('prime256v1');ua.generateKeys();const sub={...subscription(),keys:{p256dh:ua.getPublicKey().toString('base64url'),auth:Buffer.alloc(16,4).toString('base64url')}};
+ const sent=[],f=fixture((s,p,k,origin,_fetch,mode)=>sendPush(s,p,k,origin,async(url,request)=>{assert.equal(url,sub.endpoint);sent.push({request,payload:decodeDelivery(ua,sub,request)});return {status:201};},mode));
+ try{
+  f.push.subscribe('host','owner','https://portal.example.com',sub);const id=f.push.devices('host')[0].id;
+  const assertWire=mode=>{const {request,payload}=sent.at(-1);assert.equal(request.headers['Content-Type'],mode==='legacy'?'application/octet-stream':'application/notification+json');if(mode==='legacy'){assert.deepEqual(Object.keys(payload).sort(),['body','data','tag','title']);}else{assert.equal(payload.web_push,8030);assert.equal(payload.mutable,true);assert.equal(payload.notification.mutable,true);assert.ok(payload.notification.navigate.startsWith('https://portal.example.com/'));}return payload;};
+  for(const preference of ['default','legacy','declarative']){
+   f.push.setDeliveryMode('host',id,preference);const effective=preference==='default'?'declarative':preference;
+   await f.push.test('host','owner',sub.endpoint,'fixture-ordinary-'+preference);assertWire(effective);assert.equal(f.push.traces().at(-1).mode,effective);
+   await f.push.testDevice('host',id,'fixture-device-'+preference);assertWire(effective);
+   f.push.receive('host',complete('format-'+preference));await f.push.drain();assert.equal(assertWire(effective).data.threadId,'thread');assert.equal(f.push.traces().at(-1).mode,effective);
+   const before=f.state().devices;
+   for(const diagnostic of ['declarative','legacy']){await f.push.testDevice('host',id,'fixture-override-'+diagnostic,undefined,true,diagnostic);assertWire(diagnostic);assert.equal(f.push.traces().at(-1).mode,diagnostic);assert.deepEqual(f.state().devices,before);}
+  }
  }finally{f.push.close();}
 });
