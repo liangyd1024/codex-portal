@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync} from 'node:fs';
+import {mkdtempSync,readFileSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import ts from 'typescript';
@@ -14,7 +14,23 @@ function fixture(send=async()=>201,read){const file=path.join(mkdtempSync(path.j
 test('device notifications persist and deduplicate across restart',async()=>{let calls=0;const f=fixture(async()=>{calls++;return 201;});try{f.push.receive('other',complete());f.push.receive('host',complete());f.push.receive('host',complete());await f.push.drain();assert.equal(calls,1);f.push.close();const restored=new PushNotifications(f.file,f.access,async()=>{calls++;return 201;});try{restored.receive('host',complete());await restored.drain();assert.equal(calls,1);}finally{restored.close();}}finally{f.push.close();}});
 test('revocation drops queued notifications; expiry and unsubscribe stop delivery',async()=>{let calls=0;const f=fixture(async()=>{calls++;return 201;});try{f.push.receive('host',complete());delete f.access.sessions.owner;await f.push.drain();assert.equal(calls,0);assert.equal(Object.keys(f.state().devices).length,0);}finally{f.push.close();}});
 test('transient push failure queues bounded retry, gone endpoint removes subscription',async()=>{const f=fixture(async()=>503);try{f.push.receive('host',complete());await f.push.drain();const jobs=Object.values(f.state().jobs);assert.equal(jobs.length,1);assert.equal(jobs[0].attempt,1);assert.ok(jobs[0].next>Date.now());}finally{f.push.close();}const g=fixture(async()=>410);try{g.push.receive('host',complete());await g.push.drain();assert.equal(Object.keys(g.state().devices).length,0);}finally{g.push.close();}});
-test('desktop history establishes baseline and notifies only a new native terminal turn',async()=>{let calls=0;const f=fixture(async()=>{calls++;return 201;});try{f.push.observe('host','thread',[{id:'old',status:'completed'},{id:'new',status:'inProgress'}]);await f.push.drain();assert.equal(calls,0);f.push.observe('host','thread',[{id:'old',status:'completed'},{id:'new',status:'completed'}]);await f.push.drain();assert.equal(calls,1);f.push.observe('host','thread',[{id:'new',status:'completed'}]);await f.push.drain();assert.equal(calls,1);}finally{f.push.close();}});
+test('opening and refreshing history never backfills completed turns while live completion still notifies',async()=>{
+ const sent=[],f=fixture(async(_subscription,payload)=>{sent.push(payload);return 201;});
+ try{
+  f.push.observe('host','thread',[{id:'old',status:'completed'},{id:'new',status:'inProgress'}]);await f.push.drain();
+  f.push.observe('host','thread',[{id:'old',status:'completed'},{id:'new',status:'completed'},{id:'failed',status:'failed'},{id:'stopped',status:'interrupted'}]);await f.push.drain();
+  f.push.observe('host','thread',[{id:'new',status:'completed'}]);await f.push.drain();assert.equal(sent.length,0);
+  f.push.receive('host',complete('live'));await f.push.drain();assert.equal(sent.length,1);
+  f.push.observe('host','thread',[{id:'live',status:'completed'}]);f.push.receive('host',complete('live'));await f.push.drain();assert.equal(sent.length,1);
+ }finally{f.push.close();}
+});
+test('persisted watches and background polling cannot regenerate missed completion notifications',async()=>{
+ let calls=0;const f=fixture(async()=>{calls++;return 201;});
+ f.push.observe('host','thread',[{id:'old',status:'completed'},{id:'missed',status:'inProgress'}]);f.push.close();
+ const state=f.state();state.watches['host:thread'].next=0;writeFileSync(f.file,JSON.stringify(state));
+ const restored=new PushNotifications(f.file,f.access,async()=>{calls++;return 201;},async()=>({data:[{id:'old',status:'completed'},{id:'missed',status:'completed'}]}));
+ try{await restored.poll();await restored.drain();assert.equal(calls,0);restored.observe('host','thread',[{id:'missed',status:'completed'}]);await restored.drain();assert.equal(calls,0);assert.equal(Object.keys(JSON.parse(readFileSync(f.file,'utf8')).jobs).length,0);}finally{restored.close();}
+});
 
 const questionTurn=(items)=>({id:'active',status:'inProgress',items});
 const questionItem={id:'question-item',type:'agentMessage',questions:[{title:'请选择关闭方向',options:['向右','向左']}]};
