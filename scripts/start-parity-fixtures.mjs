@@ -17,7 +17,7 @@ const fixture=await readFile(path.join(root,'test/fixtures/mobile-browser.js'),'
 const extras=['model-refresh-browser.js','lazy-history-browser.js','side-expiry-browser.js','mobile-settings-browser.js','queue-performance-browser.js','native-events-browser.js','history-pages-browser.js','selection-browser.js','project-failure-browser.js','account-browser.js','maintenance-browser.js','diagnostics-browser.js','performance-browser.js','goal-status-browser.js','questions-browser.js','question-attention-browser.js','desktop-mentions-browser.js','web-mentions-browser.js','turn-files-browser.js','turn-navigation-browser.js'];
 const servers=[];
 extras.push('protocol-compatibility-browser.js','connection-editor-browser.js','sidebar-search-browser.js','mermaid-browser.js','backup-failure-browser.js');
-extras.push('desktop-blocking-browser.js');
+extras.push('desktop-blocking-browser.js','sidebar-layout-browser.js');
 async function serve(directory){
  const parityEvents=createParityEventHandler();
  const staticResponse=createStaticResponse();const index=(await readFile(path.join(directory,'public/index.html'),'utf8')).replace('</head>','<script src="/__parity_fixture.js"></script></head>');

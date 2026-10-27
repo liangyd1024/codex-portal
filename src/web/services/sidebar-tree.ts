@@ -32,11 +32,11 @@ export function treePresentation(groups:Group[],c:Controller):GroupView[]{
  const runningRows=new Map(c.runningView?.rows.map(r=>[r.thread.id,r])||[]);
  const projects=new Map(c.snapshot?.projects?.map(p=>[p.id,p.name])||[]);
  const itemView=(item:Item):ItemView=>{
-  if(item.kind==='project')return {kind:'project',raw:item.value,expanded:c.isExpanded('project:'+item.value.id),badges:summary(item.children),children:item.children.map(itemView),createDisabled:!c.o.connected()||!item.value.roots[0]};
+  if(item.kind==='project')return {kind:'project',raw:item.value,expanded:c.isExpanded('project:'+item.value.id),badges:c.isExpanded('project:'+item.value.id)?[]:summary(item.children),children:item.children.map(itemView),createDisabled:!c.o.connected()||!item.value.roots[0]};
   const t=item.value;
   const row=runningRows.get(t.id);
   const context=c.running?[projects.get(t.projectId||'')||'未关联项目',row?.uncertain?'状态待确认':waiting(t)?'需要你回答':'正在运行'].join(' · '):undefined;
   return {kind:'thread',raw:t,name:c.o.threadName(t),context,time:c.o.relativeTime(t.recencyAt||t.updatedAt),selected:c.o.selectedId()===t.id,unread:!!t.isUnread,badge:threadBadge(t,c.source(t),waiting(t)),menu:c.threadMenu(t).some(e=>!e.hidden),draggable:!c.running&&!!(t.isPinned&&c.snapshot!.preferences.pinned==='manual'&&c.snapshot!.capabilities.reorderThread.supported&&!c.snapshot!.archived)};
  };
- return groups.flatMap(group=>{const items=group.items.filter(i=>!c.view!.search||i.kind==='thread'||i.children.length);if(c.view!.search&&!items.length)return[];const badges=summary(group.items);return[{id:group.id,name:group.name,section:group.section,expanded:c.isExpanded('section:'+group.id),badges,items:items.map(itemView),menu:!!group.section&&c.sectionMenu(group.section).some(e=>!e.hidden),menuLabel:group.name+badges.map(b=>b.count??'').join('')}];});
+ return groups.flatMap(group=>{const items=group.items.filter(i=>!c.view!.search||i.kind==='thread'||i.children.length);if(c.view!.search&&!items.length)return[];const badges=c.isExpanded('section:'+group.id)?[]:summary(group.items);return[{id:group.id,name:group.name,section:group.section,expanded:c.isExpanded('section:'+group.id),badges,items:items.map(itemView),menu:!!group.section&&c.sectionMenu(group.section).some(e=>!e.hidden),menuLabel:group.name+badges.map(b=>b.count??'').join('')}];});
 }

@@ -48,3 +48,13 @@ test('running rows show project and waiting/uncertain status and cannot reorder 
  c.o.needsAnswer=()=>false;c.runningView.rows[0].uncertain=true;
  row=treePresentation(groups,c)[0].items[0];assert.equal(row.context,'示例项目 · 状态待确认');assert.equal(row.raw,raw);
 });
+
+test('expanded ancestors leave activity badges to the visible child level',()=>{
+ const {c,raw}=presentationFixture();c.o.needsAnswer=()=>true;
+ const expanded=new Set();c.isExpanded=key=>expanded.has(key);
+ const groups=[{id:'s',name:'示例分区',items:[{kind:'project',value:{id:'p',roots:[]},children:[{kind:'thread',value:raw}]}]}];
+ let view=treePresentation(groups,c)[0];assert.equal(view.badges[0].count,1);
+ expanded.add('section:s');view=treePresentation(groups,c)[0];assert.deepEqual(view.badges,[]);assert.equal(view.items[0].badges[0].count,1);
+ expanded.add('project:p');view=treePresentation(groups,c)[0];assert.deepEqual(view.items[0].badges,[]);assert.equal(view.items[0].children[0].badge.title,'需要你回答');
+ expanded.delete('section:s');assert.equal(treePresentation(groups,c)[0].badges[0].count,1);
+});

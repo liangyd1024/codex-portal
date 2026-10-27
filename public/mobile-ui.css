@@ -59,20 +59,20 @@
 .mobile-layout .sidebar-heading:has(.account-usage[hidden]) .machine-card{grid-column:1/-1}
 .mobile-layout #connection-select{width:100%;max-width:none;min-width:0;padding:8px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mobile-layout .sidebar kbd{display:none}
-.mobile-layout .sidebar .sidebar-search-row .search-box input{font-size:16px}
+.mobile-layout .sidebar .sidebar-search-row .search-box input{font-size:16px;min-height:0;height:42px}
 .mobile-layout .sidebar .search-box{height:48px;min-height:48px;margin:0 0 8px;padding:0 8px;gap:8px}
 .mobile-layout .sidebar .search-box input{height:44px}
 .mobile-layout .sidebar .sidebar-search-row .search-box{height:44px;min-height:44px;margin:0}
-.mobile-layout .sidebar .section-heading{min-height:44px;margin:0 0 8px}
-.mobile-layout .sidebar .sidebar-tools{margin-bottom:8px}
-.mobile-layout .sidebar-group-heading,.mobile-layout .project-heading{margin-bottom:8px}
-.mobile-layout .sidebar-section-button,.mobile-layout .project-button{font-size:15px;min-width:0;flex:1}
-.mobile-layout .sidebar-group-items{padding-left:0}
-.mobile-layout .project-threads{margin-left:6px;padding-left:6px}
-.mobile-layout .sidebar-thread{gap:8px;margin-bottom:8px;align-items:center}
+.mobile-layout .sidebar .sidebar-tools{margin-bottom:0}
+.mobile-layout .sidebar-view-switch>button{font-size:16px}
+.mobile-layout .sidebar-group-heading,.mobile-layout .project-heading{margin-bottom:0}
+.mobile-layout .sidebar-section-button,.mobile-layout .project-button{font-size:16px;min-width:0;flex:1}
+.mobile-layout .sidebar-group-items{padding-left:16px}
+.mobile-layout .project-threads{margin-left:16px;padding-left:0}
+.mobile-layout .sidebar-thread{gap:4px;margin-bottom:0;align-items:center}
 .mobile-layout .sidebar-thread .thread-row,.mobile-layout .sidebar .project-threads .thread-row{padding:8px;min-height:48px!important;display:block;margin:0;min-width:44px;overflow:hidden}
-.mobile-layout .sidebar .thread-name{font-size:15px;line-height:22px}
-.mobile-layout .sidebar .thread-meta{font-size:12px;line-height:18px;margin-top:2px}
+.mobile-layout .sidebar .thread-name{font-size:16px;line-height:22px}
+.mobile-layout .sidebar .thread-meta{display:none}
 .mobile-layout .sidebar-thread>.sidebar-item-menu{position:static;right:auto}
 .mobile-layout .sidebar-item-menu{opacity:1;width:44px;height:44px;flex:0 0 44px}
 .mobile-layout .sidebar-menu{padding:8px;max-height:calc(var(--visual-height,100dvh) - 16px)}

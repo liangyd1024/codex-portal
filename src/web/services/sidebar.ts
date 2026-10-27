@@ -86,10 +86,7 @@ export class Sidebar {
     this.treeView=installSidebarTree(this);
     this.dialogView=installSidebarDialog();
     this.menuView=installSidebarMenu(item=>{this.closeMenu(false);item.run?.();});
-    this.toolbarView=installSidebarToolbar({before:this.node.parentElement!,onRunning:()=>this.toggleRunning(),onRetry:()=>{void (this.o.retry?this.o.retry():this.o.refresh()).catch(e=>this.o.toast(String(e.message||e),true));},onArchive:()=>{if(this.running)this.toggleRunning();options.onArchiveView(!this.snapshot?.archived);},onMore:more=>this.openMenu(more,[
-      {label:'全部折叠',run:()=>{this.collapseAll();more.focus({preventScroll:true});}},
-      this.entry('新建分区','createSection',()=>this.edit('createSection',null,'新建分区')),
-    ])});
+    this.toolbarView=installSidebarToolbar({before:this.node.parentElement!,onAll:()=>this.toggleRunning(false),onRunning:()=>this.toggleRunning(true),onRetry:()=>{void (this.o.retry?this.o.retry():this.o.refresh()).catch(e=>this.o.toast(String(e.message||e),true));},onArchive:()=>this.archiveView(false),onMore:more=>this.openMenu(more,this.toolbarMenu(more))});
     this.toolbar=this.toolbarView.node;this.progress=this.toolbarView.progress;
     this.undoView=installSidebarUndo({anchor:this.toolbar,api:path=>this.o.api(path),restore:thread=>this.run('restore',thread,{},true),focus:()=>this.focusAnchor(),error:message=>this.o.toast(message,true)});
     document.addEventListener('pointerdown',e=>{if(this.menu&&!this.menu.contains(e.target as Node)&&!this.menuAnchor?.contains(e.target as Node))this.closeMenu(false);});
@@ -108,13 +105,27 @@ export class Sidebar {
     if(item)this.expanded.add('project:'+item.value.id);
     this.expanded.add('section:'+(group?.id||'threads'));this.save();
   }
-  toggleRunning(){
-    if(!this.running&&!this.o.connected())return;
+  toolbarMenu(more:HTMLButtonElement):MenuEntry[]{
+    const unavailable=!this.o.connected()||!!this.view?.loading||this.pending;
+    return [
+      {label:'刷新会话',disabled:unavailable,run:()=>{more.focus({preventScroll:true});void this.o.refresh().catch(e=>this.o.toast(String(e.message||e),true));}},
+      {label:'已归档',hidden:!!this.snapshot?.archived,disabled:unavailable,run:()=>{more.focus({preventScroll:true});this.archiveView(true);}},
+      {label:'全部折叠',hidden:!!this.snapshot?.archived||this.running,run:()=>{this.collapseAll();more.focus({preventScroll:true});}},
+      this.entry('新建分区','createSection',()=>this.edit('createSection',null,'新建分区')),
+    ];
+  }
+  archiveView(archived:boolean){
+    if(this.running)this.toggleRunning(false);
+    this.toolbar?.querySelector<HTMLButtonElement>('.sidebar-more')?.focus({preventScroll:true});
+    this.o.onArchiveView(archived);
+  }
+  toggleRunning(next=!this.running){
+    if(next===this.running||next&&!this.o.connected())return;
     const scroll=this.node.parentElement!;
     if(!this.running)this.savedScroll=scroll.scrollTop;
-    this.running=!this.running;this.closeMenu(false);this.render(this.snapshot,this.view);
+    this.running=next;this.closeMenu(false);this.render(this.snapshot,this.view);
     scroll.scrollTop=this.running?0:this.savedScroll;
-    this.toolbar?.querySelector<HTMLButtonElement>('.sidebar-running-filter')?.focus({preventScroll:true});
+    this.toolbar?.querySelector<HTMLButtonElement>(this.running?'.sidebar-running-filter':'.sidebar-all-filter')?.focus({preventScroll:true});
   }
   waiting(t:SidebarThread):boolean{
     if(!this.o.connected())return false;

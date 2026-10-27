@@ -45,3 +45,22 @@ test('toggle restores scroll and never changes native expansion, selected thread
  c.toggleRunning();assert.equal(c.running,true);assert.equal(parent.scrollTop,0);
  parent.scrollTop=60;c.toggleRunning();assert.equal(c.running,false);assert.equal(parent.scrollTop,123);assert.equal(c.view.search,'中文');assert.deepEqual([...c.expanded],['project:p']);
 });
+
+test('explicit all/running controls are idempotent and preserve scroll until switching views',()=>{
+ const c=Object.create(Sidebar.prototype),parent={scrollTop:123};let renders=0;
+ c.running=false;c.o={connected:()=>true};c.node={parentElement:parent};c.closeMenu=()=>{};c.render=()=>renders++;
+ c.toggleRunning(false);assert.equal(renders,0);assert.equal(parent.scrollTop,123);
+ c.toggleRunning(true);parent.scrollTop=60;c.toggleRunning(true);assert.equal(renders,1);assert.equal(parent.scrollTop,60);
+ c.toggleRunning(false);assert.equal(renders,2);assert.equal(parent.scrollTop,123);
+});
+test('more menu reuses refresh and archive actions; unavailable states disable reads',async()=>{
+ const c=Object.create(Sidebar.prototype);const calls=[];let connected=true;
+ c.snapshot={archived:false,capabilities:{}};c.view={};c.pending=false;c.running=false;c.o={connected:()=>connected,refresh:async()=>calls.push('refresh'),onArchiveView:archive=>calls.push(archive),toast:()=>{}};
+ const button={focus:()=>{}};let entries=c.toolbarMenu(button);
+ assert.deepEqual(entries.filter(e=>!e.hidden).map(e=>e.label),['刷新会话','已归档','全部折叠']);
+ await entries[0].run();entries[1].run();assert.deepEqual(calls,['refresh',true]);
+ c.view.loading=true;assert.equal(c.toolbarMenu(button)[0].disabled,true);assert.equal(c.toolbarMenu(button)[1].disabled,true);
+ c.view.loading=false;connected=false;assert.equal(c.toolbarMenu(button)[0].disabled,true);
+ c.snapshot.archived=true;assert.equal(c.toolbarMenu(button)[1].hidden,true);assert.equal(c.toolbarMenu(button)[2].hidden,true);
+ c.archiveView(false);assert.equal(calls.at(-1),false);
+});

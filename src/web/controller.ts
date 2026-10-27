@@ -261,7 +261,7 @@ let refreshNoticeTimer: ReturnType<typeof setTimeout> | null = null;
 function renderRefresh() {
   renderRefreshStatusView({refreshing:state.refreshing,message:state.refreshMessage,
     time:state.lastSync ? state.refreshScope + '最后更新：' + dateTime(state.lastSync) + '（北京时间）' : '尚未成功刷新'});
-  for (const id of ['refresh-all','refresh-projects'] as const) {
+  for (const id of ['refresh-all'] as const) {
     $(id).classList.toggle('refreshing', state.refreshing);
     $(id).setAttribute('aria-busy', String(state.refreshing));
   }
@@ -356,7 +356,7 @@ function renderControls() {
     releaseDisabled:!ready || !featureReady('release') || !state.status?.service?.running || state.busy.has('release'),
     releaseLabel:state.busy.has('release') ? '正在检查并释放…' : '停止目标服务（影响所有入口）',
     releaseReason:!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。'});
-  publishWorkspaceControl('refresh-projects',{ disabled:!ready || state.refreshing }); publishWorkspaceControl('refresh-all',{ disabled:state.refreshing || state.busy.has('refresh') });
+  publishWorkspaceControl('refresh-all',{ disabled:state.refreshing || state.busy.has('refresh') });
   publishWorkspaceControl('thread-search',{ disabled:!connected() });
   const desktopSettingsUnavailable=state.desktopMode&&!newChatOpen&&(!inputReady()||!state.detail?.desktop?.settings?.model||!!state.detail?.desktop?.unconfirmed||state.busy.size>0);
   publishModelSelectAvailability(desktopSettingsUnavailable || !ready || !state.models.length || state.loadingModels,
@@ -427,13 +427,12 @@ const sidebar: Sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon
   connected:usable,selectedId:()=>state.selectedId,newThread:openNewDialog,
   select:(t:NativeThread)=>{state.projectId=t.projectId!;state.selectedArchived=!!t.archived;saveView();selectThread(t.id);},
   onArchiveView:(archived:boolean)=>{state.sidebarArchived=archived;state.threadCursor=null;state.threads=[];loadThreads();},
-  refresh:()=>loadThreads(false,true),
+  refresh:()=>showRefresh('侧边栏',()=>loadThreads(false,true)),
   retry:async()=>{if(!connected())await connectRemote();else await refreshWorkspace();},
   changed:async(action:string,t:import('./services/sidebar').SidebarThread|import('./services/sidebar').SidebarSection|null)=>{if(t?.id===state.selectedId&&['archive','restore'].includes(action))state.selectedArchived=action==='archive';await Promise.all([loadThreads(false,true,true),loadStatus()]);if(t?.id===state.selectedId)await refreshSelected();renderControls();},
 });
 function renderProjects() { renderThreads(); if(newChatOpen&&!state.busy.has('create')){updateNewProjects();renderControls();} }
 function renderThreads() {
-  setWorkspaceText('projects-heading','工作区');
   sidebar.render(state.sidebar?{...state.sidebar,data:state.threads}:null,{search:state.search,loading:state.loadingThreads,failed:state.threadPageError});
   setWorkspaceText('breadcrumb-project',state.projects.find(p=>p.id===state.projectId)?.name||'工作区');
   publishWorkspaceControl('more-threads',{ hidden:!state.threadPageError&&!state.threadCursor&&(!state.loadingThreads||state.threads.length>0) });
@@ -964,7 +963,7 @@ function wireEvents() {
   installConnectionActions({connect:()=>connected()||connectionPending()?disconnectRemote():connectRemote(),reload:reloadLogin,release:releaseService});
   installWelcomeAction(() => connected() ? openNewDialog() : connectRemote());
   setWorkspaceControlAction('new-thread',openNewDialog); setWorkspaceControlAction('takeover',()=>{if(currentHandoff())return takeoverThread();threadAccess.reset();return refreshSelected();});
-  setWorkspaceControlAction('refresh-all',() => action('refresh',() => refreshWorkspace(true))); setWorkspaceControlAction('refresh-projects',() => action('projects',() => showRefresh('侧边栏',()=>loadThreads(false,true))));
+  setWorkspaceControlAction('refresh-all',() => action('refresh',() => refreshWorkspace(true)));
   $('project-list').addEventListener('scroll',loadVisibleThreads,{passive:true});
   new ResizeObserver(loadVisibleThreads).observe($('project-list'));
   const historyScroller = $('messages-scroller');
@@ -991,12 +990,10 @@ function wireEvents() {
   $('open-sidebar').onclick = () => toggleSidebar();
   $('close-sidebar').onclick = () => { toggleSidebar(false); $('open-sidebar').focus(); };
   $('sidebar-backdrop').onclick = () => { if (compactLayout()) toggleSidebar(false); toggleInspector(false); };
-  $('toggle-projects').onclick = () => { const show = $('project-list').hidden; publishWorkspaceRegion('project-list',{hidden:!show}); $('toggle-projects').setAttribute('aria-expanded',String(show)); saveLayout('projects',show); };
   document.addEventListener('keydown',e => { if(e.defaultPrevented||document.querySelector('dialog[open]'))return; if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); toggleSidebar(true); $('thread-search').focus(); } if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') { e.preventDefault(); openNewDialog(); } if (e.key === 'Escape' && !compactLayout() && window.innerWidth <= 1050) toggleInspector(false); });
   toggleSidebar(!compactLayout() && readLayout('sidebar',true), false);
   toggleInspector(false);
-  publishWorkspaceRegion('project-list',{hidden:!readLayout('projects',true)});
-  $('toggle-projects').setAttribute('aria-expanded',String(!$('project-list').hidden));
+  publishWorkspaceRegion('project-list',{hidden:false});
   prepareWorkspaceControlReasons();
   mobileUI = installMobileUI({openSidebar:()=>toggleSidebar(true,false),closeDrawers:()=>{toggleSidebar(false,false);toggleInspector(false);},layoutChanged:(mobile:boolean)=>{toggleSidebar(!mobile && readLayout('sidebar',true),false);toggleInspector(false);}});
   turnNavigation=installTurnNavigation({scroller:$('messages-scroller'),content:$('messages'),entryHost:document.querySelector<HTMLElement>('.mobile-more-panel')!,follow:scrollFollow,loadEarlier:moreHistory,loadDirectory:()=>api('/api/threads/'+encodeURIComponent(state.selectedId!)+'/turn-directory'),onError:message=>toast(message,true),context:()=>({visible:!newChatOpen&&Boolean(state.selectedId),ready:usable()&&!state.loadingDetail&&!state.historyError&&!state.detail?.recovering&&!selectedRefresh.pending(),turns:state.loadingDetail?[]:turns(),rendering:progressiveTurns.pending,renderHistory:()=>renderThread(),reveal:(id:string)=>progressiveTurns.reveal(id),uncertain:uncertainHistory(),totalTurns:state.detail?.totalTurns,hasEarlier:Boolean(state.historyCursor),cursor:state.historyCursor,loading:state.busy.has('history'),historyError:state.historyError})});

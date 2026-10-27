@@ -1,7 +1,7 @@
 import {createElement,type ReactNode} from 'react';
 import {flushSync} from 'react-dom';
 import {createStore,useStore} from 'zustand';
-export type WorkspaceLabelId='projects-heading'|'control-overview'|'breadcrumb-project'|'thread-title'|'welcome-footnote'|'thread-path'|'model-selection-note'|'composer-model-label'|'composer-hint'|'control-badge'|'control-note';
+export type WorkspaceLabelId='control-overview'|'breadcrumb-project'|'thread-title'|'welcome-footnote'|'thread-path'|'model-selection-note'|'composer-model-label'|'composer-hint'|'control-badge'|'control-note';
 interface LabelView {text?:string;hidden?:boolean;title?:string;className?:string}
 const store=createStore<Partial<Record<WorkspaceLabelId,LabelView>>>(()=>({}));
 export function WorkspaceLabel({as,id,className,hidden,children,role}:{as:'span'|'p'|'h1'|'div';id:WorkspaceLabelId;className?:string;hidden?:boolean;children?:ReactNode;role?:string}){

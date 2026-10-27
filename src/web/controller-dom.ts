@@ -29,9 +29,7 @@ export interface ControllerElementTags {
  'new-thread':'button';
  'open-sidebar':'button';
  'project-list':'nav';
- 'projects-heading':'span';
  'refresh-all':'button';
- 'refresh-projects':'button';
  'running-indicator':'div';
  'send-message':'button';
  'sidebar-backdrop':'div';
@@ -42,7 +40,6 @@ export interface ControllerElementTags {
  'thread-title':'h1';
  'toasts':'div';
  'toggle-inspector':'button';
- 'toggle-projects':'button';
  'welcome':'section';
  'welcome-footnote':'span';
 }
