@@ -1,16 +1,19 @@
-import {prepareNotificationWorker,NOTIFICATION_WORKER_VERSION} from '../../../public/notification-platform.js';
+import {prepareNotificationWorker} from '../../../public/notification-platform.js';
 interface Dependencies {threadId?:()=>string|null;api:<T>(path:string,options?:{method?:string;body?:unknown})=>Promise<T>}
 export function createPushSubscription({api,threadId}:Dependencies){
  let active=false;
  const bindingKey='rcm.push-binding-version';
+ // Binding migration is independent of receiver releases. Diagnostic updates
+ // must not rotate an already migrated subscription or discard pending pushes.
+ const bindingVersion='5';
  let bindingVerified=false;
  function needsBindingRefresh(subscription:PushSubscription|null){
   if(bindingVerified||!subscription||!new URL(subscription.endpoint).hostname.endsWith('.push.apple.com'))return false;
-  try{return window.localStorage.getItem(bindingKey)!==String(NOTIFICATION_WORKER_VERSION);}catch{return false;}
+  try{return window.localStorage.getItem(bindingKey)!==bindingVersion;}catch{return false;}
  }
  function rememberBinding(){
   bindingVerified=true;
-  try{window.localStorage.setItem(bindingKey,String(NOTIFICATION_WORKER_VERSION));}catch{}
+  try{window.localStorage.setItem(bindingKey,bindingVersion);}catch{}
  }
  async function setEnabled(value:boolean){
   if(!('serviceWorker' in navigator)||!('PushManager' in window)){if(value)throw Error('当前浏览器不支持后台推送');return;}
@@ -33,15 +36,15 @@ export function createPushSubscription({api,threadId}:Dependencies){
   void reportReceiver(registration,subscription.endpoint).catch(()=>{});
  }
  async function reportReceiver(registration:ServiceWorkerRegistration,endpoint:string){
-  let version='unavailable';
-  if(registration.active)version=await new Promise<string>(resolve=>{
+  let diagnostics:{version?:string|number;journal?:unknown[];capabilities?:string}={version:'unavailable'};
+  if(registration.active)diagnostics=await new Promise<typeof diagnostics>(resolve=>{
     const channel=new MessageChannel();
-    const finish=(value:string)=>{clearTimeout(timer);channel.port1.close();channel.port2.close();resolve(value);};
-    const timer=setTimeout(()=>finish('timeout'),5000);
-    channel.port1.onmessage=event=>finish(String(event.data?.version||'unknown'));
-    try{registration.active!.postMessage({type:'rcm-push-version'},[channel.port2]);}catch{finish('failed');}
+    const finish=(value:typeof diagnostics)=>{clearTimeout(timer);channel.port1.close();channel.port2.close();resolve(value);};
+    const timer=setTimeout(()=>finish({version:'timeout'}),5000);
+    channel.port1.onmessage=event=>finish(event.data||{version:'unknown'});
+    try{registration.active!.postMessage({type:'rcm-push-diagnostics'},[channel.port2]);}catch{finish({version:'failed'});}
   });
-  try{await api('/api/push/trace',{method:'POST',body:{stage:'page-receiver',endpoint,version:'worker-'+version,visibility:document.visibilityState}});}catch{}
+  try{await api('/api/push/trace',{method:'POST',body:{stage:'page-receiver',endpoint,version:'worker-'+diagnostics.version,visibility:document.visibilityState,journal:diagnostics.journal,capabilities:diagnostics.capabilities,userAgent:navigator.userAgent}});}catch{}
  }
  let testing:Promise<string>|undefined;
  function test(){

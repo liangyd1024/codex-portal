@@ -28,3 +28,20 @@ test('push diagnostics preserve pairing, Origin, CSRF and ownership; device test
  assert.equal((await request(local,'/api/push/test-device',{}, {deviceId:'unknown'})).status,403);
  assert.equal((await request(local,'/api/push/devices')).status,200);
 });
+
+test('background worker script can refresh without a pairing cookie while APIs and other assets remain protected',async t=>{
+ const manager=Object.assign(new EventEmitter(),{disconnect(){}});
+ const app=await createApp({stateDir:mkdtempSync(path.join(tmpdir(),'portal-worker-access-')),mobileConfig:{origins:['https://phone.test']},config:{defaultConnection:'test',connections:[]},managers:new Map([['test',manager]])});
+ app.proxyServer.listen(0,'127.0.0.1');await once(app.proxyServer,'listening');
+ t.after(()=>{app.proxyServer.closeAllConnections();app.proxyServer.close();});
+ const read=(url,method='GET',headers={})=>new Promise((resolve,reject)=>{
+  const req=http.request({hostname:'127.0.0.1',port:app.proxyServer.address().port,path:url,method,headers:{Host:'phone.test',...headers}},res=>{let body='';res.on('data',c=>body+=c);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body}));});req.on('error',reject);req.end();
+ });
+ const script=await read('/notification-worker.js?v=6');assert.equal(script.status,200);assert.match(script.headers['content-type'],/javascript/);assert.match(script.body,/notificationclick/);assert.equal(script.headers['set-cookie'],undefined);
+ const head=await read('/notification-worker.js?v=6','HEAD');assert.equal(head.status,200);assert.equal(head.body,'');
+ assert.equal((await read('/notification-worker.js?v=6','GET',{'If-None-Match':script.headers.etag})).status,304);
+ assert.equal((await read('/notification-worker.js','GET',{Origin:'https://evil.test'})).status,403);
+ assert.equal((await read('/notification-worker.js','GET',{Host:'evil.test'})).status,403);
+ assert.equal((await read('/notification-worker.js','POST',{Origin:'https://phone.test'})).status,401);
+ for(const url of ['/api/push/trace','/api/csrf','/api/connections','/notification-platform.js','/notification-worker.js/extra'])assert.equal((await read(url)).status,401,url);
+});

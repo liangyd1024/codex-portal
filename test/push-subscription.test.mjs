@@ -50,3 +50,15 @@ test('Apple receiver migration renews its subscription once after activation and
  const count=calls.filter(x=>x==='unsubscribe').length;assert.equal(count,1);await context.client.setEnabled(true);assert.equal(calls.filter(x=>x==='unsubscribe').length,count);assert.equal(calls[0],'verified');
  assert.deepEqual(calls.slice(0,4),['verified','unsubscribe','subscribe','save']);
 });
+
+test('receiver diagnostics reuse the subscription binding across worker releases and upload the local journal in one request',async()=>{
+ const requests=[],messages=[];
+ const subscription={endpoint:'https://web.push.apple.com/fixture',toJSON(){return {endpoint:this.endpoint};},unsubscribe(){throw Error('must not rotate');}};
+ const registration={active:{postMessage:(data,ports)=>{messages.push(data.type);ports[0].postMessage({version:6,journal:[{stage:'worker-click',at:123,threadId:'other'}],capabilities:'push=true, click=true, storage=available'});}},pushManager:{getSubscription:async()=>subscription,subscribe(){throw Error('must not resubscribe');}}};
+ const context={URL,prepareNotificationWorker:async()=>registration,MessageChannel,setTimeout,clearTimeout,Uint8Array,atob,navigator:{userAgent:'Fixture iPhone',serviceWorker:{}},window:{PushManager:{},localStorage:{getItem:()=> '5',setItem(){}}},document:{visibilityState:'visible'},api:async(path,options)=>{requests.push({path,body:options?.body});return {publicKey:'YQ'};}};
+ vm.runInNewContext(code+'\nglobalThis.client=createPushSubscription({api});',context);
+ await context.client.setEnabled(true);
+ for(let i=0;i<20&&!requests.some(x=>x.path==='/api/push/trace');i++)await new Promise(resolve=>setTimeout(resolve,5));
+ const traces=requests.filter(x=>x.path==='/api/push/trace');assert.equal(traces.length,1);assert.deepEqual(messages,['rcm-push-diagnostics']);
+ assert.equal(traces[0].body.version,'worker-6');assert.equal(traces[0].body.journal[0].threadId,'other');assert.equal(traces[0].body.userAgent,'Fixture iPhone');
+});

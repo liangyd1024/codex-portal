@@ -10,7 +10,8 @@ type Subscription={endpoint:string;keys:{auth:string;p256dh:string}};
 type Device={subscription:Subscription;owner:string;host:string;subject:string;updatedAt?:number};
 type Job={device:string;payload:Record<string,unknown>;attempt:number;next:number;expires:number;context?:{key:string;threadId:string;turnId?:string;label:string;needsBody:boolean}};
 type Watch={host:string;threadId:string;seen:string[];expires:number;next?:number};
-type NavigationTrace={at:number;host:string;owner:string;stage:string;device?:string;threadId?:string;selectedId?:string;clickId?:string;testId?:string;version?:string;visibility?:string;windows?:number};
+type WorkerTrace={at:number;stage:string;host?:string;threadId?:string;clickId?:string;testId?:string;windows?:number};
+type NavigationTrace={at:number;host:string;owner:string;stage:string;device?:string;threadId?:string;selectedId?:string;clickId?:string;testId?:string;version?:string;visibility?:string;windows?:number;journal?:WorkerTrace[];capabilities?:string;userAgent?:string};
 type State={navigation?:NavigationTrace[];watches?:Record<string,Watch>;keys:ReturnType<typeof createPushKeys>;devices:Record<string,Device>;jobs:Record<string,Job>;seen:Record<string,number>};
 export class PushNotifications {
  private state:State|undefined;private timer:ReturnType<typeof setTimeout>|undefined;private running=false;private closed=false;private watchTimer:ReturnType<typeof setTimeout>|undefined;
@@ -43,6 +44,16 @@ export class PushNotifications {
   const entry:NavigationTrace={at:Date.now(),host,owner,stage:value.stage};
   for(const key of ['threadId','selectedId','clickId','testId','version','visibility'] as const)if(typeof value[key]==='string')entry[key]=(value[key] as string).slice(0,160);
   if(typeof value.windows==='number'&&Number.isFinite(value.windows))entry.windows=Math.max(0,Math.min(100,value.windows));
+  if(value.stage==='page-receiver'){
+   for(const key of ['capabilities','userAgent'] as const)if(typeof value[key]==='string')entry[key]=value[key].slice(0,256);
+   if(Array.isArray(value.journal))entry.journal=value.journal.slice(-32).flatMap(row=>{
+    if(!row||typeof row!=='object'||!['worker-install','worker-activate','worker-push','worker-shown','worker-show-failed','worker-click','worker-window'].includes(row.stage)||!Number.isSafeInteger(row.at)||row.at<0)return [];
+    const item:WorkerTrace={at:row.at,stage:row.stage};
+    for(const key of ['host','threadId','clickId','testId'] as const)if(typeof row[key]==='string')item[key]=row[key].slice(0,160);
+    if(typeof row.windows==='number'&&Number.isFinite(row.windows))item.windows=Math.max(0,Math.min(100,row.windows));
+    return [item];
+   });
+  }
   if(typeof value.endpoint==='string'){const id=this.id(host,value.endpoint),device=this.data().devices[id];if(device?.owner===owner)entry.device=id.slice(0,12);}
   const state=this.data();state.navigation=[...(state.navigation||[]),entry].slice(-160);this.save();return {ok:true};
  }

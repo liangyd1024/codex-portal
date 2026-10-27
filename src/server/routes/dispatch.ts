@@ -68,6 +68,9 @@ export function createDispatcher(context:RouteServices){
       if((req.headers.origin&&req.headers.origin!==origin)||(remote&&req.method==='POST'&&req.headers.origin!==origin))throw new AppError('不允许跨站访问。',403,'FORBIDDEN');
       const url=new URL(req.url!,origin);const p=url.pathname;
       if(p==='/api/access/login'&&remote&&req.method==='POST'){await accessRoutes.login(req,res);return;}
+      // The browser can refresh a background receiver without the page's pairing
+      // cookie. This exact static script contains no user data; APIs stay paired.
+      if(p==='/notification-worker.js'&&(req.method==='GET'||req.method==='HEAD')){await staticRoutes.read(req,res,p);return;}
       if(remote&&!access.valid(req)){
         if(req.method==='GET'&&staticRoutes.isLoginAsset(p)){await staticRoutes.login(p,res);return;}
         throw new AppError('请先使用本机生成的配对码登录。',401,'PAIRING_REQUIRED');

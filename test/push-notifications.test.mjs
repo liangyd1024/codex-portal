@@ -80,3 +80,10 @@ test('an explicitly requested device test previews real native content and keeps
  const p=new PushNotifications(f.file,f.access,async(s,payload)=>{sent.push(payload);return 201;},undefined,async(host,threadId,turnId)=>{assert.equal(threadId,id);assert.equal(turnId,null);return {name:'通知验证会话',turn:{status:'completed',items:[{type:'agentMessage',phase:'final_answer',text:'这是原生会话里的回复。'}]}};});
  try{await p.testDevice('host',p.devices('host')[0].id,'test-device-preview',id);assert.equal(sent.length,1);assert.equal(sent[0].title,'通知验证会话 · 测试通知');assert.equal(sent[0].body,'这是原生会话里的回复。');assert.equal(sent[0].data.threadId,id);await assert.rejects(p.testDevice('other',p.devices('host')[0].id),/设备不存在/);}finally{p.close();}
 });
+
+test('receiver journal snapshots are bounded and sanitized without expanding access to message content',()=>{
+ const f=fixture();try{
+  f.push.trace('host','owner',{stage:'page-receiver',endpoint:subscription().endpoint,userAgent:'x'.repeat(500),capabilities:'push=true',journal:[...Array.from({length:40},(_,i)=>({at:i,stage:'worker-click',threadId:'t'+i,body:'private text',keys:{auth:'secret'},windows:500})),null,{stage:'arbitrary',at:1}]});
+  const entry=f.push.traces('owner')[0];assert.equal(entry.journal.length,30);assert.equal(entry.journal[0].threadId,'t10');assert.equal(entry.journal.at(-1).windows,100);assert.equal(entry.userAgent.length,256);assert.equal(JSON.stringify(entry).includes('private text'),false);assert.equal(JSON.stringify(entry).includes('secret'),false);assert.deepEqual(f.push.traces('another'),[]);
+ }finally{f.push.close();}
+});

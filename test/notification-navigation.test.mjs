@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {threadSourceIcon} from '../public/activity.js';
-function clickStorage(){let saved;return {open:async()=>({put:async(_key,value)=>{saved=await value.text();},match:async()=>saved?new Response(saved):undefined,delete:async()=>{saved=undefined;}})};}
+function clickStorage(){const saved=new Map();return {open:async name=>({put:async(key,value)=>{saved.set(name+key,await value.text());},match:async key=>saved.has(name+key)?new Response(saved.get(name+key)):undefined,delete:async key=>saved.delete(name+key)})};}
 const worker=await readFile(new URL('../public/notification-worker.js',import.meta.url),'utf8');
 test('notification cold start carries both connection and encoded thread; warm start selects without reloading',async()=>{
  for(const warm of [false,true,'default-host']){
