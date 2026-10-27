@@ -129,7 +129,13 @@ let pendingNotification=pendingNotificationTarget(localStorage,location.href), n
 let openingNotification:string|null=null,notificationWaitingForCreate=false;
 navigator.serviceWorker?.addEventListener('message',event=>{
   const data=event.data;
+  if(data?.type==='rcm-navigation-trace'){
+    if(notificationNavigationReady&&['worker-push','worker-shown','worker-show-failed','worker-click','worker-window'].includes(data.stage))void reportPageNavigation(data.stage,data,data.version);
+    return;
+  }
   if(data?.type!=='rcm-notification-click'||!data.threadId)return;
+  saveNotificationTarget(localStorage,data);
+  event.ports?.[0]?.postMessage({clickId:data.clickId});
   if(notificationNavigationReady)openNotificationThread(data);else pendingNotification=data;
 });
 function requestNotificationTarget(){
@@ -732,13 +738,13 @@ const setTaskNotifications=notificationPreferences.setEnabled;
 function notificationDiagnostic(message:string) {
   appendNotificationDiagnostic(dateTime(new Date()) + ' · ' + message);
 }
-async function reportPageNavigation(stage:string,target?:{threadId?:string;clickId?:string}){
+async function reportPageNavigation(stage:string,target?:{threadId?:string;clickId?:string;testId?:string},version='page-4'){
   if(!state.csrf)return;
   const selectedId=state.selectedId,visibility=document.visibilityState;
   try{
     const registration=await navigator.serviceWorker?.getRegistration();
     const subscription=await registration?.pushManager?.getSubscription();
-    await api('/api/push/trace',{method:'POST',body:{stage,threadId:target?.threadId,clickId:target?.clickId,selectedId,endpoint:subscription?.endpoint,version:'page-3',visibility}});
+    await api('/api/push/trace',{method:'POST',body:{stage,threadId:target?.threadId,clickId:target?.clickId,testId:target?.testId,selectedId,endpoint:subscription?.endpoint,version,visibility}});
   }catch{}
 }
 async function openNotificationThread(target:{host?:string;threadId:string;clickId?:string}) {

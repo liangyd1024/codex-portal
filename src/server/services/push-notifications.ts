@@ -38,7 +38,7 @@ export class PushNotifications {
    try{const snapshot=await this.readHistory(w.host,w.threadId);const expiry=w.expires;this.observe(w.host,w.threadId,snapshot.data||[]);if(this.state.watches?.[key])this.state.watches[key].expires=expiry;}catch{w.next=Date.now()+60000;}
   }this.save();}finally{this.watchTimer=undefined;this.scheduleWatch();}}
  trace(host:string,owner:string,value:Record<string,unknown>){
-  const stages=['send-test','send-task','worker-push','worker-shown','worker-show-failed','worker-click','worker-window','page-ready','page-target','page-opened','page-failed'];
+  const stages=['send-test','send-task','worker-push','worker-shown','worker-show-failed','worker-click','worker-window','page-ready','page-receiver','page-target','page-opened','page-failed'];
   if(typeof value.stage!=='string'||!stages.includes(value.stage))throw Error('通知诊断阶段无效。');
   const entry:NavigationTrace={at:Date.now(),host,owner,stage:value.stage};
   for(const key of ['threadId','selectedId','clickId','testId','version','visibility'] as const)if(typeof value[key]==='string')entry[key]=(value[key] as string).slice(0,160);

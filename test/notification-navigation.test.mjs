@@ -60,11 +60,12 @@ test('page acknowledges click only after target detail loads and retains it on d
  }
 });
 
-test('declarative notification link carries a same-document navigation target',()=>{
+test('declarative notification link carries a unique full-document navigation target',()=>{
  const payload=notificationPayload({title:'test',data:{host:'local',threadId:'thread /?中文'}},'https://rcm.test');
  const parsed=notificationLink(payload.notification.navigate);
- assert.deepEqual(parsed,{host:'local',threadId:'thread /?中文'});
- assert.equal(new URL(payload.notification.navigate).hash.startsWith('#notification-thread='),true);
+ assert.equal(parsed.host,'local');assert.equal(parsed.threadId,'thread /?中文');assert.ok(parsed.clickId);
+ const url=new URL(payload.notification.navigate);assert.equal(url.pathname,'/index.html');assert.equal(url.hash,'');
+ assert.notEqual(notificationLink(notificationPayload({title:'test',data:{host:'local',threadId:'thread /?中文'}},'https://rcm.test').notification.navigate).clickId,parsed.clickId);
 });
 test('URL target survives early URL cleanup and reload until matching successful consumption',()=>{
  const values=new Map(),storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
@@ -155,7 +156,8 @@ test('slow old focus cannot deliver an older click after a newer notification',a
  const w=bootWorker({clients:{matchAll:async()=>[client]}});
  const old=w.click({host:'local',threadId:'old'});while(!focus.length)await new Promise(resolve=>setImmediate(resolve));
  const latest=w.click({host:'local',threadId:'latest'});while(focus.length<2)await new Promise(resolve=>setImmediate(resolve));
- focus[1]();await latest;focus[0]();await old;assert.deepEqual(messages.map(m=>m.threadId),['latest']);
+ assert.deepEqual(messages.map(m=>m.threadId),['old','latest']);
+ focus[1]();await latest;focus[0]();await old;assert.deepEqual(messages.map(m=>m.threadId),['old','latest']);
 });
 
 test('manual navigation cancels an offline target so reconnect cannot hijack the new selection',async()=>{
@@ -174,7 +176,7 @@ test('Apple mutable declarative dispatch retains the native Notification target 
  const client={url:'https://rcm.test/?host=local',focus:async()=>client,postMessage:m=>messages.push(m)};
  vm.runInNewContext(worker,{URL,Response,crypto,caches:storage,self:{location:{origin:'https://rcm.test'},addEventListener:(n,fn)=>handlers[n]=fn,registration:{showNotification:async(title,options)=>shown.push({title,options})},clients:{matchAll:async()=>[client]}}});
  // The actual parser defaults mutable to false: in that case it never invokes push.
- if(payload.mutable===true)handlers.push({data:null,notification,waitUntil:p=>pending.push(p)});
+ if(payload.mutable===true&&payload.notification.mutable===true)handlers.push({data:null,notification,waitUntil:p=>pending.push(p)});
  await Promise.all(pending);assert.equal(shown.length,1,'Apple must run our receiver, not only display an immutable fallback');
  assert.equal(shown[0].title,payload.title);assert.equal(shown[0].options.body,payload.body);assert.equal(shown[0].options.data.threadId,'other-thread');assert.equal(Object.hasOwn(shown[0].options,'navigate'),false);
  let done;handlers.notificationclick({notification:{...shown[0].options,close(){}},waitUntil:p=>done=p});await done;
@@ -191,4 +193,55 @@ test('declarative test receipts use notification data and replacement failure re
   assert.equal(shown[0].data.threadId,'target');assert.equal(receipts[0].testId,'declarative-test');assert.equal(!!receipts[0].error,fails);
   assert.equal(notificationLink(payload.notification.navigate).threadId,'target');
  }
+});
+
+// Exercise the real MessageChannel handshake, including an unresponsive old page.
+function acknowledgedWorker(clients){
+ const handlers={},pending=[];
+ vm.runInNewContext(worker,{URL,Response,crypto,MessageChannel,setTimeout,clearTimeout,caches:clickStorage(),self:{location:{origin:'https://rcm.test'},addEventListener:(n,fn)=>handlers[n]=fn,clients}});
+ return {click(data){handlers.notificationclick({notification:{data,close(){}},waitUntil:p=>pending.push(p)});return pending.at(-1);}};
+}
+test('foreground page receives target even if focus never settles; acknowledged navigation avoids reload',async()=>{
+ const messages=[],navigations=[];
+ const stale={url:'https://rcm.test/?host=local',visibilityState:'hidden',postMessage:()=>assert.fail('must not choose stale matching window')};
+ const active={url:'https://rcm.test/',focused:true,visibilityState:'visible',focus:()=>new Promise(()=>{}),navigate:async url=>navigations.push(url),postMessage:(data,ports)=>{messages.push(data);ports[0].postMessage({clickId:data.clickId});}};
+ const w=acknowledgedWorker({matchAll:async()=>[stale,active],openWindow:()=>assert.fail('must reuse foreground page')});
+ await w.click({host:'local',threadId:'other-thread'});
+ assert.equal(messages[0].threadId,'other-thread');assert.equal(navigations.length,0);
+});
+test('missing page acknowledgement navigates existing background window to full target',async()=>{
+ const navigations=[];
+ const client={url:'https://rcm.test/?host=local',visibilityState:'hidden',focus:async()=>client,postMessage(){},navigate:async url=>{navigations.push(url);return client;}};
+ const w=acknowledgedWorker({matchAll:async()=>[client],openWindow:()=>assert.fail('existing window can navigate')});
+ await w.click({host:'local',threadId:'target'});
+ const target=notificationLink(navigations[0]);assert.equal(target.threadId,'target');assert.ok(target.clickId);assert.equal(new URL(navigations[0]).pathname,'/index.html');
+});
+test('late old acknowledgement timeout cannot navigate over the latest clicked conversation',async()=>{
+ const navigations=[],received=[];
+ const client={url:'https://rcm.test/',focus:async()=>client,postMessage:(data,ports)=>{received.push(data);if(data.threadId==='latest')ports[0].postMessage({clickId:data.clickId});},navigate:async url=>{navigations.push(url);return client;}};
+ const w=acknowledgedWorker({matchAll:async()=>[client]});
+ const old=w.click({host:'local',threadId:'old'});while(!received.length)await new Promise(resolve=>setImmediate(resolve));
+ await w.click({host:'local',threadId:'latest'});await old;
+ assert.equal(navigations.length,0);assert.equal(received.at(-1).threadId,'latest');
+});
+test('page saves and acknowledges received target before startup and retains it for later opening',async()=>{
+ const ts=await import('typescript'),source=await readFile(new URL('../src/web/controller.ts',import.meta.url),'utf8');
+ const start=source.indexOf("navigator.serviceWorker?.addEventListener('message',event=>{");
+ const code=source.slice(start,source.indexOf('function requestNotificationTarget(){',start));
+ const store=memoryStorage(),receipts=[],opened=[];let receive;
+ const context={notificationNavigationReady:false,pendingNotification:null,localStorage:store,saveNotificationTarget,navigator:{serviceWorker:{addEventListener:(_type,fn)=>receive=fn}},openNotificationThread:x=>opened.push(x)};
+ vm.runInNewContext(ts.transpile(code),context);
+ receive({data:{type:'rcm-notification-click',host:'local',threadId:'other',clickId:'receipt'},ports:[{postMessage:data=>receipts.push(data)}]});
+ assert.equal(receipts[0].clickId,'receipt');assert.equal(opened.length,0);assert.equal(context.pendingNotification.threadId,'other');assert.equal(pendingNotificationTarget(store,'https://rcm.test').threadId,'other');
+ context.notificationNavigationReady=true;
+ receive({data:{type:'rcm-notification-click',host:'local',threadId:'new',clickId:'new'},ports:[]});assert.equal(opened[0].threadId,'new');
+});
+
+test('worker trace fetch failure relays routing diagnostics to an authenticated foreground page',async()=>{
+ const handlers={},messages=[],pending=[];
+ vm.runInNewContext(worker,{URL,AbortSignal,fetch:async()=>({ok:false,json:async()=>({token:'csrf',configRevision:'revision',defaultConnection:'local'})}),self:{location:{origin:'https://rcm.test'},addEventListener:(n,fn)=>handlers[n]=fn,registration:{pushManager:{getSubscription:async()=>({endpoint:'https://web.push.apple.com/private'})},showNotification:async()=>{}},clients:{matchAll:async()=>[{url:'https://rcm.test/',focused:true,postMessage:m=>messages.push(m)}]}}});
+ handlers.push({data:{json:()=>({title:'private content',data:{host:'local',threadId:'target'}})},waitUntil:p=>pending.push(p)});
+ await Promise.all(pending);await Promise.all(pending);
+ assert.deepEqual(messages.map(m=>m.stage).sort(),['worker-push','worker-shown']);assert.equal(messages[0].threadId,'target');assert.equal(messages[0].type,'rcm-navigation-trace');
+ assert.equal(JSON.stringify(messages).includes('private'),false);
 });

@@ -10,8 +10,15 @@ async function reportNavigation(stage,data={},windows){
   try{
     traceContext ||= Promise.all([fetch('/api/csrf',{cache:'no-store',signal:AbortSignal.timeout(4000)}).then(r=>r.json()),fetch('/api/connections',{cache:'no-store',signal:AbortSignal.timeout(4000)}).then(r=>r.json())]).catch(error=>{traceContext=null;throw error;});
     const [csrf,config]=await traceContext,subscription=await self.registration.pushManager.getSubscription();
-    const result=await fetch('/api/push/trace?host='+encodeURIComponent(data.host||config.defaultConnection),{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf.token,'X-RCM-Config-Revision':config.configRevision},body:JSON.stringify({stage,threadId:data.threadId,clickId:data.clickId,testId:data.testId,endpoint:subscription?.endpoint,version:'worker-4',windows}),signal:AbortSignal.timeout(4000)});
-    if(!result.ok)traceContext=null;
+    const result=await fetch('/api/push/trace?host='+encodeURIComponent(data.host||config.defaultConnection),{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf.token,'X-RCM-Config-Revision':config.configRevision},body:JSON.stringify({stage,threadId:data.threadId,clickId:data.clickId,testId:data.testId,endpoint:subscription?.endpoint,version:'worker-5',windows}),signal:AbortSignal.timeout(4000)});
+    if(result.ok)return;
+    traceContext=null;
+  }catch{}
+  // iOS may expose different credentials in the worker. Relay only routing IDs
+  // to an open same-origin page, which retains the normal CSRF-protected API.
+  try{const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+    const client=windows.find(item=>item.focused)||windows.find(item=>item.visibilityState==='visible');
+    if(client&&new URL(client.url).origin===self.location.origin)client.postMessage({type:'rcm-navigation-trace',stage,threadId:data.threadId,clickId:data.clickId,testId:data.testId,version:'worker-5'});
   }catch{}
 }
 self.addEventListener('install',event=>event.waitUntil(self.skipWaiting()));
@@ -27,7 +34,7 @@ self.addEventListener('message',event=>{
     try{const cache=await clickCache(),saved=await cache.match(clickKey);
     if(saved&&(await saved.json()).clickId===event.data.clickId)await cache.delete(clickKey);}catch{}
   }));
-  if(event.data?.type==='rcm-push-version')event.ports?.[0]?.postMessage({version:4});
+  if(event.data?.type==='rcm-push-version')event.ports?.[0]?.postMessage({version:5});
 });
 self.addEventListener('push',event=>{
   let message;try{message=event.data?.json();}catch{}
@@ -65,11 +72,35 @@ self.addEventListener('notificationclick',event=>{
     const windows=(await self.clients.matchAll({type:'window',includeUncontrolled:true})).filter(item=>new URL(item.url).origin===self.location.origin);
     if(threadId&&fallbackClick?.clickId!==target.clickId)return;
     event.waitUntil(reportNavigation('worker-window',target,windows.length));
-    const client=windows.find(item=>new URL(item.url).searchParams.get('host')===(host||null))||windows.find(item=>item.focused)||windows[0];
-    if(client){try{await client.focus();if(!threadId||fallbackClick?.clickId===target.clickId)client.postMessage(target);return;}catch{}}
-    const url=new URL('/',self.location.origin);
+    const sameHost=item=>new URL(item.url).searchParams.get('host')===(host||null);
+    const client=windows.find(item=>item.focused&&sameHost(item))||windows.find(item=>item.focused)||windows.find(item=>item.visibilityState==='visible'&&sameHost(item))||windows.find(item=>item.visibilityState==='visible')||windows.find(sameHost)||windows[0];
+    const url=new URL('/index.html',self.location.origin);
     if(host)url.searchParams.set('host',host);
     if(threadId){url.searchParams.set('thread',threadId);url.searchParams.set('notification-click',target.clickId);}
+    if(client){
+      // Delivery must not wait for focus: iOS can leave that promise pending.
+      try{
+        const received=deliverTarget(client,target);
+        event.waitUntil(client.focus().catch(()=>{}));
+        if(await received)return;
+        if(threadId&&fallbackClick?.clickId!==target.clickId)return;
+        // A stale page or lost message must not silently keep the old thread.
+        const navigated=await client.navigate(url.href);
+        if(navigated)return;
+      }catch{}
+    }
+    if(threadId&&fallbackClick?.clickId!==target.clickId)return;
     const opened=await self.clients.openWindow(url.href);opened?.postMessage?.(target);
   })());
 });
+function deliverTarget(client,target){
+  // MessageChannel is available in supported browsers; keep a legacy fallback.
+  if(typeof MessageChannel!=='function'){client.postMessage(target);return Promise.resolve(true);}
+  return new Promise(resolve=>{
+    const channel=new MessageChannel();
+    const finish=value=>{clearTimeout(timer);channel.port1.close();channel.port2.close();resolve(value);};
+    const timer=setTimeout(()=>finish(false),1200);
+    channel.port1.onmessage=event=>{if(event.data?.clickId===target.clickId)finish(true);};
+    try{client.postMessage(target,[channel.port2]);}catch{finish(false);}
+  });
+}

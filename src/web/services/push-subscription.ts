@@ -11,6 +11,18 @@ export function createPushSubscription({api,threadId}:Dependencies){
   const key=Uint8Array.from(atob(publicKey.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
   subscription ||= await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
   await api('/api/push/subscribe',{method:'POST',body:{subscription:subscription.toJSON()}});active=true;
+  void reportReceiver(registration,subscription.endpoint).catch(()=>{});
+ }
+ async function reportReceiver(registration:ServiceWorkerRegistration,endpoint:string){
+  let version='unavailable';
+  if(registration.active)version=await new Promise<string>(resolve=>{
+    const channel=new MessageChannel();
+    const finish=(value:string)=>{clearTimeout(timer);channel.port1.close();channel.port2.close();resolve(value);};
+    const timer=setTimeout(()=>finish('timeout'),5000);
+    channel.port1.onmessage=event=>finish(String(event.data?.version||'unknown'));
+    try{registration.active!.postMessage({type:'rcm-push-version'},[channel.port2]);}catch{finish('failed');}
+  });
+  try{await api('/api/push/trace',{method:'POST',body:{stage:'page-receiver',endpoint,version:'worker-'+version,visibility:document.visibilityState}});}catch{}
  }
  let testing:Promise<string>|undefined;
  function test(){
@@ -29,7 +41,7 @@ export function createPushSubscription({api,threadId}:Dependencies){
   });
   await new Promise<void>((resolve,reject)=>{
     const channel=new MessageChannel();const timer=setTimeout(()=>{channel.port1.close();reject(Error('通知接收器版本未更新，请重新打开应用后重试'));},5000);
-    channel.port1.onmessage=event=>{clearTimeout(timer);channel.port1.close();event.data?.version===4?resolve():reject(Error('通知接收器版本不匹配'));};
+    channel.port1.onmessage=event=>{clearTimeout(timer);channel.port1.close();event.data?.version===5?resolve():reject(Error('通知接收器版本不匹配'));};
     worker.postMessage({type:'rcm-push-version'},[channel.port2]);
   });
   const subscription=await registration.pushManager.getSubscription();if(!subscription)throw Error('请先开启后台通知');
