@@ -76,3 +76,31 @@ test('management binding is fixed after first selection',async()=>{
  await assert.rejects(a.bind(tid),e=>e.code==='DESKTOP_BINDING_FIXED');
  assert.equal(a.state.threadId,id);assert.equal(calls.length,previous);
 });
+
+test('desktop active sends use native follower steering and preserve the original conversation',async()=>{
+ const {a,m,calls}=fixture();
+ m.passive=async action=>action==='history'?{data:[{id:tid,status:'inProgress',items:[]}]}:{thread:{id,cwd:'/test/project',activity:{state:'running'}}};
+ a.call=async(_s,p)=>{calls.push(p);return p.action==='send'?{result:{result:{turnId:tid}}}:{};};
+ const d=await a.detail();assert.equal(d.desktop.canSend,true);assert.equal(d.controlled,false);
+ await a.send({threadId:id,messageId:mid,text:'补充要求'});
+ assert.deepEqual(calls.find(p=>p.action==='send'),{action:'send',threadId:id,messageId:mid,text:'补充要求',steer:true,cwd:'/test/project'});
+});
+test('desktop answers validate original questions, steer the reply and deduplicate after acceptance',async()=>{
+ const {a,m,calls}=fixture();const item={id:'question',type:'agentMessage',questions:[{title:'选择方式',options:['方案一','方案二']}]};
+ m.passive=async action=>action==='history'?{data:[{id:tid,status:'inProgress',items:[item]}]}:{thread:{id,cwd:'/test/project',activity:{state:'running'}}};
+ const {asyncQuestions}=await import('../shared/questions.js');const question=asyncQuestions([{id:tid,status:'inProgress',items:[item]}],id)[0];
+ const data={threadId:id,turnId:tid,itemId:item.id,answers:{[question.params.questions[0].id]:{answers:['方案二']}}};
+ await assert.rejects(a.answerQuestions({...data,itemId:'unrelated'}),e=>e.code==='STALE_REQUEST');
+ await assert.rejects(a.answerQuestions({...data,answers:{}}),/所有问题/);
+ await a.answerQuestions(data);await a.answerQuestions(data);
+ const sent=calls.filter(p=>p.action==='send');assert.equal(sent.length,1);assert.equal(sent[0].questionReply,true);assert.equal(sent[0].steer,true);assert.match(sent[0].text,/send_user_message_question_reply/);assert.match(sent[0].text,/方案二/);
+});
+test('desktop recovery is explicit, rejects controlled/archived threads, and never dispatches a message',async()=>{
+ const {a,m,calls}=fixture();await a.recover();assert.equal(calls[0].action,'recover');assert.equal(m.mutations,0);assert.equal(a.pending,false);
+ m.controlled.add(id);await assert.rejects(a.recover(),/交还/);m.controlled.clear();
+ m.passive=async()=>({thread:{id,archived:true}});await assert.rejects(a.recover(),/归档/);assert.equal(m.mutations,0);assert.equal(calls.some(p=>p.action==='send'),false);
+});
+test('undelivered native request clears receipt; lost write reply remains blocked',async()=>{
+ const {a}=fixture();a.call=async(_s,p)=>{if(p.action==='send')throw Object.assign(Error('not routed'),{code:'DESKTOP_NOT_SENT'});return {};};
+ await assert.rejects(a.send({threadId:id,messageId:mid,text:'draft'}),/not routed/);assert.equal(a.unconfirmed(),undefined);
+});

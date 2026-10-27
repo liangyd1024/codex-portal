@@ -294,7 +294,7 @@ const api=createApiClient({lifecycle:document,targetUrl,configRevision:()=>conne
 // Trace URLs already contain their captured host; do not append the current host.
 const navigationTraceApi=createApiClient({targetUrl:path=>path,configRevision:()=>connectionConfig.configRevision as string|undefined,csrf:{get:()=>state.csrf,set:token=>{state.csrf=token;}},flushDrafts,reload:()=>location.reload()});
 
-const action=createActionRunner({state,renderControls,renderStatus,usable,syncRequestCards,recordError,messageOf,toast});
+const action=createActionRunner({state,renderControls,renderStatus,usable,syncRequestCards:view=>syncRequestCards({...view,desktopThreadId:state.desktopMode&&state.detail?.desktop?.canAnswer===true?state.selectedId:null}),recordError,messageOf,toast});
 
 function renderStatus() {
   void refreshAccountUsage?.();
@@ -345,6 +345,7 @@ function renderControls() {
   handoffControls??=createHandoffControls({endUse:endThreadUse});
   handoffControls!.render({id:newChatOpen||state.desktopMode?null:state.selectedId,context:targetHost+':'+state.selectedId+':'+state.selectionVersion,running:active,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId!)),handoff,connected:ready,
     supported:state.status?.service?.protocolValidation?.features?.handoff?.supported===true,busy:handing,archived:state.selectedArchived,conflict:state.detail?.controlState==='conflict'});
+  const answering=[...state.busy].some(key=>key.startsWith('request:'));
   const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
   publishConnectionSelect({disabled:creating});
   publishWorkspaceControl('new-thread',{ disabled:!!state.status?.loginRecovery || !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels });
@@ -358,9 +359,12 @@ function renderControls() {
   publishWorkspaceControl('thread-search',{ disabled:!connected() });
   publishModelSelectAvailability(!ready || !state.models.length || state.loadingModels,
     !ready || !state.model || !effortsFor(state.model).length || state.loadingModels);
-  const input = $('message-input'); publishMessageInput({disabled:!ready || !own || posting || handing});
+  const input = $('message-input');
   const followUp=followUpAction({active,touch:touchInput()});
-  publishMessageInput({placeholder:!ready ? '连接后继续…' : state.selectedArchived ? '恢复会话后可继续…' : !own ? '正在确认会话…' : active ? (followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…') : '发送消息…'});
+  // Publish the final mode once; avoid transient disabled states while editing.
+  publishMessageInput(newChatOpen?{disabled:!ready||posting,placeholder:'描述你想完成的任务…'}:
+    state.desktopMode?{disabled:posting,placeholder:active?'补充要求…':'发送消息，输入 / 选择技能，@ 引用会话或插件…'}:
+    {disabled:!ready||!own||posting||handing,placeholder:!ready?'连接后继续…':state.selectedArchived?'恢复会话后可继续…':!own?'正在确认会话…':active?(followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…'):'发送消息…'});
   const {buttonView,unavailable}=composerSendView({active,ready,own,posting,handing,stopping,
     loginRecovery:!!state.status?.loginRecovery,desktopMode:state.desktopMode,interrupting:state.busy.has('interrupt'),archived:state.selectedArchived,
     touch:touchInput(),backgroundState:background.state,followUp,attachmentPending:attachments?.pending(),hasAttachments:attachments?.has(),hasAnnotations:annotations?.has(),
@@ -383,7 +387,6 @@ function renderControls() {
     const reason=!ready?'连接恢复后可发送，草稿已保留。':newDraft.phase==='uncertain'?'创建结果未确认，请刷新侧栏核对，避免重复创建。':!newDraft.cwd?'选择一个项目后开始。':creating?'正在创建会话…':'';
     buttonView.send.disabled ||= !featureReady('create')||!newDraft.cwd||newDraft.phase!=='editing';
     buttonView.send.label=creating?'正在创建会话':'发送并开始会话';
-    publishMessageInput({disabled:!ready||posting,placeholder:'描述你想完成的任务…'});
     publishWorkspaceControl('composer-availability',{text:reason,hidden:!reason});
     publishNewChatControls({retryHidden:newDraft.phase!=='uncertain',closeDisabled:creating});
     publishProjectPicker({disabled:!ready||creating||newDraft.phase==='uncertain'});
@@ -396,18 +399,17 @@ function renderControls() {
   const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '正在确认会话的可用入口。';
   setWorkspaceText('composer-hint',state.desktopMode&&!newChatOpen?'使用桌面会话的模型与设置。发送成功仅代表会话已接收，任务结果以原始回复为准。':state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
   setWorkspaceText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
-  syncRequestCards({ready,pending:id=>state.busy.has('request:'+id),controlledThreads:state.status?.controlledThreads});
-  const desktopView:Parameters<typeof publishDesktopControls>[0]={entryHidden:true,entryDisabled:!state.transport||state.busy.size>0||Boolean(handoff&&handoff.state!=='released'),reviewHidden:true};
+  syncRequestCards({ready,pending:id=>state.busy.has('request:'+id),controlledThreads:state.status?.controlledThreads,desktopThreadId:state.desktopMode&&state.detail?.desktop?.canAnswer===true?state.selectedId:null});
+  const desktopView:Parameters<typeof publishDesktopControls>[0]={entryHidden:newChatOpen||own||state.selectedArchived||!state.selectedId||!(state.detail?.accessError||state.detail?.desktop?.error),entryDisabled:!state.transport||state.busy.size>0||Boolean(handoff&&handoff.state!=='released'),reviewHidden:true};
   if(state.desktopMode&&!newChatOpen){
     const desktop=state.detail?.desktop,online=state.transport&&desktop?.available,unconfirmed=desktop?.unconfirmed||desktopSends[state.selectedId!]?.messageId;
-    publishMessageInput({disabled:posting,placeholder:active?'任务执行中，可先输入下一条要求…':'发送消息，输入 / 选择技能，@ 引用会话或插件…'});
     publishWorkspaceControl('takeover',{ hidden:true });
-    buttonView.send.disabled=!online||!desktop?.canSend||!!unconfirmed||posting||attachments?.pending()||(!input.value.trim()&&!annotations?.has()&&!attachments?.has());
+    buttonView.send.disabled=!online||!desktop?.canSend||!!unconfirmed||posting||answering||attachments?.pending()||(!input.value.trim()&&!annotations?.has()&&!attachments?.has());
     buttonView.send.title='发送消息';buttonView.send.label='发送消息';
     buttonView.stop.hidden=!active&&!stopping;buttonView.stop.disabled=!online||state.busy.has('interrupt')||stopping;
-    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，请等待完成；需要回答或确认时请在桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
+    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(answering?'正在提交回答…':posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，可以发送补充要求。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     publishWorkspaceControl('composer-availability',{text:reason,hidden:!reason});
-    desktopView.reviewHidden=!unconfirmed;desktopView.reviewDisabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
+    desktopView.reviewHidden=!unconfirmed||answering;desktopView.reviewDisabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
   }
   publishDesktopControls(desktopView);
   publishSendActions(buttonView);
@@ -829,7 +831,7 @@ async function releaseService() {
     catch (caught) { const e=caught as import('./services/api').ApiError; if (e.status === 409) { const blockers = Array.isArray(e.details) ? e.details.map((b:{threadId:string;reason:string}) => (state.threads.find(t=>t.id===b.threadId)?.name || b.threadId) + '：' + b.reason).join('\n') : e.details ? pretty(e.details) : ''; throw new Error(messageOf(e) + (blockers ? '\n' + blockers : '') + '\n请先结束相关任务，再释放控制。'); } throw e; }
   });
 }
-const respondRequest=createRequestResponder({state,action,api,questionDrafts,document,element:$,sideChat:()=>sideChat,renderRequests,loadStatus});
+const respondRequest=createRequestResponder({state,action,api,questionDrafts,document,element:$,sideChat:()=>sideChat,renderRequests,loadStatus,refresh:refreshSelected});
 
 const createThreadFromDraft=createThreadSubmit({state,draft:newDraft,draftId:newDraftId,access:WEB_ACCESS,createdThreads,
   input:()=>$('message-input'),hasAttachments:()=>attachments!.has(),attachmentsPending:()=>attachments!.pending(),validate:(...args)=>composer!.validateSend(...args),toast,
@@ -903,7 +905,11 @@ function wireEvents() {
     openSession:async(id,prompt)=>{await selectThread(id,{desktop:true});if(prompt&&state.selectedId===id){const previous=$('message-input').value;if(previous&&previous!==prompt){toast('管理会话已有未发送草稿，请先处理草稿，再返回定时任务继续。',true);$('message-input').focus();return;}$('message-input').value=prompt;state.drafts.set(id,$('message-input').value);resizeInput();renderControls();}$('message-input').focus();},
     openThread:id=>selectThread(id),notify:toast});
   installAutomationNavigation(()=>automations!.open());
-  installDesktopControls({enter:()=>selectThread(state.selectedId!,{desktop:true}),
+  installDesktopControls({enter:()=>action('desktop-recover',async()=>{
+      const id=state.selectedId,selection=state.selectionVersion;
+      const detail=await api('/api/desktop/threads/'+encodeURIComponent(id!)+'/recover',{method:'POST'});
+      if(id===state.selectedId&&selection===state.selectionVersion){applyDetail(detail,true);threadAccess.reset();}
+    }),
     review:()=>action('desktop-review',async()=>{const threadId=state.selectedId;await api('/api/desktop/threads/'+encodeURIComponent(threadId!)+'/acknowledge',{method:'POST',body:{messageId:state.detail?.desktop?.unconfirmed||desktopSends[threadId!]?.messageId}});delete desktopSends[threadId!];saveDesktopSends();await refreshSelected();})});
   document.querySelector('.main-panel')!.classList.toggle('desktop-chat',state.desktopMode);
   setInterval(()=>{if(automations!.opened&&!document.hidden)void automations!.refresh();},15000);

@@ -13,7 +13,7 @@ function DesktopButton({kind}:{kind:'entry'|'review'}){
   button.onclick=()=>callbacks[kind==='entry'?'enter':'review']();apply();
   const unsubscribe=controls.subscribe(apply);return()=>{unsubscribe();button.onclick=null;};
  },[callbacks,kind]);
- return callbacks?<button ref={ref} id={'desktop-'+kind} className="text-button" type="button">{kind==='entry'?'通过桌面继续':'已核对会话记录，解锁发送'}</button>:null;
+ return callbacks?<button ref={ref} id={'desktop-'+kind} className="text-button" type="button">{kind==='entry'?'恢复桌面连接':'已核对会话记录，解锁发送'}</button>:null;
 }
 export function DesktopEntry(){return <DesktopButton kind="entry"/>;}
 export function DesktopReview(){return <DesktopButton kind="review"/>;}

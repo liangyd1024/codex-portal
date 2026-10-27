@@ -6,6 +6,8 @@ import pwd
 import socket
 import stat
 import struct
+import subprocess
+import sys
 import time
 import uuid
 
@@ -88,8 +90,12 @@ class DesktopSession:
                     return reply
                 reason = str(reply.get('error', 'unknown'))
                 # A forwarded write may already have run when its reply is lost.
-                code = 'OUTCOME_UNKNOWN' if mutation else 'DESKTOP_UNAVAILABLE'
-                raise DesktopError('桌面请求未获确认：' + reason, code)
+                code = ('DESKTOP_NOT_SENT' if reason in ('no-client-found', 'request-version-mismatch')
+                        else 'OUTCOME_UNKNOWN') if mutation else 'DESKTOP_UNAVAILABLE'
+                error = DesktopError('桌面尚未加载此会话，请点击“恢复桌面连接”。'
+                                     if reason == 'no-client-found' else '桌面请求未获确认：' + reason, code)
+                error.reason = reason
+                raise error
             raise TimeoutError()
         except (OSError, EOFError, TimeoutError) as exc:
             raise DesktopError('桌面响应中断，请核对原始会话记录后再操作。',
@@ -121,12 +127,28 @@ def run(payload):
         raise DesktopError('目标身份不符。', 'DESKTOP_IDENTITY')
     identifier = str(uuid.UUID(payload.get('threadId', '')))
     action = payload.get('action')
-    if action not in ('probe', 'send', 'interrupt'):
+    if action not in ('probe', 'send', 'interrupt', 'recover'):
         raise DesktopError('不支持此桌面操作。', 'INVALID_REQUEST')
     with DesktopSession(home, timeout=45 if action == 'send' else 15) as desktop:
-        owner = desktop.owner(identifier)
+        if action == 'recover':
+            binary = pathlib.Path(globals().get('SERVICE_BINARY', ''))
+            apps = [p for p in binary.parents if p.suffix == '.app']
+            if sys.platform != 'darwin' or not binary.is_absolute() or not apps:
+                raise DesktopError('此目标不支持自动打开桌面，请在目标电脑打开原会话后重试。')
+            # Use the configured application's native navigation, never claim its writer.
+            subprocess.run(['/usr/bin/open', '-a', str(apps[-1]), 'codex://threads/' + identifier],
+                           check=True, timeout=10, capture_output=True)
+            time.sleep(.5)
+        for attempt in range(3 if action == 'recover' else 1):
+            try:
+                owner = desktop.owner(identifier)
+                break
+            except DesktopError as exc:
+                if action != 'recover' or attempt == 2 or (getattr(exc, 'reason', None) != 'no-client-found' and 'no-client-found' not in str(exc)):
+                    raise
+                time.sleep(.25)
         settings = desktop.settings(identifier, owner)
-        if action == 'probe':
+        if action in ('probe', 'recover'):
             return {'available': True, 'threadId': identifier, 'settings': settings, 'threadReferencesSupported': reference_capability(home, identifier)}
         if action == 'interrupt':
             turn_id = str(uuid.UUID(payload.get('turnId', '')))
@@ -182,6 +204,20 @@ def run(payload):
             else:
                 normalized[first_text] = reference_input
         message_id = str(uuid.UUID(payload.get('messageId', '')))
+        if payload.get('steer'):
+            cwd = payload.get('cwd')
+            if not isinstance(cwd, str) or not cwd.startswith('/'):
+                raise DesktopError('无法核对会话目录，请刷新后重试。', 'INVALID_REQUEST')
+            restore = {'id': message_id, 'text': text, 'createdAt': int(time.time() * 1000),
+                       'cwd': cwd, 'context': {'prompt': text,
+                       'turnTrigger': 'send_user_message_async_question' if payload.get('questionReply') else 'submit',
+                       'addedFiles': [], 'fileAttachments': [], 'ideContext': None,
+                       'imageAttachments': [], 'workspaceRoots': [cwd]}}
+            reply = desktop.request('thread-follower-steer-turn', {
+                'conversationId': identifier, 'clientUserMessageId': message_id,
+                'input': normalized, 'restoreMessage': restore
+            }, 1, owner, mutation=True)
+            return {'threadId': identifier, 'messageId': message_id, 'result': reply['result']}
         reply = desktop.request('thread-follower-start-turn', {
             'conversationId': identifier,
             'turnStart': {

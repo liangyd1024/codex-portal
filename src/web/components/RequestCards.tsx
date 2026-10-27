@@ -10,7 +10,7 @@ export interface CardView {
 }
 interface Controls {pending:boolean;unavailable:boolean;feedback:string}
 interface Card extends CardView {key:number;controls:StoreApi<Controls>}
-interface Availability {ready:boolean;pending:(id:string)=>boolean;controlledThreads?:string[]}
+interface Availability {ready:boolean;pending:(id:string)=>boolean;controlledThreads?:string[];desktopThreadId?:string|null}
 const registry=createStore<{cards:Card[]}>(()=>({cards:[]}));let sequence=0;
 function RequestCard({card:c}:{card:Card}){
  const root=useRef<HTMLDivElement>(null),detail=useRef<HTMLDetailsElement>(null);
@@ -45,9 +45,9 @@ export function publishRequestCards(views:CardView[]){
  if(!views.length&&!registry.getState().cards.length)return;
  flushSync(()=>registry.setState({cards:views.map(view=>({...view,key:++sequence,controls:createStore<Controls>(()=>({pending:false,unavailable:false,feedback:''}))}))}));}
 export function clearRequestCards(host:HTMLElement){const cards=registry.getState().cards;if(cards.some(c=>c.host===host))flushSync(()=>registry.setState({cards:cards.filter(c=>c.host!==host)}));}
-export function syncRequestCards({ready,pending,controlledThreads}:Availability){
+export function syncRequestCards({ready,pending,controlledThreads,desktopThreadId}:Availability){
  for(const c of registry.getState().cards){
-  const busy=pending(c.id),viewOnly=c.asyncQuestion&&!controlledThreads?.includes(c.threadId),unavailable=!ready||viewOnly;
+  const busy=pending(c.id),viewOnly=c.asyncQuestion&&!controlledThreads?.includes(c.threadId)&&c.threadId!==desktopThreadId,unavailable=!ready||viewOnly;
   const feedback=busy?'正在提交，请稍候…':viewOnly?'查看模式，请在原操作入口回答。':!ready?'连接恢复后可处理此请求，已填内容会保留。':'';
   const previous=c.controls.getState();
   if(previous.pending!==busy||previous.unavailable!==unavailable||previous.feedback!==feedback)c.controls.setState({pending:busy,unavailable,feedback});

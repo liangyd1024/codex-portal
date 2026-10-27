@@ -9,7 +9,7 @@ function fixture(r){
  const calls=[],pending=[],busy=new Set(),other={id:'other'},state={selectedId:'thread',localRequests:[r,other],status:{instanceId:'old',pendingRequests:[r,other]},detail:{pendingRequests:[r,other]}};
  let side=null;
  const deps={state,action:async(key,run)=>{if(busy.has(key))return;busy.add(key);try{await run();}finally{busy.delete(key);}},api:(path,options)=>{calls.push({path,...options});return new Promise((resolve,reject)=>pending.push({resolve,reject}));},questionDrafts:{clear:q=>calls.push(['clear',q]),set:(q,value)=>calls.push(['draft',q,value])},document:{activeElement:{closest:()=>({dataset:{requestId:requestPath(r)}})},querySelector:()=>({focus:()=>calls.push('side-focus')})},element:()=>({focus:()=>calls.push('main-focus')}),sideChat:()=>side,renderRequests:()=>calls.push('render'),loadStatus:async()=>calls.push('status')};
- return {respond:createRequestResponder(deps),state,calls,pending,busy,other,setSide:value=>side=value};
+ return {deps,respond:createRequestResponder(deps),state,calls,pending,busy,other,setSide:value=>side=value};
 }
 test('opaque keys are encoded; native answer retains unknown fields and duplicate submission is suppressed',async()=>{
  const r={id:7,key:'request /?中文',threadId:'thread'},f=fixture(r),answer={decision:'accept',future:{raw:'原文'}};
@@ -28,4 +28,17 @@ test('failed request preserves drafts and all pending lists for retry',async()=>
 });
 test('numeric and string IDs remain distinct while explicit empty keys retain precedence',()=>{
  assert.notEqual(requestKey({id:1}),requestKey({id:'1'}));assert.equal(requestKey({id:1,key:''}),'');assert.equal(requestPath({id:1,key:''}),'');
+});
+
+test('selected desktop async answers use the desktop route without claiming web ownership',async()=>{
+ const r={id:'q',kind:'asyncQuestion',threadId:'thread',params:{turnId:'turn',itemId:'item'}},f=fixture(r);f.state.desktopMode=true;
+ const work=f.respond(r,{answers:{q:{answers:['中文']}}});assert.equal(f.calls[0].path,'/api/desktop/threads/thread/question-answer');f.pending[0].resolve();await work;
+});
+
+
+test('desktop answer refreshes its receipt after success and never refreshes a changed selection',async()=>{
+ for(const change of [false,true]){
+  const r={id:'q',kind:'asyncQuestion',threadId:'thread',params:{turnId:'turn',itemId:'item'}},f=fixture(r);f.state.desktopMode=true;let refreshes=0;f.deps.refresh=async()=>{refreshes++};
+  const work=f.respond(r,{answers:{}});if(change)f.state.selectedId='other';f.pending[0].resolve();await work;assert.equal(refreshes,change?0:1);
+ }
 });
