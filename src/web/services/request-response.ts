@@ -24,7 +24,8 @@ async function respondRequest(r: Request, answer: Record<string, unknown>) {
   await action('request:' + requestPath(r), async () => {
     const instance=state.status?.instanceId,returnFocus=document.activeElement?.closest<HTMLElement>('.request-card')?.dataset.requestId===requestPath(r);
     const desktop=state.desktopMode&&state.selectedId===r.threadId;
-    if(r.kind==='asyncQuestion')await api((desktop?'/api/desktop/threads/':'/api/threads/')+encodeURIComponent(r.threadId!)+'/question-answer',{method:'POST',body:{...answer,turnId:r.params!.turnId,itemId:r.params!.itemId}});
+    if(r.kind==='desktopQuestion')await api('/api/desktop/threads/'+encodeURIComponent(r.threadId!)+'/question-answer',{method:'POST',body:{...answer,turnId:r.params!.turnId,itemId:r.params!.itemId,requestId:r.id,ownerClientId:r.ownerClientId}});
+    else if(r.kind==='asyncQuestion')await api((desktop?'/api/desktop/threads/':'/api/threads/')+encodeURIComponent(r.threadId!)+'/question-answer',{method:'POST',body:{...answer,turnId:r.params!.turnId,itemId:r.params!.itemId}});
     else await api('/api/requests/' + encodeURIComponent(requestPath(r)) + '/respond',{method:'POST',body:answer});
     questionDrafts.clear(r);if(r.kind==='asyncQuestion')questionDrafts.set(r,{sent:true});
     if(instance!==state.status?.instanceId)return;

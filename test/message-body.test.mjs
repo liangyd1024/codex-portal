@@ -100,3 +100,9 @@ test('Mermaid enhances only complete fences and preserves source verbatim',()=>{
    assert.equal(all(plain,'PRE')[0].textContent,source);assert.equal(all(plain,'BUTTON').length,1);
  }
 });
+
+test('native steering input remains an individual visible message rather than a tool disclosure',()=>{
+ const input={id:'steer',type:'steeringUserMessage',status:'accepted',input:[{type:'text',text:'中文补充原文'}]};
+ const groups=groupTurnItems({status:'inProgress',items:[{id:'tool',type:'commandExecution'},input]});
+ assert.equal(groups[1].type,'message');assert.equal(groups[1].item,input);
+});

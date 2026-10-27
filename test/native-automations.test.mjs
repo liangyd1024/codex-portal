@@ -143,3 +143,54 @@ test('desktop settings validate native catalog, serialize with sends and retain 
  a.pending=true;await assert.rejects(a.updateSettings(data),e=>e.code==='SEND_PENDING');a.pending=false;
  a.call=async()=>{assert.equal(a.pending,true);throw Error('lost reply')};await assert.rejects(a.updateSettings(data),/lost reply/);assert.equal(a.pending,false);assert.equal(m.mutations,0);
 });
+
+function blockingFixture(){
+ const f=fixture(),request={id:7,method:'item/tool/requestUserInput',params:{threadId:id,turnId:tid,itemId:'call-question',questions:[{id:'choice',question:'选择方案',options:[{label:'方案一'}]}]}};
+ const activity={source:'desktop',state:'running',ownerClientId:'owner',activeTurnId:tid,pendingRequests:[request]};
+ f.m.passive=async action=>action==='history'?{data:[{id:tid,status:'inProgress',items:[]}]}:{thread:{id,activity}};
+ f.a.call=async(_s,p)=>{f.calls.push(p);return p.action==='answer'?{resolved:true}:{}};
+ return {...f,activity,request,data:{threadId:id,turnId:tid,itemId:'call-question',requestId:7,ownerClientId:'owner',answers:{choice:{answers:['方案一']}}}};
+}
+test('live desktop blocking requests are displayed and answered through native user-input only',async()=>{
+ const {a,m,calls,data}=blockingFixture();const detail=await a.detail();
+ assert.equal(detail.pendingRequests[0].kind,'desktopQuestion');assert.equal(detail.pendingRequests[0].id,7);
+ await a.answerQuestions(data);await a.answerQuestions(data);
+ assert.deepEqual(calls.filter(c=>c.action!=='probe'),[{action:'answer',...data}]);assert.equal(m.mutations,0);
+});
+test('blocking answers reject stale owners, typed IDs, wrong items, invalid answers and controlled sessions',async()=>{
+ for(const patch of [{requestId:'7'},{ownerClientId:'other'},{itemId:'other'},{answers:{}},{answers:{choice:{answers:['']}}}]){
+  const {a,calls,data}=blockingFixture();await assert.rejects(a.answerQuestions({...data,...patch}));assert.equal(calls.some(c=>c.action==='answer'),false);
+ }
+ const {a,m,data}=blockingFixture();m.controlled.add(id);await assert.rejects(a.answerQuestions(data),/交还/);
+});
+test('blocking answer lost acknowledgement is persisted and never automatically replayed',async()=>{
+ const {a,calls,data}=blockingFixture();const call=a.call;a.call=async(s,p)=>{if(p.action==='answer'){calls.push(p);throw Object.assign(Error('lost'),{code:'OUTCOME_UNKNOWN'});}return call(s,p);};
+ await assert.rejects(a.answerQuestions(data),/lost/);await assert.rejects(a.answerQuestions(data),/上次回答结果未确认/);
+ assert.equal(calls.filter(c=>c.action==='answer').length,1);assert.equal(a.pending,false);
+ assert.equal(Object.values(a.state.questionResponses)[0].status,'unknown');
+});
+test('blocking answer concurrent sends are refused; known non-delivery can be retried',async()=>{
+ const {a,calls,data}=blockingFixture();const call=a.call;let release;
+ a.call=async(s,p)=>p.action==='answer'?new Promise(resolve=>release=resolve):call(s,p);
+ const first=a.answerQuestions(data);while(!release)await new Promise(r=>setImmediate(r));
+ await assert.rejects(a.answerQuestions(data),/确认中/);release({resolved:true});await first;
+ const f=blockingFixture();f.a.call=async(_s,p)=>{if(p.action==='answer')throw Object.assign(Error('not delivered'),{code:'DESKTOP_NOT_SENT'});return {}};
+ await assert.rejects(f.a.answerQuestions(f.data),/not delivered/);assert.deepEqual(f.a.state.questionResponses,{});
+});
+test('native live steering appears verbatim and deduplicates after persistence',async()=>{
+ const {a,m,activity}=blockingFixture();const item={id:'steer',type:'steeringUserMessage',status:'accepted',targetTurnId:tid,clientUserMessageId:mid,input:[{type:'text',text:'中文补充原文'}]};
+ activity.steeringMessages=[item,{...item,id:'other',targetTurnId:'other'}];
+ assert.deepEqual((await a.detail()).turns[0].items,[item]);
+ m.passive=async action=>action==='history'?{data:[{id:tid,status:'inProgress',items:[{id:'persisted',type:'userMessage',clientId:mid,content:item.input}]}]}:{thread:{id,activity}};
+ const d=await a.detail();assert.equal(d.turns[0].items.length,1);assert.equal(d.turns[0].items[0].id,'persisted');
+});
+
+
+test('restart preserves uncertain blocking answers and never replays them',async()=>{
+ const {mkdtempSync,writeFileSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+ const {m,data}=blockingFixture();const directory=mkdtempSync(join(tmpdir(),'portal-question-restart-'));m.titleStore=join(directory,'state');
+ const key=JSON.stringify([data.threadId,data.ownerClientId,data.turnId,data.itemId,data.requestId]);
+ writeFileSync(m.titleStore+'.desktop-'+id+'.json',JSON.stringify({threadId:id,submissions:{},questionResponses:{[key]:{status:'sending'}}}));
+ const restored=new NativeAutomations(m,{threadId:id});let calls=0;restored.call=async()=>{calls++;};
+ await assert.rejects(restored.answerQuestions(data),/上次回答结果未确认/);assert.equal(calls,0);assert.equal(restored.state.questionResponses[key].status,'unknown');
+});

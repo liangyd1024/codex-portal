@@ -13,10 +13,11 @@ spec.loader.exec_module(store)
 
 
 class Client:
-    def __init__(self, status='active', version=11, host='local', fail=False, stale=None, owner=True, source='test-owner'):
+    def __init__(self, status='active', version=11, host='local', fail=False, stale=None, owner=True, source='test-owner', extra=None):
         self.status, self.version, self.host, self.fail = status, version, host, fail
         self.sent, self.buffer, self.closed = [], b'', False
         self.stale, self.owner, self.source = stale, owner, source
+        self.extra = extra or {}
     def settimeout(self, value): pass
     def connect(self, path): pass
     def close(self): self.closed = True
@@ -33,7 +34,7 @@ class Client:
                            params=dict(hostId='local', conversationId='test', change=dict(type='snapshot', conversationState=dict(id='test', threadRuntimeStatus=dict(type=self.stale)))))
                 data = json.dumps(old).encode(); self.buffer += struct.pack('<I', len(data)) + data
             response = dict(type='broadcast', method='thread-stream-state-changed', sourceClientId=self.source, version=self.version,
-                            params=dict(hostId=self.host, conversationId='test', change=dict(type='snapshot', conversationState=dict(id='test', threadRuntimeStatus=dict(type=self.status)))))
+                            params=dict(hostId=self.host, conversationId='test', change=dict(type='snapshot', conversationState=dict(id='test', threadRuntimeStatus=dict(type=self.status), **self.extra))))
         else: return
         data = json.dumps(response).encode(); self.buffer += struct.pack('<I', len(data)) + data
     def recv(self, size):
@@ -100,3 +101,17 @@ class DesktopActivityTest(unittest.TestCase):
         self.assertEqual(store.desktop_active_turn({'turns': [{'turnId': current, 'status': 'inProgress'}]}), current)
         self.assertIsNone(store.desktop_active_turn({'turns': [{'turnId': 'optimistic-id', 'status': 'inProgress'}]}))
         self.assertIsNone(store.desktop_active_turn({'turns': [{'turnId': current, 'status': 'completed'}]}))
+
+    def test_detail_reuses_snapshot_for_questions_and_accepted_steering_only(self):
+        turn = '00000000-0000-0000-0000-000000000002'
+        request = {'id':7,'method':'item/tool/requestUserInput','params':{'threadId':'test','turnId':turn}}
+        accepted = {'id':'s','type':'steeringUserMessage','status':'accepted','input':[{'type':'text','text':'原文'}]}
+        extra = {'requests':[request,{**request,'method':'other'}],
+                 'turns':[{'turnId':turn,'status':'inProgress','items':[accepted,{**accepted,'id':'rejected','status':'rejected'}]}]}
+        client = Client(extra=extra)
+        with patch('socket.socket', return_value=client):
+            detail = store.desktop_activity(['test'], include_requests=True)['test']
+        self.assertEqual(detail['pendingRequests'],[request])
+        self.assertEqual(detail['steeringMessages'],[accepted])
+        self.assertEqual(detail['ownerClientId'],'test-owner')
+        self.assertNotIn('pendingRequests', self.observe(Client(extra=extra))['test'])

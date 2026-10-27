@@ -111,6 +111,64 @@ class DesktopSession:
     def settings(self, thread_id, owner):
         return self.request('thread-follower-read-model-settings', {'conversationId': thread_id}, 1, owner)['result']
 
+    def snapshot(self, thread_id, owner):
+        """Read only the discovered owner's versioned live state; always unfollow."""
+        def following(value):
+            self.send({'type': 'broadcast', 'sourceClientId': self.client_id, 'targetClientIds': [owner],
+                       'version': 1, 'method': 'thread-stream-following-changed',
+                       'params': {'hostId': 'local', 'conversationId': thread_id, 'following': value}})
+        try:
+            following(True)
+            deadline = time.monotonic() + self.timeout
+            while time.monotonic() < deadline:
+                message = self.receive(deadline)
+                params = message.get('params', {})
+                change = params.get('change', {})
+                state = change.get('conversationState', {})
+                if (message.get('type') == 'broadcast' and message.get('method') == 'thread-stream-state-changed'
+                        and message.get('version') == 11 and message.get('sourceClientId') == owner
+                        and params.get('hostId') == 'local' and params.get('conversationId') == thread_id
+                        and change.get('type') == 'snapshot' and state.get('id') == thread_id):
+                    return state
+            raise TimeoutError()
+        except (OSError, EOFError, TimeoutError) as exc:
+            raise DesktopError('无法核对桌面待回答问题，请恢复连接后重试。') from exc
+        finally:
+            try:
+                following(False)
+            except OSError:
+                pass
+
+
+def answer_question(desktop, identifier, owner, payload):
+    if payload.get('ownerClientId') != owner:
+        raise DesktopError('桌面会话归属已变化，请刷新问题后重试。', 'STALE_REQUEST')
+    state = desktop.snapshot(identifier, owner)
+    request_id = payload.get('requestId')
+    request = next((r for r in state.get('requests', [])
+                    if r.get('method') == 'item/tool/requestUserInput'
+                    and type(r.get('id')) is type(request_id) and r.get('id') == request_id
+                    and all(r.get('params', {}).get(key) == payload.get(key)
+                            for key in ('threadId', 'turnId', 'itemId'))), None)
+    if request is None or state.get('threadRuntimeStatus', {}).get('type') != 'active':
+        raise DesktopError('问题已回答或已不可用，请刷新会话。', 'STALE_REQUEST')
+    questions, answers = request['params'].get('questions', []), payload.get('answers')
+    if (not questions or not isinstance(answers, dict) or set(answers) != {q['id'] for q in questions}
+            or any(not isinstance(answers[q['id']], dict)
+                   or not isinstance(answers[q['id']].get('answers'), list)
+                   or len(answers[q['id']]['answers']) != 1
+                   or not isinstance(answers[q['id']]['answers'][0], str)
+                   or not answers[q['id']]['answers'][0].strip()
+                   or len(answers[q['id']]['answers'][0]) > 100000 for q in questions)):
+        raise DesktopError('请回答所有问题。', 'INVALID_REQUEST')
+    response = {'answers': {q['id']: {'answers': answers[q['id']]['answers']} for q in questions}}
+    reply = desktop.request('thread-follower-submit-user-input', {
+        'conversationId': identifier, 'requestId': request_id, 'response': response
+    }, 1, owner, mutation=True)
+    if reply.get('result', {}).get('ok') is not True:
+        raise DesktopError('桌面回答回执未确认，请在桌面核对问题。', 'OUTCOME_UNKNOWN')
+    return {'resolved': True}
+
 
 def reference_capability(home, identifier):
     """Read the same native capability checkpoint used by the desktop composer."""
@@ -127,7 +185,7 @@ def run(payload):
         raise DesktopError('目标身份不符。', 'DESKTOP_IDENTITY')
     identifier = str(uuid.UUID(payload.get('threadId', '')))
     action = payload.get('action')
-    if action not in ('probe', 'send', 'interrupt', 'recover', 'settings'):
+    if action not in ('probe', 'send', 'interrupt', 'recover', 'settings', 'answer'):
         raise DesktopError('不支持此桌面操作。', 'INVALID_REQUEST')
     with DesktopSession(home, timeout=45 if action == 'send' else 15) as desktop:
         if action == 'recover':
@@ -147,6 +205,8 @@ def run(payload):
                 if action != 'recover' or attempt == 2 or (getattr(exc, 'reason', None) != 'no-client-found' and 'no-client-found' not in str(exc)):
                     raise
                 time.sleep(.25)
+        if action == 'answer':
+            return answer_question(desktop, identifier, owner, payload)
         settings = desktop.settings(identifier, owner)
         if action in ('probe', 'recover'):
             return {'available': True, 'threadId': identifier, 'settings': settings, 'threadReferencesSupported': reference_capability(home, identifier),

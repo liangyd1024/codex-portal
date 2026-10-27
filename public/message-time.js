@@ -2,7 +2,7 @@ import {groupTurnItems} from './message-body.js';
 
 // Snapshot item times are milliseconds; turn times are Unix seconds.
 export function userMessageTime(item) {
-  const value = item.createdAtMs;
+  const value = item.createdAtMs ?? (item.type==='steeringUserMessage'?item.restoreMessage?.createdAt:undefined);
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;

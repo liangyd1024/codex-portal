@@ -42,3 +42,11 @@ test('desktop answer refreshes its receipt after success and never refreshes a c
   const work=f.respond(r,{answers:{}});if(change)f.state.selectedId='other';f.pending[0].resolve();await work;assert.equal(refreshes,change?0:1);
  }
 });
+
+test('desktop blocking answers preserve native numeric IDs and owner without using generic RPC or async reply',async()=>{
+ const r={id:0,key:'desktop-key',kind:'desktopQuestion',threadId:'thread',ownerClientId:'owner',params:{turnId:'turn',itemId:'item'}},f=fixture(r);f.state.desktopMode=true;
+ const answer={answers:{choice:{answers:['中文回答']}},requestId:'wrong',ownerClientId:'wrong'};
+ const work=f.respond(r,answer);assert.equal(f.calls[0].path,'/api/desktop/threads/thread/question-answer');
+ assert.deepEqual(f.calls[0].body,{...answer,turnId:'turn',itemId:'item',requestId:0,ownerClientId:'owner'});f.pending[0].resolve();await work;
+ assert.equal(f.calls.some(c=>Array.isArray(c)&&c[0]==='draft'),false);
+});

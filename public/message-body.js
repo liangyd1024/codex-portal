@@ -9,7 +9,7 @@ export function groupTurnItems(turn) {
   const hasAnswer = items.some(i => i.type === 'agentMessage' && i.phase === 'final_answer' && i.text?.trim());
   const groups = [];
   for (const [index,item] of items.entries()) {
-    const process = !(item.type === 'imageGeneration' && (item.result || item.imageRef)) && !['userMessage','goalMessage','agentMessage','plan','error'].includes(item.type) ||
+    const process = !(item.type === 'imageGeneration' && (item.result || item.imageRef)) && !['userMessage','steeringUserMessage','goalMessage','agentMessage','plan','error'].includes(item.type) ||
       (finished && hasAnswer && item.type === 'agentMessage' && item.phase === 'commentary');
     if (!process) { groups.push({type:'message',item}); continue; }
     let group = groups.at(-1);

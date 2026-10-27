@@ -24,6 +24,17 @@ export function asyncQuestions(turns,threadId) {
 export function replyText(questions,answers) {
   return '<send_user_message_question_reply>\n'+JSON.stringify(questions.map(q=>({questionItemId:q.id,question:q.question,answer:answers[q.id].answers[0].trim()})))+'\n</send_user_message_question_reply>';
 }
+// Desktop blocking questions are live RPC requests, not persisted message items.
+export function desktopQuestions(activity,threadId) {
+  if(activity?.state!=='running'||typeof activity.ownerClientId!=='string')return [];
+  return (activity.pendingRequests||[]).flatMap(request=>{
+    const p=request.params;
+    if(request.method!=='item/tool/requestUserInput'||p?.threadId!==threadId||p.turnId!==activity.activeTurnId||typeof p.itemId!=='string'||!Array.isArray(p.questions)||!p.questions.length||
+      !(typeof request.id==='string'||Number.isSafeInteger(request.id))||p.questions.some(q=>typeof q?.id!=='string'||typeof q.question!=='string'))return [];
+    const key='desktop:'+JSON.stringify([threadId,activity.ownerClientId,p.turnId,p.itemId,request.id]);
+    return [{...request,key,kind:'desktopQuestion',threadId,ownerClientId:activity.ownerClientId}];
+  });
+}
 export class QuestionDrafts {
   constructor(storage,host,onError=()=>{}){this.storage=storage;this.key='rcm.questions.'+host;this.onError=onError;try{const saved=JSON.parse(storage.getItem(this.key)||'{}');this.values=saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:{};}catch{this.values={};}}
   keyFor(r){return JSON.stringify([r.threadId,r.key??r.id,r.kind==='asyncQuestion'?[r.params.turnId,r.params.itemId]:r.params]);}

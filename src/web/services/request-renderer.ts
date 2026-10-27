@@ -42,7 +42,7 @@ function renderRequests() {
     const title=question?'需要你的回答':/commandExecution/i.test(method)?'命令执行审批':/fileChange/i.test(method)?'文件修改审批':/requestPermissions/i.test(method)?'权限请求':knownApproval?'操作审批':'工具请求待处理';
     const target=threadId&&!question?(currentThread()?.id===threadId?currentThread():state.threads.find(t=>t.id===threadId)):null;
     const rerender=()=>{state.requestSignature='';renderRequests();};
-    views.push({host:sideChat()?.id&&threadId===sideChat()?.id?sideChat()!.requestsHost:$('conversation-requests'),id:requestPath(r),threadId:threadId||'',asyncQuestion:r.kind==='asyncQuestion',title,
+    views.push({host:sideChat()?.id&&threadId===sideChat()?.id?sideChat()!.requestsHost:$('conversation-requests'),id:requestPath(r),threadId:threadId||'',asyncQuestion:r.kind==='asyncQuestion'||r.kind==='desktopQuestion',title,
       origin:threadId&&!question?'会话：'+(target?threadName(target):threadId):undefined,reason:p.reason?String(p.reason):undefined,command:p.command?String(p.command):undefined,cwd:p.cwd?String(p.cwd):undefined,changes:Array.isArray(p.changes)?p.changes.map(c=>({path:c.path==null?'':String(c.path)})):undefined,
       knownApproval,availableDecisions:p.availableDecisions,detail:pretty({method,params:p}),respond:answer=>respondRequest(r,answer),previous:saved.get(requestPath(r)),
       question:question?{request:r,options:{drafts:questionDrafts,submit:answer=>respondRequest(r,answer),rerender},skipped:!!questionDrafts.get(r).skipped,restore:()=>{questionDrafts.set(r,{skipped:false,collapsed:false});rerender();}}:undefined});

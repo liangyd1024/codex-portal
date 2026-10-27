@@ -212,3 +212,40 @@ class DesktopSettingsTest(unittest.TestCase):
         self.assertEqual(params['condition'], {'ifModelEquals':'old','ifEffortEquals':None})
         self.assertEqual(params['threadSettings'], {'model':'next','effort':'high'})
         self.assertNotIn('activeTurnId', params)
+
+class DesktopBlockingQuestionTest(unittest.TestCase):
+    def test_live_request_validation_and_native_response(self):
+        identifier = '00000000-0000-0000-0000-000000000001'
+        payload = {'threadId': identifier, 'turnId': 'turn', 'itemId': 'call', 'requestId': 0,
+                   'ownerClientId': 'owner', 'answers': {'q': {'answers': ['中文答案']}}}
+        calls = []
+        class Fake:
+            def snapshot(self, *_):
+                return {'threadRuntimeStatus': {'type':'active'}, 'requests': [
+                    {'id':0,'method':'item/tool/requestUserInput','params':{
+                        'threadId':identifier,'turnId':'turn','itemId':'call','questions':[{'id':'q'}]}}]}
+            def request(self, *args, **kwargs):
+                calls.append((args, kwargs)); return {'result': {'ok': True}}
+        for patch_data in [{'ownerClientId':'other'}, {'requestId':'0'}, {'turnId':'old'}, {'itemId':'old'},
+                           {'answers':{}}, {'answers':{'q':{'answers':['']}}}]:
+            with self.assertRaises(session.DesktopError):
+                session.answer_question(Fake(), identifier, 'owner', {**payload, **patch_data})
+        self.assertEqual(calls, [])
+        self.assertEqual(session.answer_question(Fake(), identifier, 'owner', payload), {'resolved':True})
+        args, kwargs = calls[0]
+        self.assertEqual(args, ('thread-follower-submit-user-input', {
+            'conversationId':identifier,'requestId':0,'response':{'answers':payload['answers']}},1,'owner'))
+        self.assertTrue(kwargs['mutation'])
+
+    def test_snapshot_only_accepts_current_owner_version_and_unfollows_on_failure(self):
+        client = session.DesktopSession('/unused', timeout=.1);sent=[]
+        client.send=lambda message:sent.append(message)
+        base={'type':'broadcast','method':'thread-stream-state-changed','version':11,'sourceClientId':'owner',
+              'params':{'hostId':'local','conversationId':'thread','change':{'type':'snapshot','conversationState':{'id':'thread','requests':[]}}}}
+        replies=iter([{**base,'sourceClientId':'old'},{**base,'version':10},base])
+        client.receive=lambda _:next(replies)
+        self.assertEqual(client.snapshot('thread','owner')['requests'],[])
+        self.assertEqual([m['params']['following'] for m in sent],[True,False])
+        client.receive=lambda _:(_ for _ in ()).throw(EOFError())
+        with self.assertRaises(session.DesktopError):client.snapshot('thread','owner')
+        self.assertFalse(sent[-1]['params']['following'])

@@ -48,7 +48,7 @@ class SidebarModelTest(unittest.TestCase):
             probe.assert_not_called()
             self.assertNotIn('activity', first['thread'])
             later = store.read_detail({'threadId': 'chat'})
-            probe.assert_called_once_with(['chat'])
+            probe.assert_called_once_with(['chat'], include_requests=True)
             self.assertEqual(later['thread']['activity']['state'], 'running')
 
     def test_deferred_content_does_not_probe_desktop_and_activity_keeps_account_scope(self):

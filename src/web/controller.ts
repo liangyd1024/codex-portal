@@ -305,7 +305,7 @@ function renderStatus() {
   if (Array.isArray(s.pendingRequests)) {
     const keys = new Set(s.pendingRequests.map(requestKey));
     state.localRequests = state.localRequests.filter(r => keys.has(requestKey(r)));
-    if (state.detail) state.detail.pendingRequests = (state.detail.pendingRequests || []).filter(r => keys.has(requestKey(r)));
+    if (state.detail) state.detail.pendingRequests = (state.detail.pendingRequests || []).filter(r => state.desktopMode&&r.kind==='desktopQuestion'||keys.has(requestKey(r)));
   }
   const variant = connected() && state.transport ? 'connected' : ['connecting','reconnecting'].includes(conn) ? 'connecting' : conn === 'error' || conn === 'failed' ? 'error' : '';
   const label = connected() && !state.transport ? '实时连接中断' : stages[conn] || conn;
@@ -410,7 +410,7 @@ function renderControls() {
     buttonView.send.title='发送消息';buttonView.send.label='发送消息';
     buttonView.stop.hidden=!active&&!stopping;buttonView.stop.disabled=!online||desktop?.canStop!==true||state.busy.has('interrupt')||stopping;
     if(active&&desktop?.canStop!==true)buttonView.stop.title='当前轮次尚未确认，请刷新后重试。';
-    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(answering?'正在提交回答…':posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':active?'桌面正在执行，可以发送补充要求。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
+    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(answering?'正在提交回答…':posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':requests().some(r=>r.threadId===state.selectedId&&r.kind==='desktopQuestion')?'请先回答上方问题。补充消息会等待当前轮次处理。':active?'桌面正在执行，可以发送补充要求。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     publishWorkspaceControl('composer-availability',{text:reason,hidden:!reason});
     desktopView.reviewHidden=!unconfirmed||answering;desktopView.reviewDisabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
   }
@@ -489,8 +489,8 @@ function renderItem(item:NativeItem,{threadId=state.selectedId,side=false,refres
     if(/^data:image\/(png|jpeg|webp|gif);base64,/.test(path))return imageCard(path,label||'回复图片');
     return null;
   }});
-  if (item.type === 'userMessage' || item.type === 'goalMessage') {
-    const m=el('div','message user'),bubble=el('div','user-bubble'),content=item.type==='goalMessage'?{text:item.objective,images:[]}:userMessageContent(item.content);
+  if (item.type === 'userMessage' || item.type === 'goalMessage' || item.type === 'steeringUserMessage') {
+    const m=el('div','message user'),bubble=el('div','user-bubble'),content=item.type==='goalMessage'?{text:item.objective,images:[]}:userMessageContent(item.type==='steeringUserMessage'?item.input:item.content);
     if(item.type==='goalMessage'){m.setAttribute('aria-label','目标');bubble.append(el('div','goal-message-label','目标'));}
     if(content.text)bubble.append(el('div','user-message-text',content.text));
     for(const part of content.images){
@@ -498,6 +498,7 @@ function renderItem(item:NativeItem,{threadId=state.selectedId,side=false,refres
       bubble.append(imageCard(src,'图片附件 '+(part.index+1)));
     }
     m.append(bubble);
+    if(item.type==='steeringUserMessage')m.append(el('div','user-message-time',item.status==='accepted'?'桌面已接收，等待当前轮次处理。':'补充消息状态：'+String(item.status||'未确认')));
     const sent = userMessageTime(item);
     if (sent) {
       const time = el('time','user-message-time',sent.label);

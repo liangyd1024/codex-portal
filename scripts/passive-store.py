@@ -91,8 +91,7 @@ def archived_flag(payload):
     raise ValueError('archived 必须是布尔值。')
 
 
-def desktop_active_turn(state):
-    """Extract a unique native turn ID from the owner's versioned snapshot."""
+def desktop_turns(state):
     history = state.get('turnHistory', {})
     if history.get('kind') == 'canonical':
         data = history.get('history', {})
@@ -102,6 +101,12 @@ def desktop_active_turn(state):
                  for island in data.get('islands', []) for entry in island.get('entries', [])]
     else:
         turns = state.get('turns', [])
+    return [turn for turn in turns if isinstance(turn, dict)]
+
+
+def desktop_active_turn(state):
+    """Extract a unique native turn ID from the owner's versioned snapshot."""
+    turns = desktop_turns(state)
     identifiers = {turn.get('turnId') or turn.get('id') for turn in turns
                    if isinstance(turn, dict) and turn.get('status') == 'inProgress'}
     identifiers = {identifier for identifier in identifiers if isinstance(identifier, str)
@@ -109,7 +114,7 @@ def desktop_active_turn(state):
     return next(iter(identifiers)) if len(identifiers) == 1 else None
 
 
-def desktop_activity(identifiers):
+def desktop_activity(identifiers, include_requests=False):
     """Observe existing desktop owners briefly; never resume or claim a thread.
 
     Only a versioned live snapshot is evidence. Missing owners, old versions and
@@ -221,6 +226,15 @@ def desktop_activity(identifiers):
                 result[identifier] = {'source': 'desktop', 'state': 'running' if status == 'active' else 'idle', 'observedAt': int(time.time() * 1000)}
                 if status == 'active':
                     result[identifier]['activeTurnId'] = desktop_active_turn(state)
+                if include_requests:
+                    result[identifier]['ownerClientId'] = owners[identifier]
+                    result[identifier]['pendingRequests'] = [request for request in state.get('requests', [])
+                        if isinstance(request, dict) and request.get('method') == 'item/tool/requestUserInput'
+                        and request.get('params', {}).get('threadId') == identifier]
+                    result[identifier]['steeringMessages'] = [item for turn in desktop_turns(state)
+                        if turn.get('turnId', turn.get('id')) == result[identifier].get('activeTurnId')
+                        for item in turn.get('items', []) if item.get('type') == 'steeringUserMessage'
+                        and item.get('status') == 'accepted']
                 following(identifier, False)
     except (OSError, EOFError, ValueError, KeyError, TypeError, AttributeError):
         pass
@@ -382,7 +396,7 @@ def read_detail(payload):
         if row is None:
             raise ValueError('未找到会话：' + identifier)
         thread = normalized_thread(row)
-        activity = desktop_activity([identifier]) if payload.get('includeActivity', True) else {}
+        activity = desktop_activity([identifier], include_requests=True) if payload.get('includeActivity', True) else {}
         if identifier in activity:
             thread['activity'] = activity[identifier]
         return {'thread': thread, 'historySource': 'snapshot'}
