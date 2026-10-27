@@ -13,7 +13,7 @@ function applyDetail(data:SelectionDetail, resetModels = false) {
   }
   state.detail = {...data, turns:data.turns || data.thread?.turns || []};
   state.historyCursor = data.nextCursor || data.historyCursor || null; state.historyError = '';
-  if (resetModels) renderModels(true); renderThread(); renderRequests(); if(!data.recovering)saveDetailSoon();
+  if (resetModels||state.desktopMode) renderModels(true); renderThread(); renderRequests(); if(!data.recovering)saveDetailSoon();
 }
 async function selectThread(id:string,options:{desktop?:boolean;notification?:boolean}={}) {
   if(state.busy.has('create'))return;

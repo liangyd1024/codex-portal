@@ -4,7 +4,7 @@ import type {Response} from '../types';
 import {body,json} from '../protocol';
 import {createDesktopService} from '../services/desktop';
 
-export const matchDesktopRoute=(path:string)=>path.match(/^\/api\/desktop\/threads\/([0-9a-f-]{36})(?:\/(history|message|interrupt|acknowledge|recover|question-answer))?$/i);
+export const matchDesktopRoute=(path:string)=>path.match(/^\/api\/desktop\/threads\/([0-9a-f-]{36})(?:\/(history|message|interrupt|acknowledge|recover|question-answer|settings))?$/i);
 type Match=ReturnType<typeof matchDesktopRoute>;
 type Route=(url:URL,data:Awaited<ReturnType<typeof body>>,res:Response)=>Promise<void>;
 export function createDesktopRoutes(manager:Manager,automations:NativeAutomations,sessionFor:(id:string)=>NativeAutomations,observe?:(id:string,turns:any[])=>void) {
@@ -33,7 +33,7 @@ export function createDesktopRoutes(manager:Manager,automations:NativeAutomation
    if(!match)return;
    const session=service.session(match[1]);
    const action=match[2];
-   if(action==='message'||action==='interrupt'||action==='acknowledge'||action==='recover'||action==='question-answer')return async(_url,data,res)=>json(res,200,await session[action](data));
+   if(action==='message'||action==='interrupt'||action==='acknowledge'||action==='recover'||action==='question-answer'||action==='settings')return async(_url,data,res)=>json(res,200,await session[action](data));
   },
   automationWrite:(path:string)=>writes.get(path),
  };

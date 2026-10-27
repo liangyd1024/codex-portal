@@ -51,3 +51,11 @@ test('model aliases and mixed effort entries retain native fields and choose onl
 });
 
 function runController(code,context){return vm.runInContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,context);}
+
+test('desktop models always reflect owner settings, including unknown models and native default effort',()=>{
+ const state={models:[{id:'web-default',isDefault:true,supportedReasoningEfforts:['low']}],model:'web-default',effort:'low',loadingModels:false},options=[];
+ let native={model:'desktop-only',reasoningEffort:null};
+ const c=createModelSelection({state,effortNames:{},newChatOpen:()=>false,currentThread:()=>({model:'stale'}),nativeSettings:()=>native,element:id=>({id}),renderSelectOptions:(node,entries,value)=>options.push({node,entries,value}),renderControls(){}});
+ c.renderModels(true);assert.equal(state.model,'desktop-only');assert.equal(state.effort,'');assert.equal(options[0].value,'desktop-only');assert.equal(options[1].entries[0].label,'桌面默认');
+ native={model:'web-default',reasoningEffort:'low'};c.renderModels();assert.equal(state.model,'web-default');assert.equal(state.effort,'low');
+});

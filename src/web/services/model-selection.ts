@@ -1,23 +1,27 @@
 export interface Model {hidden?:unknown;id:string;model?:string;displayName?:string;description?:string;isDefault?:boolean;defaultReasoningEffort?:string;supportedReasoningEfforts?:(string|{reasoningEffort?:string;effort?:string;description?:string;[field:string]:unknown})[];[field:string]:unknown}
 interface EffortOption {value:string;label:string;description:string}
-interface Dependencies {state:{models:Model[];model:string;effort:string;loadingModels:boolean};effortNames:Record<string,string>;newChatOpen:()=>boolean;currentThread:()=>{model?:string;reasoningEffort?:string}|null|undefined;element:(id:'model-select'|'effort-select')=>HTMLSelectElement;renderSelectOptions:(select:HTMLSelectElement,options:{value:string;label:string;title?:string}[],value:string)=>void;renderControls:()=>void}
-export function createModelSelection({state,effortNames,newChatOpen,currentThread,element:$,renderSelectOptions,renderControls}:Dependencies){
+interface Dependencies {nativeSettings?:()=>{model?:string;reasoningEffort?:string|null}|null;state:{models:Model[];model:string;effort:string;loadingModels:boolean};effortNames:Record<string,string>;newChatOpen:()=>boolean;currentThread:()=>{model?:string;reasoningEffort?:string}|null|undefined;element:(id:'model-select'|'effort-select')=>HTMLSelectElement;renderSelectOptions:(select:HTMLSelectElement,options:{value:string;label:string;title?:string}[],value:string)=>void;renderControls:()=>void}
+export function createModelSelection({state,effortNames,newChatOpen,currentThread,element:$,renderSelectOptions,renderControls,nativeSettings}:Dependencies){
 function modelId(m:Model) { return m.model || m.id; }
 function modelFor(id:string) { return state.models.find(m => modelId(m) === id || m.id === id); }
 function effortsFor(id:string):EffortOption[] {
   const m = modelFor(id); return (m?.supportedReasoningEfforts || []).map(e => typeof e === 'string' ? {value:e,label:effortNames[e] || e,description:''} : {value:e.reasoningEffort || e.effort,label:effortNames[(e.reasoningEffort || e.effort)!] || e.reasoningEffort || e.effort,description:e.description || ''}).filter(e => e.value) as EffortOption[];
 }
 function defaultEffort(id:string) { const m = modelFor(id), opts = effortsFor(id); return opts.some(e => e.value === m?.defaultReasoningEffort) ? m!.defaultReasoningEffort! : opts[0]?.value || ''; }
-function fillModels(select:HTMLSelectElement,selected:string) {
+function fillModels(select:HTMLSelectElement,selected:string,preserve=false) {
   const options=state.models.length?state.models.map(m=>({value:modelId(m),label:m.displayName||modelId(m),title:m.description||''})):[{value:'',label:state.loadingModels?'正在读取模型…':'等待模型目录'}];
-  const value=state.models.some(m=>modelId(m)===selected)?selected:state.models.length?modelId(state.models.find(m=>m.isDefault)||state.models[0]):'';
+  if(preserve&&!options.some(option=>option.value===selected))options.unshift({value:selected,label:selected?selected+'（当前桌面模型）':'正在读取桌面模型…',title:''});
+  const value=preserve?selected:state.models.some(m=>modelId(m)===selected)?selected:state.models.length?modelId(state.models.find(m=>m.isDefault)||state.models[0]):'';
   renderSelectOptions(select,options,value);
 }
-function fillEfforts(select:HTMLSelectElement,model:string,effort:string) {
+function fillEfforts(select:HTMLSelectElement,model:string,effort:string,preserve=false) {
   const opts=effortsFor(model);
+  if(preserve&&!opts.some(e=>e.value===effort))opts.unshift({value:effort,label:effortNames[effort]||effort||'桌面默认',description:''});
   renderSelectOptions(select,opts.length?opts.map(e=>({value:e.value,label:e.label,title:e.description})):[{value:'',label:'无可用档位'}],opts.some(e=>e.value===effort)?effort:defaultEffort(model));
 }
 function renderModels(preferThread = false) {
+  const native=nativeSettings?.();
+  if(native){state.model=native.model||'';state.effort=native.reasoningEffort||'';fillModels($('model-select'),state.model,true);fillEfforts($('effort-select'),state.model,state.effort,true);renderControls();return;}
   const t = currentThread();
   if (preferThread && !newChatOpen() && t?.model) state.model = modelFor(t.model) ? modelId(modelFor(t.model)!) : t.model;
   if (preferThread && !newChatOpen() && t?.reasoningEffort) state.effort = t.reasoningEffort;

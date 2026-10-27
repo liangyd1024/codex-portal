@@ -18,6 +18,7 @@ import {createActionRunner} from './services/action-runner';
 import {createRequestResponder,requestKey,requestPath} from './services/request-response';
 import {createThreadSelection} from './services/thread-selection';
 import {createSidebarReader} from './services/sidebar-reader';
+import {createDesktopSettings} from './services/desktop-settings';
 import {createModelSelection} from './services/model-selection';
 import {createLiveTurns} from './services/live-turns';
 import {createEventHandler} from './services/events';
@@ -346,7 +347,7 @@ function renderControls() {
   handoffControls!.render({id:newChatOpen||state.desktopMode?null:state.selectedId,context:targetHost+':'+state.selectedId+':'+state.selectionVersion,running:active,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId!)),handoff,connected:ready,
     supported:state.status?.service?.protocolValidation?.features?.handoff?.supported===true,busy:handing,archived:state.selectedArchived,conflict:state.detail?.controlState==='conflict'});
   const answering=[...state.busy].some(key=>key.startsWith('request:'));
-  const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
+  const posting = state.busy.has('message')||state.busy.has('create')||state.busy.has('desktop-settings'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
   publishConnectionSelect({disabled:creating});
   publishWorkspaceControl('new-thread',{ disabled:!!state.status?.loginRecovery || !ready || !featureReady('create') || creating || !state.models.length || state.loadingModels });
   setWelcomeDisabled(connectionPending() || state.busy.has('connect') || state.busy.has('disconnect') || (connected() && (!ready || !state.models.length||!featureReady('create'))));
@@ -357,8 +358,9 @@ function renderControls() {
     releaseReason:!ready ? '连接恢复后可检查目标服务。' : !featureReady('release') ? '当前引擎不支持从此入口停止服务。' : state.busy.has('release') ? '正在检查维护条件…' : '目标服务未运行。'});
   publishWorkspaceControl('refresh-projects',{ disabled:!ready || state.refreshing }); publishWorkspaceControl('refresh-all',{ disabled:state.refreshing || state.busy.has('refresh') });
   publishWorkspaceControl('thread-search',{ disabled:!connected() });
-  publishModelSelectAvailability(!ready || !state.models.length || state.loadingModels,
-    !ready || !state.model || !effortsFor(state.model).length || state.loadingModels);
+  const desktopSettingsUnavailable=state.desktopMode&&!newChatOpen&&(!inputReady()||!state.detail?.desktop?.settings?.model||!!state.detail?.desktop?.unconfirmed||state.busy.size>0);
+  publishModelSelectAvailability(desktopSettingsUnavailable || !ready || !state.models.length || state.loadingModels,
+    desktopSettingsUnavailable || !ready || !state.model || !effortsFor(state.model).length || state.loadingModels);
   const input = $('message-input');
   const followUp=followUpAction({active,touch:touchInput()});
   // Publish the final mode once; avoid transient disabled states while editing.
@@ -394,11 +396,11 @@ function renderControls() {
     publishWorkspaceLabel('thread-title',{hidden:false});setWorkspaceText('thread-title','新会话');
   }
   projectFolders?.sync();
-  setWorkspaceText('composer-model-label',(modelFor(state.model)?.displayName || state.model || '模型')+' · '+(effortNames[state.effort] || state.effort || '档位'));
+  setWorkspaceText('composer-model-label',(modelFor(state.model)?.displayName || state.model || '模型')+' · '+(effortNames[state.effort] || state.effort || (state.desktopMode?'桌面默认':'档位')));
   composer?.render(); attachments?.render();
   const draft = own ? active ? '发送补充要求不会更改当前模型。模型与档位在下一轮生效。' : '模型与档位来自目标机器。更改在下一轮生效。' : '正在确认会话的可用入口。';
-  setWorkspaceText('composer-hint',state.desktopMode&&!newChatOpen?'使用桌面会话的模型与设置。发送成功仅代表会话已接收，任务结果以原始回复为准。':state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
-  setWorkspaceText('model-selection-note',currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
+  setWorkspaceText('composer-hint',state.desktopMode&&!newChatOpen?(state.busy.has('desktop-settings')?'正在更新桌面模型设置…':'由桌面执行。模型与思考档位用于下一轮，目标请在桌面设置。'):state.loadingModels && !state.models.length ? '正在读取目标机器模型目录…' : draft);
+  setWorkspaceText('model-selection-note',state.desktopMode&&!newChatOpen?(state.busy.has('desktop-settings')?'正在更新桌面设置…':'由桌面执行 · 下一轮生效'):currentThread()?.model ? '下一轮模型与思考档位' : '下一轮模型与思考档位 · 目标机器未提供当前模型');
   syncRequestCards({ready,pending:id=>state.busy.has('request:'+id),controlledThreads:state.status?.controlledThreads,desktopThreadId:state.desktopMode&&state.detail?.desktop?.canAnswer===true?state.selectedId:null});
   const desktopView:Parameters<typeof publishDesktopControls>[0]={entryHidden:newChatOpen||own||state.selectedArchived||!state.selectedId||!(state.detail?.accessError||state.detail?.desktop?.error),entryDisabled:!state.transport||state.busy.size>0||Boolean(handoff&&handoff.state!=='released'),reviewHidden:true};
   if(state.desktopMode&&!newChatOpen){
@@ -439,7 +441,12 @@ function renderThreads() {
   publishWorkspaceControl('more-threads',{ disabled:state.loadingThreads });
   setWorkspaceControlAction('more-threads',()=>loadThreads(Boolean(state.threadCursor)));
 }
-const {modelId,modelFor,effortsFor,defaultEffort,fillModels,fillEfforts,renderModels}=createModelSelection({state,effortNames,newChatOpen:()=>newChatOpen,currentThread,element:$,renderSelectOptions,renderControls});
+const {modelId,modelFor,effortsFor,defaultEffort,fillModels,fillEfforts,renderModels}=createModelSelection({state,effortNames,newChatOpen:()=>newChatOpen,currentThread,nativeSettings:()=>state.desktopMode&&!newChatOpen?(state.detail?.desktop?.settings||{}):null,element:$,renderSelectOptions,renderControls});
+const updateDesktopSettings=createDesktopSettings({busy:state.busy,
+  context:()=>({key:JSON.stringify([targetHost,state.status?.instanceId,state.status?.connection?.connectedAt,state.selectedId,state.selectionVersion,state.desktopMode]),id:state.selectedId,available:state.desktopMode&&inputReady(),settings:state.detail?.desktop?.settings}),
+  post:(path,body)=>api(path,{method:'POST',body}),apply:settings=>{if(state.detail?.desktop)state.detail.desktop.settings=settings;},
+  refresh:()=>refreshSelected(),render:sync=>sync?renderModels(true):renderControls(),notify:toast});
+
 
 function toolDetails(item:NativeItem, title:string, iconName = 'terminal') {
   const d = el('details','tool-block'); d.dataset.itemId = item.id || title; d.dataset.running = String(['inProgress','in_progress','running'].includes(typeOf(item.status)));
@@ -670,10 +677,10 @@ function renderThread() {
   if (!state.selectedId) { renderControls(); return; }
   setWorkspaceText('thread-title',t ? threadName(t) : '正在读取会话…'); publishWorkspaceLabel('thread-title',{title:$('thread-title').textContent||''}); setWorkspaceText('thread-path',t?.cwd ? '目标机器 · ' + t.cwd : '');
   const own = controlled(), control = typeOf(state.detail?.controlState), busy = ['busy','occupied','active_writer','conflict'].includes(control);
-  let badgeText=own ? '已取得控制' : busy ? '已被占用' : '查看模式';
+  let badgeText=own ? '由网页执行' : busy ? '已被占用' : '查看模式';
   let noteText=own ? '此会话由当前工作台控制。发送消息会在目标机器执行。' : busy ? '此会话由其他入口管理，当前为查看模式。' : '正在确认会话的可用入口。';
   if(snapshotHistory())noteText=(own ? '历史来自快照。实时状态由目标机器控制连接确认。' : '历史来自快照，正在确认运行状态。')+(busy?' '+noteText:'');
-  if(state.desktopMode){badgeText='桌面托管';noteText='消息由 Codex 桌面执行，沿用该会话的原生工具。';}
+  if(state.desktopMode){badgeText='由桌面执行';noteText='网页操作原桌面会话。模型设置用于下一轮，目标请在桌面设置。';}
   publishWorkspaceLabel('control-badge',{className:'control-badge'+(own?' controlled':busy?' busy':''),text:badgeText});
   publishWorkspaceLabel('control-note',{className:'control-note',text:noteText});
   renderMessages(); renderControls(); resizeInput();
@@ -973,8 +980,8 @@ function wireEvents() {
   installSendActions({guide:()=>sendMessage(undefined,true),stop:interruptThread});
   messageInput.bind($('message-form'));
   installModelSelectActions({
-    'model-select':value=>{state.model=value;state.effort=defaultEffort(state.model);fillEfforts($('effort-select'),state.model,state.effort);settings.open=false;settings.querySelector('summary')!.focus();renderControls();},
-    'effort-select':value=>{state.effort=value;settings.open=false;settings.querySelector('summary')!.focus();renderControls();},
+    'model-select':value=>{if(state.desktopMode&&!newChatOpen){void updateDesktopSettings(value,defaultEffort(value));return;}state.model=value;state.effort=defaultEffort(state.model);fillEfforts($('effort-select'),state.model,state.effort);settings.open=false;settings.querySelector('summary')!.focus();renderControls();},
+    'effort-select':value=>{if(state.desktopMode&&!newChatOpen){void updateDesktopSettings(state.model,value);return;}state.effort=value;settings.open=false;settings.querySelector('summary')!.focus();renderControls();},
   });
   installNewChatActions({retry:()=>{newDraft.complete();publishNewChatControls({errorHidden:true});renderControls();$('message-input').focus();},
     close:()=>{if(!state.busy.has('create'))closeNewChat();}});

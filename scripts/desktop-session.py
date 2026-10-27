@@ -127,7 +127,7 @@ def run(payload):
         raise DesktopError('目标身份不符。', 'DESKTOP_IDENTITY')
     identifier = str(uuid.UUID(payload.get('threadId', '')))
     action = payload.get('action')
-    if action not in ('probe', 'send', 'interrupt', 'recover'):
+    if action not in ('probe', 'send', 'interrupt', 'recover', 'settings'):
         raise DesktopError('不支持此桌面操作。', 'INVALID_REQUEST')
     with DesktopSession(home, timeout=45 if action == 'send' else 15) as desktop:
         if action == 'recover':
@@ -151,6 +151,30 @@ def run(payload):
         if action in ('probe', 'recover'):
             return {'available': True, 'threadId': identifier, 'settings': settings, 'threadReferencesSupported': reference_capability(home, identifier),
                     'planSupported': isinstance(settings.get('settings', {}).get('model'), str)}
+        if action == 'settings':
+            model, effort, expected = payload.get('model'), payload.get('effort'), payload.get('expected')
+            if (not isinstance(model, str) or not model or len(model) > 200
+                    or not isinstance(effort, str) or not effort or len(effort) > 40
+                    or not isinstance(expected, dict) or not isinstance(expected.get('model'), str)
+                    or expected.get('reasoningEffort') is not None and not isinstance(expected.get('reasoningEffort'), str)):
+                raise DesktopError('模型设置参数无效。', 'INVALID_REQUEST')
+            native = settings.get('settings') or {}
+            if any(native.get(key) != expected.get(key) for key in ('model', 'reasoningEffort')):
+                raise DesktopError('桌面模型设置已变化，请刷新后重新选择。', 'STALE_SETTINGS')
+            reply = desktop.request('thread-follower-update-thread-settings', {
+                'conversationId': identifier, 'threadSettings': {'model': model, 'effort': effort},
+                'condition': {'ifModelEquals': expected['model'], 'ifEffortEquals': expected.get('reasoningEffort')}
+            }, 2, owner, mutation=True)
+            if reply.get('result', {}).get('applied') is not True:
+                raise DesktopError('桌面未应用设置，请刷新后重新选择。', 'STALE_SETTINGS')
+            # Read the owner again. A transport acknowledgement alone is not proof of settings.
+            try:
+                confirmed = desktop.settings(identifier, owner).get('settings') or {}
+            except Exception as exc:
+                raise DesktopError('设置已提交，但桌面回读未确认，请刷新核对。', 'OUTCOME_UNKNOWN') from exc
+            if confirmed.get('model') != model or confirmed.get('reasoningEffort') != effort:
+                raise DesktopError('桌面模型设置结果未确认，请刷新核对。', 'OUTCOME_UNKNOWN')
+            return {'settings': confirmed}
         if action == 'interrupt':
             turn_id = str(uuid.UUID(payload.get('turnId', '')))
             reply = desktop.request('thread-follower-interrupt-turn', {

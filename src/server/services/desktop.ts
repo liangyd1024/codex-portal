@@ -13,6 +13,7 @@ export function createDesktopService(manager:Manager,automations:NativeAutomatio
    return {
     detail:()=>session.detail(),
     recover:()=>session.recover(),
+    settings:(data:any)=>session.updateSettings({...data,threadId:id}),
     'question-answer':(data:any)=>session.answerQuestions({...data,threadId:id}),
     history:(cursor:string|null)=>session.history(cursor,id),
     message:(data:SendInput)=>session.send({...data,threadId:id}),

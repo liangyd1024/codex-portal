@@ -133,3 +133,13 @@ test('running desktop cannot change mode and stale plan cannot execute',async()=
  f.m.passive=async action=>action==='history'?{data:[]}:{thread:{id,activity:{state:'running'}}};await assert.rejects(f.a.send({threadId:id,messageId:mid,text:'plan',mode:'plan'}),/切换模式/);
  f.m.passive=async action=>action==='history'?{data:[]}:{thread:{id,activity:{state:'idle'}}};await assert.rejects(f.a.send({threadId:id,messageId:mid,text:'implement',mode:'default',planTurnId:tid}),/计划已变化/);assert.equal(f.calls.some(p=>p.action==='send'),false);
 });
+
+test('desktop settings validate native catalog, serialize with sends and retain expected owner values',async()=>{
+ const {a,m,calls}=fixture();m.models=[{id:'model',supportedReasoningEfforts:['low','high']}];
+ const data={threadId:id,model:'model',effort:'high',expected:{model:'old',reasoningEffort:null}};
+ await a.updateSettings(data);assert.deepEqual(calls[0],{action:'settings',...data});assert.equal(a.pending,false);assert.equal(m.mutations,0);
+ await assert.rejects(a.updateSettings({...data,effort:'invalid'}),/档位/);
+ m.controlled.add(id);await assert.rejects(a.updateSettings(data),/网页控制/);m.controlled.clear();
+ a.pending=true;await assert.rejects(a.updateSettings(data),e=>e.code==='SEND_PENDING');a.pending=false;
+ a.call=async()=>{assert.equal(a.pending,true);throw Error('lost reply')};await assert.rejects(a.updateSettings(data),/lost reply/);assert.equal(a.pending,false);assert.equal(m.mutations,0);
+});

@@ -180,3 +180,35 @@ class DesktopPlanTest(unittest.TestCase):
             self.assertEqual(requests[index][2], 2)
             self.assertEqual(requests[index][1]['turnStart']['request']['collaborationMode'],
                              {'mode':mode,'settings':{'model':'native-model','reasoning_effort':'high'}})
+
+class DesktopSettingsTest(unittest.TestCase):
+    def test_conditional_native_settings_and_readback(self):
+        requests = []
+        class Fake:
+            native = {'model': 'old', 'reasoningEffort': None}
+            applied = True
+            def __init__(self, *_a, **_kw): pass
+            def __enter__(self): return self
+            def __exit__(self, *_a): pass
+            def owner(self, _id): return 'owner'
+            def settings(self, *_a): return {'settings': dict(self.native)}
+            def request(self, method, params, version, owner, mutation):
+                requests.append((method, params, version, mutation))
+                if self.applied: Fake.native = {'model':'next','reasoningEffort':'high'}
+                return {'result': {'applied': self.applied}}
+        payload = {'action':'settings','threadId':'00000000-0000-0000-0000-000000000001','model':'next','effort':'high','expected':dict(Fake.native)}
+        with patch.object(session, 'DesktopSession', Fake):
+            result = session.run(payload)
+            self.assertEqual(result['settings'], {'model':'next','reasoningEffort':'high'})
+            with self.assertRaises(session.DesktopError) as stale:
+                session.run(payload)
+            self.assertEqual(stale.exception.code, 'STALE_SETTINGS')
+            Fake.native = dict(payload['expected']); Fake.applied = False
+            with self.assertRaises(session.DesktopError): session.run(payload)
+        self.assertEqual(len(requests), 2)
+        method, params, version, mutation = requests[0]
+        self.assertEqual(method, 'thread-follower-update-thread-settings')
+        self.assertEqual(version, 2); self.assertTrue(mutation)
+        self.assertEqual(params['condition'], {'ifModelEquals':'old','ifEffortEquals':None})
+        self.assertEqual(params['threadSettings'], {'model':'next','effort':'high'})
+        self.assertNotIn('activeTurnId', params)

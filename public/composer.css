@@ -136,3 +136,6 @@
 .goal-toolbar .goal-edit{display:flex;align-items:center;gap:8px;flex:1;min-width:0;width:auto;height:auto;min-height:44px;padding:0;text-align:left;font:inherit}
 
 .goal-toolbar-feedback[data-kind="hint"]{color:var(--text-muted,#666)}
+
+.desktop-chat #composer-settings .model-selection-note{display:block;margin:0;padding:0;font-size:13px;line-height:1.5;color:var(--text-muted,#666)}
+#composer-settings select:focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:2px}
