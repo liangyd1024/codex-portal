@@ -24,3 +24,7 @@ test('takeover conflict never creates a permanent handoff warning',()=>{
  f.controls.render({...f.state,owned:false,running:false,conflict:true});assert.equal(f.view().bannerHidden,true);assert.equal(f.view().message,'');
  f.controls.render({...f.state,owned:false,running:false,conflict:true,handoff:{state:'waiting'}});assert.equal(f.view().bannerHidden,false);assert.match(f.view().message,/等待引擎释放/);
 });
+
+test('verified shared desktop removes handoff and never sends an unsubscribe',()=>{
+ const f=controlsFixture();f.controls.render({...f.state,sharedDesktop:true,running:false});assert.equal(f.view().buttonHidden,true);assert.equal(f.view().bannerHidden,true);f.controls.run();assert.equal(f.calls(),0);f.controls.render({...f.state,sharedDesktop:false});assert.equal(f.view().buttonHidden,false);
+});

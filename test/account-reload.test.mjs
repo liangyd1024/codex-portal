@@ -11,7 +11,7 @@ function fixture(overrides={}){
   if(method==='thread/goal/get')return {goal:null};
   return {data:[]};
  },close(){}};
- m.serviceAction=async action=>{calls.push([action]);return {running:true};};
+ m.serviceAction=async action=>{calls.push([action]);return {running:true,sharedDesktop:false};};
  m.connect=async()=>{calls.push(['connect']);m.connection.state='connected';m.rpc={connected:true,request:async()=>({account:{type:'apiKey'}})};};
  return {m,calls};
 }

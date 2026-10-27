@@ -343,7 +343,7 @@ function renderControls() {
   const stopLabel=stopping?(state.transport&&(state.desktopMode?state.detail?.desktop?.available:ready)?'停止中…':'停止状态待确认'):'停止';
   const handoff=currentHandoff(),handing=state.busy.has('handoff:'+state.selectedId)||handoff?.state==='checking';
   handoffControls??=createHandoffControls({endUse:endThreadUse});
-  handoffControls!.render({id:newChatOpen||state.desktopMode?null:state.selectedId,context:targetHost+':'+state.selectedId+':'+state.selectionVersion,running:active,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId!)),handoff,connected:ready,
+  handoffControls!.render({sharedDesktop:state.status?.service?.sharedDesktopReady===true,id:newChatOpen||state.desktopMode?null:state.selectedId,context:targetHost+':'+state.selectedId+':'+state.selectionVersion,running:active,owned:Boolean(state.detail?.controlled||state.status?.controlledThreads?.includes(state.selectedId!)),handoff,connected:ready,
     supported:state.status?.service?.protocolValidation?.features?.handoff?.supported===true,busy:handing,archived:state.selectedArchived,conflict:state.detail?.controlState==='conflict'});
   const posting = state.busy.has('message')||state.busy.has('create'), switching = state.busy.has('takeover'), creating = state.busy.has('create');
   publishConnectionSelect({disabled:creating});

@@ -47,6 +47,12 @@ def main():
     if pwd.getpwuid(os.getuid()).pw_name != SERVICE_USER or pathlib.Path.home() != HOME:
         raise RuntimeError('目标身份不符。未启动服务。')
     action = globals().get('ACTION', 'ensure')
+    shared = (ROOT / 'desktop-shared.json').exists()
+    if action == 'ownership':
+        emit({'sharedDesktop': shared})
+        return
+    if shared and action in ('release', 'reload-login'):
+        raise RuntimeError('此引擎已启用桌面共享。网页不得停止或重启共享引擎。')
     if action == 'projects':
         import sqlite3
         for attempt in range(3):
@@ -141,7 +147,7 @@ def main():
             delay_match = re.search(r'thread_unload_delay_secs=(\d+)', status.stdout)
             actual_delay = int(delay_match.group(1)) if delay_match else None
             journal = ensure_relay()
-            emit({'outputJournal': journal, 'threadUnloadDelaySecs': actual_delay, 'running': True, 'pid': pid, 'startedAt': started, 'version': version, 'socket': str(SOCKET), 'hostname': socket.gethostname(), 'binary': str(BINARY), 'protocolValidation': validation})
+            emit({'sharedDesktop': shared, 'outputJournal': journal, 'threadUnloadDelaySecs': actual_delay, 'running': True, 'pid': pid, 'startedAt': started, 'version': version, 'socket': str(SOCKET), 'hostname': socket.gethostname(), 'binary': str(BINARY), 'protocolValidation': validation})
             return
         time.sleep(0.2)
     # No credential files or full logs are returned.
