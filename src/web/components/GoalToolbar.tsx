@@ -27,7 +27,7 @@ export function installReactGoalToolbar({input,context,api,refresh,edit}:Options
  let pending=false,error='',errorId:string|null=null;
  function render(){
   const c=context(),presentation=goalPresentation(c.goal,c.goalError),disabled=pending||!c.ready||c.busy||Boolean(c.goalError)||!c.goal;
-  const view:View={hidden:Boolean(c.draft||c.ephemeral||!presentation.visible),pending,label:presentation.label,objective:c.goal?.objective||'',duration:goalDuration(c.goal?.timeUsedSeconds),disabled,action:presentation.action,toggleDisabled:disabled||(presentation.action==='active'&&c.active),feedbackError:errorId===c.id&&!!error,feedback:(errorId===c.id?error:'')||(c.goal?.status==='blocked'?(c.busy?'补充信息发送后将恢复目标…':c.active?'当前消息正在执行；目标尚未恢复。发送补充信息后将继续目标。':'发送补充信息后将自动继续目标。'):'')};
+  const view:View={hidden:Boolean(c.draft||c.ephemeral||!presentation.visible),pending,label:presentation.label,objective:c.goal?.objective||'',duration:goalDuration(c.goal?.timeUsedSeconds),disabled,action:presentation.action,toggleDisabled:disabled||(presentation.action==='active'&&c.active),feedbackError:errorId===c.id&&!!error,feedback:errorId===c.id?error:''};
   const previous=store.getState().view;if(previous&&Object.entries(view).every(([key,value])=>Object.is(previous[key as keyof View],value)))return;
   flushSync(()=>store.setState({view}));
  }

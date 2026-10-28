@@ -363,10 +363,11 @@ function renderControls() {
     desktopSettingsUnavailable || !ready || !state.model || !effortsFor(state.model).length || state.loadingModels);
   const input = $('message-input');
   const followUp=followUpAction({active,touch:touchInput()});
+  const blockedGoal=state.detail?.goal?.status==='blocked'&&!state.detail?.goalError&&composer?.mode()!=='plan';
   // Publish the final mode once; avoid transient disabled states while editing.
   publishMessageInput(newChatOpen?{disabled:!ready||posting,placeholder:'描述你想完成的任务…'}:
     state.desktopMode?{disabled:posting,placeholder:active?'补充要求…':'发送消息，输入 / 选择技能，@ 引用会话或插件…'}:
-    {disabled:!ready||!own||posting||handing,placeholder:!ready?'连接后继续…':state.selectedArchived?'恢复会话后可继续…':!own?'正在确认会话…':active?(followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…'):'发送消息…'});
+    {disabled:!ready||!own||posting||handing,placeholder:!ready?'连接后继续…':state.selectedArchived?'恢复会话后可继续…':!own?'正在确认会话…':blockedGoal?'发送补充信息后将自动继续目标…':active?(followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…'):'发送消息…'});
   const {buttonView,unavailable}=composerSendView({active,ready,own,posting,handing,stopping,
     loginRecovery:!!state.status?.loginRecovery,desktopMode:state.desktopMode,interrupting:state.busy.has('interrupt'),archived:state.selectedArchived,
     touch:touchInput(),backgroundState:background.state,followUp,attachmentPending:attachments?.pending(),hasAttachments:attachments?.has(),hasAnnotations:annotations?.has(),
@@ -934,7 +935,7 @@ function wireEvents() {
   projectFolders=configureProjectBrowser({api,context:()=>({host:targetHost,instance:state.status?.instanceId,ready:newChatOpen&&usable()&&!$('new-cwd').disabled,open:newChatOpen}),onSelect:(project:import('../contracts/native').NativeProject)=>{
     state.projects=[...state.projects.filter(p=>p.id!==project.id),project];updateNewProjects(project.roots[0]);renderProjects();renderControls();void loadThreads().catch(error=>recordError(error,'刷新新项目'));
   }});
-  composer=installComposer({host:targetHost,api,implementPlan,images:attachments!.images,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,desktop:!newChatOpen&&state.desktopMode,planSupported:state.detail?.desktop?.planSupported===true,threadReferencesSupported:state.detail?.desktop?.threadReferencesSupported===true,turns:turns(),goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
+  composer=installComposer({host:targetHost,api,implementPlan,modeChanged:renderControls,images:attachments!.images,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,desktop:!newChatOpen&&state.desktopMode,planSupported:state.detail?.desktop?.planSupported===true,threadReferencesSupported:state.detail?.desktop?.threadReferencesSupported===true,turns:turns(),goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
   queuedInputs=installQueuedInputs({host:document.querySelector<HTMLElement>('#conversation>.composer-region')!,context:()=>({host:targetHost,id:state.selectedId,queue:state.detail?.queue,visible:!newChatOpen&&!state.desktopMode,ready:usable()&&controlled(),running:running(),supported:featureReady('queueWrite'),editable:featureReady('queueEdit')}),api,refresh:refreshSelected,onError:error=>toast(messageOf(error),true)});
   sideChat=installSideChat({api,requestsChanged:renderRequests,context:()=>({id:inputId(),cwd:currentThread()?.cwd,ready:usable(),model:state.model,effort:state.effort,models:state.models.map(m=>({id:modelId(m),label:m.displayName||modelId(m),defaultEffort:defaultEffort(modelId(m)),efforts:effortsFor(modelId(m)).map(e=>e.value)}))}),renderItem,notify:toast,selectionChanged:()=>{annotations?.refreshMarks();void reportThreadView().catch(e=>recordError(e,'thread'));}});
   annotations=installResponseAnnotations({host:targetHost,context:()=>({id:inputId()}),onSideChat:(fragment:import('./services/side-chat').SideFragment)=>sideChat!.open(fragment),sideSelections:()=>sideChat!.fragments(),changed:renderControls,notify:toast});

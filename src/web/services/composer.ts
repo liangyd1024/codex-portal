@@ -9,7 +9,7 @@ type Kind='skills'|'plugins'|'threads';
 interface Reference {kind:Kind;key:string;token:string}
 interface Selection {mode:'default'|'plan';skills:string[];plugins:string[];threads?:string[];references?:Reference[];goalPending?:boolean;goalUncertain?:string;goalEdit?:{base:string;text:string;uncertain?:string};[field:string]:unknown}
 export interface ComposerContext {id:string|null;cwd?:string;ready:boolean;busy:boolean;active:boolean;draft?:boolean;desktop?:boolean;planSupported?:boolean;ephemeral?:boolean;threadReferencesSupported?:boolean;turns:NativeTurn[];goal?:NativeGoal|null;goalError?:unknown}
-interface Options {host:string;api:<T=unknown>(path:string,options?:ApiOptions)=>Promise<T>;context:()=>ComposerContext;refresh:()=>Promise<unknown>;notify:(message:string,error?:boolean)=>unknown;implementPlan:(id:string,plan:{turnId:string;text:string})=>Promise<unknown>;input?:HTMLTextAreaElement;images:AttachmentButtonControl;prefix?:string}
+interface Options {modeChanged?:()=>void;host:string;api:<T=unknown>(path:string,options?:ApiOptions)=>Promise<T>;context:()=>ComposerContext;refresh:()=>Promise<unknown>;notify:(message:string,error?:boolean)=>unknown;implementPlan:(id:string,plan:{turnId:string;text:string})=>Promise<unknown>;input?:HTMLTextAreaElement;images:AttachmentButtonControl;prefix?:string}
 type Entry=Parameters<Parameters<typeof installReactComposerCatalog>[0]['insertReference']>[0];
 import {installGoalToolbar,installGoalEditor} from '../../../public/goal-toolbar.js';
 import {validateGoalDraft,prepareGoalSubmission,reconcileGoalSelection} from '../../../public/goal-submit.js';
@@ -17,7 +17,7 @@ import {installSkillSuggestions} from '../../../public/skill-suggestions.js';
 import {installInlineMentions,mentionRanges} from '../../../public/inline-mentions.js';
 export const WEB_ACCESS='full';
 
-export function installComposer({host,api,context,refresh,notify,implementPlan,input=document.getElementById('message-input') as HTMLTextAreaElement,images,prefix=''}:Options) {
+export function installComposer({host,api,context,refresh,notify,implementPlan,modeChanged=()=>{},input=document.getElementById('message-input') as HTMLTextAreaElement,images,prefix=''}:Options) {
   if(!document.querySelector('link[href="/composer.css"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/composer.css';document.head.append(link);}
   const bar=document.createElement('div');bar.className='composer-tools';
   input.form!.querySelector('.composer-bottom')!.prepend(bar);
@@ -26,8 +26,8 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
   const save=()=>{try{sessionStorage.setItem(selectionKey,JSON.stringify([...selections]));}catch{notify('输入工具选择暂未保存，刷新后请重新核对。',true);}};
   const choice=()=>{const id=context().id;if(!selections.has(id))selections.set(id,{mode:'default',skills:[],plugins:[]});return selections.get(id)!;};
   const controls=installComposerControls({bar,images,prefix,actions:{
-    mode:()=>{choice().mode=choice().mode==='plan'?'default':'plan';choice().modeExplicit=true;choice().goalPending=false;save();render();controls.closeMenu();controls.focusMenu();},
-    cancelPlan:()=>{choice().mode='default';choice().modeExplicit=true;save();render();controls.focusMenu();},
+    mode:()=>{choice().mode=choice().mode==='plan'?'default':'plan';choice().modeExplicit=true;choice().goalPending=false;save();render();controls.closeMenu();controls.focusMenu();modeChanged();},
+    cancelPlan:()=>{choice().mode='default';choice().modeExplicit=true;save();render();controls.focusMenu();modeChanged();},
     cancelGoal:()=>{choice().goalPending=false;save();render();controls.focusMenu();},
     goal:()=>selectGoal(),pick:(kind,button)=>void picker(kind,button)
   }});
@@ -81,7 +81,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,i
 
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
-  return {render,dismiss:()=>{suggestions.close();controls.closeMenu();if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending&&!context().goal),validateSend:(text:string,active:boolean)=>validateGoalDraft(choice(),text,active,context().goal),prepareSend:async(id:string,text:string,active:boolean)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,goal:context().id===id?context().goal:null,api,save}):false;render();return started;},moveDraft:(from:string,to:string)=>{if(selections.has(from)){selections.set(to,selections.get(from)!);selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();const c=context();return {...(!c.desktop&&c.goal?.status==='blocked'&&mode!=='plan'?{resumeBlockedGoal:{createdAt:c.goal.createdAt,objective:c.goal.objective}}:{}),mode,desktopExecutionMode:c.desktop&&!c.active&&choice().modeExplicit?mode:undefined,skills:[...skills],plugins:[...plugins],threads:[...threads!],access:WEB_ACCESS};},isLoading:()=>loading};
+  return {render,mode:()=>choice().mode,dismiss:()=>{suggestions.close();controls.closeMenu();if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending&&!context().goal),validateSend:(text:string,active:boolean)=>validateGoalDraft(choice(),text,active,context().goal),prepareSend:async(id:string,text:string,active:boolean)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,goal:context().id===id?context().goal:null,api,save}):false;render();return started;},moveDraft:(from:string,to:string)=>{if(selections.has(from)){selections.set(to,selections.get(from)!);selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();const c=context();return {...(!c.desktop&&c.goal?.status==='blocked'&&mode!=='plan'?{resumeBlockedGoal:{createdAt:c.goal.createdAt,objective:c.goal.objective}}:{}),mode,desktopExecutionMode:c.desktop&&!c.active&&choice().modeExplicit?mode:undefined,skills:[...skills],plugins:[...plugins],threads:[...threads!],access:WEB_ACCESS};},isLoading:()=>loading};
 }
 
 // Match the desktop's completed native plan item, never infer plans from prose.
