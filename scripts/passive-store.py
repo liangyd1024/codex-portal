@@ -753,6 +753,49 @@ def goal_input_items(connection, identifier, turn_ids):
         return {}
 
 
+
+def turn_collaboration_modes(connection, identifier, turn_ids):
+    """Read bounded native turn contexts using snapshot offsets; never infer a mode."""
+    columns = {row['name'] for row in connection.execute('PRAGMA table_info(thread_turns)')}
+    if not {'rollout_byte_offset', 'rollout_end_byte_offset'} <= columns or not turn_ids:
+        return {}
+    result = {}
+    try:
+        state = connect_store('state_5.sqlite')
+        try:
+            row = state.execute('SELECT rollout_path FROM threads WHERE id=?', (identifier,)).fetchone()
+        finally:
+            state.close()
+        if not row or not row[0]: return result
+        path = pathlib.Path(row[0]).resolve()
+        if not path.is_relative_to(STORE.resolve()): return result
+        with path.open('rb') as stream:
+            for turn_id in turn_ids:
+                turn = connection.execute('SELECT rollout_byte_offset,rollout_end_byte_offset FROM thread_turns WHERE thread_id=? AND turn_id=?', (identifier, turn_id)).fetchone()
+                if not turn or turn[0] is None or turn[0] < 0: continue
+                start, end = turn
+                end = min(end if end is not None else start + 524288, start + 524288)
+                stream.seek(start)
+                while stream.tell() < end:
+                    line = stream.readline(end - stream.tell())
+                    if not line or not line.endswith(b'\n'): break
+                    try: record = json.loads(line)
+                    except (ValueError, UnicodeDecodeError): continue
+                    if not isinstance(record, dict): continue
+                    value = record.get('payload')
+                    if not isinstance(value, dict): continue
+                    if record.get('type') == 'event_msg' and value.get('type') == 'task_started' and value.get('turn_id') != turn_id: break
+                    if record.get('type') != 'turn_context': continue
+                    if value.get('turn_id') != turn_id: break
+                    mode = value.get('collaboration_mode')
+                    if isinstance(mode, dict) and mode.get('mode') in ('plan', 'default'):
+                        result[turn_id] = {'mode': mode['mode']}
+                    break
+    except (OSError, sqlite3.Error, RuntimeError):
+        pass  # Missing context means unknown, not default; history remains readable.
+    return result
+
+
 def read_turn_directory(payload):
     """Presentation-only projection; native IDs and original input order are preserved."""
     identifier = thread_id(payload)
@@ -829,6 +872,7 @@ def read_history(payload):
         limit = 1 if payload.get('preview') else 5
         rows = connection.execute(sql, parameters + [limit + 1]).fetchall()
         goal_inputs = goal_input_items(connection, identifier, [row['turn_id'] for row in rows[:limit]])
+        modes = turn_collaboration_modes(connection, identifier, [row['turn_id'] for row in rows[:limit]])
         outputs = read_outputs({**payload, 'turnIds': [row['turn_id'] for row in rows[:limit]]})['data'] if payload.get('withOutputs') else []
         journal_ids = [entry['item']['id'] for entry in outputs]
         item_sql = "CASE WHEN json_extract(item_json,'$.type')='commandExecution' THEN json_set(item_json,'$.aggregatedOutput',substr(coalesce(json_extract(item_json,'$.aggregatedOutput'),''),1,16384),'$.outputPartial',json('true')) ELSE item_json END" if payload.get('preview') else 'item_json'
@@ -847,6 +891,7 @@ def read_history(payload):
             ).fetchall()
             turns.append({
                 'id': row['turn_id'],
+                **({'collaborationMode': modes[row['turn_id']]} if row['turn_id'] in modes else {}),
                 'status': row['status'],
                 'error': decode_json(row['error_json'], 'thread_turns.error_json', row['turn_id']),
                 'startedAt': row['started_at'],

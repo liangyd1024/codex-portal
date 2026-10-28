@@ -1,3 +1,4 @@
+import {selectComposerMode,reconcileComposerMode,composerModeOption,type ModeSelection} from './composer-mode.ts';
 import type {NativeGoal,NativeTurn} from '../../contracts/native';
 import type {ApiOptions} from './api';
 import type {AttachmentButtonControl} from './attachments';
@@ -7,7 +8,7 @@ import type {installReactComposerControls} from '../components/ComposerControls'
 import type {installReactComposerDialog} from '../components/ComposerDialog';
 type Kind='skills'|'plugins'|'threads';
 interface Reference {kind:Kind;key:string;token:string}
-interface Selection {mode:'default'|'plan';skills:string[];plugins:string[];threads?:string[];references?:Reference[];goalPending?:boolean;goalUncertain?:string;goalEdit?:{base:string;text:string;uncertain?:string};[field:string]:unknown}
+interface Selection extends ModeSelection {skills:string[];plugins:string[];threads?:string[];references?:Reference[];goalPending?:boolean;goalUncertain?:string;goalEdit?:{base:string;text:string;uncertain?:string};[field:string]:unknown}
 export interface ComposerContext {id:string|null;cwd?:string;ready:boolean;busy:boolean;active:boolean;draft?:boolean;desktop?:boolean;planSupported?:boolean;ephemeral?:boolean;threadReferencesSupported?:boolean;turns:NativeTurn[];goal?:NativeGoal|null;goalError?:unknown}
 interface Options {modeChanged?:()=>void;host:string;api:<T=unknown>(path:string,options?:ApiOptions)=>Promise<T>;context:()=>ComposerContext;refresh:()=>Promise<unknown>;notify:(message:string,error?:boolean)=>unknown;implementPlan:(id:string,plan:{turnId:string;text:string})=>Promise<unknown>;input?:HTMLTextAreaElement;images:AttachmentButtonControl;prefix?:string}
 type Entry=Parameters<Parameters<typeof installReactComposerCatalog>[0]['insertReference']>[0];
@@ -24,10 +25,10 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,m
   const selectionKey='rcm.composer.'+host;let savedSelections;try{savedSelections=JSON.parse(sessionStorage.getItem(selectionKey)||'[]');}catch{}
   const selections=new Map<string|null,Selection>(Array.isArray(savedSelections)?savedSelections.filter(v=>Array.isArray(v)&&typeof v[0]==='string'&&['default','plan'].includes(v[1]?.mode)&&Array.isArray(v[1]?.skills)&&Array.isArray(v[1]?.plugins)) as [string,Selection][]:[]);let selected:string|undefined,loading=false;
   const save=()=>{try{sessionStorage.setItem(selectionKey,JSON.stringify([...selections]));}catch{notify('输入工具选择暂未保存，刷新后请重新核对。',true);}};
-  const choice=()=>{const id=context().id;if(!selections.has(id))selections.set(id,{mode:'default',skills:[],plugins:[]});return selections.get(id)!;};
+  const choice=()=>{const id=context().id;if(!selections.has(id))selections.set(id,{mode:'default',skills:[],plugins:[]});const selection=selections.get(id)!;const c=context();reconcileComposerMode(selection,c.turns);return selection;};
   const controls=installComposerControls({bar,images,prefix,actions:{
-    mode:()=>{choice().mode=choice().mode==='plan'?'default':'plan';choice().modeExplicit=true;choice().goalPending=false;save();render();controls.closeMenu();controls.focusMenu();modeChanged();},
-    cancelPlan:()=>{choice().mode='default';choice().modeExplicit=true;save();render();controls.focusMenu();modeChanged();},
+    mode:()=>{const selection=choice();selectComposerMode(selection,selection.mode==='plan'?'default':'plan',context().turns);choice().goalPending=false;save();render();controls.closeMenu();controls.focusMenu();modeChanged();},
+    cancelPlan:()=>{selectComposerMode(choice(),'default',context().turns);save();render();controls.focusMenu();modeChanged();},
     cancelGoal:()=>{choice().goalPending=false;save();render();controls.focusMenu();},
     goal:()=>selectGoal(),pick:(kind,button)=>void picker(kind,button)
   }});
@@ -59,7 +60,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,m
     if(c.goal){editGoal(goalButton);return;}
     const next=!choice().goalPending;
     choice().goalPending=next;
-    if(next){choice().mode='default';delete choice().goalUncertain;}
+    if(next){selectComposerMode(choice(),'default',context().turns);delete choice().goalUncertain;}
     save();render();controls.closeMenu();input.focus();
   }
   let goalUpdating=false;
@@ -67,7 +68,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,m
   const editGoal=(button:HTMLElement)=>goalEditor!.edit(button);
   const goalToolbar=installGoalToolbar({input,context:()=>({...context(),busy:context().busy||goalUpdating}),api,refresh,edit:editGoal});
   const suggestions=installSkillSuggestions({input,api,context,select:(entry:Entry,range:{start:number;end:number},kind:Kind)=>insertReference(entry,kind,range)});
-  const planCompletion=installPlanCompletion({host,context,input,notify,send:implementPlan,resetMode:()=>{choice().mode='default';choice().modeExplicit=true;save();}});
+  const planCompletion=installPlanCompletion({host,context,input,notify,send:implementPlan,resetMode:()=>{selectComposerMode(choice(),'default',context().turns);save();}});
   function render(){
     planCompletion.render();goalToolbar.render();
     const c=context();if(selected!==JSON.stringify([c.id,c.cwd])){selected=JSON.stringify([c.id,c.cwd]);suggestions.close();if(dialog.open)dialog.close();}
@@ -81,7 +82,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,m
 
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
-  return {render,mode:()=>choice().mode,dismiss:()=>{suggestions.close();controls.closeMenu();if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending&&!context().goal),validateSend:(text:string,active:boolean)=>validateGoalDraft(choice(),text,active,context().goal),prepareSend:async(id:string,text:string,active:boolean)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,goal:context().id===id?context().goal:null,api,save}):false;render();return started;},moveDraft:(from:string,to:string)=>{if(selections.has(from)){selections.set(to,selections.get(from)!);selections.delete(from);save();}},options:()=>{syncReferences();const {mode,skills,plugins,threads}=choice();const c=context();return {...(!c.desktop&&c.goal?.status==='blocked'&&mode!=='plan'?{resumeBlockedGoal:{createdAt:c.goal.createdAt,objective:c.goal.objective}}:{}),mode,desktopExecutionMode:c.desktop&&!c.active&&choice().modeExplicit?mode:undefined,skills:[...skills],plugins:[...plugins],threads:[...threads!],access:WEB_ACCESS};},isLoading:()=>loading};
+  return {render,mode:()=>choice().mode,dismiss:()=>{suggestions.close();controls.closeMenu();if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending&&!context().goal),validateSend:(text:string,active:boolean)=>validateGoalDraft(choice(),text,active,context().goal),prepareSend:async(id:string,text:string,active:boolean)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,goal:context().id===id?context().goal:null,api,save}):false;render();return started;},moveDraft:(from:string,to:string)=>{if(selections.has(from)){selections.set(to,selections.get(from)!);selections.delete(from);save();}},options:()=>{syncReferences();const selection=choice();const {skills,plugins,threads}=selection;const mode=composerModeOption(selection);const c=context();return {...(!c.desktop&&c.goal?.status==='blocked'&&mode!=='plan'?{resumeBlockedGoal:{createdAt:c.goal.createdAt,objective:c.goal.objective}}:{}),mode,desktopExecutionMode:c.desktop&&!c.active&&choice().modeExplicit?mode:undefined,skills:[...skills],plugins:[...plugins],threads:[...threads!],access:WEB_ACCESS};},isLoading:()=>loading};
 }
 
 // Match the desktop's completed native plan item, never infer plans from prose.

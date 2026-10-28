@@ -19,7 +19,7 @@ const servers=[];
 extras.push('completion-browser.js');
 extras.push('protocol-compatibility-browser.js','connection-editor-browser.js','sidebar-search-browser.js','mermaid-browser.js','backup-failure-browser.js');
 extras.push('desktop-blocking-browser.js','sidebar-layout-browser.js');
-extras.push('takeover-goal-browser.js');
+extras.push('takeover-goal-browser.js','composer-mode-browser.js');
 async function serve(directory){
  const parityEvents=createParityEventHandler();
  const staticResponse=createStaticResponse();const index=(await readFile(path.join(directory,'public/index.html'),'utf8')).replace('</head>','<script src="/__parity_fixture.js"></script></head>');

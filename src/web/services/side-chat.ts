@@ -54,7 +54,7 @@ export function installSideChat({api,context,renderItem,notify,selectionChanged=
  async function submit(override?:string,plan=false){
   const s=selected,c=localContext();if(!s?.id||s.busy||s.uncertain||!c.ready||attachments.pending())return;
   const raw=override??input.value,parts=plan?[]:s.selections.slice(),pictures=plan?{items:[]}:attachments.capture();if(!raw.trim()&&!parts.length&&!pictures.items.length)return;
-  const options:{mode:string;access:string;threads?:unknown[]}=plan?{mode:'default',access:'full'}:composer.options();
+  const options:{mode?:string;access:string;threads?:unknown[]}=plan?{mode:'default',access:'full'}:composer.options();
   if(s.active&&options.threads?.length){notify('请在当前轮次结束后发送会话引用，草稿已保留。',true);return;}
   // Match the server input normalization so native echoes retire the receipt.
   const active=s.active,text=annotatedText(raw,[],parts).trim();
