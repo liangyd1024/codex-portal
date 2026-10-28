@@ -44,8 +44,8 @@ async function loadSidebarActivity(snapshot:SidebarSnapshot,seq:number){
       const data=await api('/api/sidebar/activity?'+new URLSearchParams({ids:JSON.stringify(ids.slice(offset,offset+200))}));
       if(!current())return;
       if(data.accountScope!==snapshot.accountScope){snapshot.activityPhase='error';renderThreads();return;}
-      const activity=new Map((data.data||[]).map(t=>[t.id,t.activity]));
-      for(const t of state.threads)if(activity.has(t.id)){if(activity.get(t.id))t.activity=activity.get(t.id);else delete t.activity;}
+      const activity=new Map((data.data||[]).map(t=>[t.id,t]));
+      for(const t of state.threads)if(activity.has(t.id)){const next=activity.get(t.id)!;if(next.activity)t.activity=next.activity;else delete t.activity;t.latestTurn=next.latestTurn;}
       if(offset+200<ids.length)renderThreads();
     }catch(error){if(current()){snapshot.activityPhase='error';recordError(error,'sidebar-activity');renderThreads();}return;}
   }

@@ -58,3 +58,11 @@ test('expanded ancestors leave activity badges to the visible child level',()=>{
  expanded.add('project:p');view=treePresentation(groups,c)[0];assert.deepEqual(view.items[0].badges,[]);assert.equal(view.items[0].children[0].badge.title,'需要你回答');
  expanded.delete('section:s');assert.equal(treePresentation(groups,c)[0].badges[0].count,1);
 });
+
+test('completion receipt appears on idle rows and collapsed ancestors, yielding to running and questions',()=>{
+ const {c,raw,groups}=presentationFixture();raw.completionUnseen=true;c.source=()=>null;c.isExpanded=()=>false;
+ let view=treePresentation(groups,c)[0];assert.equal(view.items[0].badge.title,'已完成，待查看');assert.equal(view.items[0].badge.icon,'check');assert.equal(view.badges[0].count,1);
+ c.source=()=> 'web';view=treePresentation(groups,c)[0];assert.match(view.items[0].badge.title,/正在运行/);assert.equal(view.badges.some(b=>b.icon==='check'),false);
+ c.o.needsAnswer=()=>true;assert.equal(treePresentation(groups,c)[0].items[0].badge.title,'需要你回答');
+ raw.completionUnseen=false;c.source=()=>null;c.o.needsAnswer=()=>false;assert.equal(treePresentation(groups,c)[0].items[0].badge.title,'桌面端创建');
+});

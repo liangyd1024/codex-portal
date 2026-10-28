@@ -1,3 +1,4 @@
+import {createCompletionNotices} from './services/completion-notices';
 import {createNotificationTraceQueue,createNotificationTraceSender} from './services/notification-trace';
 import {readWorkspaceView,saveWorkspaceView} from './services/workspace-view';
 import {pendingNotificationTarget,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl} from './services/notification-target';
@@ -423,6 +424,9 @@ function controlReason(id:'new-thread'|'takeover',text:string){
   const button=$(id),hidden=Boolean(!button.disabled||button.hidden);
   publishWorkspaceControl(id,{reason:{text,hidden},...(id==='new-thread'?{title:hidden?'新建会话（⌘/Ctrl+N）':text}:{})});
 }
+const completionNotices=createCompletionNotices(localStorage,targetHost);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')renderThreads();});
+window.addEventListener('focus',()=>renderThreads());
 const sidebar: Sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon,threadName,relativeTime,api,toast,
   needsAnswer,
   activitySource:(t:NativeThread)=>activitySource(t,{connected:usable(),webActive:(((state.status?.controlledSessions||[]).find(s=>s.id===t.id)?.status||t.status) as {type?:string}|undefined)?.type==='active'}),
@@ -435,7 +439,11 @@ const sidebar: Sidebar = new Sidebar({node:$('thread-list'),host:targetHost,icon
 });
 function renderProjects() { renderThreads(); if(newChatOpen&&!state.busy.has('create')){updateNewProjects();renderControls();} }
 function renderThreads() {
-  sidebar.render(state.sidebar?{...state.sidebar,data:state.threads}:null,{search:state.search,loading:state.loadingThreads,failed:state.threadPageError});
+  if(state.sidebar)completionNotices.scope(state.sidebar.accountScope);
+  const latest=state.detail?.turns?.at(-1);
+  const viewed=!newChatOpen&&!state.loadingDetail&&!state.historyError&&document.visibilityState==='visible'&&document.hasFocus()&&state.detail?.thread?.id===state.selectedId&&latest?.status==='completed'?{id:state.selectedId!,turnId:latest.id!}:undefined;
+  if(state.sidebar)completionNotices.update(state.threads,viewed);
+  sidebar.render(state.sidebar?{...state.sidebar,data:state.threads.map(t=>({...t,completionUnseen:completionNotices.has(t.id)}))}:null,{search:state.search,loading:state.loadingThreads,failed:state.threadPageError});
   setWorkspaceText('breadcrumb-project',state.projects.find(p=>p.id===state.projectId)?.name||'工作区');
   publishWorkspaceControl('more-threads',{ hidden:!state.threadPageError&&!state.threadCursor&&(!state.loadingThreads||state.threads.length>0) });
   publishWorkspaceControl('more-threads',{ text:state.threadPageError?'加载失败，点击重试':state.loadingThreads?'正在加载会话…':'加载更多会话' });
@@ -698,7 +706,7 @@ function renderThread() {
   if(state.desktopMode){badgeText='由桌面执行';noteText='网页操作原桌面会话。模型设置用于下一轮，目标请在桌面设置。';}
   publishWorkspaceLabel('control-badge',{className:'control-badge'+(own?' controlled':busy?' busy':''),text:badgeText});
   publishWorkspaceLabel('control-note',{className:'control-note',text:noteText});
-  renderMessages(); renderControls(); resizeInput();
+  renderMessages(); renderControls(); resizeInput(); renderThreads();
 }
 function renderDiagnostics() {
   const s=state.status||{},c=s.connection||{},entries=[];

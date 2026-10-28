@@ -78,3 +78,7 @@
 .sidebar-heading .account-usage>span{display:block;font-size:inherit;color:inherit;letter-spacing:0;white-space:nowrap}
 .sidebar-heading #close-sidebar{position:static;grid-area:1/4;display:grid;width:44px;height:44px;margin:0}
 .sidebar-heading:has(.account-usage[hidden]) .machine-card{grid-column:2/4}
+
+/* Completion is a persistent receipt, distinct from the animated running state. */
+.sidebar .activity-icon.activity-completed{color:var(--ink);background:white;border:1px solid currentColor;border-radius:50%;width:18px;height:18px;flex-basis:18px}
+.sidebar .activity-completed:has(.question-count){width:auto;flex-basis:auto;border-radius:9px;padding:0 4px;gap:3px}

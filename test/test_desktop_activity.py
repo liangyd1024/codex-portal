@@ -73,7 +73,8 @@ class DesktopActivityTest(unittest.TestCase):
     def test_sidebar_missing_live_candidate_is_unknown(self):
         from unittest.mock import MagicMock
         db = MagicMock()
-        db.execute.return_value = [('candidate',)]
+        db.execute.return_value.__iter__.return_value = iter([('candidate',)])
+        db.execute.return_value.fetchone.return_value = None
         rows = [{'id': 'candidate'}, {'id': 'done'}]
         with patch.object(store, 'connect_store', return_value=db), patch.object(store, 'desktop_activity', return_value={}):
             store.sidebar_activity(rows)
@@ -136,3 +137,19 @@ class DesktopActivityTest(unittest.TestCase):
         self.assertEqual(detail['steeringMessages'],[accepted])
         self.assertEqual(detail['ownerClientId'],'test-owner')
         self.assertNotIn('pendingRequests', self.observe(Client(extra=extra))['test'])
+
+
+class CompletionSnapshotTest(unittest.TestCase):
+    def test_latest_turn_status_is_read_without_items(self):
+        import sqlite3
+        root = pathlib.Path(tempfile.mkdtemp(prefix='portal-completion-'))
+        db = sqlite3.connect(root / 'thread_history_1.sqlite')
+        db.execute('CREATE TABLE thread_turns(thread_id TEXT,turn_id TEXT,status TEXT,rollout_ordinal INTEGER)')
+        db.executemany('INSERT INTO thread_turns VALUES(?,?,?,?)', [('chat','old','completed',1),('chat','new','failed',2),('done','last','completed',1)])
+        db.commit(); db.close()
+        rows = [{'id':'chat'},{'id':'done'},{'id':'empty'}]
+        with patch.object(store,'STORE',root), patch.object(store,'desktop_activity',return_value={}):
+            store.sidebar_activity(rows)
+        self.assertEqual(rows[0]['latestTurn'], {'id':'new','status':'failed'})
+        self.assertEqual(rows[1]['latestTurn'], {'id':'last','status':'completed'})
+        self.assertNotIn('latestTurn',rows[2])

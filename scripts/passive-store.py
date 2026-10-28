@@ -257,6 +257,11 @@ def sidebar_activity(threads):
         db = connect_store('thread_history_1.sqlite')
         try:
             candidates = {r[0] for r in db.execute("SELECT t.thread_id FROM thread_turns t WHERE t.status='inProgress' AND NOT EXISTS (SELECT 1 FROM thread_turns newer WHERE newer.thread_id=t.thread_id AND newer.rollout_ordinal>t.rollout_ordinal)")}
+            # Read only the latest turn for each listed thread, without loading items.
+            for thread in threads:
+                row = db.execute('SELECT turn_id,status FROM thread_turns WHERE thread_id=? ORDER BY rollout_ordinal DESC,turn_id DESC LIMIT 1', [thread['id']]).fetchone()
+                if row:
+                    thread['latestTurn'] = {'id': row['turn_id'], 'status': row['status']}
         finally:
             db.close()
         activity = desktop_activity([t['id'] for t in threads if t['id'] in candidates])
