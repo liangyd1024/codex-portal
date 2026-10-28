@@ -16,7 +16,7 @@ export function installAccountUsage({details,...deps}:Omit<Parameters<typeof ins
 }
 export function AccountUsage(){
  const view=useStore(store,state=>state.usage);
- return <button type="button" id="account-usage" className="account-usage" hidden={view.hidden} title={view.title} aria-label={view.ariaLabel} onClick={()=>store.getState().details?.(view.title||'')}>{view.text}</button>;
+ return <button type="button" id="account-usage" className="account-usage" hidden={view.hidden} title={view.title} aria-label={view.ariaLabel} onClick={()=>store.getState().details?.(view.title||'')}>{view.text.split(' · ').map((text,index)=><span key={index}>{text}</span>)}</button>;
 }
 export function AccountIdentity(){
  const view=useStore(store,state=>state.identity);

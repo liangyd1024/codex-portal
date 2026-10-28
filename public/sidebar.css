@@ -4,11 +4,11 @@
 
 .sidebar-progress{font-size:11px;color:var(--muted)}
 
-.sidebar-search-row{display:flex;align-items:center;gap:8px;flex-shrink:0;min-width:0;margin-bottom:10px}
+.sidebar-search-row{display:flex;align-items:center;gap:8px;flex-shrink:0;min-width:0;margin-bottom:6px}
 .sidebar .sidebar-search-row .search-box{display:flex;flex:1;min-width:0;height:44px;margin:0;padding:0 10px;gap:8px;border:1px solid var(--control-border-color);border-radius:var(--control-radius);background:var(--control-background);color:var(--control-foreground)}
 .sidebar .sidebar-search-row .search-box input{flex:1;min-width:0;width:0;height:42px;min-height:0;background:transparent;font-size:16px}
 .sidebar-search-row .search-box kbd{flex-shrink:0}
-.sidebar .sidebar-search-row .new-thread{display:grid;place-items:center;flex:0 0 64px;width:64px;height:44px;min-height:44px;margin:0;padding:0;border:1px solid var(--control-border-color);border-radius:var(--control-radius);background:var(--control-background);color:var(--control-foreground);font-size:16px}
+.sidebar .sidebar-search-row .new-thread{display:grid;place-items:center;flex:0 0 64px;width:64px;height:44px;min-height:44px;margin:0;padding:0;border:1px solid var(--control-border-color);border-radius:var(--control-radius);background:var(--control-background);color:var(--control-foreground);font-size:14px}
 .sidebar .sidebar-search-row .new-thread:hover:not(:disabled){background:var(--soft)}
 .sidebar .sidebar-thread .thread-row{display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 32px 6px 8px}
 @media(max-width:700px),(hover:none){.sidebar .sidebar-thread .thread-row{min-height:44px;padding-right:38px}}
@@ -39,7 +39,7 @@
 .backup-selection .settings-actions{display:flex;flex-wrap:wrap;gap:8px}
 .backup-selection button{min-height:44px}
 
-.sidebar-tools{display:flex;align-items:center;flex-wrap:wrap;flex-shrink:0;gap:8px;padding:0 0 12px}
+.sidebar-tools{display:flex;align-items:center;flex-wrap:wrap;flex-shrink:0;gap:8px;padding:0 0 6px}
 .sidebar-view-switch{display:flex;flex:1;min-width:0;border:1px solid var(--control-border-color);border-radius:var(--control-radius);background:var(--control-background)}
 .sidebar-view-switch>button{flex:1;min-width:0;min-height:44px;padding:6px 8px;white-space:nowrap;font-size:14px;background:var(--control-background);color:var(--control-foreground);border-radius:calc(var(--control-radius) - 1px)}
 .sidebar-view-switch>button:hover:not(:disabled){background:var(--control-hover-background)}
@@ -63,3 +63,18 @@
 .sidebar-running-thread .thread-meta{display:none}
 .thread-context{display:block;text-align:left;font-size:12px;line-height:1.625;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sidebar-empty .secondary-button{min-height:44px}
+
+/* One identity row leaves the project list more room at every sidebar width. */
+.sidebar-heading{display:grid;grid-template-columns:18px minmax(0,1fr) auto 44px;grid-template-rows:44px;align-items:center;gap:4px;min-height:0;margin:0 0 6px;padding:0}
+.sidebar-heading .brand{display:contents}
+.sidebar-heading .brand>div{display:none}
+.sidebar-heading .brand-mark{grid-area:1/1}
+.sidebar-heading .brand-mark,.sidebar-heading .brand-mark .icon{width:18px;height:18px}
+.sidebar-heading .machine-card{grid-area:1/2;min-width:0;width:100%;margin:0;padding:0;gap:4px}
+.sidebar-heading .machine-copy{min-width:0;flex:1}
+.sidebar-heading .connection-dot{order:-1;margin:0}
+.sidebar-heading #connection-select{width:100%;max-width:none;min-width:0;min-height:44px;padding:4px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar-heading .account-usage{grid-area:1/3;max-width:80px;min-width:44px;min-height:44px;padding:4px;font-size:12px;white-space:normal;text-align:center}
+.sidebar-heading .account-usage>span{display:block;font-size:inherit;color:inherit;letter-spacing:0;white-space:nowrap}
+.sidebar-heading #close-sidebar{position:static;grid-area:1/4;display:grid;width:44px;height:44px;margin:0}
+.sidebar-heading:has(.account-usage[hidden]) .machine-card{grid-column:2/4}
