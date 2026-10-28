@@ -102,7 +102,7 @@ let scrollFollow: ReturnType<typeof installScrollFollow> | undefined;
 let scrollContext: string | undefined;
 let turnNavigation: ReturnType<typeof installTurnNavigation> | undefined;
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from '../../public/message-media.js';
-import {markdown} from '../../public/message-body.js';
+import {markdown,userMessageBody} from '../../public/message-body.js';
 import {userMessageTime, timedTurnGroups} from '../../public/message-time.js';
 import {renderTurnFiles} from '../../public/turn-files.js';
 import {reconcileMessages} from '../../public/message-dom.js';
@@ -483,16 +483,17 @@ function renderCommandOutput(item:NativeItem,{threadId=state.selectedId,refresh=
 function renderItem(item:NativeItem,{threadId=state.selectedId,side=false,refresh=renderMessages}={}) {
   const imageUrl=(options:Record<string,unknown>)=>itemImageUrl(threadId,item.id,{...options,host:targetHost});
   const fileContext={threadId,itemId:item.id,host:targetHost};
-  const bodyMarkdown=(text:string)=>markdown(text,0,{file:(path:string,label:string)=>fileLink(path,label,fileContext),image:(path:string,label:string)=>{
+  const bodyOptions={file:(path:string,label:string)=>fileLink(path,label,fileContext),image:(path:string,label:string)=>{
     if(!isRasterImage(path))return null;
     if(path.startsWith('/')&&!path.startsWith('//'))return imageCard(imageUrl({reference:path}),label||'回复图片');
     if(/^data:image\/(png|jpeg|webp|gif);base64,/.test(path))return imageCard(path,label||'回复图片');
     return null;
-  }});
+  }};
+  const bodyMarkdown=(text:string)=>markdown(text,0,bodyOptions);
   if (item.type === 'userMessage' || item.type === 'goalMessage' || item.type === 'steeringUserMessage') {
     const m=el('div','message user'),bubble=el('div','user-bubble'),content=item.type==='goalMessage'?{text:item.objective,images:[]}:userMessageContent(item.type==='steeringUserMessage'?item.input:item.content);
     if(item.type==='goalMessage'){m.setAttribute('aria-label','目标');bubble.append(el('div','goal-message-label','目标'));}
-    if(content.text)bubble.append(el('div','user-message-text',content.text));
+    if(content.text)bubble.append(userMessageBody(content.text,bodyOptions));
     for(const part of content.images){
       const src=part.type==='image'&&/^data:image\/(png|jpeg|webp|gif);base64,/.test(part.url||'')?part.url:imageUrl({part:part.index});
       bubble.append(imageCard(src,'图片附件 '+(part.index+1)));

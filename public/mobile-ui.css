@@ -98,7 +98,7 @@
 .mobile-layout .inspector .notification-controls{gap:4px}
 .mobile-layout .inspector .notification-controls label{padding:4px 0}
 .mobile-layout .messages-scroller{padding:8px 16px 16px;scroll-behavior:auto}
-.mobile-layout :is(.message-body,.user-bubble){font-size:16px;line-height:1.7}
+.mobile-layout :is(.message-body,.user-bubble){font-size:var(--conversation-font);line-height:var(--conversation-leading)}
 .mobile-layout :is(.tool-block,.process-group,.request-detail)>summary{padding:10px 4px;gap:8px}
 .mobile-layout .tool-block+.tool-block{margin-top:8px}
 .mobile-layout a{min-height:44px;min-width:44px;display:inline-flex;align-items:center;max-width:100%;overflow-wrap:anywhere;margin-right:8px}

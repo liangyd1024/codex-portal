@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {markdown,groupTurnItems} from '../public/message-body.js';
+import {markdown,userMessageBody,groupTurnItems} from '../public/message-body.js';
 // Minimal DOM for semantic assertions; browser acceptance covers real layout/events.
 class Node {
   constructor(tag='',text=''){this.tagName=tag.toUpperCase();this.children=[];this.text=text;this.style={};this.attrs={};this.dataset={};}
@@ -14,6 +14,29 @@ globalThis.document={createElement:tag=>new Node(tag),createTextNode:text=>new N
 const all=(n,tag)=>[...(n.tagName===tag?[n]:[]),...n.children.flatMap(c=>all(c,tag))];
 const msg=(id,phase)=>({id,type:'agentMessage',phase,text:id});
 const tool=id=>({id,type:'commandExecution'});
+test('desktop user Markdown renders entities, link labels and indentation without rewriting input',()=>{
+ const input=Object.freeze({text:'测试说明\n\n资料：[https://example.com/guide](https://example.com/guide)\n\n测试类型\n&#x20;   接口测试\n&#32;   UI测试\n\n&#x20;    场景\n&#x20;     日常迭代'});
+ const before=JSON.stringify(input),body=userMessageBody(input.text);
+ assert.equal(body.className,'message-body user-message-text');
+ assert.equal(all(body,'A').length,1);
+ assert.equal(all(body,'A')[0].textContent,'https://example.com/guide');
+ assert.equal(all(body,'A')[0].href,'https://example.com/guide');
+ assert.equal(body.textContent.split('https://example.com/guide').length,2);
+ assert.ok(body.textContent.includes('测试类型\n    接口测试\n    UI测试'));
+ assert.ok(body.textContent.includes('     场景\n      日常迭代'));
+ assert.equal(body.textContent.includes('&#'),false);
+ assert.equal(JSON.stringify(input),before);
+});
+test('user Markdown keeps code literal and HTML inert while preserving rich structure',()=>{
+ const body=userMessageBody('# 标题\n\n**重点**\n\n- 第一项\n  - 第二级\n\n`&#x20; [原样](https://example.com)`\n\n```text\n&#x20; <script>example</script>\n```\n\n&lt;img src=x onerror=alert(1)&gt;\n\n[坏](javascript:alert(1))');
+ assert.equal(all(body,'H1')[0].textContent,'标题');
+ assert.equal(all(body,'STRONG')[0].textContent,'重点');
+ assert.equal(all(body,'UL').length,2);
+ assert.equal(all(body,'CODE')[0].textContent,'&#x20; [原样](https://example.com)');
+ assert.equal(all(body,'PRE')[0].textContent,'&#x20; <script>example</script>');
+ assert.equal(all(body,'A').length,0);assert.equal(all(body,'IMG').length,0);assert.equal(all(body,'SCRIPT').length,0);
+ assert.ok(body.textContent.includes('<img src=x onerror=alert(1)>'));
+});
 test('completed commentary folds in chronological order with tools, leaving final answer visible',()=>{
  const items=[{id:'u',type:'userMessage'},msg('progress','commentary'),tool('t1'),msg('progress2','commentary'),tool('t2'),msg('answer','final_answer')];
  const groups=groupTurnItems({status:'completed',items});

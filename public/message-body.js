@@ -53,6 +53,13 @@ function appendInline(n, text, depth = 0, options = {}) {
 }
 const listMarker = line => /^( *)([-+*]|\d+[.)]) +(.*)$/.exec(line);
 const tableCells = value => value.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map(cell => cell.trim());
+// Native user inputs can contain Markdown produced by the desktop rich editor.
+// Render it without changing the stored message or decoding code examples.
+export function userMessageBody(text, options = {}) {
+  const body = markdown(text, 0, options);
+  body.className += ' user-message-text';
+  return body;
+}
 export function markdown(text, depth = 0, options = {}) {
   const n = el('div','message-body'), lines = String(text || '').replace(/\r\n?/g,'\n').split('\n');
   if (depth > 20) { n.textContent=text; return n; }

@@ -413,6 +413,7 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .code-language{margin-right:auto}.code-copy-status{font-size:12px}.code-copy{padding:6px 8px;background:transparent;border-radius:5px;color:#333;white-space:nowrap}
 .message-body .code-block pre{margin:0;border:0;border-radius:0;white-space:pre;overflow:auto;overflow-wrap:normal;tab-size:4}
 .message-body .code-block code{white-space:inherit;overflow-wrap:normal}
+
 .code-block pre:focus-visible,.code-copy:focus-visible,.message-image button:focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:-2px}
 @media(max-width:700px){.code-copy,.message-image-retry{min-height:44px}.message-image-open img{max-height:300px}.image-viewer{padding:12px}.image-viewer-close{min-height:44px}}
 
@@ -580,6 +581,20 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 @media(pointer:coarse),(max-width:700px){.mermaid-action,.mermaid-block .code-copy{min-width:44px;min-height:44px}.mermaid-dialog{width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}.mermaid-viewport{padding:12px}}
 
 .mermaid-block .code-copy{color:var(--control-foreground)}
+
+/* User Markdown stays legible on the black bubble, including nested content. */
+.user-message-text{color:inherit;font-weight:inherit;white-space:normal;min-width:0}
+.user-message-text p{white-space:pre-wrap;margin-bottom:1em}
+.user-message-text :is(a,blockquote,th,td:first-child){color:inherit}
+.user-message-text a:focus-visible{outline-color:currentColor}
+.user-message-text a:hover{background:#333}
+.user-message-text code{color:inherit;background:#292929}
+.user-message-text :is(pre,th,.code-block-header){background:#202020;color:inherit}
+.user-message-text :is(.code-copy,.code-copy-status){color:inherit}
+.user-message-text .code-copy:hover{background:#444}
+.user-message-text :is(.code-copy,pre):focus-visible{outline-color:currentColor}
+.user-message-text :is(.code-block,.table-scroll,th,td,blockquote,hr){border-color:#666}
+.user-message-text .table-scroll:focus-visible{outline-color:currentColor}
 
 /* Referenced files use the same controls and reading baseline as messages. */
 .file-viewer-path{margin:10px 0 0;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);overflow-wrap:anywhere;user-select:text}

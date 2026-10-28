@@ -5,7 +5,7 @@ import {groupTurnItems} from '../public/message-body.js';
 const command = (extra={}) => ({id:'command',type:'commandExecution',status:'completed',exitCode:0,...extra});
 test('native actions become ordered compact summaries without inspecting command text',()=>{
  const items=[command({commandActions:[{type:'read'},{type:'search'},{type:'read'},{type:'unknown'}]})];
- assert.equal(processSummary({status:'completed'},items).label,'已读取文件已搜索文件运行了命令');
+ assert.equal(processSummary({status:'completed'},items).label,'已读取文件、已搜索文件、运行了命令');
  assert.equal(processSummary({},[command({command:'cat file.txt'})]).label,'运行了命令');
  assert.equal(processSummary({},[command({commandActions:[{type:'newAction'}]})]).label,'运行了命令');
 });
@@ -38,13 +38,13 @@ test('mixed command outcomes deduplicate by action, keeping original errors in i
  const items=[command({commandActions:[{type:'read'}]}),command({exitCode:1}),command(),command({status:'inProgress',exitCode:null})];
  const before=JSON.stringify(items);
  const value=processSummary({status:'inProgress',items:[...items,{type:'agentMessage',text:'继续。'}]},items);
- assert.equal(value.label,'已读取文件运行了命令');assert.equal(value.status,'');assert.equal(value.icon,'book');
+ assert.equal(value.label,'已读取文件、运行了命令');assert.equal(value.status,'');assert.equal(value.icon,'book');
  assert.equal(JSON.stringify(items),before);
 });
 test('integrations use native display names and never expose implementation tool names',()=>{
  const items=[{type:'mcpToolCall',tool:'js',server:'computer',appContext:{appName:'Example App'}},command(),{type:'mcpToolCall',tool:'js',appContext:{appName:'Example App'}}];
  const value=processSummary({status:'completed'},items);
- assert.equal(value.label,'已使用 Example App 集成运行了命令');assert.equal(value.icon,'integration');
+ assert.equal(value.label,'已使用 Example App 集成、运行了命令');assert.equal(value.icon,'integration');
  assert.equal(processSummary({},[{type:'mcpToolCall',tool:'js',pluginId:'private-id'}]).label,'已使用集成');
 });
 test('empty historical reasoning adds no disclosure but nonempty original summaries remain available',()=>{

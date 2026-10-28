@@ -34,7 +34,7 @@ export function processSummary(turn, items, options = {}) {
     tool:live?'调用工具':'调用了工具'};
   // Category order is stable; result status belongs to each original detail.
   const order = ['read','list','search','edit','web','integration','tool','command'];
-  const label = order.filter(key=>categories.has(key)).map(key=>labels[key]).join('') ||
+  const label = order.filter(key=>categories.has(key)).map(key=>labels[key]).join('、') ||
     (onlyReasoning ? (status || '思考摘要') : '处理过程');
   const icon = categories.has('integration') ? 'integration' : categories.has('read') || categories.has('list') || categories.has('search') ? 'book' : categories.has('edit') ? 'file' : 'process-terminal';
   return {label,icon,status:onlyReasoning?'':status,failed:false,
