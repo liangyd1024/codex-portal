@@ -66,3 +66,8 @@ test('completion receipt appears on idle rows and collapsed ancestors, yielding 
  c.o.needsAnswer=()=>true;assert.equal(treePresentation(groups,c)[0].items[0].badge.title,'需要你回答');
  raw.completionUnseen=false;c.source=()=>null;c.o.needsAnswer=()=>false;assert.equal(treePresentation(groups,c)[0].items[0].badge.title,'桌面端创建');
 });
+
+test('completion summary rows show their project and cannot reorder pinned native sessions',()=>{
+ const {c,raw,groups}=presentationFixture();c.completed=true;c.source=()=>null;raw.completionUnseen=true;raw.projectId='p';c.snapshot.projects=[{id:'p',name:'示例项目'}];
+ const view=treePresentation(groups,c)[0].items[0];assert.equal(view.context,'示例项目 · 已完成，待查看');assert.equal(view.draggable,false);assert.equal(view.raw,raw);
+});

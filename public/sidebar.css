@@ -41,7 +41,9 @@
 
 .sidebar-tools{display:flex;align-items:center;flex-wrap:wrap;flex-shrink:0;gap:8px;padding:0 0 6px}
 .sidebar-view-switch{display:flex;flex:1;min-width:0;border:1px solid var(--control-border-color);border-radius:var(--control-radius);background:var(--control-background)}
-.sidebar-view-switch>button{flex:1;min-width:0;min-height:44px;padding:6px 8px;white-space:nowrap;font-size:14px;background:var(--control-background);color:var(--control-foreground);border-radius:calc(var(--control-radius) - 1px)}
+.sidebar-view-switch>button{display:flex;align-items:center;justify-content:center;gap:4px;flex:1;min-width:0;min-height:44px;padding:6px 8px;white-space:nowrap;font-size:14px;background:var(--control-background);color:var(--control-foreground);border-radius:calc(var(--control-radius) - 1px)}
+.sidebar-view-switch.has-completed{display:grid;grid-template-columns:minmax(44px,.65fr) repeat(2,minmax(0,1fr))}
+.sidebar-view-switch.has-completed>button{flex-wrap:wrap;column-gap:4px;row-gap:0;padding:6px 4px;line-height:1.25}
 .sidebar-view-switch>button:hover:not(:disabled){background:var(--control-hover-background)}
 .sidebar-view-switch>button[aria-pressed=true]{background:#000;color:#fff}
 .sidebar-view-switch>button[aria-pressed=true]:hover{background:#262626}
