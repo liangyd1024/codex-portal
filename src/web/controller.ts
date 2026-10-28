@@ -796,10 +796,23 @@ async function openNotificationThread(target:{host?:string;threadId:string;click
   }
   openingNotification=key;
   try{
+    const selection=state.selectionVersion;
+    const resolved=await api<{threadId:string;sideChat?:import('./services/side-chat').SideResponse & {parentThreadId:string}}>('/api/threads/'+encodeURIComponent(threadId)+'/notification-target');
+    if(openingNotification!==key||state.selectionVersion!==selection)return;
+    if(resolved.sideChat){
+      const parent=resolved.sideChat.parentThreadId;
+      await selectThread(parent,{notification:true});
+      if(openingNotification!==key||state.selectionVersion!==selection+1||state.selectedId!==parent||state.historyError||state.detail?.thread?.id!==parent)return;
+      sideChat!.openExisting(resolved.sideChat);
+      void reportPageNavigation('page-opened',target);
+      history.replaceState(null,'',consumeNotificationTarget(localStorage,target,location.href));
+      await acknowledgeNotificationClick(target.clickId);
+      return;
+    }
     await selectThread(threadId,{notification:true});
     await finishNotificationNavigation(target);
     if(state.selectedId===threadId&&(state.historyError||!state.detail))void reportPageNavigation('page-failed',target);
-  }catch(error){void reportPageNavigation('page-failed',target);recordError(error,'notification-navigation');}
+  }catch(error){if(openingNotification===key){void reportPageNavigation('page-failed',target);toast(messageOf(error),true);recordError(error,'notification-navigation');}}
   finally{if(openingNotification===key)openingNotification=null;}
 }
 async function finishNotificationNavigation(target=pendingNotificationTarget(localStorage,location.href)){
@@ -809,6 +822,7 @@ async function finishNotificationNavigation(target=pendingNotificationTarget(loc
   await acknowledgeNotificationClick(target.clickId);
 }
 function cancelPendingNotification(){
+  openingNotification=null;
   const target=pendingNotificationTarget(localStorage,location.href);if(!target)return;
   notificationWaitingForCreate=false;
   history.replaceState(null,'',consumeNotificationTarget(localStorage,target,location.href));

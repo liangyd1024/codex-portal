@@ -52,7 +52,7 @@ test('page acknowledges click only after target detail loads and retains it on d
  const code=source.slice(source.indexOf('async function openNotificationThread('),source.indexOf('const sendTaskNotification='));
  for(const loaded of [false,true]){
   const sent=[],state={selectedId:null,detail:null,historyError:'',busy:new Set()};
-  const context={reportPageNavigation:async()=>{},openingNotification:null,notificationWaitingForCreate:false,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl,pendingNotificationTarget,localStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://rcm.test/?host=local'},history:{replaceState(){}},recordError:error=>{throw error;},state,targetHost:'local',connectionIds:['local'],navigator:{serviceWorker:{getRegistration:async()=>({active:{postMessage:value=>sent.push(value)}})}},selectThread:async id=>{state.selectedId=id;if(loaded)state.detail={thread:{id}};}};
+  const context={messageOf:e=>e.message,api:async()=>({threadId:"target"}),reportPageNavigation:async()=>{},openingNotification:null,notificationWaitingForCreate:false,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl,pendingNotificationTarget,localStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://rcm.test/?host=local'},history:{replaceState(){}},recordError:error=>{throw error;},state,targetHost:'local',connectionIds:['local'],navigator:{serviceWorker:{getRegistration:async()=>({active:{postMessage:value=>sent.push(value)}})}},selectThread:async id=>{state.selectedId=id;if(loaded)state.detail={thread:{id}};}};
   vm.createContext(context);vm.runInContext(ts.transpile(code),context);
   await context.openNotificationThread({host:'local',threadId:'target',clickId:'click'});
   assert.equal(sent.length,loaded?1:0);
@@ -101,8 +101,8 @@ async function pageNavigation(storage=memoryStorage()){
  const code=source.slice(source.indexOf('async function openNotificationThread('),source.indexOf('const sendTaskNotification='));
  const sent=[],selected=[],assigned=[],errors=[];
  const location={href:'https://rcm.test/?host=local',assign:value=>assigned.push(value)};
- const state={selectedId:null,detail:null,loadingDetail:false,historyError:'',busy:new Set()};
- const context={reportPageNavigation:async()=>{},openingNotification:null,notificationWaitingForCreate:false,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl,pendingNotificationTarget,localStorage:storage,location,history:{replaceState:(_a,_b,url)=>location.href=url},recordError:e=>errors.push(e),toast:e=>errors.push(e),flushDrafts(){},state,targetHost:'local',connectionIds:['local','remote'],navigator:{serviceWorker:{getRegistration:async()=>({active:{postMessage:value=>sent.push(value)}})}},selectThread:async id=>{selected.push(id);state.selectedId=id;state.detail={thread:{id}};}};
+ const state={selectionVersion:0,selectedId:null,detail:null,loadingDetail:false,historyError:'',busy:new Set()};
+ const context={messageOf:e=>e.message,api:async()=>({threadId:"target"}),reportPageNavigation:async()=>{},openingNotification:null,notificationWaitingForCreate:false,saveNotificationTarget,consumeNotificationTarget,notificationTargetUrl,pendingNotificationTarget,localStorage:storage,location,history:{replaceState:(_a,_b,url)=>location.href=url},recordError:e=>errors.push(e),toast:e=>errors.push(e),flushDrafts(){},state,targetHost:'local',connectionIds:['local','remote'],navigator:{serviceWorker:{getRegistration:async()=>({active:{postMessage:value=>sent.push(value)}})}},selectThread:async id=>{selected.push(id);state.selectionVersion++;state.selectedId=id;state.detail={thread:{id}};}};
  vm.createContext(context);vm.runInContext(ts.transpile(code),context);
  return {context,state,sent,selected,assigned,errors,storage,location};
 }
@@ -136,9 +136,9 @@ test('creating defers navigation and latest click wins while older detail is in 
  const page=await pageNavigation();page.state.busy.add('create');await page.context.openNotificationThread({host:'local',threadId:'deferred'});
  assert.equal(page.selected.length,0);assert.equal(page.context.notificationWaitingForCreate,true);page.state.busy.clear();
  const releases={};page.context.selectThread=async id=>{page.state.selectedId=id;await new Promise(resolve=>releases[id]=resolve);if(page.state.selectedId===id)page.state.detail={thread:{id}};};
- const first=page.context.openNotificationThread({host:'local',threadId:'first',clickId:'first'});
+ const first=page.context.openNotificationThread({host:'local',threadId:'first',clickId:'first'});await new Promise(setImmediate);
  const last=page.context.openNotificationThread({host:'local',threadId:'last',clickId:'last'});
- releases.last();await last;releases.first();await first;
+ await new Promise(setImmediate);releases.last();await last;releases.first();await first;
  assert.equal(page.state.selectedId,'last');assert.deepEqual(page.sent.map(m=>m.clickId),['last']);assert.equal(pendingNotificationTarget(page.storage,page.location.href),null);
 });
 function bootWorker({caches=clickStorage(),clients}={}){const handlers={};vm.runInNewContext(worker,{URL,Response,crypto,caches,self:{location:{origin:'https://rcm.test'},addEventListener:(name,fn)=>handlers[name]=fn,clients}});return {handlers,click(data){let done;handlers.notificationclick({notification:{data,close(){}},waitUntil:p=>done=p});return done;},ready(){let done;const messages=[];handlers.message({data:{type:'rcm-notification-ready'},source:{postMessage:m=>messages.push(m)},waitUntil:p=>done=p});return done.then(()=>messages);}};}
@@ -282,4 +282,23 @@ test('diagnostic receiver titles reflect the native event branch, never the requ
    const target=messages.find(m=>m.type==='rcm-notification-click');assert.equal(target.threadId,'target');assert.equal(target.testId,data.testId);assert.ok(target.clickId);
   }
  }
+});
+
+test('side notification opens original parent and side panel, never selects ephemeral ID as ordinary history',async()=>{
+ const page=await pageNavigation(),opened=[];
+ const side={thread:{id:'side'},parentThreadId:'parent',turns:[{id:'turn',items:[]}]};
+ page.context.api=async()=>({threadId:'side',sideChat:side});page.context.sideChat={openExisting:data=>opened.push(data)};
+ await page.context.openNotificationThread({host:'local',threadId:'side',clickId:'side-click'});
+ assert.deepEqual(page.selected,['parent']);assert.equal(opened[0],side);assert.equal(page.sent[0].clickId,'side-click');assert.equal(pendingNotificationTarget(page.storage,page.location.href),null);
+});
+test('late side lookup cannot override manual selection or a newer notification',async()=>{
+ const page=await pageNavigation();let release;page.context.api=()=>new Promise(r=>release=r);
+ const pending=page.context.openNotificationThread({host:'local',threadId:'side',clickId:'side-click'});
+ page.context.cancelPendingNotification();release({sideChat:{parentThreadId:'parent',thread:{id:'side'},turns:[]}});await pending;
+ assert.equal(page.selected.length,0);assert.equal(page.sent.length,1);
+});
+test('expired side target shows an actionable error without selecting invalid ordinary history',async()=>{
+ const page=await pageNavigation();page.context.api=async()=>{throw Object.assign(Error('临时聊天已失效，请从主会话重新打开。'),{code:'SIDE_CHAT_EXPIRED'});};
+ await page.context.openNotificationThread({host:'local',threadId:'side'});
+ assert.equal(page.selected.length,0);assert.match(page.errors[0],/临时聊天已失效/);assert.equal(page.sent.length,0);
 });

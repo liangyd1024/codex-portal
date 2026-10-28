@@ -4,7 +4,7 @@ import type {Response} from '../types';
 import {body,json} from '../protocol';
 import {createThreadService} from '../services/threads';
 
-export const matchThreadRoute=(path:string)=>path.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(side-chat|side-chat-view|turn-directory|history|takeover|handoff|message|steer|queue-add|queue-steer|queue-delete|queue-update|interrupt|goal|question-answer|retry-capacity))?$/);
+export const matchThreadRoute=(path:string)=>path.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(notification-target|side-chat|side-chat-view|turn-directory|history|takeover|handoff|message|steer|queue-add|queue-steer|queue-delete|queue-update|interrupt|goal|question-answer|retry-capacity))?$/);
 type Match=ReturnType<typeof matchThreadRoute>;
 type Route=(req:IncomingMessage,res:Response,url:URL,data:Awaited<ReturnType<typeof body>>)=>void|Promise<void>;
 export function createThreadRoutes(manager:Manager,observe?:(id:string,turns:any[])=>void) {
@@ -18,6 +18,7 @@ export function createThreadRoutes(manager:Manager,observe?:(id:string,turns:any
    if(path==='/api/thread-references')return references;
    if(!match)return;
    const [,id,action]=match;
+   if(action==='notification-target')return async(_req,res)=>json(res,200,await service.notificationTarget(id));
    if(action==='side-chat-view')return async(_req,res)=>json(res,200,await service.sideChat(id));
    if(action==='turn-directory')return async(_req,res)=>json(res,200,await service.turnDirectory(id));
    if(action==='history')return async(_req,res,url)=>json(res,200,await service.history(id,url.searchParams.get('cursor'),false,{},false,null,url.searchParams.get('lazyTools')==='1'));

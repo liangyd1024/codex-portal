@@ -4,7 +4,7 @@ import {EventEmitter} from 'node:events';
 import {clipboardHTML,safeImage,installComposerClipboard} from '../public/composer-clipboard.js';
 import {annotatedText} from '../public/response-annotations.js';
 import {applySideEvent} from '../shared/side-chat-events.js';
-import {createSideChat,readSideChat} from '../lib/side-chats.mjs';
+import {createSideChat,readSideChat,notificationThreadTarget} from '../lib/side-chats.mjs';
 test('clipboard preserves all images and escapes markup, rejects external image sources',()=>{
  const html=clipboardHTML('<text>\n&',[{name:'"cat"',url:'data:image/png;base64,YQ=='}]);
  assert.match(html,/&lt;text&gt;/);assert.match(html,/&quot;cat&quot;/);assert.ok(safeImage('data:image/png;base64,YQ=='));assert.equal(safeImage('https://example.test/a.png'),false);assert.equal(safeImage('data:image/svg+xml;base64,YQ=='),false);
@@ -93,3 +93,14 @@ test('consecutive native side turns retain each input when completion carries on
 });
 
 test('expired side chats drop history cache and free capacity without replaying a creation request',async()=>{const {m,calls}=fixture();const requestId='44444444-4444-4444-8444-444444444444';await createSideChat(m,'parent',{requestId});m.emit('event',{method:'side-chat/expired',params:{threadId:'side'}});await assert.rejects(readSideChat(m,'side'),e=>e.code==='SIDE_CHAT_EXPIRED');await createSideChat(m,'parent',{requestId});assert.equal(calls.filter(c=>c.method==='thread/fork').length,1);await createSideChat(m,'parent',{requestId:'55555555-5555-4555-8555-555555555555'});assert.equal(calls.filter(c=>c.method==='thread/fork').length,2);});
+
+test('notification resolves side ID to original parent and native messages without creating a chat',async()=>{
+ const {m,calls}=fixture();await createSideChat(m,'parent',{requestId:'66666666-6666-4666-8666-666666666666'});
+ m.emit('event',{method:'item/completed',params:{threadId:'side',turnId:'t',item:{id:'i',type:'agentMessage',text:'original'}}});
+ const before=calls.length,target=await notificationThreadTarget(m,'side');
+ assert.equal(target.sideChat.parentThreadId,'parent');assert.equal(target.sideChat.thread.id,'side');assert.equal(target.sideChat.turns[0].items[0].text,'original');
+ assert.deepEqual(calls.slice(before).map(c=>c.method),['thread/read']);
+ assert.deepEqual(await notificationThreadTarget(m,'ordinary'),{threadId:'ordinary'});
+ m.emit('event',{method:'side-chat/expired',params:{threadId:'side'}});
+ await assert.rejects(notificationThreadTarget(m,'side'),e=>e.code==='SIDE_CHAT_EXPIRED');
+});

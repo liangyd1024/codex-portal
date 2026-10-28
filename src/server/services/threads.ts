@@ -1,6 +1,6 @@
 import type {Manager} from '../../../lib/manager.mjs';
 import {queueInput} from '../../../lib/queued-inputs.mjs';
-import {createSideChat,readSideChat} from '../../../lib/side-chats.mjs';
+import {createSideChat,readSideChat,notificationThreadTarget} from '../../../lib/side-chats.mjs';
 import {retryCapacity} from '../../../lib/capacity-retry.mjs';
 import {sendWithGoalResume} from '../../../lib/goal-follow-up.mjs';
 import {setGoal} from '../../../lib/composer.mjs';
@@ -12,6 +12,7 @@ export function createThreadService(manager:Manager) {
   detail:(...args:Parameters<Manager['detail']>)=>manager.detail(...args),
   history:(...args:Parameters<Manager['history']>)=>manager.history(...args),
   turnDirectory:(id:string)=>manager.turnDirectory(id),
+  notificationTarget:(id:string)=>notificationThreadTarget(manager,id),
   sideChat:(id:string)=>readSideChat(manager,id),
   create:(data:NativePayload)=>manager.newThread(data),
   actions:{
