@@ -55,3 +55,20 @@ export function renderProcessSummary(description, {durationLabel,icon} = {}) {
   const chevron = icon('chevron','chevron'); chevron.classList.add('process-chevron'); summary.append(chevron);
   return summary;
 }
+
+// Keep the two conversation surfaces on the same native process presentation.
+/** @param {import('../src/contracts/native').NativeTurn} turn
+ * @param {{items: any[],durationLabel?: string}} group
+ * @param {{icon: Function,renderItem: Function,itemId: string,open?: boolean,uncertain?: boolean,background?: any}} options */
+export function renderProcessGroup(turn, group, {icon,renderItem,itemId,open=false,...options}) {
+  const description = processSummary(turn,group.items,options);
+  if (description.hidden && !group.durationLabel) return null;
+  const node = document.createElement('details');
+  node.className = 'activity-group process-group' + (group.durationLabel ? ' has-duration' : '');
+  node.dataset.itemId = itemId;
+  node.open = open;
+  const body = document.createElement('div'); body.className = 'activity-items';
+  for (const item of group.items) body.append(renderItem(item));
+  node.append(renderProcessSummary(description,{durationLabel:group.durationLabel,icon}),body);
+  return node;
+}

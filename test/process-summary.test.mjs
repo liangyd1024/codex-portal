@@ -53,3 +53,20 @@ test('empty historical reasoning adds no disclosure but nonempty original summar
  assert.equal(processSummary({status:'inProgress',items:[empty]},[empty]).hidden,false);
  assert.equal(processSummary({status:'completed'},[{...empty,summary:['说明']}]).hidden,false);
 });
+
+test('shared process disclosure preserves original items and renders live, uncertain and timed states',async t=>{
+ const {renderProcessGroup}=await import('../public/process-summary.js');
+ class Node {children=[];dataset={};className='';textContent='';classList={add:value=>{this.className+=' '+value;}};append(...nodes){this.children.push(...nodes);}}
+ const previous=globalThis.document;globalThis.document={createElement:()=>new Node()};
+ t.after(()=>{if(previous)globalThis.document=previous;else delete globalThis.document;});
+ const item={id:'thinking',type:'reasoning',summary:[]},turn={status:'inProgress',items:[item]},seen=[];
+ const options={itemId:'side-process-t-thinking',icon:()=>new Node(),renderItem:item=>{seen.push(item);return new Node();},open:true};
+ const live=renderProcessGroup(turn,{items:[item]},options);
+ assert.equal(live.children[0].children[1].textContent,'正在思考');assert.equal(live.open,true);assert.equal(seen[0],item);
+ const uncertain=renderProcessGroup(turn,{items:[item]},{...options,uncertain:true});
+ assert.equal(uncertain.children[0].children[1].textContent,'状态未确认');
+ assert.equal(renderProcessGroup({...turn,status:'completed'},{items:[item]},options),null);
+ const timed=renderProcessGroup({...turn,status:'completed'},{items:[item],durationLabel:'用时 3秒'},options);
+ assert.match(timed.className,/has-duration/);assert.equal(timed.children[0].children[1].textContent,'用时 3秒');
+ assert.match(timed.children[0].children.at(-1).className,/process-chevron/);
+});

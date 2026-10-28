@@ -19,6 +19,8 @@ import {shouldSendOnEnter} from '../../../public/input-state.js';
 import {compactLayout,touchInput,installScrollFollow} from '../../../public/mobile-ui.js';
 import {installAttachments} from '../../../public/attachments.js';
 import {installComposer,implementationText} from '../../../public/composer.js';
+import {installDrawerGestures} from './drawer-gestures';
+import {renderProcessGroup} from '../../../public/process-summary.js';
 import {timedTurnGroups} from '../../../public/message-time.js';
 import {createSendReceipts,sendReceiptLabels} from '../../../public/connection-state.js';
 
@@ -37,6 +39,7 @@ export function installSideChat({api,context,renderItem,notify,selectionChanged=
  });
  const {panel,close,scroller,output,requestsHost,form,input,settings,summary,model,effort,send}=view;
  const follow=installScrollFollow(scroller,output);
+ installDrawerGestures({surface:panel,mode:()=>compactLayout()&&!panel.hidden?'sideChat':null,openSidebar:()=>{},closeDrawers:()=>close.click()});
  const localContext=()=>({id:selected?.id||selected?.requestId||'side-empty',cwd:selected?.cwd||context().cwd,ready:!!selected?.id&&context().ready&&!selected?.expired,busy:!!selected?.busy||!!selected?.creating||!!selected?.uncertain,active:!!selected?.active,turns:selected?.turns||[],ephemeral:true});
  const sideApi=<T=SideResponse>(path:string,options?:ApiOptions):Promise<T>=>/^\/api\/threads\/[^/]+$/.test(path)?api<T>(path+'/side-chat-view',options):api<T>(path,options);
  attachments=installAttachments({host:'side-'+crypto.randomUUID(),context:localContext,changed:render,notify,form,input,prefix:'side-'});
@@ -80,7 +83,20 @@ export function installSideChat({api,context,renderItem,notify,selectionChanged=
   if(renderedId!==s){cache.clear();renderedId=s;follow.reset();}const receipts=sendReceipts.view(s,s.turns),next=document.createDocumentFragment();if(!s.turns.length&&!receipts.length){const empty=el('div','side-chat-empty');empty.append(icon('chat'),el('strong','','围绕选文继续聊'),el('p','','与主聊天分开讨论，保留当前上下文。'));next.append(empty);}
   const opened=new Set([...output.querySelectorAll<HTMLDetailsElement>('details[open][data-item-id]')].map(n=>n.dataset.itemId));
   const itemNode=(item:SideItem,turn:SideTurn)=>cache.render(turn.id+':'+item.id,JSON.stringify(item),()=>{const node=renderItem(item,{threadId:s.id,side:true,refresh:()=>{cache.clear();render();}});node.dataset.messageId=item.id;return node;});
-  for(const turn of s.turns){const node=el('section','message-turn');node.dataset.turnId=turn.id;for(const group of timedTurnGroups(turn) as ({type:'duration';label:string}|{type:'message';item:SideItem}|{type:'process';key:string;durationLabel?:string;items:SideItem[]})[]){if(group.type==='duration'){node.append(el('div','turn-duration',group.label));}else if(group.type==='message')node.append(itemNode(group.item,turn));else{const process=el('details','activity-group process-group');process.dataset.itemId='side-process-'+turn.id+'-'+group.key;process.open=opened.has(process.dataset.itemId);const label=el('summary');label.append(icon('chevron'),el('span','',group.durationLabel||'查看过程'));const body=el('div','activity-items');group.items.forEach(item=>body.append(itemNode(item,turn)));process.append(label,body);node.append(process);}}if(turn.error)node.append(el('div','turn-error',turn.error.message||String(turn.error)));next.append(node);}
+  for(const turn of s.turns){
+   const node=el('section','message-turn');node.dataset.turnId=turn.id;
+   for(const group of timedTurnGroups(turn) as ({type:'duration';label:string}|{type:'message';item:SideItem}|{type:'process';key:string;durationLabel?:string;items:SideItem[]})[]){
+    if(group.type==='duration')node.append(el('div','turn-duration',group.label));
+    else if(group.type==='message')node.append(itemNode(group.item,turn));
+    else{
+     const itemId='side-process-'+turn.id+'-'+group.key;
+     const process=renderProcessGroup(turn,group,{icon,renderItem:(item:SideItem)=>itemNode(item,turn),itemId,open:opened.has(itemId),uncertain:!context().ready||!!s.expired});
+     if(process)node.append(process);
+    }
+   }
+   if(turn.error)node.append(el('div','turn-error',turn.error.message||String(turn.error)));
+   next.append(node);
+  }
   for(const receipt of receipts){const node=cache.render('receipt:'+receipt.id,receipt.status,()=>{const node=renderItem({id:receipt.id,type:'userMessage',content:receipt.content},{threadId:s.id,side:true});node.dataset.sendReceipt=receipt.id;const status=el('div','user-message-time',sendReceiptLabels[receipt.status as keyof typeof sendReceiptLabels]);status.setAttribute('role','status');node.append(status);return node;});next.append(node);}
   reconcileMessages(output,next);cache.bind(output);follow.schedule();resize();
  }

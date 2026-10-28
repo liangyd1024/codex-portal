@@ -64,3 +64,21 @@ test('drawer form inputs and vertical row scrolling remain available',t=>{
  f.target.tag='input';f.swipe(200,100);f.target.tag='button';f.swipe(200,155,350);
  assert.deepEqual(f.actions,[]);assert.equal(f.fire('click',[],{detail:1}).defaultPrevented,false);
 });
+
+test('side chat closes only from the left edge with a rightward swipe',t=>{
+ const f=fixture(t);f.mode('sideChat');
+ for(const x of [0,8,24,25,80])f.swipe(x,x+80);
+ assert.deepEqual(f.actions,['close','close','close']);
+ f.actions.length=0;
+ f.swipe(8,30);f.swipe(20,0);f.swipe(8,120,350);
+ assert.deepEqual(f.actions,[]);
+});
+test('side chat preserves editing, selection, scrolling, cancellation and taps',t=>{
+ const f=fixture(t);f.mode('sideChat');
+ f.target.tag='textarea';f.swipe(8,140);f.target.tag='p';
+ f.selection('选文');f.swipe(8,140);f.selection('');
+ f.target.scrollWidth=300;f.swipe(8,140);f.target.scrollWidth=100;
+ f.fire('touchstart',[f.touch(8)]);f.fire('touchmove',[f.touch(120)]);f.fire('touchcancel',[]);f.fire('touchend',[f.touch(120)]);
+ f.fire('touchstart',[f.touch(8)]);f.fire('touchend',[f.touch(8)]);
+ assert.deepEqual(f.actions,[]);assert.equal(f.fire('click',[],{detail:1}).defaultPrevented,false);
+});

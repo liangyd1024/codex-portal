@@ -49,7 +49,7 @@ export function installMobileUI({closeDrawers, openSidebar, layoutChanged}: Mobi
       returnTo?.focus({preventScroll:true});
     }
   }
-  installDrawerGestures({surface:shell,mode:()=>!compactLayout() ? null : shell.classList.contains('sidebar-open') ? 'sidebar' : !shell.classList.contains('inspector-hidden') ? 'inspector' : 'main',openSidebar,closeDrawers});
+  installDrawerGestures({surface:shell,mode:()=>!compactLayout() || document.body.classList.contains('side-chat-open') ? null : shell.classList.contains('sidebar-open') ? 'sidebar' : !shell.classList.contains('inspector-hidden') ? 'inspector' : 'main',openSidebar,closeDrawers});
   new MutationObserver(syncDrawers).observe(shell,{attributes:true,attributeFilter:['class']});
   function positionPanels() {
     if (!compactLayout()) return;

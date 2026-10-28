@@ -96,7 +96,7 @@ import {asyncQuestions,QuestionDrafts} from '../../public/questions.js';
 import {publishRequestCards,syncRequestCards} from './components/RequestCards';
 import {fileLink,itemFileUrl,closeFileViewer} from '../../public/message-files.js';
 import {notifyManagerError, recoveryMessage, selectedRecoveryMessage} from '../../public/recovery-state.js';
-import {processSummary,renderProcessSummary} from '../../public/process-summary.js';
+import {renderProcessGroup} from '../../public/process-summary.js';
 import {activitySource,conversationActivity} from '../../public/activity.js';
 import {installTurnNavigation} from '../../public/turn-navigation.js';
 let scrollFollow: ReturnType<typeof installScrollFollow> | undefined;
@@ -643,15 +643,10 @@ function renderMessages() {
     for (const group of timedTurnGroups(t)) {
       if (group.type === 'duration') { turn.append(el('div','turn-duration',group.label)); continue; }
       if (group.type === 'message') { turn.append(cachedItem(group.item,t.id)); continue; }
-      const processGroup = el('details','activity-group process-group');
-      processGroup.dataset.itemId = 'process-' + t.id + '-' + group.key;
-      if (group.durationLabel) processGroup.classList.add('has-duration');
-      const description = processSummary(t,group.items,{uncertain:uncertainHistory(),background:backgroundActivity(state.detail,{controlled:controlled(),connected:usable()})});
-      if (description.hidden && !group.durationLabel) continue;
-      const summary = renderProcessSummary(description,{durationLabel:group.durationLabel,icon});
-      const body = el('div','activity-items');
-      for (const item of group.items) { body.append(cachedItem(item,t.id)); }
-      processGroup.append(summary,body); turn.append(processGroup);
+      const processGroup = renderProcessGroup(t,group,{icon,renderItem:(item:NativeItem)=>cachedItem(item,t.id),
+        itemId:'process-' + t.id + '-' + group.key,uncertain:uncertainHistory(),
+        background:backgroundActivity(state.detail,{controlled:controlled(),connected:usable()})});
+      if (processGroup) turn.append(processGroup);
     }
     const fileItems=(t.items||[]).filter(item=>item.type==='fileChange');
     if(fileItems.some(item=>item.changes?.length)){
