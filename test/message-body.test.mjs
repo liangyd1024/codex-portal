@@ -138,3 +138,15 @@ test('questions remain visible after commentary folds and can reopen from the tr
  assert.match(card.textContent,/选择方式？甲乙/);all(card,'BUTTON')[0].onclick();assert.equal(opened,1);
  assert.equal(questionHistory(msg('plain'),()=>{}),null);
 });
+
+test('ordinary image links render inline while documents and code remain links or literal text',()=>{
+ const calls=[];
+ const body=markdown('- **运行流程**：[查看 PNG](</tmp/a b.png>) · [SVG](/tmp/a.svg)\n- [文档](/tmp/readme.md)\n\n`[示例](/tmp/code.png)`\n\n```md\n[示例](/tmp/fence.png)\n```',0,{
+  image:(path,label,explicit)=>{calls.push({path,explicit});return /\.(png|svg)$/.test(path)?new Node('img'):null;},
+  file:()=>new Node('a')
+ });
+ assert.equal(all(body,'IMG').length,2);
+ assert.equal(all(body,'A').length,1);
+ assert.equal(all(body,'A')[0].textContent,'文档');
+ assert.deepEqual(calls,[{path:'/tmp/a b.png',explicit:false},{path:'/tmp/a.svg',explicit:false},{path:'/tmp/readme.md',explicit:false}]);
+});

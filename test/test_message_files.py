@@ -129,3 +129,13 @@ class MessageFilesTest(unittest.TestCase):
         with self.assertRaises(reader.FileError) as caught:self.read(mode='html')
         self.assertEqual(caught.exception.status,415)
         with self.assertRaises(reader.FileError):self.read(itemId='other-message',reference=str(path),mode='html')
+
+    def test_image_links_stream_with_image_mime_without_metadata_request(self):
+        for suffix, mime, content in [('png', 'image/png', b'\x89PNG\r\n\x1a\n'), ('svg', 'image/svg+xml', b'<svg xmlns="http://www.w3.org/2000/svg"/>')]:
+            path = self.home / ('diagram.' + suffix)
+            path.write_bytes(content)
+            self.add(suffix, path)
+            header, body = self.read(itemId=suffix, reference=str(path))
+            self.assertEqual(header['mime'], mime)
+            self.assertEqual(header['kind'], 'image')
+            self.assertEqual(body, content)

@@ -94,7 +94,7 @@ import {notificationSupport,prepareNotificationWorker,submitWorkerNotification} 
 import {deliverNotice,submitNotification} from '../../public/notification-delivery.js';
 import {asyncQuestions,QuestionDrafts} from '../../public/questions.js';
 import {publishRequestCards,syncRequestCards} from './components/RequestCards';
-import {fileLink,closeFileViewer} from '../../public/message-files.js';
+import {fileLink,itemFileUrl,closeFileViewer} from '../../public/message-files.js';
 import {notifyManagerError, recoveryMessage, selectedRecoveryMessage} from '../../public/recovery-state.js';
 import {processSummary,renderProcessSummary} from '../../public/process-summary.js';
 import {activitySource,conversationActivity} from '../../public/activity.js';
@@ -492,9 +492,10 @@ function renderCommandOutput(item:NativeItem,{threadId=state.selectedId,refresh=
 function renderItem(item:NativeItem,{threadId=state.selectedId,side=false,refresh=renderMessages}={}) {
   const imageUrl=(options:Record<string,unknown>)=>itemImageUrl(threadId,item.id,{...options,host:targetHost});
   const fileContext={threadId,itemId:item.id,host:targetHost};
-  const bodyOptions={file:(path:string,label:string)=>fileLink(path,label,fileContext),image:(path:string,label:string)=>{
-    if(!isRasterImage(path))return null;
-    if(path.startsWith('/')&&!path.startsWith('//'))return imageCard(imageUrl({reference:path}),label||'回复图片');
+  const bodyOptions={file:(path:string,label:string)=>fileLink(path,label,fileContext),image:(path:string,label:string,explicit:boolean)=>{
+    const raster=isRasterImage(path);
+    if(!raster&&!/\.svg$/i.test(path))return null;
+    if(path.startsWith('/')&&!path.startsWith('//'))return imageCard(explicit&&raster?imageUrl({reference:path}):itemFileUrl(threadId,item.id,path,targetHost),label||'回复图片');
     if(/^data:image\/(png|jpeg|webp|gif);base64,/.test(path))return imageCard(path,label||'回复图片');
     return null;
   }};

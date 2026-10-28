@@ -16,6 +16,7 @@ TYPES = {
     '.mp4': ('video/mp4', 'video'), '.webm': ('video/webm', 'video'), '.mov': ('video/quicktime', 'video'),
     '.mp3': ('audio/mpeg', 'audio'), '.m4a': ('audio/mp4', 'audio'), '.wav': ('audio/wav', 'audio'), '.ogg': ('audio/ogg', 'audio'), '.flac': ('audio/flac', 'audio'),
     '.png': ('image/png', 'image'), '.jpg': ('image/jpeg', 'image'), '.jpeg': ('image/jpeg', 'image'), '.gif': ('image/gif', 'image'), '.webp': ('image/webp', 'image'),
+    '.svg': ('image/svg+xml', 'image'),
     '.pdf': ('application/pdf', 'pdf'),
 }
 TEXT_EXTENSIONS = {'.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.tsv', '.log', '.py', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.java', '.sql', '.css', '.html', '.htm', '.svg', '.xml', '.yaml', '.yml', '.toml', '.sh', '.go', '.rs', '.c', '.h', '.cpp'}
