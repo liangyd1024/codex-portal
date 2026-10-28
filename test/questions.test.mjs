@@ -26,7 +26,7 @@ test('async answer uses verified question wording and original expected turn, de
 });
 test('stale, foreign and incomplete questions cannot be submitted',async()=>{
  const {m,calls}=manager();for(const data of [{turnId:'other',itemId:'item',answers:answers()},{turnId:'turn',itemId:'item',answers:{}},{turnId:'turn',itemId:'foreign',answers:answers()}])await assert.rejects(m.answerQuestions('thread',data));
- m.history=async()=>({data:[{...turn(),status:'interrupted'}]});await assert.rejects(m.answerQuestions('thread',{turnId:'turn',itemId:'item',answers:answers()}),e=>e.code==='STALE_REQUEST');assert.equal(calls.length,0);
+ m.history=async()=>({data:[]});await assert.rejects(m.answerQuestions('thread',{turnId:'turn',itemId:'item',answers:answers()}),e=>e.code==='STALE_REQUEST');assert.equal(calls.length,0);
 });
 test('concurrent answers send once and connection changes during verification abort',async()=>{
  const {m,calls}=manager();let release;m.history=()=>new Promise(r=>{release=()=>r({data:[turn()]});});const data={turnId:'turn',itemId:'item',answers:answers()};const pending=m.answerQuestions('thread',data);await assert.rejects(m.answerQuestions('thread',data),e=>e.code==='SEND_PENDING');m.generation++;release();await assert.rejects(pending,e=>e.code==='CONNECTION_CHANGED');assert.equal(calls.length,0);
@@ -83,13 +83,28 @@ test('temporary chat stale status, removed questions and connection changes cann
  }
 });
 
-test('finished questions cannot start or steer a native turn',async()=>{
+test('explicit historical answers use the current native turn or start a message when idle',async()=>{
  for(const status of ['completed','failed','interrupted'])for(const active of [false,true]){
-  const {m,calls}=manager();m.controlled.get('thread').status={type:active?'active':'idle'};
+  const {m,calls}=manager();m.message=async(id,data)=>{calls.push({method:'message',params:{id,...data}});};
   m.history=async()=>({data:[...(active?[{id:'new',status:'inProgress',items:[]}]:[]),{...turn(),status}]});
-  await assert.rejects(m.answerQuestions('thread',{turnId:'turn',itemId:'item',answers:answers()}),e=>e.code==='STALE_REQUEST');
-  assert.equal(calls.length,0);
+  await m.answerQuestions('thread',{turnId:'turn',itemId:'item',answers:answers()});
+  assert.equal(calls.length,1);assert.equal(calls[0].method,active?'turn/steer':'message');
+  if(active)assert.equal(calls[0].params.expectedTurnId,'new');
  }
+});
+test('historical lookup reads older pages and accepted replies still prevent resubmission',async()=>{
+ const {m,calls}=manager(),read=[];
+ const text=replyText(request().params.questions,answers());
+ m.history=async(id,cursor)=>{read.push(cursor);return cursor?{data:[{...turn(),status:'completed'}]}:{data:[{id:'new',status:'inProgress',items:[{type:'userMessage',content:[{type:'text',text}]}]}],nextCursor:'older'};};
+ await assert.rejects(m.answerQuestions('thread',{turnId:'turn',itemId:'item',answers:answers()}),e=>e.code==='STALE_REQUEST');
+ assert.deepEqual(read,[undefined,'older']);assert.equal(calls.length,0);
+});
+test('history questions are opt-in and keep original IDs without reviving accepted replies',()=>{
+ const t={...turn(),status:'completed'};
+ assert.equal(asyncQuestions([t],'thread').length,0);
+ assert.deepEqual(asyncQuestions([t],'thread',{includeFinished:true})[0].params.questions,request().params.questions);
+ const reply={type:'userMessage',content:[{type:'text',text:replyText(request().params.questions,answers())}]};
+ assert.equal(asyncQuestions([t,{id:'new',items:[reply]}],'thread',{includeFinished:true}).length,0);
 });
 test('accepted answer in a later turn clears a completed historical question',()=>{
  const completed={...turn(),status:'completed'},text=replyText(request().params.questions,answers());

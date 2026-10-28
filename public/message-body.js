@@ -10,7 +10,7 @@ export function groupTurnItems(turn) {
   const groups = [];
   for (const [index,item] of items.entries()) {
     const process = !(item.type === 'imageGeneration' && (item.result || item.imageRef)) && !['userMessage','steeringUserMessage','goalMessage','agentMessage','plan','error'].includes(item.type) ||
-      (finished && hasAnswer && item.type === 'agentMessage' && item.phase === 'commentary');
+      (finished && hasAnswer && item.type === 'agentMessage' && item.phase === 'commentary' && !item.questions?.length);
     if (!process) { groups.push({type:'message',item}); continue; }
     let group = groups.at(-1);
     if (group?.type !== 'process') { group = {type:'process',key:item.id || index,items:[]}; groups.push(group); }
@@ -136,4 +136,19 @@ export function markdown(text, depth = 0, options = {}) {
     paragraph.push(line);
   }
   flush();return n;
+}
+
+// Keep the native question wording in the transcript even after its turn ends.
+export function questionHistory(item,open) {
+  const questions=(item.questions||[]).filter(q=>typeof q?.title==='string'&&q.title.trim());
+  if(!questions.length)return null;
+  const card=el('details','question-history');card.dataset.itemId='question:'+item.id;
+  card.append(el('summary','','查看问题（'+questions.length+'）'));
+  for(const q of questions){
+    card.append(el('p','',q.title));
+    const list=el('ul');for(const option of q.options||[])if(typeof option==='string')list.append(el('li','',option));
+    if(list.childNodes.length)card.append(list);
+  }
+  const button=el('button','secondary-button','回答问题');button.type='button';button.onclick=open;card.append(button);
+  return card;
 }

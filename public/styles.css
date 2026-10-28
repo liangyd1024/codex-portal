@@ -646,3 +646,9 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .inspector .notification-controls input{accent-color:var(--control-foreground)}
 .inspector :is(.primary-button,.secondary-button){font-size:14px;line-height:1.625;border-radius:var(--control-radius)}
 .inspector .text-button:not(.danger){color:var(--control-foreground)}
+
+/* Native questions remain accessible in the transcript across turn changes. */
+.question-history{margin-block:12px;border:1px solid var(--control-border-color);border-radius:var(--panel-radius);padding:8px 12px;background:var(--control-background);overflow-wrap:anywhere}
+.question-history>summary{min-height:44px;display:flex;align-items:center;cursor:pointer;border-radius:var(--control-radius)}
+.question-history>summary:hover{background:var(--control-hover-background,#f2f2f2)}
+.question-history>.secondary-button{min-width:44px;min-height:44px}

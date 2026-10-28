@@ -85,9 +85,9 @@ test('desktop active sends use native follower steering and preserve the origina
  await a.send({threadId:id,messageId:mid,text:'补充要求'});
  assert.deepEqual(calls.find(p=>p.action==='send'),{action:'send',threadId:id,messageId:mid,text:'补充要求',steer:true,cwd:'/test/project'});
 });
-test('desktop answers validate original questions, steer the reply and deduplicate after acceptance',async()=>{
+for(const status of ['inProgress','completed'])test('desktop '+status+' questions validate original wording and deduplicate after acceptance',async()=>{
  const {a,m,calls}=fixture();const item={id:'question',type:'agentMessage',questions:[{title:'选择方式',options:['方案一','方案二']}]};
- m.passive=async action=>action==='history'?{data:[{id:tid,status:'inProgress',items:[item]}]}:{thread:{id,cwd:'/test/project',activity:{state:'running'}}};
+ m.passive=async action=>action==='history'?{data:[{id:tid,status,items:[item]}]}:{thread:{id,cwd:'/test/project',activity:{state:'running'}}};
  const {asyncQuestions}=await import('../shared/questions.js');const question=asyncQuestions([{id:tid,status:'inProgress',items:[item]}],id)[0];
  const data={threadId:id,turnId:tid,itemId:item.id,answers:{[question.params.questions[0].id]:{answers:['方案二']}}};
  await assert.rejects(a.answerQuestions({...data,itemId:'unrelated'}),e=>e.code==='STALE_REQUEST');

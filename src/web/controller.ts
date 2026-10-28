@@ -102,7 +102,7 @@ let scrollFollow: ReturnType<typeof installScrollFollow> | undefined;
 let scrollContext: string | undefined;
 let turnNavigation: ReturnType<typeof installTurnNavigation> | undefined;
 import {userMessageContent,itemImageUrl,isRasterImage,imageCard} from '../../public/message-media.js';
-import {markdown,userMessageBody} from '../../public/message-body.js';
+import {questionHistory,markdown,userMessageBody} from '../../public/message-body.js';
 import {userMessageTime, timedTurnGroups} from '../../public/message-time.js';
 import {renderTurnFiles} from '../../public/turn-files.js';
 import {reconcileMessages} from '../../public/message-dom.js';
@@ -228,7 +228,8 @@ function messageOf(value:unknown) {
 }
 function requestThread(r:NativeRequest) { return r.threadId || r.params?.threadId; }
 function requests() {
-  const all = [...(state.status?.pendingRequests || []), ...(state.detail?.pendingRequests || []), ...state.localRequests,...(sideChat?.requests()||[]), ...(state.detail?.recovering?[]:asyncQuestions(turns(),state.selectedId))];
+  const activeIds=new Set(turns().filter(t=>t.status==='inProgress').map(t=>t.id));
+  const all = [...(state.status?.pendingRequests || []), ...(state.detail?.pendingRequests || []), ...state.localRequests,...(sideChat?.requests()||[]), ...(state.detail?.recovering?[]:asyncQuestions(turns(),state.selectedId,{includeFinished:true}).filter((r:NativeRequest)=>typeof r.params?.turnId==='string'&&activeIds.has(r.params.turnId)||questionDrafts.get(r).reopened))];
   const map = new Map(); all.forEach(r => { if (r?.id != null) map.set(requestKey(r), r); });
   return [...map.values()];
 }
@@ -517,7 +518,19 @@ function renderItem(item:NativeItem,{threadId=state.selectedId,side=false,refres
       const reply=el('button','secondary-button',controlled()?'回复决策':'接管并回复决策');
       reply.onclick=async()=>{if(!controlled())await takeoverThread();if(!controlled())return;$('message-input').focus();$('message-input').placeholder='输入你的决定，确认后发送…';};
       card.append(reply,el('small','','此通知是历史记录。填写并发送后，才会提交你的决定。'));m.append(card,bodyMarkdown(text.slice(heartbeat.index!+heartbeat[0].length)));
-    }else m.append(bodyMarkdown(text)); return m;
+    }else m.append(bodyMarkdown(text));
+    if(!side&&Array.isArray(item.questions)){
+      const card=questionHistory(item,()=>{
+        if(threadId!==state.selectedId)return;
+        const request=asyncQuestions(turns(),threadId,{includeFinished:true}).find((r:NativeRequest)=>r.params?.itemId===item.id);
+        if(!request||questionDrafts.get(request).sent){toast('此问题已回答。');return;}
+        questionDrafts.set(request,{reopened:true,skipped:false,collapsed:false});state.requestSignature='';renderRequests();
+        const form=[...document.querySelectorAll<HTMLElement>('.request-card')].find(node=>node.dataset.requestId===requestPath(request));
+        form?.scrollIntoView({block:'nearest'});form?.querySelector<HTMLElement>('input,textarea,button')?.focus();
+      });
+      if(card)m.append(card);
+    }
+    return m;
   }
   if (item.type === 'reasoning') {
     const r = el('details','reasoning-block'); r.dataset.itemId = item.id!; r.append(el('summary','','思考摘要'));

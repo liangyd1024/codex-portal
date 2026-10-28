@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {markdown,userMessageBody,groupTurnItems} from '../public/message-body.js';
+import {markdown,userMessageBody,groupTurnItems,questionHistory} from '../public/message-body.js';
 // Minimal DOM for semantic assertions; browser acceptance covers real layout/events.
 class Node {
   constructor(tag='',text=''){this.tagName=tag.toUpperCase();this.children=[];this.text=text;this.style={};this.attrs={};this.dataset={};}
@@ -128,4 +128,13 @@ test('native steering input remains an individual visible message rather than a 
  const input={id:'steer',type:'steeringUserMessage',status:'accepted',input:[{type:'text',text:'中文补充原文'}]};
  const groups=groupTurnItems({status:'inProgress',items:[{id:'tool',type:'commandExecution'},input]});
  assert.equal(groups[1].type,'message');assert.equal(groups[1].item,input);
+});
+
+test('questions remain visible after commentary folds and can reopen from the transcript',()=>{
+ const question={...msg('q','commentary'),questions:[{title:'选择方式？',options:['甲','乙']}]};
+ assert.equal(groupTurnItems({status:'completed',items:[question,msg('a','final_answer')]})[0].type,'message');
+ let opened=0;const card=questionHistory(question,()=>opened++);
+ assert.equal(all(card,'SUMMARY')[0].textContent,'查看问题（1）');
+ assert.match(card.textContent,/选择方式？甲乙/);all(card,'BUTTON')[0].onclick();assert.equal(opened,1);
+ assert.equal(questionHistory(msg('plain'),()=>{}),null);
 });

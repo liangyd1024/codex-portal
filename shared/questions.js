@@ -7,8 +7,8 @@ export function questionReplies(item) {
   if(!match)return [];
   try{const parsed=JSON.parse(match[1]),values=Array.isArray(parsed)?parsed:[parsed];return values.filter(v=>typeof v?.questionItemId==='string'&&typeof v.question==='string'&&typeof v.answer==='string');}catch{return [];}
 }
-export function asyncQuestions(turns,threadId) {
-  const active=(turns||[]).filter(t=>t.status==='inProgress');
+export function asyncQuestions(turns,threadId,{includeFinished=false}={}) {
+  const active=(turns||[]).filter(t=>includeFinished||t.status==='inProgress');
   if(!active.length)return [];
   const answered=new Set((turns||[]).flatMap(t=>(t.items||[]).flatMap(questionReplies)).map(r=>r.questionItemId));
   return active.flatMap(turn=>(turn.items||[]).flatMap(item=>{
