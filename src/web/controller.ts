@@ -328,7 +328,7 @@ function renderControlOverview() {
 }
 function renderConnectionBanner() {
   const s=state.status||{}, c=s.connection||{}, service=s.service||{}, conn=c.state||'disconnected';
-  publishConnectionBanner(connectionBanner({recovering:state.transportRecovering,transport:state.transport,error:c.error?messageOf(c.error):'',connection:conn,
+  publishConnectionBanner(connectionBanner({resumeWarning:!newChatOpen&&!state.desktopMode?state.detail?.resumeWarning:null,recovering:state.transportRecovering,transport:state.transport,error:c.error?messageOf(c.error):'',connection:conn,
     stage:c.stage,stageLabel:stages[c.stage!],connected:connected(),desktopMode:state.desktopMode,loginRecovery:s.loginRecovery,
     limited:service.protocolValidation?.status==='limited',features:service.protocolValidation?.features,
     recoveryMessage:()=>selectedRecoveryMessage(s.recoveryFailures,newChatOpen?null:state.selectedId)}));

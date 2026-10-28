@@ -59,6 +59,7 @@ function fixture(t, handlers = {}) {
     return { running: action !== 'release', pid: 123, version: '0.162.fake', startedAt: 'fixed-start' };
   };
   manager.passive = async(action, payload)=>{
+    if(action==='takeoverState')return {thread:{id:payload.threadId},goal:null};
     if(action==='detail')return await rpc.request('thread/read',{threadId:payload.threadId});
     assert.equal(action,'history');
     return {...await rpc.request('thread/turns/list',{threadId:payload.threadId,cursor:payload.cursor}),historySource:'snapshot'};
@@ -123,6 +124,7 @@ test('active writer conflict keeps the original id and never creates or forks a 
   });
   await assert.rejects(manager.takeover('original'), (error) => error.code === 'WRITER_CONFLICT' && error.status === 409);
   assert.deepEqual(rpc.calls.map(({ method, params }) => ({ method, params })), [
+    { method: 'thread/loaded/list', params: {} },
     { method: 'thread/resume', params: { threadId: 'original', excludeTurns: true } },
   ]);
   assert.equal(manager.controlled.has('original'), false);

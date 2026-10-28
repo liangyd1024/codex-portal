@@ -396,6 +396,39 @@ def read_threads(payload):
         connection.close()
 
 
+def read_goal_snapshot(payload):
+    identifier = thread_id(payload)
+    # Older installations have no goal store. Never create or migrate it.
+    try:
+        (STORE / 'goals_1.sqlite').stat()
+    except FileNotFoundError:
+        return {'goal': None}
+    connection = connect_store('goals_1.sqlite')
+    try:
+        require_columns(connection, 'goals_1.sqlite', 'thread_goals',
+                        ('thread_id', 'objective', 'status', 'created_at_ms', 'updated_at_ms',
+                         'tokens_used', 'time_used_seconds', 'token_budget'))
+        row = connection.execute('SELECT * FROM thread_goals WHERE thread_id = ?', (identifier,)).fetchone()
+        if row is None:
+            return {'goal': None}
+        statuses = {'active': 'active', 'paused': 'paused', 'blocked': 'blocked', 'complete': 'complete',
+                    'budget_limited': 'budgetLimited', 'usage_limited': 'usageLimited'}
+        if row['status'] not in statuses:
+            raise ValueError('目标状态无法识别。')
+        return {'goal': {'threadId': identifier, 'objective': row['objective'], 'status': statuses[row['status']],
+                         'createdAt': row['created_at_ms'] // 1000, 'updatedAt': row['updated_at_ms'] // 1000,
+                         'tokensUsed': row['tokens_used'], 'timeUsedSeconds': row['time_used_seconds'],
+                         'tokenBudget': row['token_budget']}}
+    finally:
+        connection.close()
+
+
+def read_takeover_state(payload):
+    # Keep the native goal read after owner discovery to narrow the handoff race.
+    detail = read_detail(payload)
+    return {**detail, **read_goal_snapshot(payload)}
+
+
 def read_detail(payload):
     connection = connect_store('state_5.sqlite')
     try:
@@ -1014,7 +1047,7 @@ def main():
     if not isinstance(payload, dict):
         raise ValueError('PAYLOAD 必须是 JSON 对象。')
     action = payload.get('action')
-    handlers = {'turnDirectory': read_turn_directory, 'toolItem': read_tool_item, 'sidebar': read_sidebar, 'sidebarActivity': read_sidebar_activity, 'sidebarMetadata': read_sidebar_metadata, 'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
+    handlers = {'goal': read_goal_snapshot, 'takeoverState': read_takeover_state, 'turnDirectory': read_turn_directory, 'toolItem': read_tool_item, 'sidebar': read_sidebar, 'sidebarActivity': read_sidebar_activity, 'sidebarMetadata': read_sidebar_metadata, 'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
     if action not in handlers:
         raise ValueError('不支持的只读操作。')
     return handlers[action](payload)

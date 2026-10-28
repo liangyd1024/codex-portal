@@ -8,7 +8,7 @@ export function protocolDiagnostics(validation:{features?:Record<string,{support
  return reasons;
 }
 interface Context {
- recovering?:boolean;transport:boolean;error:string;connection:string;stage?:string;stageLabel?:string;
+ resumeWarning?:string|null;recovering?:boolean;transport:boolean;error:string;connection:string;stage?:string;stageLabel?:string;
  connected:boolean;desktopMode:boolean;loginRecovery?:string;limited:boolean;
  features?:Record<string,{supported?:boolean}>;recoveryMessage:()=>string;
 }
@@ -18,6 +18,7 @@ export function connectionBanner(context:Context):Partial<BannerView>{
  if(!context.transport)return show('与网页服务的连接已中断，正在自动重连。已有内容和草稿保留，恢复后将自动同步。');
  if(context.error)return show(context.error,true);
  if(['connecting','reconnecting'].includes(context.connection))return show('正在连接目标机器。'+(context.stage?(context.stageLabel||context.stage)+'…':'正在核验连接状态…'));
+ if(context.connected&&context.resumeWarning)return show(context.resumeWarning,true);
  if(context.connected&&context.loginRecovery&&!context.desktopMode)return show(context.loginRecovery,true);
  if(context.connected&&context.limited){
   const disabled=Object.entries(context.features||{}).filter(([name,value])=>primaryFeatures.has(name)&&value.supported===false).map(([name])=>featureNames[name]);

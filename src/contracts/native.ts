@@ -8,7 +8,7 @@ export interface NativeRequest {id?:unknown;key?:string;kind?:string;threadId?:s
 export interface NativeHandoff {threadId?:string;state?:string;[field:string]:unknown}
 export interface NativeGoal {createdAt?:number;updatedAt?:number;timeUsedSeconds?:number;objective:string;status?:string;[field:string]:unknown}
 export interface NativeDetail {
- thread?:NativeThread;turns?:NativeTurn[];pendingRequests?:NativeRequest[];controlled?:boolean;recovering?:boolean;historySource?:string;handoff?:NativeHandoff|null;
+ resumeWarning?:string|null;thread?:NativeThread;turns?:NativeTurn[];pendingRequests?:NativeRequest[];controlled?:boolean;recovering?:boolean;historySource?:string;handoff?:NativeHandoff|null;
  queue?:{data?:{id:string;input?:{type:string;text?:string;[field:string]:unknown}[];[field:string]:unknown}[];[field:string]:unknown};goal?:NativeGoal|null;goalError?:unknown;controlState?:string;nextCursor?:string|null;historyCursor?:string|null;totalTurns?:number;
  desktop?:{settings?:{model:string;reasoningEffort?:string|null;[field:string]:unknown}|null;available?:boolean;canSend?:boolean;threadReferencesSupported?:boolean;error?:string;receipts?:Record<string,{status?:string;[field:string]:unknown}>;[field:string]:unknown};
  backgroundTerminals?:{data?:unknown[];error?:string;[field:string]:unknown};[field:string]:unknown;

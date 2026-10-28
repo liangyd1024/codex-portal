@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {Manager} from '../lib/manager.mjs';
 import {RpcClient} from '../lib/rpc-client.mjs';
 import {readSidebar} from '../src/server/services/sidebar.ts';
-import {readLiveStatus} from '../lib/status-read.mjs';
+import {readLiveStatus,invalidateLiveStatus} from '../lib/status-read.mjs';
 import {backgroundActivity} from '../public/connection-state.js';
 
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
@@ -111,4 +111,15 @@ test('late rejected auth read cannot mark a newly updated account invalid',async
  const rejected=assert.rejects(readLiveStatus(m,'account/read'),e=>e.code==='ACCOUNT_CHANGED');await settle();
  m.onNotification({method:'account/updated',params:{authMode:'apiKey'}});reject(Error('token_revoked'));await rejected;
  assert.equal(m.status().loginRecovery,null);
+});
+
+test('post-resume verification cannot reuse a pre-resume goal read',async()=>{
+ const old=deferred(),fresh=deferred();let calls=0;
+ const m=fixture({connected:true,request:async()=>++calls===1?old.promise:fresh.promise});
+ const previous=readLiveStatus(m,'thread/goal/get',{threadId:'a'});await settle();
+ invalidateLiveStatus(m,'thread/goal/get',{threadId:'a'});
+ const verified=readLiveStatus(m,'thread/goal/get',{threadId:'a'});await settle();assert.equal(calls,2);
+ old.resolve({goal:{status:'active'}});await previous;
+ const shared=readLiveStatus(m,'thread/goal/get',{threadId:'a'});await settle();assert.equal(calls,2);
+ fresh.resolve({goal:null});assert.deepEqual(await verified,{goal:null});assert.deepEqual(await shared,{goal:null});
 });

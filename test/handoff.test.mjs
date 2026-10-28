@@ -144,7 +144,7 @@ test('lost response persists non-resumption across a new Manager and reconnect',
 test('explicit takeover restores control and a late release poll cannot undo it',async()=>{
   const {m,rpc}=fixture();
   try{
-    await m.handoff('a');let resolve;rpc.overrides['thread/loaded/list']=()=>new Promise(r=>resolve=r);
+    await m.handoff('a');let resolve;rpc.overrides['thread/loaded/list']=()=>{delete rpc.overrides['thread/loaded/list'];return new Promise(r=>resolve=r);};
     const poll=m.handoffs.refresh();await m.takeover('a');resolve({data:['b']});await poll;
     assert.equal(m.controlled.has('a'),true);assert.equal(m.subscriptions.get('a').handoff,undefined);
   }finally{m.disconnect();}

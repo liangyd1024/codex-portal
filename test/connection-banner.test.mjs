@@ -33,3 +33,10 @@ test('optional capability limits stay in diagnostics without masking recovery fa
  assert.equal(connectionBanner({...context(),limited:true,features,recoveryMessage:()=> '会话恢复失败'}).text,'会话恢复失败');
  assert.deepEqual(protocolDiagnostics({features,methodReasons:{first:'缺少目标接口',second:'thread/readState/update 接口缺失'}}),['会话引用：缺少筛选参数','目标管理：缺少目标接口','清除目标：缺少清除接口','执行中补充会话引用：缺少引用上下文','thread/readState/update 接口缺失']);
 });
+
+test('resume warning stays scoped to the selected session and yields to connection failures',()=>{
+ const warning='会话已连接，但原来未完成的目标未保留。';
+ assert.deepEqual(connectionBanner({...context(),resumeWarning:warning}),{hidden:false,className:'connection-banner error',text:warning});
+ assert.equal(connectionBanner({...context(),resumeWarning:warning,error:'断连'}).text,'断连');
+ assert.deepEqual(connectionBanner({...context(),resumeWarning:null}),{hidden:true});
+});
