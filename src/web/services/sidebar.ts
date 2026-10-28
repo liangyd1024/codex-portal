@@ -87,7 +87,7 @@ export class Sidebar {
     this.treeView=installSidebarTree(this);
     this.dialogView=installSidebarDialog();
     this.menuView=installSidebarMenu(item=>{this.closeMenu(false);item.run?.();});
-    this.toolbarView=installSidebarToolbar({before:this.node.parentElement!,onAll:()=>this.toggleRunning(false),onRunning:()=>this.toggleRunning(true),onCompleted:()=>this.toggleView('completed'),onRetry:()=>{void (this.o.retry?this.o.retry():this.o.refresh()).catch(e=>this.o.toast(String(e.message||e),true));},onArchive:()=>this.archiveView(false),onMore:more=>this.openMenu(more,this.toolbarMenu(more))});
+    this.toolbarView=installSidebarToolbar({before:this.node.parentElement!,onAll:()=>this.toggleRunning(false),onRunning:()=>this.toggleRunning(true),onCompleted:()=>this.toggleView('completed'),onArchive:()=>this.archiveView(false),onMore:more=>this.openMenu(more,this.toolbarMenu(more))});
     this.toolbar=this.toolbarView.node;this.progress=this.toolbarView.progress;
     this.undoView=installSidebarUndo({anchor:this.toolbar,api:path=>this.o.api(path),restore:thread=>this.run('restore',thread,{},true),focus:()=>this.focusAnchor(),error:message=>this.o.toast(message,true)});
     document.addEventListener('pointerdown',e=>{if(this.menu&&!this.menu.contains(e.target as Node)&&!this.menuAnchor?.contains(e.target as Node))this.closeMenu(false);});

@@ -4,7 +4,7 @@ import {createStore,useStore,type StoreApi} from 'zustand';
 interface Running {active:boolean;disabled:boolean;hidden:boolean;count:number;pending:boolean;uncertain:boolean;search:boolean}
 interface Completed {active:boolean;count:number}
 interface View {completed:Completed;running:Running;archived:boolean|undefined;hidden:boolean;label:string}
-interface Options {before:HTMLElement;onAll:()=>void;onRunning:()=>void;onCompleted:()=>void;onRetry:()=>void;onArchive:()=>void;onMore:(button:HTMLButtonElement)=>void}
+interface Options {before:HTMLElement;onAll:()=>void;onRunning:()=>void;onCompleted:()=>void;onArchive:()=>void;onMore:(button:HTMLButtonElement)=>void}
 interface Instance extends Options {id:number;store:StoreApi<View>;node:HTMLDivElement|null}
 const registry=createStore<{instances:Instance[]}>(()=>({instances:[]}));let sequence=0;
 // Only installation requires an immediate DOM handle; view updates can batch.
@@ -22,7 +22,6 @@ function Toolbar({instance}:{instance:Instance}){
   </div>}
   <button type="button" className="icon-button sidebar-more" aria-label="侧边栏更多操作" onClick={e=>instance.onMore(e.currentTarget)}>⋯</button>
   <span className="sidebar-progress" role="status" hidden={view.hidden}>{view.label}</span>
-  {r.active&&(r.pending||r.uncertain)&&<div className="sidebar-running-notice"><span role="status">{r.pending?'正在确认运行状态…':r.count?'已确认 '+r.count+' 个，部分状态待确认':'运行状态待确认'}</span>{r.uncertain&&!r.pending&&<button type="button" onClick={instance.onRetry}>重试</button>}</div>}
  </div>,instance.before.parentElement!);
 }
 export function SidebarToolbars(){const instances=useStore(registry).instances;return <>{instances.map(instance=><Toolbar key={instance.id} instance={instance}/>)}</>;}
