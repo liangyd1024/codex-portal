@@ -75,7 +75,7 @@ test('initialize completes before initialized and before connected becomes true'
   assert.equal(socket.sent.length, 1);
   assert.deepEqual(socket.sent[0].params, {
     clientInfo: { name: 'remote_codex_manager', title: 'Codex Portal', version: '0.1.0' },
-    capabilities: { experimentalApi: true },
+    capabilities: { experimentalApi: true, optOutNotificationMethods: ['app/list/updated'] },
   });
   await assert.rejects(client.request('thread/list'), /not connected/);
   const result = { userAgent: 'codex/0.162', platformOs: 'macos' };
