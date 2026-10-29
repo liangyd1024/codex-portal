@@ -220,3 +220,17 @@ test('live owner receipts confirm lost delivery before history flushes without r
  assert.equal(calls.filter(p=>p.action==='send').length,1);
  assert.equal(a.unconfirmed(),undefined);
 });
+
+test('late first-send receipt is reconciled without replaying the native mutation',async()=>{
+ const {a,m,calls}=fixture();const original=a.call;let reads=0;
+ a.call=async(s,p)=>{if(p.action==='send'){calls.push(p);throw Object.assign(Error('native reply timed out'),{code:'OUTCOME_UNKNOWN'});}return original(s,p);};
+ const passive=m.passive;m.passive=async action=>{const result=await passive(action);if(action==='detail'&&++reads>=4)result.thread.activity.messageReceipts=[{messageId:mid,turnId:tid}];return result;};
+ const confirm=a.confirmSend.bind(a);a.confirmSend=messageId=>confirm(messageId,{wait:async()=>{},delays:[0,1,2,4]});
+ const result=await a.send({threadId:id,messageId:mid,text:'first message'});
+ assert.equal(result.accepted,true);assert.equal(result.turnId,tid);assert.equal(calls.filter(p=>p.action==='send').length,1);assert.equal(a.unconfirmed(),undefined);assert.equal(m.mutations,0);
+});
+test('bounded confirmation never accepts unrelated messages or an empty idle thread',async()=>{
+ const {a,m}=fixture();a.state.submissions[mid]={threadId:id,status:'unknown'};
+ m.passive=async action=>action==='history'?{data:[]}:{thread:{id,activity:{state:'idle',messageReceipts:[{messageId:tid,turnId:tid}]}}};
+ const waits=[];assert.equal(await a.confirmSend(mid,{wait:async ms=>waits.push(ms),delays:[0,1,2]}),false);assert.deepEqual(waits,[1,2]);assert.equal(a.state.submissions[mid].status,'unknown');
+});

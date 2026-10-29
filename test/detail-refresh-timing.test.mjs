@@ -23,7 +23,7 @@ function fixture(){
  refresh=createSelectedRefresh({state,blocked:()=>false,newChatOpen:()=>false,restore:async()=>{},read,turns,merge:(_old,incoming)=>incoming,apply,updated(){}}).refresh;
  const finish=async(index,id='a')=>{requests[index].resolve({thread:{id},turns:[],nextCursor:null});await settle();};
  const select=id=>{state.selectionVersion++;state.selectedId=id;state.detail=null;state.loadingDetail=true;return refresh();};
- return{state,requests,errors,applied,advance,finish,select,refresh:()=>refresh()};
+ return{state,requests,errors,applied,advance,finish,select,refresh:(fresh=false)=>refresh(fresh)};
 }
 async function initial(f){const pending=f.refresh();assert.equal(f.requests.length,1);await f.finish(0);assert.equal(f.requests.length,2);await f.finish(1);await pending;await f.advance(1000);}
 test('queued cold-read refresh merges with the same selection read that is still pending',async()=>{
@@ -34,4 +34,17 @@ test('queued cold-read refresh issues one warm read when selection completed bef
 });
 test('queued refresh uses the new selection and ignores the older selection response',async()=>{
  const f=fixture();await initial(f);await f.advance(1600);const old=f.select('a');await f.finish(2);await f.advance(1620);const current=f.select('b');await f.finish(4,'b');await f.advance(1650);assert.equal(f.requests.length,6);assert(f.requests[5].path.startsWith('/api/threads/b?'));await f.finish(3,'a');await old;assert.equal(f.state.detail.thread.id,'b');await f.finish(5,'b');await current;assert.equal(f.state.detail.thread.id,'b');assert.deepEqual(f.errors,[]);
+});
+
+test('fresh receipt events during a desktop read coalesce into one later snapshot',async()=>{
+ const f=fixture();f.state.desktopMode=true;
+ const old=f.refresh();const next=f.refresh(true);const burst=f.refresh(true);
+ assert.equal(f.requests.length,1);await f.finish(0);await old;
+ assert.equal(f.requests.length,2);await f.finish(1);await Promise.all([next,burst]);
+ assert.equal(f.requests.length,2);assert.deepEqual(f.errors,[]);
+});
+test('queued fresh reads cannot update a different selection',async()=>{
+ const f=fixture();f.state.desktopMode=true;
+ const old=f.refresh();const next=f.refresh(true);f.state.selectionVersion++;f.state.selectedId='b';
+ await f.finish(0);await Promise.all([old,next]);assert.equal(f.requests.length,1);assert.equal(f.state.detail,null);
 });

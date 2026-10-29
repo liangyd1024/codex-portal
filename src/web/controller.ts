@@ -906,7 +906,7 @@ const sendDesktopMessage=createDesktopSend({state,running,input:()=>$('message-i
   options:()=>composer!.options(),captureDraft:(id,text)=>state.drafts.capture(id,text),
   acknowledgeDraft:sent=>state.drafts.acknowledge(sent),sends:desktopSends,saveSends:()=>saveDesktopSends(),
   uuid:()=>crypto.randomUUID(),action:(...args)=>action(...args),post:(path,body)=>api(path,{method:'POST',body}),
-  refresh:()=>refreshSelected(),resize:()=>resizeInput(),toast:(...args)=>toast(...args)});
+  refresh:()=>refreshSelected(true),resize:()=>resizeInput(),toast:(...args)=>toast(...args)});
 const historyPagination=createHistoryPagination({state,busy:value=>publishWorkspaceRegion('messages-scroller',{busy:value}),
   action:(...args)=>action(...args),read:path=>api(path),turns,render:()=>renderThread()});
 const interruptThread=createStopRequest({state,newChatOpen:()=>newChatOpen,context:stopContext,turns,kind:typeOf,
@@ -921,7 +921,7 @@ const messageInput=createMessageInput({input:()=>$('message-input'),id:inputId,s
 function resizeInput() { messageInput.resize(); }
 const updateScheduler=createUpdateScheduler({state,defer:(run,delay)=>window.setTimeout(run,delay),cancel:timer=>window.clearTimeout(timer),usable,
   renderMessages:()=>renderMessages(),renderRequests:()=>renderRequests(),renderControls:()=>renderControls(),
-  refreshSelected:()=>refreshSelected(),refreshList:()=>loadThreads(false,false,true),report:error=>recordError(error,'thread')});
+  refreshSelected:()=>refreshSelected(true),refreshList:()=>loadThreads(false,false,true),report:error=>recordError(error,'thread')});
 function scheduleStreamRender(kind='all') { updateScheduler.stream(kind); }
 function scheduleDetailRefresh() { updateScheduler.detail(); }
 function scheduleListRefresh() { updateScheduler.list(); }

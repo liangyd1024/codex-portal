@@ -30,14 +30,26 @@ export function createSelectedRefresh<T, D extends Detail<T>>({
   state, blocked, newChatOpen, restore, read, turns, merge, apply, updated,
 }: SelectionDependencies<T, D>) {
   const reads = new Map<string, Promise<void>>();
+  const queued = new Map<string, Promise<void>>();
   const currentKey = () => JSON.stringify([state.selectedId, state.selectionVersion, state.detailVersion]);
-  async function refresh(): Promise<void> {
+  async function refresh(fresh = false): Promise<void> {
     if (blocked() || !state.selectedId) return;
     const id = state.selectedId, selection = state.selectionVersion, version = state.detailVersion;
     const key = JSON.stringify([id, selection, version]);
     const isCurrent = () => !newChatOpen() && id === state.selectedId &&
       selection === state.selectionVersion && version === state.detailVersion;
-    if (reads.has(key)) return reads.get(key);
+    if (reads.has(key)) {
+      if (!fresh) return reads.get(key);
+      // An event observed after a read started needs a later snapshot.
+      if (!queued.has(key)) {
+        const next = reads.get(key)!.catch(() => {}).then(async () => {
+          queued.delete(key);
+          if (isCurrent()) await refresh();
+        });
+        queued.set(key, next);
+      }
+      return queued.get(key);
+    }
     let applied = false;
     const pending = (async () => {
       // IndexedDB recovery is optional and must not delay the network reader.
