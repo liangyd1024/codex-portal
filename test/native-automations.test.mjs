@@ -96,7 +96,8 @@ for(const status of ['inProgress','completed'])test('desktop '+status+' question
  const sent=calls.filter(p=>p.action==='send');assert.equal(sent.length,1);assert.equal(sent[0].questionReply,true);assert.equal(sent[0].steer,true);assert.match(sent[0].text,/send_user_message_question_reply/);assert.match(sent[0].text,/方案二/);
 });
 test('desktop recovery is explicit, rejects controlled/archived threads, and never dispatches a message',async()=>{
- const {a,m,calls}=fixture();await a.recover();assert.equal(calls[0].action,'recover');assert.equal(m.mutations,0);assert.equal(a.pending,false);
+ const {a,m,calls}=fixture(),reads=[],passive=m.passive;m.passive=async(action,payload)=>{reads.push([action,payload]);return passive(action,payload);};await a.recover();assert.equal(calls[0].action,'recover');assert.equal(m.mutations,0);assert.equal(a.pending,false);
+ assert.deepEqual(reads[0],['detail',{threadId:id,includeActivity:false}]);assert.equal(reads.filter(([action])=>action==='detail').length,2);
  m.controlled.add(id);await assert.rejects(a.recover(),/交还/);m.controlled.clear();
  m.passive=async()=>({thread:{id,archived:true}});await assert.rejects(a.recover(),/归档/);assert.equal(m.mutations,0);assert.equal(calls.some(p=>p.action==='send'),false);
 });

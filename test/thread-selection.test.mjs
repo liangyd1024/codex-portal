@@ -27,14 +27,15 @@ test('creating blocks selection and mutable automation context is read when sele
 });
 test('detail apply retains raw values and same-thread goal on error but never saves recovering previews',()=>{
  const f=fixture(),goal={raw:{future:true}},turns=[{future:'完整原文'}];f.state.detail={thread:{id:'a'},goal};const data={thread:{id:'a',turns},goalError:'unavailable',nextCursor:'next',recovering:true,future:{text:'原始字段'}};f.applyDetail(data,true);
- assert.equal(f.state.detail.goal,goal);assert.equal(f.state.detail.turns,turns);assert.equal(f.state.detail.future,data.future);assert.equal(f.state.historyCursor,'next');assert.deepEqual(f.calls,[['models',true],'thread','requests']);
- f.calls.length=0;f.applyDetail({thread:{id:'b'},goalError:'unavailable',historyCursor:'older'});assert.equal(f.state.detail.goal,undefined);assert.deepEqual(f.state.detail.turns,[]);assert.equal(f.state.historyCursor,'older');assert.deepEqual(f.calls,['thread','requests','cache']);
+ assert.equal(f.state.detail.goal,goal);assert.equal(f.state.detail.turns,turns);assert.equal(f.state.detail.future,data.future);assert.equal(f.state.historyCursor,'next');assert.deepEqual(f.calls,[['desktop-chat',false],['models',true],'thread','requests']);
+ f.calls.length=0;f.applyDetail({thread:{id:'b'},goalError:'unavailable',historyCursor:'older'});assert.equal(f.state.detail.goal,undefined);assert.deepEqual(f.state.detail.turns,[]);assert.equal(f.state.historyCursor,'older');assert.deepEqual(f.calls,[['desktop-chat',false],'thread','requests','cache']);
 });
 test('verified desktop detail enables the existing composer without changing the draft or selection',()=>{
  const f=fixture();const selection=f.state.selectionVersion;
  f.applyDetail({thread:{id:'a'},controlState:'desktop',desktop:{available:true,canSend:true}});
  assert.equal(f.state.desktopMode,true);assert.equal(f.state.selectionVersion,selection);assert.equal(f.input.value,'草稿 A');assert.deepEqual(f.calls.slice(0,2),[['desktop-chat',true],['save','a']]);
  const cached=fixture();cached.applyDetail({thread:{id:'a'},controlState:'desktop',desktop:{available:true},recovering:true});assert.equal(cached.state.desktopMode,false);
+ const created=fixture();created.state.desktopMode=true;created.applyDetail({thread:{id:'a'},controlled:false,controlState:'desktop',desktop:{available:true}});assert.deepEqual(created.calls[0],['desktop-chat',true]);assert.equal(created.calls.some(c=>Array.isArray(c)&&c[0]==='save'),false);
 });
 
 test('manual selection cancels pending notification but notification routing does not cancel itself',async()=>{

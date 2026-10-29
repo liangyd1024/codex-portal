@@ -31,3 +31,10 @@ test('routing failure returned by thread/start remains uncertain and is never re
  assert.deepEqual(calls,['account/read','thread/start']);
  const draft=new NewChatDraft({getItem:()=>null,setItem(){}},'test');draft.begin();draft.failed(failure);assert.equal(draft.phase,'uncertain');
 });
+test('desktop-bound empty threads use native immediate unload without enabling web reference tools or pending auto titles',async()=>{
+ const {m}=fixture(()=>({}));const rpc=m.rpc.request;let config;
+ m.references.enabled=()=>true;m.references.create=async()=>assert.fail('desktop thread must inherit desktop tools');
+ m.rpc.request=async(method,params)=>{if(method==='thread/start')config=params.config;return rpc(method,params);};
+ await m.newThread({cwd:'/project'},{desktop:true});
+ assert.deepEqual(config,{thread_unload_delay_secs:0});assert.equal(m.autoTitles.size,0);
+});

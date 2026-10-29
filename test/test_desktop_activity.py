@@ -23,6 +23,7 @@ class Client:
     def close(self): self.closed = True
     def sendall(self, frame):
         message = json.loads(frame[4:]); self.sent.append(message)
+        if message.get('type') == 'client-discovery-response': return
         if message.get('method') == 'initialize':
             response = dict(type='response', requestId=message['requestId'], resultType='success', result=dict(clientId='test-observer'))
         elif message.get('method') == 'thread-owner-discovery':
@@ -55,13 +56,19 @@ class DesktopActivityTest(unittest.TestCase):
         with patch('socket.socket', return_value=client):
             result = store.desktop_activity(['test'])
         self.assertTrue(client.closed)
-        following = [m for m in client.sent if m['method'] == 'thread-stream-following-changed']
+        following = [m for m in client.sent if m.get('method') == 'thread-stream-following-changed']
         if following:
             self.assertFalse(following[-1]['params']['following'])
             self.assertEqual(sum(not m['params']['following'] for m in following), 1)
             self.assertTrue(all(m.get('targetClientIds') == ['test-owner'] for m in following))
-        self.assertTrue(all(m['method'] in ('initialize', 'thread-owner-discovery', 'thread-stream-following-changed') for m in client.sent))
+        self.assertTrue(all(m.get('method') in ('initialize', 'thread-owner-discovery', 'thread-stream-following-changed') or m.get('type')=='client-discovery-response' for m in client.sent))
         return result
+    def test_observer_declines_owner_discovery_while_reading_activity(self):
+        client=Client()
+        request={'type':'client-discovery-request','requestId':'discovery','request':{'method':'thread-owner-discovery'}}
+        data=json.dumps(request).encode();client.buffer=struct.pack('<I',len(data))+data
+        self.assertEqual(self.observe(client)['test']['state'],'running')
+        self.assertIn({'type':'client-discovery-response','requestId':'discovery','response':{'canHandle':False}},client.sent)
     def test_sidebar_question_flag_does_not_expose_request_contents(self):
         request = {'method': 'item/tool/requestUserInput', 'params': {'threadId': 'test', 'questions': [{'question': 'fixture'}]}}
         result = self.observe(Client(extra={'requests': [request]}))['test']

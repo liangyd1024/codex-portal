@@ -23,7 +23,7 @@ export function createThreadAccess(d:Dependencies){
   if(desktop.thread?.id!==id){error='会话已变化，请刷新后重试。';return {...detail,accessError:error};}
   if(desktop.desktop?.available)return desktop;
   // A deliberate handoff must never be undone by browsing or refresh.
-  if(detail.handoff){error=desktop.desktop?.error||'请在电脑端打开此会话，然后重试。';return {...detail,accessError:error};}
+  if(detail.handoff){error=desktop.desktop?.error||'请恢复桌面连接后重试。';return {...desktop,handoff:detail.handoff,accessError:error};}
   try{
    const resumed=await d.resume(id);
    return current()?resumed:detail;

@@ -168,10 +168,15 @@ def desktop_activity(identifiers, include_requests=False):
             return data
 
         def receive():
-            size = struct.unpack('<I', exact(4))[0]
-            if not 0 < size <= 16 * 1024 * 1024:
-                raise ValueError('Invalid activity frame')
-            return json.loads(exact(size))
+            while True:
+                size = struct.unpack('<I', exact(4))[0]
+                if not 0 < size <= 16 * 1024 * 1024:
+                    raise ValueError('Invalid activity frame')
+                message = json.loads(exact(size))
+                if message.get('type') != 'client-discovery-request':
+                    return message
+                send({'type': 'client-discovery-response', 'requestId': message['requestId'],
+                      'response': {'canHandle': False}})
 
         def following(identifier, value):
             if identifier not in owners:

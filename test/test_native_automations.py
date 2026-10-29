@@ -5,6 +5,10 @@ import tempfile
 import unittest
 import os
 import time
+import json
+import struct
+import plistlib
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -60,6 +64,36 @@ class AutomationStoreTest(unittest.TestCase):
 
 
 class DesktopSessionTest(unittest.TestCase):
+    def test_observer_answers_discovery_without_claiming_a_thread(self):
+        discovery = {'type':'client-discovery-request','requestId':'discovery','request':{'method':'thread-owner-discovery'}}
+        reply = {'type':'response','requestId':'own-request','resultType':'success'}
+        frames = b''.join(struct.pack('<I',len(data))+data for data in [json.dumps(discovery).encode(),json.dumps(reply).encode()])
+        class Socket:
+            buffer = frames
+            sent = []
+            def settimeout(self, _value): pass
+            def recv(self, size):
+                part, self.buffer = self.buffer[:size], self.buffer[size:]
+                return part
+            def sendall(self, data): self.sent.append(json.loads(data[4:]))
+        client = session.DesktopSession('/fixture');client.client = Socket()
+        self.assertEqual(client.receive(time.monotonic()+1),reply)
+        self.assertEqual(client.client.sent,[{'type':'client-discovery-response','requestId':'discovery','response':{'canHandle':False}}])
+
+    def test_availability_requires_running_configured_app_and_existing_ipc(self):
+        root = pathlib.Path(tempfile.mkdtemp(prefix='rcm-desktop-availability-'))
+        app = root/'Fixture.app';(app/'Contents/MacOS').mkdir(parents=True)
+        (app/'Contents/Info.plist').write_bytes(plistlib.dumps({'CFBundleExecutable':'Fixture'}))
+        binary = app/'Contents/Resources/codex'
+        app_binary = str(app/'Contents/MacOS/Fixture')
+        with patch.object(session,'SERVICE_BINARY',str(binary),create=True),patch.object(session.sys,'platform','darwin'),patch.object(session,'DesktopSession') as ipc,patch.object(session.subprocess,'run') as run:
+            run.return_value=SimpleNamespace(stdout='/fixture/unrelated\n')
+            self.assertEqual(session.run({'action':'availability'}),{'available':False});ipc.assert_not_called()
+            run.return_value=SimpleNamespace(stdout=app_binary+'\n')
+            self.assertEqual(session.run({'action':'availability'}),{'available':True});ipc.assert_called_once()
+            ipc.side_effect=session.DesktopError('socket unavailable')
+            with self.assertRaisesRegex(session.DesktopError,'socket unavailable'):session.run({'action':'availability'})
+
     def test_no_write_retry_after_disconnection(self):
         client = session.DesktopSession('/nonexistent', timeout=.1)
         calls = []
@@ -135,13 +169,12 @@ class DesktopSessionTest(unittest.TestCase):
     def test_recovery_navigates_once_and_retries_only_read_discovery(self):
         calls = []
         class Fake:
-            def __init__(self, *_a, **_kw): self.count = 0
+            def __init__(self, *_a, **_kw): pass
             def __enter__(self): return self
             def __exit__(self, *_a): pass
             def owner(self, _id):
-                self.count += 1
                 calls.append('discover')
-                if self.count == 1:
+                if len(calls) == 1:
                     raise session.DesktopError('桌面请求未获确认：no-client-found')
                 return 'owner'
             def settings(self, *_a): return {}
@@ -154,6 +187,23 @@ class DesktopSessionTest(unittest.TestCase):
         self.assertEqual(calls, ['discover','discover'])
         self.assertEqual(open_url.call_count, 1)
         self.assertEqual(open_url.call_args.args[0], ['/usr/bin/open','-a','/Applications/Example.app','codex://threads/'+identifier])
+
+    def test_recovery_bounds_read_timeouts_and_closes_each_observer_without_reopening_app(self):
+        timeouts, closed = [], []
+        class Fake:
+            def __init__(self, *_a, **kw): timeouts.append(kw['timeout'])
+            def __enter__(self): return self
+            def __exit__(self, *_a): closed.append(True)
+            def owner(self, _id):
+                raise session.DesktopError('timeout') from session.socket.timeout()
+        with patch.object(session, 'DesktopSession', Fake), patch.object(session.sys, 'platform', 'darwin'), \
+             patch.object(session, 'SERVICE_BINARY', '/Applications/Example.app/Contents/MacOS/codex', create=True), \
+             patch.object(session.subprocess, 'run') as open_url, patch.object(session.time, 'sleep'):
+            with self.assertRaises(session.DesktopError):
+                session.run({'action':'recover','threadId':'00000000-0000-0000-0000-000000000001'})
+        self.assertEqual(timeouts, [2,2,2,2])
+        self.assertEqual(len(closed), 4)
+        self.assertEqual(open_url.call_count, 1)
 
 
 class DesktopPlanTest(unittest.TestCase):

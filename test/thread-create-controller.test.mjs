@@ -33,3 +33,16 @@ test('first send failure leaves adopted native thread and draft rather than crea
 test('blank, pending image, invalid goal and unavailable creation states do not create',async()=>{
  for(const reason of ['blank','image','goal','busy','uncertain','cwd']){const f=fixture();if(reason==='blank')f.input.value='  ';if(reason==='image')f.d.attachmentsPending=()=>true;if(reason==='goal')f.d.validate=()=>{throw Error('目标无效');};if(reason==='busy')f.state.busy.add('create');if(reason==='uncertain')f.draft.phase='uncertain';if(reason==='cwd')f.draft.cwd='';await f.create();assert.equal(f.calls.some(c=>c[0]==='post'),false,reason);}
 });
+test('desktop native detail selects desktop sending and preserves the first draft',async()=>{
+ const f=fixture();f.d.preferDesktop=()=>true;const creating=f.create();
+ assert.equal(f.calls.find(c=>c[0]==='post')[1].preferDesktop,true);
+ const desktop={canSend:true,settings:{model:'native'}};
+ f.response.resolve({thread:{id:'native'},controlled:false,controlState:'desktop',desktop,creationReady:true});await creating;
+ assert.equal(f.state.desktopMode,true);assert.equal(f.calls.find(c=>c[0]==='detail')[1].controlled,false);
+ assert.equal(f.calls.find(c=>c[0]==='detail')[1].desktop,desktop);assert.equal(f.calls.filter(c=>c[0]==='send').length,1);
+});
+test('known creation with incomplete handoff retains its identity and draft without sending',async()=>{
+ const f=fixture(),creating=f.create();f.response.resolve({thread:{id:'native'},controlled:false,controlState:'desktop',creationReady:false,creationError:'桌面暂不可用'});await creating;
+ assert.equal(f.state.selectedId,'native');assert.equal(f.state.desktopMode,true);assert.equal(f.state.drafts.get('native'),f.input.value);
+ assert.equal(f.calls.some(c=>c[0]==='send'),false);assert.equal(f.calls.find(c=>c[0]==='toast')[1],'桌面暂不可用');
+});

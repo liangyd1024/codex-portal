@@ -2,6 +2,7 @@
 import json
 import os
 import pathlib
+import plistlib
 import pwd
 import socket
 import stat
@@ -67,10 +68,17 @@ class DesktopSession:
                     raise EOFError('桌面连接已断开。')
                 result.extend(part)
             return result
-        size = struct.unpack('<I', exact(4))[0]
-        if not 0 < size <= 16 * 1024 * 1024:
-            raise DesktopError('桌面响应格式不受支持。', 'DESKTOP_PROTOCOL')
-        return json.loads(exact(size))
+        while True:
+            size = struct.unpack('<I', exact(4))[0]
+            if not 0 < size <= 16 * 1024 * 1024:
+                raise DesktopError('桌面响应格式不受支持。', 'DESKTOP_PROTOCOL')
+            message = json.loads(exact(size))
+            if message.get('type') != 'client-discovery-request':
+                return message
+            # This client observes or forwards; it never owns a native thread.
+            # Silence would make another client's owner discovery wait 10s.
+            self.send({'type': 'client-discovery-response', 'requestId': message['requestId'],
+                       'response': {'canHandle': False}})
 
     def request(self, method, params, version, target=None, mutation=False):
         identifier = str(uuid.uuid4())
@@ -183,32 +191,56 @@ def run(payload):
     home = pathlib.Path(globals().get('SERVICE_HOME', str(pathlib.Path.home())))
     if home != pathlib.Path.home() or globals().get('SERVICE_USER', pwd.getpwuid(os.getuid()).pw_name) != pwd.getpwuid(os.getuid()).pw_name:
         raise DesktopError('目标身份不符。', 'DESKTOP_IDENTITY')
+    if payload.get('action') == 'availability':
+        binary = pathlib.Path(globals().get('SERVICE_BINARY', ''))
+        apps = [p for p in binary.parents if p.suffix == '.app']
+        if sys.platform != 'darwin' or not binary.is_absolute() or not apps:
+            return {'available': False}
+        with (apps[-1] / 'Contents/Info.plist').open('rb') as stream:
+            executable = plistlib.load(stream)['CFBundleExecutable']
+        app_binary = str(apps[-1] / 'Contents/MacOS' / executable)
+        processes = subprocess.run(['/bin/ps', '-axo', 'comm='], check=True,
+                                   capture_output=True, text=True, timeout=2).stdout.splitlines()
+        if app_binary not in (line.strip() for line in processes):
+            return {'available': False}
+        with DesktopSession(home, timeout=2):
+            return {'available': True}
     identifier = str(uuid.UUID(payload.get('threadId', '')))
     action = payload.get('action')
     if action not in ('probe', 'send', 'interrupt', 'recover', 'settings', 'answer'):
         raise DesktopError('不支持此桌面操作。', 'INVALID_REQUEST')
-    with DesktopSession(home, timeout=45 if action == 'send' else 15) as desktop:
-        if action == 'recover':
-            binary = pathlib.Path(globals().get('SERVICE_BINARY', ''))
-            apps = [p for p in binary.parents if p.suffix == '.app']
-            if sys.platform != 'darwin' or not binary.is_absolute() or not apps:
-                raise DesktopError('此目标不支持自动打开桌面，请在目标电脑打开原会话后重试。')
-            # Use the configured application's native navigation, never claim its writer.
-            subprocess.run(['/usr/bin/open', '-a', str(apps[-1]), 'codex://threads/' + identifier],
-                           check=True, timeout=10, capture_output=True)
-            time.sleep(.5)
-        for attempt in range(3 if action == 'recover' else 1):
+    if action == 'recover':
+        binary = pathlib.Path(globals().get('SERVICE_BINARY', ''))
+        apps = [p for p in binary.parents if p.suffix == '.app']
+        if sys.platform != 'darwin' or not binary.is_absolute() or not apps:
+            raise DesktopError('此目标不支持自动打开桌面，请在目标电脑打开原会话后重试。')
+        # Use the configured application's native navigation once. Only owner
+        # reads retry: an early discovery can otherwise wait 10s for no owner.
+        subprocess.run(['/usr/bin/open', '-a', str(apps[-1]), 'codex://threads/' + identifier],
+                       check=True, timeout=10, capture_output=True)
+        time.sleep(.5)
+        for attempt in range(4):
             try:
-                owner = desktop.owner(identifier)
+                # A fresh socket also discards any partial frame after timeout.
+                with DesktopSession(home, timeout=2) as desktop:
+                    owner = desktop.owner(identifier)
+                    settings = desktop.settings(identifier, owner)
                 break
             except DesktopError as exc:
-                if action != 'recover' or attempt == 2 or (getattr(exc, 'reason', None) != 'no-client-found' and 'no-client-found' not in str(exc)):
+                transient = (getattr(exc, 'reason', None) == 'no-client-found'
+                             or 'no-client-found' in str(exc) or isinstance(exc.__cause__, (TimeoutError, socket.timeout)))
+                if attempt == 3 or not transient:
                     raise
                 time.sleep(.25)
+        return {'available': True, 'threadId': identifier, 'settings': settings,
+                'threadReferencesSupported': reference_capability(home, identifier),
+                'planSupported': isinstance(settings.get('settings', {}).get('model'), str)}
+    with DesktopSession(home, timeout=45 if action == 'send' else 15) as desktop:
+        owner = desktop.owner(identifier)
         if action == 'answer':
             return answer_question(desktop, identifier, owner, payload)
         settings = desktop.settings(identifier, owner)
-        if action in ('probe', 'recover'):
+        if action == 'probe':
             return {'available': True, 'threadId': identifier, 'settings': settings, 'threadReferencesSupported': reference_capability(home, identifier),
                     'planSupported': isinstance(settings.get('settings', {}).get('model'), str)}
         if action == 'settings':

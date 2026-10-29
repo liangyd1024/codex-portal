@@ -4,9 +4,11 @@ import {createSideChat,readSideChat,notificationThreadTarget} from '../../../lib
 import {retryCapacity} from '../../../lib/capacity-retry.mjs';
 import {sendWithGoalResume} from '../../../lib/goal-follow-up.mjs';
 import {setGoal} from '../../../lib/composer.mjs';
+import {createWithDesktop} from '../../../lib/desktop-execution.mjs';
+import type {NativeAutomations} from '../../../lib/native-automations.mjs';
 
 type NativePayload=Parameters<Manager['newThread']>[0];
-export function createThreadService(manager:Manager) {
+export function createThreadService(manager:Manager,sessionFor?:(id:string)=>NativeAutomations) {
  return {
   list:(options:Parameters<Manager['threads']>[0])=>manager.threads(options),
   detail:(...args:Parameters<Manager['detail']>)=>manager.detail(...args),
@@ -14,7 +16,7 @@ export function createThreadService(manager:Manager) {
   turnDirectory:(id:string)=>manager.turnDirectory(id),
   notificationTarget:(id:string)=>notificationThreadTarget(manager,id),
   sideChat:(id:string)=>readSideChat(manager,id),
-  create:(data:NativePayload)=>manager.newThread(data),
+  create:(data:NativePayload&{preferDesktop?:boolean})=>createWithDesktop(manager,data,sessionFor),
   actions:{
    'queue-update':(id:string,data:NativePayload)=>queueInput(manager,id,'update',data),
    'queue-add':(id:string,data:NativePayload)=>sendWithGoalResume(manager,id,data,()=>queueInput(manager,id,'add',data)),

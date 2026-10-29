@@ -20,7 +20,7 @@ test('owned, archived, cached, disconnected and pending handoff sessions never p
 });
 test('released handoff may follow desktop but can never auto-resume in the web engine',async()=>{
  const f=fixture();f.detail.handoff={state:'released'};assert.equal(await f.resolve(),f.desktop);
- f.access.reset();f.desktop.desktop.available=false;f.desktop.desktop.error='请在电脑端打开';assert.equal((await f.resolve()).accessError,'请在电脑端打开');assert.equal(f.calls.some(c=>c[0]==='resume'),false);
+ f.access.reset();f.desktop.desktop.available=false;f.desktop.desktop.error='请在电脑端打开';const unavailable=await f.resolve();assert.equal(unavailable.accessError,'请在电脑端打开');assert.equal(unavailable.controlState,'desktop');assert.deepEqual(unavailable.handoff,{state:'released'});assert.equal(f.calls.some(c=>c[0]==='resume'),false);
 });
 test('network failure does not claim a session; repeated refreshes do not retry until explicit reset',async()=>{
  const f=fixture({desktop:async()=>{f.calls.push('probe');throw Error('offline');}});

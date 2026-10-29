@@ -875,6 +875,7 @@ async function releaseService() {
 const respondRequest=createRequestResponder({state,action,api,questionDrafts,document,element:$,sideChat:()=>sideChat,renderRequests,loadStatus,refresh:refreshSelected});
 
 const createThreadFromDraft=createThreadSubmit({state,draft:newDraft,draftId:newDraftId,access:WEB_ACCESS,createdThreads,
+  preferDesktop:()=>!composer!.isGoalPending()&&!composer!.options().threads.length,
   input:()=>$('message-input'),hasAttachments:()=>attachments!.has(),attachmentsPending:()=>attachments!.pending(),validate:(...args)=>composer!.validateSend(...args),toast,
   hideError:()=>{publishNewChatControls({errorHidden:true});},showError:error=>{publishNewChatControls({error:messageOf(error),errorHidden:false});},recordError,action,
   post:body=>api('/api/threads',{method:'POST',body}),moveAttachments:(...args)=>attachments!.moveDraft(...args),moveComposer:(...args)=>composer!.moveDraft(...args),close:closeNewChat,

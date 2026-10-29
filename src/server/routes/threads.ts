@@ -3,12 +3,13 @@ import type {Manager} from '../../../lib/manager.mjs';
 import type {Response} from '../types';
 import {body,json} from '../protocol';
 import {createThreadService} from '../services/threads';
+import type {NativeAutomations} from '../../../lib/native-automations.mjs';
 
 export const matchThreadRoute=(path:string)=>path.match(/^\/api\/threads\/([A-Za-z0-9_-]{1,160})(?:\/(notification-target|side-chat|side-chat-view|turn-directory|history|takeover|handoff|message|steer|queue-add|queue-steer|queue-delete|queue-update|interrupt|goal|question-answer|retry-capacity))?$/);
 type Match=ReturnType<typeof matchThreadRoute>;
 type Route=(req:IncomingMessage,res:Response,url:URL,data:Awaited<ReturnType<typeof body>>)=>void|Promise<void>;
-export function createThreadRoutes(manager:Manager,observe?:(id:string,turns:any[])=>void) {
- const service=createThreadService(manager);
+export function createThreadRoutes(manager:Manager,observe?:(id:string,turns:any[])=>void,sessionFor?:(id:string)=>NativeAutomations) {
+ const service=createThreadService(manager,sessionFor);
  const list:Route=async(_req,res,url)=>json(res,200,await service.list(Object.fromEntries(url.searchParams)));
  const references:Route=async(_req,res,url)=>json(res,200,await service.list({search:url.searchParams.get('search')||'',cursor:url.searchParams.get('cursor')}));
  const create:Route=async(_req,res,_url,data)=>json(res,201,await service.create(data));

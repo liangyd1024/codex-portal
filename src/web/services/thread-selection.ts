@@ -6,9 +6,9 @@ export function createThreadSelection({cancelNotification,state,location,history
 function applyDetail(data:SelectionDetail, resetModels = false) {
   if(data.goalError&&state.detail?.thread?.id===data.thread?.id)data.goal=state.detail!.goal;
   const desktopMode=data.controlled===true?false:data.controlState==='desktop'&&data.desktop?true:state.desktopMode;
+  document.querySelector<HTMLElement>('.main-panel')!.classList.toggle('desktop-chat',data.recovering?state.desktopMode:desktopMode);
   if(!data.recovering&&state.desktopMode!==desktopMode){
     state.desktopMode=desktopMode;
-    document.querySelector<HTMLElement>('.main-panel')!.classList.toggle('desktop-chat',desktopMode);
     saveView();
   }
   state.detail = {...data, turns:data.turns || data.thread?.turns || []};
