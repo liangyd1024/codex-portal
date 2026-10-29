@@ -22,7 +22,7 @@ interface Dependencies<Annotation, Draft extends {text: string}> {
   saveSends: () => void;
   uuid: () => string;
   action: (key: string, run: () => Promise<void>) => Promise<unknown>;
-  post: (path: string, body: {mode?:'default'|'plan';messageId: string; text: string; threads: unknown[]; images:{url:string}[];skills:unknown[];plugins:unknown[]}) => Promise<unknown>;
+  post: (path: string, body: {mode?:'default'|'plan';messageId: string; text: string; threads: unknown[]; images:{url:string}[];skills:unknown[];plugins:unknown[]}) => Promise<{delivery?:'steer'|'start'}>;
   refresh: () => Promise<unknown>;
   resize: () => void;
   toast: (message: string, error: boolean) => void;
@@ -42,7 +42,8 @@ export function createDesktopSend<Annotation, Draft extends {text: string}>(d: D
     sends[id] = {messageId, text: sent.text, ...(pictures.items.length?{pictures:{id:pictures.id,items:pictures.items.map(({id})=>({id}))}}:{})}; d.saveSends();
     await d.action('message', async () => {
       try {
-        await d.post('/api/desktop/threads/' + encodeURIComponent(id) + '/message', {messageId, text, ...(options.desktopExecutionMode?{mode:options.desktopExecutionMode}:{}), threads: options.threads,images:pictures.items.map(({url})=>({url})),skills:options.skills,plugins:options.plugins});
+        const result=await d.post('/api/desktop/threads/' + encodeURIComponent(id) + '/message', {messageId, text, ...(options.desktopExecutionMode?{mode:options.desktopExecutionMode}:{}), threads: options.threads,images:pictures.items.map(({url})=>({url})),skills:options.skills,plugins:options.plugins});
+        if(id===state.selectedId&&selection===state.selectionVersion)d.toast(result.delivery==='steer'?'已提交引导，桌面将在当前轮次处理。':result.delivery==='start'?'已发送，桌面已启动新一轮。':'桌面已接收消息。',false);
         d.acknowledgeAnnotation(annotation);
         d.acknowledgeAttachments(pictures);
         delete sends[id]; d.saveSends();

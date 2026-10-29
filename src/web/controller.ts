@@ -410,10 +410,10 @@ function renderControls() {
     const desktop=state.detail?.desktop,online=state.transport&&desktop?.available,unconfirmed=desktop?.unconfirmed||desktopSends[state.selectedId!]?.messageId;
     publishWorkspaceControl('takeover',{ hidden:true });
     buttonView.send.disabled=!online||!desktop?.canSend||!!unconfirmed||posting||answering||attachments?.pending()||(!input.value.trim()&&!annotations?.has()&&!attachments?.has());
-    buttonView.send.title='发送消息';buttonView.send.label='发送消息';
+    buttonView.send.title=active?'引导当前轮次':'发送消息';buttonView.send.label=buttonView.send.title;
     buttonView.stop.hidden=!active&&!stopping;buttonView.stop.disabled=!online||desktop?.canStop!==true||state.busy.has('interrupt')||stopping;
     if(active&&desktop?.canStop!==true)buttonView.stop.title='当前轮次尚未确认，请刷新后重试。';
-    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(answering?'正在提交回答…':posting?'':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':requests().some(r=>r.threadId===state.selectedId&&r.kind==='desktopQuestion')?'请先回答上方问题。补充消息会等待当前轮次处理。':active?'':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
+    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(answering?'正在提交回答…':posting?'正在提交到桌面…':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':requests().some(r=>r.threadId===state.selectedId&&r.kind==='desktopQuestion')?'请先回答上方问题。补充消息将引导当前轮次。':active?'发送将引导当前轮次，由桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     publishWorkspaceControl('composer-availability',{text:reason,hidden:!reason});
     desktopView.reviewHidden=!unconfirmed||answering;desktopView.reviewDisabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
   }
@@ -509,7 +509,7 @@ function renderItem(item:NativeItem,{threadId=state.selectedId,side=false,refres
       bubble.append(imageCard(src,'图片附件 '+(part.index+1)));
     }
     m.append(bubble);
-    if(item.type==='steeringUserMessage')m.append(el('div','user-message-time',item.status==='accepted'?'桌面已接收，等待当前轮次处理。':'补充消息状态：'+String(item.status||'未确认')));
+    if(item.type==='steeringUserMessage')m.append(el('div','user-message-time',item.status==='accepted'?'已提交引导，桌面将在当前轮次处理。':'补充消息状态：'+String(item.status||'未确认')));
     const sent = userMessageTime(item);
     if (sent) {
       const time = el('time','user-message-time',sent.label);

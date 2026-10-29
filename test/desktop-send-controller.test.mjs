@@ -33,3 +33,11 @@ test('desktop rejection preserves image draft',async()=>{
  const f=fixture();f.addPicture({id:'one',url:'picture'});const sending=f.send();f.reject({status:400});await assert.rejects(sending);assert.equal(f.pictures().length,1);
 });
 test('desktop explicitly selected plan mode is forwarded with the accepted message',async()=>{const f=fixture();f.options.desktopExecutionMode='plan';const pending=f.send();assert.equal(f.calls[0].body.mode,'plan');f.resolve({});await pending;});
+
+test('desktop acceptance uses server delivery mode and suppresses notices for a changed selection',async()=>{
+ for(const delivery of ['steer','start',undefined]){
+  const f=fixture(),sending=f.send();f.resolve({delivery});await sending;
+  assert.deepEqual(f.toasts,[[delivery==='steer'?'已提交引导，桌面将在当前轮次处理。':delivery==='start'?'已发送，桌面已启动新一轮。':'桌面已接收消息。',false]]);
+ }
+ const f=fixture(),sending=f.send();f.state.selectedId='other';f.state.selectionVersion++;f.resolve({delivery:'steer'});await sending;assert.deepEqual(f.toasts,[]);
+});

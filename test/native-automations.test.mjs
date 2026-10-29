@@ -195,3 +195,15 @@ test('restart preserves uncertain blocking answers and never replays them',async
  const restored=new NativeAutomations(m,{threadId:id});let calls=0;restored.call=async()=>{calls++;};
  await assert.rejects(restored.answerQuestions(data),/上次回答结果未确认/);assert.equal(calls,0);assert.equal(restored.state.questionResponses[key].status,'unknown');
 });
+
+test('desktop delivery receipt reports the actual dispatch and survives duplicate submission',async()=>{
+ for(const state of ['running','idle']){
+  const {a,m,calls}=fixture();m.passive=async action=>action==='history'?{data:[]}:{thread:{id,cwd:'/project',activity:{state}}};
+  const request={threadId:id,messageId:mid,text:'follow up'};
+  const result=await a.send(request),delivery=state==='running'?'steer':'start';
+  assert.equal(result.delivery,delivery);assert.equal((await a.send(request)).delivery,delivery);
+  assert.equal(a.state.submissions[mid].delivery,delivery);
+  assert.equal(calls.filter(c=>c.action==='send').length,1);
+  assert.equal(Boolean(calls.find(c=>c.action==='send').steer),state==='running');
+ }
+});
