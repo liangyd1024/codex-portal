@@ -33,7 +33,7 @@ test('push/click evidence survives background request failure and restart, witho
  await w.event('notificationclick',{notification:{data,close(){}}});
  assert.equal(w.shown.length,1);assert.equal(new URL(w.opened[0]).searchParams.get('thread'),'other-thread');
  const restarted=boot(caches),diagnostics=await restarted.diagnostics();
- assert.equal(diagnostics.version,9);assert.equal(diagnostics.capabilities,'push=true, click=true, storage=available');
+ assert.equal(diagnostics.version,10);assert.equal(diagnostics.capabilities,'push=true, click=true, storage=available');
  assert.deepEqual(diagnostics.journal.map(row=>row.stage),['worker-install','worker-activate','worker-push','worker-shown','worker-click','worker-window']);
  const clicked=diagnostics.journal.find(row=>row.stage==='worker-click');assert.ok(clicked.clickId);assert.equal(clicked.clickId,diagnostics.journal.find(row=>row.stage==='worker-window').clickId);assert.equal(clicked.clickId,(await restarted.ready()).clickId);assert.equal(clicked.clickId,new URL(w.opened[0]).searchParams.get('notification-click'));assert.equal(clicked.testId,diagnostics.journal.find(row=>row.stage==='worker-window').testId);assert.equal(clicked.testId,(await restarted.ready()).testId);
  assert.equal(diagnostics.journal.find(row=>row.stage==='worker-click').testId,'test-fixture');assert.equal(JSON.stringify(diagnostics).includes('private'),false);

@@ -14,7 +14,7 @@ test('notification cold start carries both connection and encoded thread; warm s
   vm.runInNewContext(worker,{URL,Response,crypto,caches:clickStorage(),self:{location:{origin:'https://rcm.test'},addEventListener:(name,fn)=>handlers[name]=fn,clients:{matchAll:async()=>warm?[client]:[],openWindow:async url=>opened.push(url)}}});
   handlers.notificationclick({notification:{data:{host:'local',threadId:'thread /?中文'},close:()=>{closed=true;}},waitUntil:p=>done=p});await done;
   assert.equal(closed,true);
-  if(warm){assert.equal(focused,true);assert.equal(messages[0].threadId,'thread /?中文');assert.equal(opened.length,0);}
+  if(warm){assert.equal(focused,true);assert.equal(messages[0].threadId,'thread /?中文');assert.equal(new URL(opened[0]).searchParams.get('thread'),'thread /?中文');}
   else {const url=new URL(opened[0]);assert.equal(url.searchParams.get('host'),'local');assert.equal(url.searchParams.get('thread'),'thread /?中文');}
  }
 });
@@ -153,6 +153,7 @@ test('new page can request its target before openWindow resolves (no startup dea
 });
 test('slow old focus cannot deliver an older click after a newer notification',async()=>{
  const messages=[],focus=[];const client={url:'https://rcm.test/?host=local',focus:()=>new Promise(resolve=>focus.push(resolve)),postMessage:m=>messages.push(m)};
+ client.navigate=async()=>client;
  const w=bootWorker({clients:{matchAll:async()=>[client]}});
  const old=w.click({host:'local',threadId:'old'});while(!focus.length)await new Promise(resolve=>setImmediate(resolve));
  const latest=w.click({host:'local',threadId:'latest'});while(focus.length<2)await new Promise(resolve=>setImmediate(resolve));
@@ -219,7 +220,7 @@ function acknowledgedWorker(clients){
 test('foreground page receives target even if focus never settles; acknowledged navigation avoids reload',async()=>{
  const messages=[],navigations=[];
  const stale={url:'https://rcm.test/?host=local',visibilityState:'hidden',postMessage:()=>assert.fail('must not choose stale matching window')};
- const active={url:'https://rcm.test/',focused:true,visibilityState:'visible',focus:()=>new Promise(()=>{}),navigate:async url=>navigations.push(url),postMessage:(data,ports)=>{messages.push(data);ports[0].postMessage({clickId:data.clickId});}};
+ const active={url:'https://rcm.test/',focused:true,visibilityState:'visible',focus:()=>new Promise(()=>{}),navigate:async url=>navigations.push(url),postMessage:(data,ports)=>{messages.push(data);ports[0].postMessage({clickId:data.clickId,handled:true});}};
  const w=acknowledgedWorker({matchAll:async()=>[stale,active],openWindow:()=>assert.fail('must reuse foreground page')});
  await w.click({host:'local',threadId:'other-thread'});
  assert.equal(messages[0].threadId,'other-thread');assert.equal(navigations.length,0);
@@ -233,21 +234,21 @@ test('missing page acknowledgement navigates existing background window to full 
 });
 test('late old acknowledgement timeout cannot navigate over the latest clicked conversation',async()=>{
  const navigations=[],received=[];
- const client={url:'https://rcm.test/',focus:async()=>client,postMessage:(data,ports)=>{received.push(data);if(data.threadId==='latest')ports[0].postMessage({clickId:data.clickId});},navigate:async url=>{navigations.push(url);return client;}};
+ const client={url:'https://rcm.test/',focus:async()=>client,postMessage:(data,ports)=>{received.push(data);if(data.threadId==='latest')ports[0].postMessage({clickId:data.clickId,handled:true});},navigate:async url=>{navigations.push(url);return client;}};
  const w=acknowledgedWorker({matchAll:async()=>[client]});
  const old=w.click({host:'local',threadId:'old'});while(!received.length)await new Promise(resolve=>setImmediate(resolve));
  await w.click({host:'local',threadId:'latest'});await old;
  assert.equal(navigations.length,0);assert.equal(received.at(-1).threadId,'latest');
 });
-test('page saves and acknowledges received target before startup and retains it for later opening',async()=>{
+test('page saves startup target without prematurely acknowledging navigation',async()=>{
  const ts=await import('typescript'),source=await readFile(new URL('../src/web/controller.ts',import.meta.url),'utf8');
  const start=source.indexOf("navigator.serviceWorker?.addEventListener('message',event=>{");
  const code=source.slice(start,source.indexOf('function requestNotificationTarget(){',start));
  const store=memoryStorage(),receipts=[],opened=[];let receive;
- const context={notificationNavigationReady:false,pendingNotification:null,localStorage:store,saveNotificationTarget,navigator:{serviceWorker:{addEventListener:(_type,fn)=>receive=fn}},openNotificationThread:x=>opened.push(x)};
+ const context={recordError:error=>{throw error;},notificationNavigationReady:false,pendingNotification:null,localStorage:store,saveNotificationTarget,navigator:{serviceWorker:{addEventListener:(_type,fn)=>receive=fn}},openNotificationThread:async x=>{opened.push(x);return true;}};
  vm.runInNewContext(ts.transpile(code),context);
  receive({data:{type:'rcm-notification-click',host:'local',threadId:'other',clickId:'receipt'},ports:[{postMessage:data=>receipts.push(data)}]});
- assert.equal(receipts[0].clickId,'receipt');assert.equal(opened.length,0);assert.equal(context.pendingNotification.threadId,'other');assert.equal(pendingNotificationTarget(store,'https://rcm.test').threadId,'other');
+ assert.equal(receipts.length,0);assert.equal(opened.length,0);assert.equal(context.pendingNotification.threadId,'other');assert.equal(pendingNotificationTarget(store,'https://rcm.test').threadId,'other');
  context.notificationNavigationReady=true;
  receive({data:{type:'rcm-notification-click',host:'local',threadId:'new',clickId:'new'},ports:[]});assert.equal(opened[0].threadId,'new');
 });
@@ -268,7 +269,7 @@ test('diagnostic receiver titles reflect the native event branch, never the requ
   const title=declarative?'[原始·L点击处理] 会话 · 测试编号':'[原始·D系统跳转] 会话 · 测试编号';
   const data={host:'local',threadId:'target',testId:'fixture-actual-branch',diagnostic,deliveryMode:declarative?'legacy':'declarative'};
   const payload=notificationPayload({title,body:'正文',tag:'one',data},'https://rcm.test');
-  const client={url:'https://rcm.test/',focus:async()=>client,postMessage:m=>messages.push(m)};
+  const client={url:'https://rcm.test/',navigate:async()=>client,focus:async()=>client,postMessage:m=>messages.push(m)};
   vm.runInNewContext(worker,{URL,crypto,Response,caches:clickStorage(),self:{location:{origin:'https://rcm.test'},addEventListener:(n,fn)=>handlers[n]=fn,registration:{showNotification:async(title,options)=>{if(declarative&&!URL.canParse(options.navigate))throw new TypeError('valid navigate required');shown.push({title,options});}},clients:{matchAll:async()=>[client]}}});
   const event=declarative?{notification:payload.notification,data:null}:{data:{json:()=>kind==='wrapped-legacy'?payload:{title,body:'正文',tag:'one',data}}};
   handlers.push({...event,waitUntil:p=>pending.push(p)});for(let i=0;i<pending.length;i++)await pending[i];
@@ -301,4 +302,30 @@ test('expired side target shows an actionable error without selecting invalid or
  const page=await pageNavigation();page.context.api=async()=>{throw Object.assign(Error('临时聊天已失效，请从主会话重新打开。'),{code:'SIDE_CHAT_EXPIRED'});};
  await page.context.openNotificationThread({host:'local',threadId:'side'});
  assert.equal(page.selected.length,0);assert.match(page.errors[0],/临时聊天已失效/);assert.equal(page.sent.length,0);
+});
+test('foreground receipt waits for completed navigation and failed navigation leaves worker fallback available',async()=>{
+ const ts=await import('typescript'),source=await readFile(new URL('../src/web/controller.ts',import.meta.url),'utf8');
+ const start=source.indexOf("navigator.serviceWorker?.addEventListener('message',event=>{");
+ const code=source.slice(start,source.indexOf('function requestNotificationTarget(){',start));
+ for(const handled of [true,undefined]){
+  let receive,resolve;const receipts=[];
+  const context={notificationNavigationReady:true,localStorage:memoryStorage(),saveNotificationTarget,recordError:e=>{throw e;},navigator:{serviceWorker:{addEventListener:(_type,fn)=>receive=fn}},openNotificationThread:()=>new Promise(r=>resolve=r)};
+  vm.runInNewContext(ts.transpile(code),context);
+  receive({data:{type:'rcm-notification-click',host:'local',threadId:'target',clickId:'click'},ports:[{postMessage:r=>receipts.push(r)}]});
+  assert.equal(receipts.length,0);resolve(handled);await new Promise(setImmediate);
+  assert.equal(receipts.length,handled?1:0);if(handled)assert.equal(receipts[0].handled,true);
+ }
+});
+test('worker relay metadata and pending URL resolve to the same in-flight click',async()=>{
+ const page=await pageNavigation();let resolve,reads=0;
+ page.context.api=()=>{reads++;return new Promise(r=>resolve=r);};
+ const first=page.context.openNotificationThread({type:'rcm-notification-click',testId:'test',host:'local',threadId:'target',clickId:'click'});
+ await page.context.openNotificationThread({host:'local',threadId:'target',clickId:'click'});
+ assert.equal(reads,1);resolve({threadId:'target'});await first;assert.deepEqual(page.selected,['target']);
+});
+test('foreground page merely acknowledging receipt cannot suppress full URL navigation',async()=>{
+ const navigations=[];
+ const client={url:'https://rcm.test/?host=local',focused:true,visibilityState:'visible',focus:async()=>client,postMessage:(data,ports)=>ports[0].postMessage({clickId:data.clickId}),navigate:async url=>{navigations.push(url);return client;}};
+ const w=acknowledgedWorker({matchAll:async()=>[client],openWindow:()=>assert.fail('reuse existing foreground window')});
+ await w.click({host:'local',threadId:'target'});assert.equal(notificationLink(navigations[0]).threadId,'target');
 });

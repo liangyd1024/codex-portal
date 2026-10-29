@@ -13,7 +13,7 @@ function clearClickIntent(expectedId,current){return serializeClick(async()=>{
 });}
 // Immutable per-event keys prevent one worker's stale snapshot overwriting another.
 // Only routing IDs and bounded runtime metadata are persisted; never bodies or keys.
-const workerVersion=9,instanceId=globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+const workerVersion=10,instanceId=globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
 const journalName='rcm-notification-journal-v2',journalPrefix='/__notification-event/';
 let sequence=0,journal=[],journalStorage='available',journalWork,journalGeneration=0,savedGeneration=0;
 function bounded(promise,fallback,ms=800){
@@ -234,12 +234,12 @@ self.addEventListener('notificationclick',event=>{
 });
 function deliverTarget(client,target){
   // MessageChannel is available in supported browsers; keep a legacy fallback.
-  if(typeof MessageChannel!=='function'){client.postMessage(target);return Promise.resolve(true);}
+  if(typeof MessageChannel!=='function'){client.postMessage(target);return Promise.resolve(false);}
   return new Promise(resolve=>{
     const channel=new MessageChannel();
     const finish=value=>{clearTimeout(timer);channel.port1.close();channel.port2.close();resolve(value);};
     const timer=setTimeout(()=>finish(false),1200);
-    channel.port1.onmessage=event=>{if(event.data?.clickId===target.clickId)finish(true);};
+    channel.port1.onmessage=event=>{if(event.data?.clickId===target.clickId&&event.data.handled===true)finish(true);};
     try{client.postMessage(target,[channel.port2]);}catch{finish(false);}
   });
 }

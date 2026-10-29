@@ -144,8 +144,9 @@ navigator.serviceWorker?.addEventListener('message',event=>{
   }
   if(data?.type!=='rcm-notification-click'||!data.threadId)return;
   saveNotificationTarget(localStorage,data);
-  event.ports?.[0]?.postMessage({clickId:data.clickId});
-  if(notificationNavigationReady)openNotificationThread(data);else pendingNotification=data;
+  if(notificationNavigationReady){
+    void openNotificationThread(data).then(handled=>{if(handled)event.ports?.[0]?.postMessage({clickId:data.clickId,handled:true});}).catch(recordError);
+  }else pendingNotification=data;
 });
 function requestNotificationTarget(){
   void navigationTraces.flush();
@@ -785,12 +786,12 @@ async function reportPageNavigation(stage:string,target?:{host?:string;threadId?
 }
 async function openNotificationThread(target:{host?:string;threadId:string;clickId?:string}) {
   const {threadId,clickId}=target,host=target.host||targetHost;
-  target={...target,host};
+  target={host,threadId,...(clickId?{clickId}:{})};
   const key=JSON.stringify(target);if(openingNotification===key)return;
   void reportPageNavigation('page-target',target);
   saveNotificationTarget(localStorage,target);
   history.replaceState(null,'',notificationTargetUrl(location.href,target));
-  if(state.busy.has('create')){notificationWaitingForCreate=true;return;}
+  if(state.busy.has('create')){notificationWaitingForCreate=true;return true;}
   if(host!==targetHost){
     if(!connectionIds.includes(host)){toast('通知对应的连接已不存在，请在侧栏选择可用连接。',true);history.replaceState(null,'',consumeNotificationTarget(localStorage,target,location.href));await acknowledgeNotificationClick(target.clickId);return;}
     flushDrafts();
@@ -809,11 +810,12 @@ async function openNotificationThread(target:{host?:string;threadId:string;click
       void reportPageNavigation('page-opened',target);
       history.replaceState(null,'',consumeNotificationTarget(localStorage,target,location.href));
       await acknowledgeNotificationClick(target.clickId);
-      return;
+      return true;
     }
     await selectThread(threadId,{notification:true});
-    await finishNotificationNavigation(target);
+    const opened=await finishNotificationNavigation(target);
     if(state.selectedId===threadId&&(state.historyError||!state.detail))void reportPageNavigation('page-failed',target);
+    return opened;
   }catch(error){if(openingNotification===key){void reportPageNavigation('page-failed',target);toast(messageOf(error),true);recordError(error,'notification-navigation');}}
   finally{if(openingNotification===key)openingNotification=null;}
 }
@@ -822,6 +824,7 @@ async function finishNotificationNavigation(target=pendingNotificationTarget(loc
   void reportPageNavigation('page-opened',target);
   history.replaceState(null,'',consumeNotificationTarget(localStorage,target,location.href));
   await acknowledgeNotificationClick(target.clickId);
+  return true;
 }
 function cancelPendingNotification(){
   openingNotification=null;
