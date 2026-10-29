@@ -1,10 +1,12 @@
 """Use the existing same-user desktop session owner. Never start or claim it."""
 import json
+from contextlib import closing
 import os
 import pathlib
 import plistlib
 import pwd
 import socket
+import sqlite3
 import stat
 import struct
 import subprocess
@@ -178,14 +180,70 @@ def answer_question(desktop, identifier, owner, payload):
     return {'resolved': True}
 
 
+def declared_reference_tool(tools):
+    """Recognize native declarations, never mentions in conversation text."""
+    if not isinstance(tools, list):
+        return False
+    for tool in tools:
+        if not isinstance(tool, dict):
+            continue
+        if tool.get('type') == 'namespace':
+            if declared_reference_tool(tool.get('tools')):
+                return True
+        elif tool.get('type') == 'function' and tool.get('name') in ('read_thread', 'mcp__codex_app__read_thread'):
+            return True
+        # Code mode exposes app tools through the native exec tool's typed API.
+        elif (tool.get('type') == 'custom' and tool.get('name') == 'exec'
+              and '\ndeclare const tools: { mcp__codex_app__read_thread(args: {' in tool.get('description', '')):
+            return True
+    return False
+
+
+def recorded_reference_capability(home, identifier):
+    """Bounded, read-only fallback for desktop-resumed Portal conversations."""
+    root = (home / '.codex').resolve()
+    try:
+        with closing(sqlite3.connect((root / 'state_5.sqlite').as_uri() + '?mode=ro', uri=True, timeout=1)) as db:
+            row = db.execute('SELECT rollout_path FROM threads WHERE id = ?', (identifier,)).fetchone()
+        if not row:
+            return None
+        path = pathlib.Path(row[0]).resolve()
+        if not any(path.is_relative_to(root / folder) for folder in ('sessions', 'archived_sessions')):
+            return None
+        # Only the most recent declaration counts. Do not scan an unbounded history.
+        with path.open('rb') as stream:
+            size = stream.seek(0, 2)
+            stream.seek(max(0, size - 8 * 1024 * 1024))
+            truncated = stream.tell() > 0
+            data = stream.read(8 * 1024 * 1024)
+            if truncated:
+                data = data.partition(b'\n')[2]  # Discard the partial first record.
+        for line in reversed(data.splitlines()):
+            try:
+                record = json.loads(line)
+            except (ValueError, UnicodeError):
+                continue  # A live writer may have an incomplete final record.
+            if not isinstance(record, dict) or record.get('type') != 'response_item':
+                continue
+            payload = record.get('payload')
+            if (isinstance(payload, dict) and payload.get('type') == 'additional_tools'
+                    and payload.get('role') == 'developer' and isinstance(payload.get('tools'), list)):
+                return True if declared_reference_tool(payload['tools']) else None
+    except (OSError, ValueError, sqlite3.Error):
+        pass
+    return None
+
+
 def reference_capability(home, identifier):
-    """Read the same native capability checkpoint used by the desktop composer."""
+    """Keep explicit native decisions; otherwise verify the native tool catalog."""
     try:
         state = json.loads((home / '.codex/.codex-global-state.json').read_text())
         value = state.get('electron-persisted-atom-state', {}).get('thread-reference-capability:' + identifier)
-        return value if isinstance(value, bool) else None
+        if isinstance(value, bool):
+            return value
     except (OSError, ValueError, AttributeError):
-        return None
+        pass
+    return recorded_reference_capability(home, identifier)
 
 
 def run(payload):

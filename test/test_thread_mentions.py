@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import pathlib
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -24,6 +25,52 @@ class ThreadMentionsTest(unittest.TestCase):
         self.assertEqual(before, file.read_bytes())
         file.write_text(json.dumps({'electron-persisted-atom-state': {'thread-reference-capability:' + REF: False}}))
         self.assertIs(session.reference_capability(home, REF), False)
+
+    def native_catalog(self, records):
+        home = pathlib.Path(tempfile.mkdtemp(prefix='rcm-reference-catalog-'))
+        root = home / '.codex'
+        (root / 'sessions').mkdir(parents=True)
+        rollout = root / 'sessions/test.jsonl'
+        rollout.write_text(''.join(json.dumps(r) + '\n' for r in records))
+        with sqlite3.connect(root / 'state_5.sqlite') as db:
+            db.execute('CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT)')
+            db.execute('INSERT INTO threads VALUES (?, ?)', (ID, str(rollout)))
+        return home, rollout
+
+    def catalog_record(self, tools):
+        return {'type': 'response_item', 'payload': {'type': 'additional_tools', 'role': 'developer', 'tools': tools}}
+
+    def test_missing_checkpoint_uses_exact_native_tool_declaration(self):
+        for tools in ([{'type': 'function', 'name': 'read_thread'}],
+                      [{'type': 'namespace', 'name': 'functions', 'tools': [{'type': 'custom', 'name': 'exec', 'description':
+                        'Native API\ndeclare const tools: { mcp__codex_app__read_thread(args: {\nthreadId: string;'}]}]):
+            with self.subTest(tools=tools):
+                home, rollout = self.native_catalog([self.catalog_record(tools)])
+                before = rollout.read_bytes()
+                self.assertIs(session.reference_capability(home, ID), True)
+                self.assertIsNone(session.reference_capability(home, REF))
+                self.assertEqual(rollout.read_bytes(), before)
+                self.assertFalse((home / '.codex/.codex-global-state.json').exists())
+                (home / '.codex/.codex-global-state.json').write_text(json.dumps({
+                    'electron-persisted-atom-state': {'thread-reference-capability:' + ID: False}}))
+                self.assertIs(session.reference_capability(home, ID), False)
+
+    def test_catalog_is_latest_scoped_bounded_and_not_message_text(self):
+        declaration = self.catalog_record([{'type': 'function', 'name': 'read_thread'}])
+        home, rollout = self.native_catalog([declaration, self.catalog_record([])])
+        self.assertIsNone(session.reference_capability(home, ID))
+        for fake in ({'type': 'response_item', 'payload': {'type': 'message', 'role': 'user', 'tools': declaration['payload']['tools']}},
+                     self.catalog_record([{'type': 'function', 'name': 'other', 'description': 'read_thread'}])):
+            rollout.write_text(json.dumps(fake) + '\n')
+            self.assertIsNone(session.reference_capability(home, ID))
+        rollout.write_text(json.dumps(declaration) + '\n' + '{"incomplete":')
+        self.assertIs(session.reference_capability(home, ID), True)
+        rollout.write_text(json.dumps(declaration) + '\n' + 'x' * (8 * 1024 * 1024) + '\n')
+        self.assertIsNone(session.reference_capability(home, ID))
+        with sqlite3.connect(home / '.codex/state_5.sqlite') as db:
+            db.execute('UPDATE threads SET rollout_path = ?', (str(home / 'outside.jsonl'),))
+        (home / 'outside.jsonl').write_text(json.dumps(declaration) + '\n')
+        self.assertIsNone(session.reference_capability(home, ID))
 
     def test_native_reference_context_and_unavailable_capability(self):
         requests = []
