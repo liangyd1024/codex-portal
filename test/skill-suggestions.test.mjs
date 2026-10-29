@@ -67,3 +67,23 @@ test('catalog failures settle independently and retain successful results',async
  assert.equal(published.find(e=>e.source==='plugins').error.message,'offline');
  assert.deepEqual(published.find(e=>e.source==='skills').result,['skill']);
 });
+
+import {createSuggestionReader} from '../src/web/services/skill-suggestions.ts';
+test('continuous typing keeps one search active and skips obsolete queued inputs',async()=>{
+ const read=createSuggestionReader(),calls=[];let release,version=1;
+ const first=read('files',()=>version===1,()=>{calls.push(1);return new Promise(r=>release=r)});
+ await Promise.resolve();await Promise.resolve();
+ version=2;const second=read('files',()=>version===2,async()=>{calls.push(2);return [2]});
+ version=3;const third=read('files',()=>version===3,async()=>{calls.push(3);return [3]});
+ assert.deepEqual(await read('skills',()=>true,async()=>['skill']),['skill']);
+ assert.deepEqual(calls,[1]);release([1]);
+ assert.deepEqual(await Promise.all([first,second,third]),[[1],[],[3]]);assert.deepEqual(calls,[1,3]);
+});
+test('failed searches do not block later input and closed menus skip queued requests',async()=>{
+ const read=createSuggestionReader();let reject,open=true;
+ const first=read('files',()=>true,()=>new Promise((_r,j)=>reject=j));
+ await Promise.resolve();await Promise.resolve();
+ const second=read('files',()=>open,async()=>{throw Error('obsolete request')});open=false;
+ reject(Error('offline'));await assert.rejects(first,/offline/);assert.deepEqual(await second,[]);
+ assert.deepEqual(await read('files',()=>true,async()=>['recovered']),['recovered']);
+});

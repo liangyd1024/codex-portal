@@ -43,6 +43,7 @@ export function matchingSkills<T extends SuggestionEntry>(entries:T[],query='') 
 export function installSkillSuggestions({input,api,context,select}:Options) {
   const box=document.createElement('div');box.className='skill-suggestions';box.id='skill-suggestions-'+crypto.randomUUID();box.hidden=true;box.setAttribute('role','listbox');box.setAttribute('aria-label','技能');document.body.append(box);
   input.setAttribute('aria-controls',box.id);input.setAttribute('aria-expanded','false');input.setAttribute('aria-autocomplete','list');
+  const readLatest=createSuggestionReader();
   let version=0,rows:SuggestionEntry[]=[],index=0,query:Query|null=null,composing=false,ended=-Infinity;
   const close=()=>{version++;box.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');};
   const position=()=>{if(box.hidden)return;const r=input.getBoundingClientRect(),v=window.visualViewport;box.style.left=Math.max(8,r.left)+'px';box.style.width=Math.max(0,Math.min(r.width,(v?.width||innerWidth)-16))+'px';box.style.bottom=Math.max(8,innerHeight-r.top+8)+'px';box.style.maxHeight=Math.max(60,Math.min(300,r.top-(v?.offsetTop||0)-16))+'px';};
@@ -84,7 +85,7 @@ export function installSkillSuggestions({input,api,context,select}:Options) {
           }}))
         ];
         sources.forEach(s=>loading.add(s.label));publish();
-        await loadSuggestionSources(sources,async s=>s.map(await api<Catalog>(s.path,{timeout:s.kind==='apps'?35000:12000})),(s,result,error)=>{
+        await loadSuggestionSources(sources,s=>readLatest(s.kind,current,async()=>s.map(await api<Catalog>(s.path,{timeout:s.kind==='apps'?35000:12000}))),(s,result,error)=>{
           if(!current())return;
           loading.delete(s.label);
           if(error)errors.set(s.kind,s.label+'暂时无法读取，重新输入可重试。');else groups.set(s.kind,result!);
@@ -131,4 +132,16 @@ export function installSkillSuggestionsView(options:ViewOptions){
 // Each source publishes independently; a slow or failed catalog never hides ready rows.
 export async function loadSuggestionSources<T,R>(sources:T[],read:(source:T)=>Promise<R>,publish:(source:T,result:R|undefined,error:unknown)=>void){
   await Promise.all(sources.map(async source=>{try{const result=await read(source);publish(source,result,null);}catch(error){publish(source,undefined,error);}}));
+}
+
+// Each source has one active read. Superseded queued inputs never reach the API.
+export function createSuggestionReader(){
+ const pending=new Map<string,Promise<unknown>>();
+ return function read<T>(key:string,current:()=>boolean,request:()=>Promise<T[]>):Promise<T[]>{
+  const previous=pending.get(key)||Promise.resolve();
+  const next=previous.catch(()=>{}).then(()=>current()?request():[]);
+  pending.set(key,next);
+  void next.finally(()=>{if(pending.get(key)===next)pending.delete(key);}).catch(()=>{});
+  return next;
+ };
 }
