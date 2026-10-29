@@ -4,7 +4,7 @@ import {flushSync} from 'react-dom';
 import {createStore,useStore,type StoreApi} from 'zustand';
 interface QueuePart {type:string;text?:string;[key:string]:unknown}
 interface QueueItem {id:string;input?:QueuePart[];[key:string]:unknown}
-interface QueueContext {host:string;id:string|null;queue?:{data?:QueueItem[]};visible:boolean;ready:boolean;running:boolean;supported:boolean;editable:boolean}
+interface QueueContext {desktop?:boolean;host:string;id:string|null;queue?:{data?:QueueItem[]};visible:boolean;ready:boolean;running:boolean;supported:boolean;editable:boolean}
 interface QueueOptions {
  host:HTMLElement;context:()=>QueueContext;
  api:(path:string,options:{method:'POST';body:{queuedSubmissionId:string;text?:string;expectedText?:string}})=>Promise<unknown>;
@@ -56,7 +56,7 @@ export function installQueuedInputs({host,context,api,refresh,onError}:QueueOpti
  dialog.addEventListener('close',()=>{const previous=editing;editing=null;if(previous&&contextKey(context())===previous.scope)list.querySelectorAll<HTMLButtonElement>('.queue-edit').forEach(b=>{if(b.dataset.id===previous.id)b.focus();});});
  async function act(item:QueueItem,action:QueueAction){
   const c=context(),key=itemKey(c,item);if(busy.has(key)||!c.ready||!c.supported)return;busy.add(key);render();
-  try{await api('/api/threads/'+encodeURIComponent(String(c.id))+'/queue-'+action,{method:'POST',body:{queuedSubmissionId:item.id}});drafts.delete(key);}
+  try{await api((c.desktop?'/api/desktop/threads/':'/api/threads/')+encodeURIComponent(String(c.id))+'/queue-'+action,{method:'POST',body:{queuedSubmissionId:item.id}});drafts.delete(key);}
   catch(error){if(contextKey(context())===contextKey(c))onError(error);}
   finally{busy.delete(key);if(contextKey(context())===contextKey(c)){await refresh().catch(onError);signature='';render();}}
  }
@@ -81,7 +81,7 @@ export function installQueuedInputs({host,context,api,refresh,onError}:QueueOpti
    // Finish the row commit before disabling the focused editor control.
    // Both updates remain synchronous and precede the request.
    busy.add(key);render();update({disabled:true,feedback:'正在保存…',busy:true});
-   try{await api('/api/threads/'+encodeURIComponent(String(c.id))+'/queue-update',{method:'POST',body:{queuedSubmissionId:item.id,text:draft.text,expectedText:draft.base}});drafts.delete(key);if(same())dialog.close();if(contextKey(context())===contextKey(c))await refresh();}
+   try{await api((c.desktop?'/api/desktop/threads/':'/api/threads/')+encodeURIComponent(String(c.id))+'/queue-update',{method:'POST',body:{queuedSubmissionId:item.id,text:draft.text,expectedText:draft.base}});drafts.delete(key);if(same())dialog.close();if(contextKey(context())===contextKey(c))await refresh();}
    catch(error){if(same())update({feedback:message(error)});}
    finally{busy.delete(key);if(same())update({disabled:false,busy:false});signature='';render();}
   }

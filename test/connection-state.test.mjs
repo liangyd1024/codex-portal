@@ -45,3 +45,17 @@ test('full live tool results replace deferred markers without losing original re
  merged=mergeLiveTurns(turn(full),turn({detailsDeferred:true}));
  assert.equal(merged[0].items[0].detailsDeferred,undefined);assert.deepEqual(merged[0].items[0].result,full.result);
 });
+
+test('persisted native message retires its steering placeholder in either arrival order',()=>{
+ const placeholder={id:'live',type:'steeringUserMessage',status:'accepted',clientUserMessageId:'client',input:[{type:'text',text:'补充'}]};
+ const actual={id:'stored',type:'userMessage',clientId:'client',content:placeholder.input};
+ const other={...placeholder,id:'another',clientUserMessageId:'another-client'};
+ for(const [before,after] of [[[placeholder,other],[actual]],[[actual],[placeholder,other]]]){
+  const result=mergeLiveTurns([{id:'t',items:before}],[{id:'t',items:after}]);
+  assert.deepEqual(result[0].items.filter(i=>i.type==='userMessage'),[actual]);
+  assert.deepEqual(result[0].items.filter(i=>i.type==='steeringUserMessage'),[other]);
+  assert.deepEqual(mergeLiveTurns(result,[]),result);
+ }
+ const linked={...placeholder,clientUserMessageId:null,serverUserMessageId:'stored'};
+ assert.equal(mergeLiveTurns([{id:'t',items:[linked,actual]}],[])[0].items.length,1);
+});

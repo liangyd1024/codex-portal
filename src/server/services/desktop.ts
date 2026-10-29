@@ -12,6 +12,7 @@ export function createDesktopService(manager:Manager,automations:NativeAutomatio
    const session=sessionFor(id);
    return {
     detail:()=>session.detail(),
+    queue:(action:string,data:any)=>session.queue(action,data),
     recover:()=>session.recover(),
     settings:(data:any)=>session.updateSettings({...data,threadId:id}),
     'question-answer':(data:any)=>session.answerQuestions({...data,threadId:id}),

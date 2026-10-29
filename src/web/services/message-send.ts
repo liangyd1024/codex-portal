@@ -10,7 +10,7 @@ interface Dependencies<Annotation, Draft extends {text: string}, Pictures extend
  disabled: () => boolean;
  newChatOpen: () => boolean;
  createThread: () => Promise<unknown>;
- sendDesktop: () => Promise<unknown>;
+ sendDesktop: (alternate:boolean) => Promise<unknown>;
  host: () => string;
  captureAnnotation: () => Annotation;
  annotatedText: (text: string, annotation: Annotation) => string;
@@ -50,7 +50,7 @@ export function createMessageSend<Annotation, Draft extends {text: string}, Pict
   event?.preventDefault();
   if (d.disabled() && !alternate) return;
   if (d.newChatOpen()) {await d.createThread();return;}
-  if (state.desktopMode) {await d.sendDesktop();return;}
+  if (state.desktopMode) {await d.sendDesktop(alternate);return;}
   const annotation = d.captureAnnotation();
   const text = d.annotatedText(d.input().value.trim(), annotation), id = state.selectedId;
   if ((!text && !d.hasAttachments()) || d.attachmentsPending() || !id || !d.usable() || !d.controlled() || state.busy.has('message')) return;

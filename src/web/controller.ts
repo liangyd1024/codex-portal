@@ -368,7 +368,7 @@ function renderControls() {
   const blockedGoal=state.detail?.goal?.status==='blocked'&&!state.detail?.goalError&&composer?.mode()!=='plan';
   // Publish the final mode once; avoid transient disabled states while editing.
   publishMessageInput(newChatOpen?{disabled:!ready||posting,placeholder:'描述你想完成的任务…'}:
-    state.desktopMode?{disabled:posting,placeholder:active?'补充要求…':'发送消息，输入 / 选择技能，@ 引用会话或插件…'}:
+    state.desktopMode?{disabled:posting,placeholder:active?'排队发送，或 ⌘/Ctrl+Enter 引导…':'发送消息，输入 / 选择技能，@ 引用会话或插件…'}:
     {disabled:!ready||!own||posting||handing,placeholder:!ready?'连接后继续…':state.selectedArchived?'恢复会话后可继续…':!own?'正在确认会话…':blockedGoal?'发送补充信息后将自动继续目标…':active?(followUp==='queue'?'排队发送，或 ⌘/Ctrl+Enter 引导…':'补充要求…'):'发送消息…'});
   const {buttonView,unavailable}=composerSendView({active,ready,own,posting,handing,stopping,
     loginRecovery:!!state.status?.loginRecovery,desktopMode:state.desktopMode,interrupting:state.busy.has('interrupt'),archived:state.selectedArchived,
@@ -410,10 +410,12 @@ function renderControls() {
     const desktop=state.detail?.desktop,online=state.transport&&desktop?.available,unconfirmed=desktop?.unconfirmed||desktopSends[state.selectedId!]?.messageId;
     publishWorkspaceControl('takeover',{ hidden:true });
     buttonView.send.disabled=!online||!desktop?.canSend||!!unconfirmed||posting||answering||attachments?.pending()||(!input.value.trim()&&!annotations?.has()&&!attachments?.has());
-    buttonView.send.title=active?'引导当前轮次':'发送消息';buttonView.send.label=buttonView.send.title;
+    buttonView.send.disabled ||= active&&desktop?.queueSupported!==true;
+    buttonView.send.title=active?'排队发送':'发送消息';buttonView.send.label=buttonView.send.title;
+    buttonView.guide.hidden=!active;buttonView.guide.disabled=!online||!desktop?.canSend||!!unconfirmed||posting||answering||attachments?.pending()||(!input.value.trim()&&!annotations?.has()&&!attachments?.has());
     buttonView.stop.hidden=!active&&!stopping;buttonView.stop.disabled=!online||desktop?.canStop!==true||state.busy.has('interrupt')||stopping;
     if(active&&desktop?.canStop!==true)buttonView.stop.title='当前轮次尚未确认，请刷新后重试。';
-    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(answering?'正在提交回答…':posting?'正在提交到桌面…':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':requests().some(r=>r.threadId===state.selectedId&&r.kind==='desktopQuestion')?'请先回答上方问题。补充消息将引导当前轮次。':active?'发送将引导当前轮次，由桌面处理。':!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
+    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(answering?'正在提交回答…':posting?'正在提交到桌面…':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':requests().some(r=>r.threadId===state.selectedId&&r.kind==='desktopQuestion')?'请先回答上方问题。补充消息将引导当前轮次。':active?(desktop?.queueSupported===true?'发送默认排队；点击引导或按 ⌘/Ctrl+Enter 立即补充。':'原生队列暂不可用；可使用引导。草稿已保留。'):!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     publishWorkspaceControl('composer-availability',{text:reason,hidden:!reason});
     desktopView.reviewHidden=!unconfirmed||answering;desktopView.reviewDisabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
   }
@@ -882,7 +884,7 @@ const createThreadFromDraft=createThreadSubmit({state,draft:newDraft,draftId:new
   expandProject:id=>sidebar.expandProject(id),clearSearch:()=>{$('thread-search').value='';},saveView,applyDetail,renderThreads,
   send:()=>sendMessage(),loadThreads:()=>loadThreads(),loadStatus:()=>loadStatus()});
 const submitMessage=createMessageSend({state,input:()=>$('message-input'),disabled:()=>$('send-message').disabled,
-  newChatOpen:()=>newChatOpen,createThread:()=>createThreadFromDraft(),sendDesktop:()=>sendDesktopMessage(),host:()=>targetHost,
+  newChatOpen:()=>newChatOpen,createThread:()=>createThreadFromDraft(),sendDesktop:alternate=>sendDesktopMessage(alternate),host:()=>targetHost,
   captureAnnotation:()=>annotations!.capture(),annotatedText:(text,draft)=>annotatedText(text,draft.items),acknowledgeAnnotation:draft=>annotations!.acknowledge(draft),
   hasAttachments:()=>attachments?.has(),attachmentsPending:()=>attachments?.pending(),captureAttachments:()=>attachments!.capture(),acknowledgeAttachments:pictures=>attachments!.acknowledge(pictures),
   captureDraft:(id,text)=>state.drafts.capture(id,text),acknowledgeDraft:draft=>state.drafts.acknowledge(draft),usable,controlled,running,touch:touchInput,followUp:followUpAction,
@@ -897,7 +899,7 @@ const submitPlan=createPlanSubmit({state,newChatOpen:()=>newChatOpen,usable,cont
   post:(path,body)=>api(path,{method:'POST',body}),upsert:upsertTurn,renderControls,renderThread,
   refresh:()=>refreshSelected(),recordError:(...args)=>recordError(...args)});
 async function implementPlan(id:Parameters<typeof submitPlan>[0],plan:Parameters<typeof submitPlan>[1]){return submitPlan(id,plan);}
-const sendDesktopMessage=createDesktopSend({state,input:()=>$('message-input'),
+const sendDesktopMessage=createDesktopSend({state,running,input:()=>$('message-input'),
   captureAnnotation:()=>annotations!.capture(),annotatedText:(text,draft)=>annotatedText(text,draft.items),
   acknowledgeAnnotation:draft=>annotations!.acknowledge(draft),hasAttachments:()=>attachments?.has(),
   attachmentsPending:()=>attachments?.pending(),captureAttachments:()=>attachments!.capture(),acknowledgeAttachments:pictures=>attachments!.acknowledge(pictures),
@@ -969,7 +971,7 @@ function wireEvents() {
     state.projects=[...state.projects.filter(p=>p.id!==project.id),project];updateNewProjects(project.roots[0]);renderProjects();renderControls();void loadThreads().catch(error=>recordError(error,'刷新新项目'));
   }});
   composer=installComposer({host:targetHost,api,implementPlan,modeChanged:renderControls,images:attachments!.images,context:()=>({id:inputId(),cwd:newChatOpen?newDraft.cwd:currentThread()?.cwd,ready:inputReady(),busy:state.busy.size>0,active:!newChatOpen&&running(),draft:newChatOpen,desktop:!newChatOpen&&state.desktopMode,planSupported:state.detail?.desktop?.planSupported===true,threadReferencesSupported:state.detail?.desktop?.threadReferencesSupported,turns:newChatOpen?[]:turns(),goal:newChatOpen?null:state.detail?.goal,goalError:newChatOpen?null:state.detail?.goalError}),refresh:refreshSelected,notify:toast});
-  queuedInputs=installQueuedInputs({host:document.querySelector<HTMLElement>('#conversation>.composer-region')!,context:()=>({host:targetHost,id:state.selectedId,queue:state.detail?.queue,visible:!newChatOpen&&!state.desktopMode,ready:usable()&&controlled(),running:running(),supported:featureReady('queueWrite'),editable:featureReady('queueEdit')}),api,refresh:refreshSelected,onError:error=>toast(messageOf(error),true)});
+  queuedInputs=installQueuedInputs({host:document.querySelector<HTMLElement>('#conversation>.composer-region')!,context:()=>({host:targetHost,id:state.selectedId,queue:state.detail?.queue,desktop:state.desktopMode,visible:!newChatOpen,ready:state.desktopMode?!!(state.transport&&state.detail?.desktop?.canSend):usable()&&controlled(),running:running(),supported:state.desktopMode?state.detail?.desktop?.queueSupported===true:featureReady('queueWrite'),editable:featureReady('queueEdit')}),api,refresh:refreshSelected,onError:error=>toast(messageOf(error),true)});
   sideChat=installSideChat({api,requestsChanged:renderRequests,context:()=>({id:inputId(),cwd:currentThread()?.cwd,ready:usable(),model:state.model,effort:state.effort,models:state.models.map(m=>({id:modelId(m),label:m.displayName||modelId(m),defaultEffort:defaultEffort(modelId(m)),efforts:effortsFor(modelId(m)).map(e=>e.value)}))}),renderItem,notify:toast,selectionChanged:()=>{annotations?.refreshMarks();void reportThreadView().catch(e=>recordError(e,'thread'));}});
   annotations=installResponseAnnotations({host:targetHost,context:()=>({id:inputId()}),onSideChat:(fragment:import('./services/side-chat').SideFragment)=>sideChat!.open(fragment),sideSelections:()=>sideChat!.fragments(),changed:renderControls,notify:toast});
   const settings = $('composer-settings');

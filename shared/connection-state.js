@@ -67,7 +67,16 @@ export function mergeLiveTurns(current = [], incoming = []) {
     const confirmed = items.filter(item => !item.localAccepted || !userTexts.has(userContentKey(item.content)));
     result[index] = {...old, ...turn, items:confirmed, status:terminal(old.status) && !terminal(turn.status) ? old.status : turn.status || old.status};
   }
-  return result;
+  // A live steering placeholder and its persisted userMessage have different item
+  // IDs. Retire the placeholder by native identity, never by text equality.
+  const messages=result.flatMap(turn=>(turn.items||[]).filter(item=>item.type==='userMessage'&&!item.localAccepted));
+  const ids=new Set(messages.map(item=>item.id).filter(Boolean));
+  const clients=new Set(messages.flatMap(item=>[item.clientId,item.clientUserMessageId]).filter(Boolean));
+  return result.map(turn=>({...turn,items:(turn.items||[]).filter(item=>item.type!=='steeringUserMessage'||!(
+    item.serverUserMessageId&&ids.has(item.serverUserMessageId)||
+    item.clientUserMessageId&&clients.has(item.clientUserMessageId)||
+    item.serverClientUserMessageId&&clients.has(item.serverClientUserMessageId)
+  ))}));
 }
 
 // Goal state, not assistant wording, determines whether a terminal turn should alert.

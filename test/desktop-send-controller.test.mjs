@@ -9,8 +9,9 @@ function fixture(){
  let resolve,reject;const pending=new Promise((a,b)=>{resolve=a;reject=b});
  const state={selectedId:'a/b',selectionVersion:1,busy:new Set(),detail:{desktop:{canSend:true}}},input={value:' 中文草稿 '},sends={},calls=[],saved=[],toasts=[],drafts=new Map([['a/b',input.value]]),annotation={items:['注释']},options={skills:[],plugins:[],threads:[{id:'reference',unknown:{keep:true}}]};
  let attachments=false,converting=false,pictures=[],ack=0,resizes=0,refreshes=0;
- const send=createDesktopSend({state,input:()=>input,captureAnnotation:()=>annotation,annotatedText:(text,a)=>text+'\n'+a.items.join(''),acknowledgeAnnotation:a=>{assert.equal(a,annotation);ack++},hasAttachments:()=>attachments,attachmentsPending:()=>converting,captureAttachments:()=>({id:state.selectedId,items:[...pictures]}),acknowledgeAttachments:sent=>{pictures=pictures.filter(p=>!sent.items.some(i=>i.id===p.id))},options:()=>options,captureDraft:(id,text)=>({id,text}),acknowledgeDraft:d=>{if(drafts.get(d.id)!==d.text)return false;drafts.delete(d.id);return true},sends,saveSends:()=>saved.push(structuredClone(sends)),uuid:()=> 'stable-uuid',action:async(key,run)=>{state.busy.add(key);try{return await run()}finally{state.busy.delete(key)}},post:(path,body)=>{calls.push({path,body});return pending},refresh:async()=>{refreshes++},resize:()=>resizes++,toast:(...args)=>toasts.push(args)});
- return{state,input,sends,calls,saved,toasts,drafts,options,send,resolve,reject,setAttachments:v=>attachments=v,setConverting:v=>converting=v,addPicture:p=>{pictures.push(p);attachments=true},pictures:()=>pictures,counts:()=>({ack,resizes,refreshes})};
+ let active=false;
+ const send=createDesktopSend({state,running:()=>active,input:()=>input,captureAnnotation:()=>annotation,annotatedText:(text,a)=>text+'\n'+a.items.join(''),acknowledgeAnnotation:a=>{assert.equal(a,annotation);ack++},hasAttachments:()=>attachments,attachmentsPending:()=>converting,captureAttachments:()=>({id:state.selectedId,items:[...pictures]}),acknowledgeAttachments:sent=>{pictures=pictures.filter(p=>!sent.items.some(i=>i.id===p.id))},options:()=>options,captureDraft:(id,text)=>({id,text}),acknowledgeDraft:d=>{if(drafts.get(d.id)!==d.text)return false;drafts.delete(d.id);return true},sends,saveSends:()=>saved.push(structuredClone(sends)),uuid:()=> 'stable-uuid',action:async(key,run)=>{state.busy.add(key);try{return await run()}finally{state.busy.delete(key)}},post:(path,body)=>{calls.push({path,body});return pending},refresh:async()=>{refreshes++},resize:()=>resizes++,toast:(...args)=>toasts.push(args)});
+ return{setActive:v=>active=v,state,input,sends,calls,saved,toasts,drafts,options,send,resolve,reject,setAttachments:v=>attachments=v,setConverting:v=>converting=v,addPicture:p=>{pictures.push(p);attachments=true},pictures:()=>pictures,counts:()=>({ack,resizes,refreshes})};
 }
 test('desktop send saves receipt before posting; duplicate requests are blocked and confirmed text is cleared',async()=>{
  const f=fixture(),sending=f.send();assert.deepEqual(f.saved,[{'a/b':{messageId:'stable-uuid',text:' 中文草稿 '}}]);await f.send();assert.equal(f.calls.length,1);assert.deepEqual(f.calls[0],{path:'/api/desktop/threads/a%2Fb/message',body:{messageId:'stable-uuid',text:'中文草稿\n注释',threads:[{id:'reference',unknown:{keep:true}}],images:[],skills:[],plugins:[]}});f.resolve({accepted:true});await sending;assert.equal(f.input.value,'');assert.deepEqual(f.sends,{});assert.deepEqual(f.counts(),{ack:1,resizes:1,refreshes:1});assert.equal(f.state.busy.size,0);
@@ -40,4 +41,9 @@ test('desktop acceptance uses server delivery mode and suppresses notices for a 
   assert.deepEqual(f.toasts,[[delivery==='steer'?'已提交引导，桌面将在当前轮次处理。':delivery==='start'?'已发送，桌面已启动新一轮。':'桌面已接收消息。',false]]);
  }
  const f=fixture(),sending=f.send();f.state.selectedId='other';f.state.selectionVersion++;f.resolve({delivery:'steer'});await sending;assert.deepEqual(f.toasts,[]);
+});
+
+
+test('desktop running send defaults to native queue and alternate input steers',async()=>{
+ for(const alternate of [false,true]){const f=fixture();f.setActive(true);const sending=f.send(alternate);assert.equal(f.calls[0].body.followUp,alternate?'steer':'queue');f.resolve({delivery:alternate?'steer':'queue'});await sending;assert.equal(f.toasts[0][0].includes(alternate?'引导':'排队'),true);}
 });

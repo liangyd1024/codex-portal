@@ -21,8 +21,9 @@ interface Dependencies<Annotation, Draft extends {text: string}> {
   sends: Record<string, {messageId: string; text: string; pictures?:{id:string|null;items:{id:string}[]}} | undefined>;
   saveSends: () => void;
   uuid: () => string;
+  running?:()=>boolean;
   action: (key: string, run: () => Promise<void>) => Promise<unknown>;
-  post: (path: string, body: {mode?:'default'|'plan';messageId: string; text: string; threads: unknown[]; images:{url:string}[];skills:unknown[];plugins:unknown[];apps?:unknown[]}) => Promise<{delivery?:'steer'|'start'}>;
+  post: (path: string, body: {followUp?:'queue'|'steer';mode?:'default'|'plan';messageId: string; text: string; threads: unknown[]; images:{url:string}[];skills:unknown[];plugins:unknown[];apps?:unknown[]}) => Promise<{delivery?:'queue'|'steer'|'start'}>;
   refresh: () => Promise<unknown>;
   resize: () => void;
   toast: (message: string, error: boolean) => void;
@@ -30,7 +31,7 @@ interface Dependencies<Annotation, Draft extends {text: string}> {
 
 export function createDesktopSend<Annotation, Draft extends {text: string}>(d: Dependencies<Annotation, Draft>) {
   const {state, sends} = d;
-  return async function sendDesktopMessage() {
+  return async function sendDesktopMessage(alternate=false) {
     const annotation = d.captureAnnotation();
     // Availability is established by the selected detail, as in the original controller.
     const id = state.selectedId!, selection = state.selectionVersion;
@@ -42,8 +43,8 @@ export function createDesktopSend<Annotation, Draft extends {text: string}>(d: D
     sends[id] = {messageId, text: sent.text, ...(pictures.items.length?{pictures:{id:pictures.id,items:pictures.items.map(({id})=>({id}))}}:{})}; d.saveSends();
     await d.action('message', async () => {
       try {
-        const result=await d.post('/api/desktop/threads/' + encodeURIComponent(id) + '/message', {messageId, text, ...(options.desktopExecutionMode?{mode:options.desktopExecutionMode}:{}), threads: options.threads,images:pictures.items.map(({url})=>({url})),skills:options.skills,plugins:options.plugins,...(options.apps?{apps:options.apps}:{})});
-        if(id===state.selectedId&&selection===state.selectionVersion)d.toast(result.delivery==='steer'?'已提交引导，桌面将在当前轮次处理。':result.delivery==='start'?'已发送，桌面已启动新一轮。':'桌面已接收消息。',false);
+        const result=await d.post('/api/desktop/threads/' + encodeURIComponent(id) + '/message', {messageId, text, ...(d.running?.()?{followUp:alternate?'steer' as const:'queue' as const}:{}), ...(options.desktopExecutionMode?{mode:options.desktopExecutionMode}:{}), threads: options.threads,images:pictures.items.map(({url})=>({url})),skills:options.skills,plugins:options.plugins,...(options.apps?{apps:options.apps}:{})});
+        if(id===state.selectedId&&selection===state.selectionVersion)d.toast(result.delivery==='queue'?'已排队，将在当前轮次结束后发送。':result.delivery==='steer'?'已提交引导，桌面将在当前轮次处理。':result.delivery==='start'?'已发送，桌面已启动新一轮。':'桌面已接收消息。',false);
         d.acknowledgeAnnotation(annotation);
         d.acknowledgeAttachments(pictures);
         delete sends[id]; d.saveSends();
