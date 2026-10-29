@@ -88,7 +88,7 @@ export function installSkillSuggestions({input,api,context,select}:Options) {
           }}))
         ];
         sources.forEach(s=>loading.add(s.label));publish();
-        await loadSuggestionSources(sources,async s=>s.map(await api<Catalog>(s.path,{timeout:12000})),(s,result,error)=>{
+        await loadSuggestionSources(sources,async s=>s.map(await api<Catalog>(s.path,{timeout:s.kind==='apps'?35000:12000})),(s,result,error)=>{
           if(!current())return;
           loading.delete(s.label);
           if(error)errors.set(s.kind,s.label+'暂时无法读取，重新输入可重试。');else groups.set(s.kind,result!);

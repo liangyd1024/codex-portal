@@ -62,3 +62,12 @@ test('foreground replaces suspended stream once and delayed old callbacks are ig
  t.mock.timers.tick(46000);assert.equal(f.sources.length,3);
  window.dispatchEvent(new Event('pagehide'));t.mock.timers.reset();
 });
+test('failed stream is replaced without a page refresh and late old events cannot undo recovery',async(t)=>{
+ t.mock.timers.enable({apis:['setTimeout','setInterval','Date'],now:100000});
+ const window=new EventTarget();window.navigator={onLine:true};const document=new EventTarget();document.hidden=false;
+ const f=fixture({lifecycle:{window,document}});f.setup();const first=f.sources[0];first.onopen();await settle();first.onerror();first.onerror();
+ t.mock.timers.tick(2999);assert.equal(f.sources.length,1);t.mock.timers.tick(1);assert.equal(f.sources.length,2);
+ f.sources[1].onopen();await settle();first.onerror();assert.equal(f.state.transport,true);
+ t.mock.timers.tick(15000);assert.equal(f.sources.length,2);
+ document.hidden=true;document.dispatchEvent(new Event('visibilitychange'));t.mock.timers.reset();
+});

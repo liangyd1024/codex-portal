@@ -18,6 +18,7 @@ interface EventConnectionDependencies {
 export function createEventConnection(deps: EventConnectionDependencies) {
   let installed=false, suspended=false, lastEvent=Date.now(), lastReconnect=0;
   let recoveryTimer:ReturnType<typeof setTimeout>|undefined;
+  let errorTimer:ReturnType<typeof setTimeout>|undefined, failures=0;
   let watchdog:ReturnType<typeof setInterval>|undefined;
   const active=()=>!deps.lifecycle?.document.hidden&&deps.lifecycle?.window.navigator.onLine!==false;
   function reconnect(){
@@ -28,7 +29,7 @@ export function createEventConnection(deps: EventConnectionDependencies) {
   function setupEvents() {
     if(deps.lifecycle&&!installed){
       installed=true;const {window,document}=deps.lifecycle;
-      const pause=()=>{suspended=true;clearInterval(watchdog);};
+      const pause=()=>{suspended=true;clearInterval(watchdog);clearTimeout(errorTimer);errorTimer=undefined;};
       const resume=()=>{if(!active())return;if(suspended||!deps.state.transport||Date.now()-lastEvent>45000)reconnect();clearInterval(watchdog);watchdog=setInterval(()=>{if(active()&&Date.now()-lastEvent>45000)reconnect();},15000);};
       document.addEventListener('visibilitychange',()=>document.hidden?pause():resume());
       window.addEventListener('pagehide',pause);window.addEventListener('pageshow',resume);
@@ -36,6 +37,7 @@ export function createEventConnection(deps: EventConnectionDependencies) {
       window.addEventListener('online',resume);window.addEventListener('focus',resume);
       watchdog=setInterval(()=>{if(active()&&Date.now()-lastEvent>45000)reconnect();},15000);
     }
+    clearTimeout(errorTimer);errorTimer=undefined;
     const {state} = deps;
     state.eventSource?.close?.();
     lastEvent=Date.now();
@@ -43,7 +45,7 @@ export function createEventConnection(deps: EventConnectionDependencies) {
     state.eventSource = es;
     es.onopen = () => {
       if(state.eventSource!==es)return;
-      lastEvent=Date.now();
+      lastEvent=Date.now();failures=0;clearTimeout(errorTimer);errorTimer=undefined;
       deps.resetThreadView();
       deps.reconnectSideChat();
       const restored = !state.transport;
@@ -64,7 +66,15 @@ export function createEventConnection(deps: EventConnectionDependencies) {
     for (const name of ['manager/status', 'manager/error', 'manager/request', 'manager/requestResolved']) {
       es.addEventListener(name, es.onmessage as EventListener);
     }
-    es.onerror = () => { if(state.eventSource!==es)return;state.transport = false; deps.renderStatus(); };
+    es.onerror = () => {
+      if(state.eventSource!==es)return;
+      state.transport=false;deps.renderStatus();
+      // Native EventSource may remain CLOSED after an HTTP/proxy failure.
+      // Give its own retry a chance, then replace only this failed stream.
+      if(deps.lifecycle&&active()&&!errorTimer)errorTimer=setTimeout(()=>{
+        errorTimer=undefined;if(state.eventSource===es&&!state.transport)reconnect();
+      },Math.min(15000,3000*2**Math.min(failures++,3)));
+    };
   }
   return setupEvents;
 }

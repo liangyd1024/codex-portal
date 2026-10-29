@@ -26,7 +26,7 @@ import {composerCatalog,referenceInputs} from '../lib/composer.mjs';
 test('apps paginate and only enabled accessible IDs can be sent as native mentions',async()=>{
  const {m}=fixture();m.requireCapability=()=>{};
  m.rpc.request=async(method,params)=>{assert.equal(method,'app/list');return params.cursor?{data:[{id:'enabled',name:'Example',isAccessible:true,isEnabled:true}],nextCursor:null}:{data:[{id:'off',isAccessible:true,isEnabled:false}],nextCursor:'next'};};
- assert.equal((await composerCatalog(m,'/project','apps')).apps.data.length,2);
+ assert.equal((await composerCatalog(m,'/project','apps')).apps.data.length,1);
  assert.deepEqual(await referenceInputs(m,'/project',{apps:['enabled']}),[{type:'mention',name:'Example',path:'app://enabled'}]);
  await assert.rejects(referenceInputs(m,'/project',{apps:['off']}),/不可用/);
  await assert.rejects(referenceInputs(m,'/project',{apps:'bad'}),/无效/);
@@ -34,4 +34,21 @@ test('apps paginate and only enabled accessible IDs can be sent as native mentio
 test('repeated app cursors fail instead of exposing an incomplete catalog',async()=>{
  const {m}=fixture();m.rpc.request=async()=>({data:[],nextCursor:'repeat'});
  assert.match((await composerCatalog(m,'/project','apps')).apps.error,/完整读取/);
+});
+test('large native app catalogs complete without a 2000 item cutoff and share cache across projects',async()=>{
+ const {m}=fixture();let calls=0;
+ m.accountRevision=1;
+ m.rpc.request=async(method,params)=>{calls++;assert.equal(params.limit,1000);const offset=Number(params.cursor||0),end=Math.min(offset+params.limit,5028);return {data:Array.from({length:end-offset},(_,i)=>({id:String(offset+i),isAccessible:(offset+i)%1000===0,isEnabled:true})),nextCursor:end===5028?null:String(end)};};
+ const first=await composerCatalog(m,'/first','apps');assert.equal(first.apps.data.length,6);assert.equal(first.apps.nextCursor,null);assert.equal(calls,6);
+ assert.deepEqual(await composerCatalog(m,'/second','apps'),first);assert.equal(calls,6);
+ await composerCatalog(m,'/second','apps',{fresh:true});assert.equal(calls,12);
+ m.accountRevision++;await composerCatalog(m,'/second','apps');assert.equal(calls,18);
+});
+test('account change during paging cannot cache or send results from the previous account',async()=>{
+ const {m}=fixture();m.rpc.request=async()=>{m.accountRevision=2;return {data:[{id:'a',isAccessible:true,isEnabled:true}],nextCursor:null};};
+ assert.match((await composerCatalog(m,'/project','apps')).apps.error,/账号已变化/);
+});
+test('application pages share one timeout budget instead of multiplying per-page timeouts',async()=>{
+ const {m}=fixture();const original=Date.now;let clock=0;Date.now=()=>clock;let calls=0;
+ try{m.rpc.request=async(_method,_params,{timeoutMs})=>{calls++;assert.equal(timeoutMs,30000);clock+=30001;return {data:[],nextCursor:'next'};};assert.match((await composerCatalog(m,'/project','apps')).apps.error,/超时/);assert.equal(calls,1);}finally{Date.now=original;}
 });

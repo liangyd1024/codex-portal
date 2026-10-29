@@ -552,3 +552,17 @@ test('cold detail and sidebar expose CLI activity without claiming the target',a
  assert.deepEqual([...manager.controlled.keys()],['source']);
  assert.equal(rpc.calls.some(call=>call.method==='thread/resume'),false);
 });
+test('transport recovery keeps retrying after a transient outage but manual disconnect cancels it',async(t)=>{
+ const {manager}=fixture(t);t.mock.timers.enable({apis:['setTimeout']});let attempts=0;
+ manager.connect=async()=>{attempts++;manager.connection.state='error';throw Error('WebSocket transport failed.');};
+ manager.scheduleConnectionRecovery(3000);t.mock.timers.tick(3000);await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(attempts,1);assert.equal(manager.connection.state,'reconnecting');
+ t.mock.timers.tick(30000);await new Promise(resolve=>setImmediate(resolve));assert.equal(attempts,2);
+ manager.disconnect();t.mock.timers.tick(60000);await new Promise(resolve=>setImmediate(resolve));assert.equal(attempts,2);
+});
+test('background recovery does not loop on identity or authentication failures',async(t)=>{
+ const {manager}=fixture(t);t.mock.timers.enable({apis:['setTimeout']});let attempts=0;
+ manager.connect=async()=>{attempts++;manager.connection.state='error';throw Error('Permission denied');};
+ manager.scheduleConnectionRecovery(3000);t.mock.timers.tick(3000);await new Promise(resolve=>setImmediate(resolve));
+ t.mock.timers.tick(60000);assert.equal(attempts,1);assert.equal(manager.connection.state,'error');
+});

@@ -236,3 +236,12 @@ for (const cause of [new Error(''), new AggregateError([Object.assign(new Error(
     await rejected; assert.equal(client.connected,false); assert.equal(socket.closeCalls,1);
   });
 }
+
+test('browser-style transport error messages survive into close diagnostics',async()=>{
+ const client=new RpcClient({WebSocketImpl:FakeWebSocket,timeoutMs:100});
+ const connecting=client.connect('ws://local'),socket=FakeWebSocket.instances.at(-1);let closed;
+ client.on('close',event=>{closed=event;});
+ const rejected=assert.rejects(connecting,/invalid frame/);
+ const event=new Event('error');event.message='invalid frame';socket.dispatchEvent(event);
+ await rejected;assert.match(closed.error.message,/invalid frame/);assert.equal(closed.error.code,'WEBSOCKET_TRANSPORT');
+});

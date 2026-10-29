@@ -415,7 +415,7 @@ function renderControls() {
     buttonView.guide.hidden=!active;buttonView.guide.disabled=!online||!desktop?.canSend||!!unconfirmed||posting||answering||attachments?.pending()||(!input.value.trim()&&!annotations?.has()&&!attachments?.has());
     buttonView.stop.hidden=!active&&!stopping;buttonView.stop.disabled=!online||desktop?.canStop!==true||state.busy.has('interrupt')||stopping;
     if(active&&desktop?.canStop!==true)buttonView.stop.title='当前轮次尚未确认，请刷新后重试。';
-    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(answering?'正在提交回答…':posting?'正在提交到桌面…':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':requests().some(r=>r.threadId===state.selectedId&&r.kind==='desktopQuestion')?'请先回答上方问题。补充消息将引导当前轮次。':active?(desktop?.queueSupported===true?'发送默认排队；点击引导或按 ⌘/Ctrl+Enter 立即补充。':'原生队列暂不可用；可使用引导。草稿已保留。'):!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
+    const reason=!state.transport?'网页连接中断，草稿已保留。':desktop?.error||(answering?'正在提交回答…':posting?'正在提交到桌面…':!desktop?'正在确认桌面会话…':unconfirmed?'上次发送结果未确认，请先核对原始会话记录，避免重复发送。':requests().some(r=>r.threadId===state.selectedId&&r.kind==='desktopQuestion')?'请先回答上方问题。补充消息将引导当前轮次。':active?(desktop?.queueSupported===true?'':'原生队列暂不可用；可使用引导。草稿已保留。'):!desktop.canSend?'桌面状态未确认，请稍后刷新。':'');
     publishWorkspaceControl('composer-availability',{text:reason,hidden:!reason});
     desktopView.reviewHidden=!unconfirmed||answering;desktopView.reviewDisabled=!online||!desktop?.canSend||posting||state.busy.has('desktop-review');
   }
