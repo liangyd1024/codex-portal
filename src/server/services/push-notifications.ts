@@ -28,8 +28,16 @@ type State={deliveries?:Record<string,Delivery>;navigation?:NavigationTrace[];wa
 export class PushNotifications {
  private state:State|undefined;private timer:ReturnType<typeof setTimeout>|undefined;private running=false;private closed=false;private watchTimer:ReturnType<typeof setTimeout>|undefined;
  constructor(private file:string,private access:MobileAccess,private send=sendPush,private readHistory?:(host:string,id:string)=>Promise<{data?:any[]}>,private readNotice?:(host:string,id:string,turnId?:string|null)=>Promise<{name?:string;turn?:any}>){try{this.state=JSON.parse(readFileSync(file,'utf8'));this.compactDevices();this.schedule();this.scheduleWatch();}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}}
+ private watchListener?: (host:string,ids:string[])=>void;
+ private watchedHosts=new Map<string,string>();
+ setWatchListener(listener:(host:string,ids:string[])=>void){this.watchListener=listener;this.watchedHosts.clear();this.syncWatches();}
+ private syncWatches(){
+  if(!this.watchListener)return;
+  const hosts=new Set([...this.watchedHosts.keys(),...Object.values(this.state?.watches||{}).map(w=>w.host)]);
+  for(const host of hosts){const ids=Object.values(this.state?.watches||{}).filter(w=>w.host===host&&w.expires>Date.now()&&this.hasDevices(host)).map(w=>w.threadId);const key=JSON.stringify(ids);if(this.watchedHosts.get(host)!==key){this.watchedHosts.set(host,key);this.watchListener(host,ids);}}
+ }
  private data(){return this.state ||= {keys:createPushKeys(),devices:{},jobs:{},seen:{}};}
- private save(){this.pruneDeliveries();mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});writeFileSync(this.file+'.tmp',JSON.stringify(this.data()),{mode:0o600});renameSync(this.file+'.tmp',this.file);}
+ private save(){this.pruneDeliveries();mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});writeFileSync(this.file+'.tmp',JSON.stringify(this.data()),{mode:0o600});renameSync(this.file+'.tmp',this.file);this.syncWatches();}
  private pruneDeliveries(){
   const records=this.state?.deliveries;if(!records)return;
   for(const [id,d] of Object.entries(records))if(d.expires<=Date.now())delete records[id];
@@ -77,7 +85,7 @@ export class PushNotifications {
   // Live native turn/completed events still enter through receive().
   watches[key]={host,threadId,seen:[...new Set([...(previous?.seen||[]),...terminal.map(t=>t.id+':'+t.status)])].slice(-200),expires:Date.now()+86400000,next:Date.now()+(turns.some(t=>['inProgress','in_progress','running'].includes(t.status))?15000:60000)};
   const keys=Object.keys(watches);if(keys.length>20)delete watches[keys[0]];
-  if(!previous||JSON.stringify(previous.seen)!==JSON.stringify(watches[key].seen)||previous.expires<Date.now()+23*3600000)this.save();this.scheduleWatch();
+  if(!previous||JSON.stringify(previous.seen)!==JSON.stringify(watches[key].seen)||previous.expires<Date.now()+23*3600000)this.save();this.syncWatches();this.scheduleWatch();
  }
  private scheduleWatch(){if(this.closed||this.watchTimer||!this.readHistory||!Object.keys(this.state?.watches||{}).length)return;const delay=Math.max(1000,Math.min(...Object.values(this.state?.watches||{}).map(w=>w.next||Date.now()))-Date.now());this.watchTimer=setTimeout(()=>void this.poll(),delay);this.watchTimer.unref();}
  async poll(){if(this.closed||!this.state||!this.readHistory)return;try{for(const [key,w] of Object.entries(this.state.watches||{})){

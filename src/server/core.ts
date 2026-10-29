@@ -43,6 +43,7 @@ export function createApp({connectionConfigFile,serverFactory=handler=>http.crea
     const [metadata,history]=await Promise.allSettled([manager.readThreadMetadata(id,true,false),turnId!==undefined?manager.passive('history',{threadId:id,withOutputs:false}):Promise.resolve(null)]);
     return {name:metadata.status==='fulfilled'?metadata.value.thread?.name:undefined,turn:history.status==='fulfilled'?history.value?.data?.find((turn:any)=>turnId===null?['completed','failed','interrupted'].includes(turn.status):turn.id===turnId):undefined};
   });
+  push.setWatchListener((host,ids)=>{const m=managers.get(host);if(m){m.desktopNotificationIds=ids;m.retention?.changed();}});
   const broadcasts=new Map<string,(event:unknown)=>void>();
   const staticResponse=createStaticResponse();
   const csrf=randomBytes(32).toString('hex'); const clients=new Set<Response>();

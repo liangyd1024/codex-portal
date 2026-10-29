@@ -325,3 +325,20 @@ test('background push suppresses intermediate goal turns and sends completion or
   f.push.receive('host',request);f.push.receive('host',request);await f.push.drain();assert.equal(sent.length,2);assert.match(sent[1].title,/需要你回答/);
  }finally{f.push.close();}
 });
+test('background desktop watches restore without a page and stop after device unsubscribe',()=>{
+ const f=fixture(),updates=[];
+ try{f.push.setWatchListener((host,ids)=>updates.push({host,ids}));f.push.observe('host','thread',[{id:'a',status:'inProgress'}]);assert.deepEqual(updates.at(-1),{host:'host',ids:['thread']});f.push.close();
+ const restored=new PushNotifications(f.file,f.access,async()=>201);
+ try{restored.setWatchListener((host,ids)=>updates.push({host,ids}));assert.deepEqual(updates.at(-1),{host:'host',ids:['thread']});restored.remove('host','owner',subscription().endpoint);assert.deepEqual(updates.at(-1),{host:'host',ids:[]});}finally{restored.close();}
+ }finally{f.push.close();}
+});
+test('desktop live completion reaches push once while initial snapshot and revision gaps stay silent',async()=>{
+ const {DesktopStream}=await import('../lib/desktop-stream.mjs');let deliveries=0;const f=fixture(async()=>{deliveries++;return 201;});
+ const id='00000000-0000-0000-0000-000000000001';const stream=new DesktopStream({kind:'ssh'},()=>{},(method,params)=>f.push.receive('host',{method,params}));stream.ids.add(id);stream.owners.set(id,'owner');stream.send=()=>{};
+ const message=change=>stream.message({type:'broadcast',method:'thread-stream-state-changed',sourceClientId:'owner',version:11,params:{hostId:'local',conversationId:id,change}});
+ try{message({type:'snapshot',revision:1,conversationState:{id,threadGoal:null,turns:[{turnId:'a',status:'inProgress'}]}});await f.push.drain();assert.equal(deliveries,0);
+ message({type:'patches',baseRevision:1,revision:2,patches:[{op:'replace',path:['turns',0,'status'],value:'completed'}]});await f.push.drain();assert.equal(deliveries,1);
+ message({type:'patches',baseRevision:2,revision:3,patches:[{op:'replace',path:['turns',0,'status'],value:'completed'}]});await f.push.drain();assert.equal(deliveries,1);
+ message({type:'patches',baseRevision:9,revision:10,patches:[]});message({type:'snapshot',revision:10,conversationState:{id,threadGoal:null,turns:[{turnId:'missed',status:'completed'}]}});await f.push.drain();assert.equal(deliveries,1);
+ }finally{stream.close();f.push.close();}
+});

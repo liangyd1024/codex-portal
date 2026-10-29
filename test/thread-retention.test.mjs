@@ -44,3 +44,6 @@ test('side chats are excluded from count limit but expire after three hours and 
 test('visible and empty side chats stay loaded; closing the last view starts the full TTL',async()=>{
  const f=fixture(0);try{const r=f.m.retention;f.m.rememberControl({thread:{id:'side',ephemeral:true,status:{type:'idle'}}});f.advance(10800001);await r.sweep();assert.equal(f.calls.length,0);f.m.controlled.get('side').lastTurnStatus='completed';r.attach('tab');await r.view('tab',null,1,'side');f.advance(10800001);await r.sweep();assert.equal(f.calls.length,0);await r.view('tab',null,2,null);f.advance(10799999);await r.sweep();assert.equal(f.calls.length,0);f.advance(2);await r.sweep();assert.equal(f.m.controlled.size,0);}finally{f.close();}
 });
+test('notification watches keep desktop observation alive after the last browser closes',()=>{
+ const f=fixture(0),seen=[];try{f.m.desktopStream={set:(ids,enabled)=>seen.push({ids,enabled}),close(){}};const release=f.m.retention.attach('page');f.m.desktopNotificationIds=['watched'];release();assert.deepEqual(seen.at(-1),{ids:['watched'],enabled:true});f.m.desktopNotificationIds=[];f.m.retention.changed();assert.equal(seen.at(-1).enabled,false);}finally{f.close();}
+});
