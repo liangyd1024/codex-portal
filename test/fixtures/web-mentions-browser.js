@@ -8,6 +8,8 @@
  const previous=window.fetch,json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
  window.fetch=async(url,options={})=>{
   const u=new URL(url,location.href),p=u.pathname;
+  if(p==='/api/file-suggestions'){f.calls.push({path:p,query:u.search,method:'GET',body:{}});return json({data:[{name:'示例 文件.ts',path:'/test/project/src/示例 文件.ts',description:'src/示例 文件.ts',mentionKind:'files',matchType:'file'},{name:'src',path:'/test/project/src/',description:'src',mentionKind:'files',matchType:'directory'}].filter(e=>e.description.toLowerCase().includes((u.searchParams.get('query')||'').toLowerCase()))});}
+  if(p==='/api/composer'&&u.searchParams.get('kind')==='mentions'){const response=await previous(url,options),catalog=await response.json();return json({...catalog,apps:{data:[{id:'sample-app',name:'测试应用',isAccessible:true,isEnabled:true}]}});}
   if(p!=='/api/thread-references')return previous(url,options);
   f.calls.push({path:p,query:u.search,method:'GET',body:{}});
   if(f.offline)throw new TypeError('fixture offline');

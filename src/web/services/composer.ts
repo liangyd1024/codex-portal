@@ -6,9 +6,9 @@ import type {installReactPlanCompletion} from '../components/PlanCompletion';
 import type {installReactComposerCatalog} from '../components/ComposerCatalog';
 import type {installReactComposerControls} from '../components/ComposerControls';
 import type {installReactComposerDialog} from '../components/ComposerDialog';
-type Kind='skills'|'plugins'|'threads';
+type Kind='skills'|'plugins'|'threads'|'files'|'apps';
 interface Reference {kind:Kind;key:string;token:string}
-interface Selection extends ModeSelection {skills:string[];plugins:string[];threads?:string[];references?:Reference[];goalPending?:boolean;goalUncertain?:string;goalEdit?:{base:string;text:string;uncertain?:string};[field:string]:unknown}
+interface Selection extends ModeSelection {skills:string[];plugins:string[];threads?:string[];apps?:string[];references?:Reference[];goalPending?:boolean;goalUncertain?:string;goalEdit?:{base:string;text:string;uncertain?:string};[field:string]:unknown}
 export interface ComposerContext {id:string|null;cwd?:string;ready:boolean;busy:boolean;active:boolean;draft?:boolean;desktop?:boolean;planSupported?:boolean;ephemeral?:boolean;threadReferencesSupported?:boolean;turns:NativeTurn[];goal?:NativeGoal|null;goalError?:unknown}
 interface Options {modeChanged?:()=>void;host:string;api:<T=unknown>(path:string,options?:ApiOptions)=>Promise<T>;context:()=>ComposerContext;refresh:()=>Promise<unknown>;notify:(message:string,error?:boolean)=>unknown;implementPlan:(id:string,plan:{turnId:string;text:string})=>Promise<unknown>;input?:HTMLTextAreaElement;images:AttachmentButtonControl;prefix?:string}
 type Entry=Parameters<Parameters<typeof installReactComposerCatalog>[0]['insertReference']>[0];
@@ -17,6 +17,8 @@ import {validateGoalDraft,prepareGoalSubmission,reconcileGoalSelection} from '..
 import {installSkillSuggestions} from '../../../public/skill-suggestions.js';
 import {installInlineMentions,mentionRanges} from '../../../public/inline-mentions.js';
 export const WEB_ACCESS='full';
+// A literal absolute path survives draft restore and every native text send path.
+export function fileReferenceText(path:string){return JSON.stringify(path);}
 
 export function installComposer({host,api,context,refresh,notify,implementPlan,modeChanged=()=>{},input=document.getElementById('message-input') as HTMLTextAreaElement,images,prefix=''}:Options) {
   if(!document.querySelector('link[href="/composer.css"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/composer.css';document.head.append(link);}
@@ -32,10 +34,15 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,m
     cancelGoal:()=>{choice().goalPending=false;save();render();controls.focusMenu();},
     goal:()=>selectGoal(),pick:(kind,button)=>void picker(kind,button)
   }});
-  const references=():Reference[]=>Array.isArray(choice().references)?choice().references!.filter(r=>r&&['skills','plugins','threads'].includes(r.kind)&&typeof r.key==='string'&&typeof r.token==='string'&&r.token.length>1):[];
+  const references=():Reference[]=>Array.isArray(choice().references)?choice().references!.filter(r=>r&&['skills','plugins','threads','apps'].includes(r.kind)&&typeof r.key==='string'&&typeof r.token==='string'&&r.token.length>1):[];
   const present=()=>mentionRanges(input.value,references());
-  const syncReferences=()=>{const active=present();for(const kind of ['skills','plugins','threads'] as const)choice()[kind]=[...new Set(active.filter(r=>r.kind===kind).map(r=>r.key))];};
+  const syncReferences=()=>{const active=present();for(const kind of ['skills','plugins','threads','apps'] as const)choice()[kind]=[...new Set(active.filter(r=>r.kind===kind).map(r=>r.key))];};
   function insertReference(entry:Entry,kind:Kind='skills',range?:{start:number;end:number}){
+    if(kind==='files'){
+      const start=range?.start??input.selectionStart,end=range?.end??input.selectionEnd;
+      input.setRangeText(fileReferenceText(entry.path!)+' ',start,end,'end');
+      input.focus();input.dispatchEvent(new Event('input',{bubbles:true}));return true;
+    }
     const key=(kind==='skills'?entry.path:entry.id)!;
     const token=(kind==='skills'?'$':'@')+(entry.name||key).replace(/\s+/gu,'-')+(kind==='threads'?'·'+key.slice(-8):'');
     const collision=present().find(r=>r.token===token&&r.key!==key);if(collision){notify('同名能力已在草稿中，请先删除原引用再选择。',true);return false;}
@@ -82,7 +89,7 @@ export function installComposer({host,api,context,refresh,notify,implementPlan,m
 
   }
   // Web access is fixed by owner policy; old stored preferences cannot override it.
-  return {render,mode:()=>choice().mode,dismiss:()=>{suggestions.close();controls.closeMenu();if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending&&!context().goal),validateSend:(text:string,active:boolean)=>validateGoalDraft(choice(),text,active,context().goal),prepareSend:async(id:string,text:string,active:boolean)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,goal:context().id===id?context().goal:null,api,save}):false;render();return started;},moveDraft:(from:string,to:string)=>{if(selections.has(from)){selections.set(to,selections.get(from)!);selections.delete(from);save();}},options:()=>{syncReferences();const selection=choice();const {skills,plugins,threads}=selection;const mode=composerModeOption(selection);const c=context();return {...(!c.desktop&&c.goal?.status==='blocked'&&mode!=='plan'?{resumeBlockedGoal:{createdAt:c.goal.createdAt,objective:c.goal.objective}}:{}),mode,desktopExecutionMode:c.desktop&&!c.active&&choice().modeExplicit?mode:undefined,skills:[...skills],plugins:[...plugins],threads:[...threads!],access:WEB_ACCESS};},isLoading:()=>loading};
+  return {render,mode:()=>choice().mode,dismiss:()=>{suggestions.close();controls.closeMenu();if(dialog.open)dialog.close();},isGoalPending:()=>Boolean(choice().goalPending&&!context().goal),validateSend:(text:string,active:boolean)=>validateGoalDraft(choice(),text,active,context().goal),prepareSend:async(id:string,text:string,active:boolean)=>{const selection=selections.get(id);const started=selection?await prepareGoalSubmission({selection,id,text,active,goal:context().id===id?context().goal:null,api,save}):false;render();return started;},moveDraft:(from:string,to:string)=>{if(selections.has(from)){selections.set(to,selections.get(from)!);selections.delete(from);save();}},options:()=>{syncReferences();const selection=choice();const {skills,plugins,threads,apps}=selection;const mode=composerModeOption(selection);const c=context();return {...(!c.desktop&&c.goal?.status==='blocked'&&mode!=='plan'?{resumeBlockedGoal:{createdAt:c.goal.createdAt,objective:c.goal.objective}}:{}),mode,desktopExecutionMode:c.desktop&&!c.active&&choice().modeExplicit?mode:undefined,skills:[...skills],plugins:[...plugins],apps:[...apps!],threads:[...threads!],access:WEB_ACCESS};},isLoading:()=>loading};
 }
 
 // Match the desktop's completed native plan item, never infer plans from prose.

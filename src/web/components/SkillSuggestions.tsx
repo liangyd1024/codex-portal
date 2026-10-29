@@ -12,7 +12,7 @@ function Suggestions({box,choose,store}:Instance){
  const v=useStore(store).view,content=v&&!('text' in v)?v:null;
  const rows=useMemo(()=>content?.rows.map((entry,i)=>{
   const kind=entry.mentionKind||content.kind,view=skillPresentation(entry);
-  return <button key={i} type="button" id={box.id+'-option-'+i} role="option" title={[view.name,view.description,view.source,entry.path].filter(Boolean).join('\n')} onPointerDown={e=>{if(e.pointerType==='mouse')e.preventDefault();}} onClick={()=>choose(entry)}><svg className="icon" aria-hidden="true"><use href={kind==='threads'?'#i-chat':'#i-mark'}/></svg><strong title={String(entry.name)}>{view.name}</strong><span className="skill-description">{view.description}</span><span className="skill-source">{kind==='threads'?'会话':kind==='plugins'?'插件':view.source}</span></button>;
+  return <button key={i} type="button" id={box.id+'-option-'+i} role="option" title={[view.name,view.description,view.source,entry.path].filter(Boolean).join('\n')} onPointerDown={e=>{if(e.pointerType==='mouse')e.preventDefault();}} onClick={()=>choose(entry)}><svg className="icon" aria-hidden="true"><use href={kind==='threads'?'#i-chat':'#i-mark'}/></svg><strong title={String(entry.name)}>{view.name}</strong><span className="skill-description">{view.description}</span><span className="skill-source">{kind==='files'?(entry.matchType==='directory'?'文件夹':'文件'):kind==='apps'?'应用':kind==='skills'?'技能':kind==='threads'?'会话':kind==='plugins'?'插件':view.source}</span></button>;
  }),[content?.rows,content?.kind,box.id,choose]);
  // This component alone writes selection attributes. Reuse unchanged React rows
  // while preserving the baseline list update and scroll/focus behavior.

@@ -1,8 +1,8 @@
 import type {ApiOptions} from './api';
 export interface SuggestionEntry {id?:string;path?:string;name?:string;title?:string;description?:string;shortDescription?:string;scope?:string;pluginId?:string;enabled?:boolean;installed?:boolean;archived?:boolean;ephemeral?:boolean;threadSource?:string;cwd?:string;mentionKind?:string;interface?:{displayName?:string;shortDescription?:string};skills?:SuggestionEntry[];errors?:unknown[];[field:string]:unknown}
 interface Query {start:number;end:number;query:string;kind?:string}
-interface Catalog {data?:SuggestionEntry[];error?:string;plugins?:Catalog;skills?:Catalog;marketplaces?:{plugins?:SuggestionEntry[]}[];marketplaceLoadErrors?:unknown[];nextCursor?:string}
-interface Options {input:HTMLTextAreaElement;api:<T=unknown>(path:string,options?:ApiOptions)=>Promise<T>;context:()=>{id:string|null;cwd?:string;desktop?:boolean;ready:boolean;busy:boolean;threadReferencesSupported?:boolean};select:(entry:SuggestionEntry,range:Query,kind:'skills'|'plugins'|'threads')=>unknown}
+interface Catalog {data?:SuggestionEntry[];error?:string;plugins?:Catalog;skills?:Catalog;apps?:Catalog;marketplaces?:{plugins?:SuggestionEntry[]}[];marketplaceLoadErrors?:unknown[];nextCursor?:string}
+interface Options {input:HTMLTextAreaElement;api:<T=unknown>(path:string,options?:ApiOptions)=>Promise<T>;context:()=>{id:string|null;cwd?:string;desktop?:boolean;ready:boolean;busy:boolean;threadReferencesSupported?:boolean};select:(entry:SuggestionEntry,range:Query,kind:'skills'|'plugins'|'threads'|'files'|'apps')=>unknown}
 interface ViewOptions {box:HTMLElement;choose:(entry:SuggestionEntry)=>void}
 interface View {text:(value:string)=>void;render:(content:{label:string;kind:string;rows:SuggestionEntry[];messages:string[]})=>void;highlight:(index:number)=>void}
 export function skillQuery(value:string, caret:number):Query|null {
@@ -11,7 +11,7 @@ export function skillQuery(value:string, caret:number):Query|null {
 }
 
 export function pluginQuery(value:string, caret:number):Query|null {
-  const match=value.slice(0,caret).match(/(?:^|\s)@([^\s/@$]*)$/u);
+  const match=value.slice(0,caret).match(/(?:^|\s)@([^\s@$]*)$/u);
   return match?{start:caret-match[1].length-1,end:caret,query:match[1].toLowerCase(),kind:'plugins'}:null;
 }
 
@@ -47,31 +47,47 @@ export function installSkillSuggestions({input,api,context,select}:Options) {
   const close=()=>{version++;box.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');};
   const position=()=>{if(box.hidden)return;const r=input.getBoundingClientRect(),v=window.visualViewport;box.style.left=Math.max(8,r.left)+'px';box.style.width=Math.max(0,Math.min(r.width,(v?.width||innerWidth)-16))+'px';box.style.bottom=Math.max(8,innerHeight-r.top+8)+'px';box.style.maxHeight=Math.max(60,Math.min(300,r.top-(v?.offsetTop||0)-16))+'px';};
   const highlight=()=>{view.highlight(index);const node=box.querySelectorAll('[role=option]')[index];if(node){input.setAttribute('aria-activedescendant',node.id);node.scrollIntoView({block:'nearest'});}};
-  const choose=(entry:SuggestionEntry)=>{if(!query||input.disabled||!context().ready||context().busy)return;const range={...query};close();select(entry,range,(entry.mentionKind||query.kind||'skills') as 'skills'|'plugins'|'threads');};
+  const choose=(entry:SuggestionEntry)=>{if(!query||input.disabled||!context().ready||context().busy)return;const range={...query};close();select(entry,range,(entry.mentionKind||query.kind||'skills') as 'skills'|'plugins'|'threads'|'files'|'apps');};
   const view=installSkillSuggestionsView({box,choose});
   async function update(){
-    close();rows=[];if(composing||input.disabled||!context().ready||context().busy)return;
+    close();rows=[];index=0;if(composing||input.disabled||!context().ready||context().busy)return;
     query=pluginQuery(input.value,input.selectionStart)||skillQuery(input.value,input.selectionStart);if(!query)return;
     const desktop=context().desktop;
-    if(desktop&&query.kind!=='plugins')return;
-    const kind=desktop?'threads':query.kind==='plugins'?'mentions':'skills',label=kind==='threads'?'会话':kind==='mentions'?'会话与插件':'技能';
+    const kind=query.kind==='plugins'?'mentions':'skills',label=kind==='mentions'?'文件、会话与能力':'技能';
     query.kind=kind;box.setAttribute('aria-label',label);
-    if(desktop&&!context().threadReferencesSupported){box.hidden=false;view.text('此桌面会话尚未确认支持会话引用，请在桌面新建支持引用的会话。');input.setAttribute('aria-expanded','true');position();return;}
     const stamp=version,id=context().id,cwd=context().cwd,value=input.value,caret=input.selectionStart;
     view.text('');box.hidden=false;input.setAttribute('aria-expanded','true');position();view.text('正在读取'+label+'…');input.removeAttribute('aria-activedescendant');
     try{
       let source:Catalog,loadErrors:string[]=[];
-      if(kind==='threads'||kind==='mentions'){
+      if(kind==='mentions'){
         await new Promise(resolve=>setTimeout(resolve,180));if(stamp!==version)return;
-        const reads=await Promise.allSettled([api<Catalog>((desktop?'/api/desktop/candidates':'/api/thread-references')+'?search='+encodeURIComponent(query.query)),...(kind==='mentions'?[api<Catalog>('/api/composer?cwd='+encodeURIComponent(cwd!)+'&kind=plugins')]:[])]);
+        const pending=[desktop&&!context().threadReferencesSupported?Promise.resolve({data:[]} as Catalog):api<Catalog>((desktop?'/api/desktop/candidates':'/api/thread-references')+'?search='+encodeURIComponent(query.query)),query.query?api<Catalog>('/api/file-suggestions?cwd='+encodeURIComponent(cwd||'')+'&query='+encodeURIComponent(query.query)):Promise.resolve({data:[]} as Catalog),api<Catalog>('/api/composer?cwd='+encodeURIComponent(cwd!)+'&kind=mentions')];
+        const catalogRead=Promise.allSettled(pending.slice(2));
+        const reads=await Promise.allSettled(pending.slice(0,2));
         if(stamp!==version||context().id!==id||context().cwd!==cwd||input.value!==value||input.selectionStart!==caret)return;
         source=reads[0].status==='fulfilled'?reads[0].value:{data:[]};
         if(reads[0].status==='rejected')loadErrors.push('会话读取失败：'+reads[0].reason.message);
         rows=matchingThreads(source.data||[],id).map(e=>({...e,mentionKind:'threads'}));
+        if(reads[1].status==='fulfilled')rows.unshift(...(reads[1].value.data||[]));
+        else loadErrors.push('文件搜索暂不可用：'+reads[1].reason.message);
+        if(!query.query)loadErrors.push('输入文件名或相对路径可搜索当前项目文件');
+        if(desktop&&!context().threadReferencesSupported)loadErrors.push('此桌面会话尚未确认支持会话引用');
         if(kind==='mentions'){
-          const plugins=reads[1].status==='fulfilled'?reads[1].value.plugins:null;
-          if(reads[1].status==='rejected'||plugins?.error)loadErrors.push('插件目录暂不可用');
+          index=0;view.render({label,kind,rows:[...rows],messages:[...loadErrors,'正在读取技能、插件与应用…']});highlight();position();
+          const selectedPath=()=>rows[index]?.path;
+          const catalogs=await catalogRead;
+          if(stamp!==version||context().id!==id||context().cwd!==cwd||input.value!==value||input.selectionStart!==caret)return;
+          reads.push(...catalogs);
+          const keep=selectedPath();
+          const plugins=reads[2].status==='fulfilled'?reads[2].value.plugins:null;
+          if(reads[2].status==='rejected'||plugins?.error)loadErrors.push('插件目录暂不可用');
+          const catalog=reads[2].status==='fulfilled'?reads[2].value:null;
+          if(catalog?.skills?.error)loadErrors.push('技能目录暂不可用');
+          if(catalog?.apps?.error)loadErrors.push('应用目录暂不可用');
+          rows.push(...matchingSkills((catalog?.skills?.data||[]).flatMap(e=>e.skills||[]),query.query).map(e=>({...e,mentionKind:'skills'})));
+          rows.push(...matchingSkills((catalog?.apps?.data||[]).map(e=>({...e,path:e.id,enabled:e.isAccessible===true&&e.isEnabled===true})),query.query).map(e=>({...e,mentionKind:'apps'})));
           if(plugins)rows.push(...matchingPlugins((plugins.marketplaces||[]).flatMap(e=>e.plugins||[]),query.query).map(e=>({...e,mentionKind:'plugins'})));
+          if(keep)index=Math.max(0,rows.findIndex(e=>e.path===keep));
         }
       }else{
         const catalog=await api<Catalog>('/api/composer?cwd='+encodeURIComponent(cwd!)+'&kind='+kind);
@@ -79,11 +95,11 @@ export function installSkillSuggestions({input,api,context,select}:Options) {
         source=catalog[kind as 'skills']!;if(source.error)throw Error(source.error);
         rows=matchingSkills((source.data||[]).flatMap(e=>e.skills||[]),query.query);
       }
-      index=0;const messages=[];
+      const messages=[];
       if(!rows.length)messages.push('没有匹配的可用'+label+'。');
       if((source.data||[]).some(e=>e.errors?.length)||source.marketplaceLoadErrors?.length)messages.push('部分目录未能读取，请重新输入以重试。');
-      for(const error of loadErrors)messages.push(error+'。重新输入可重试。');
-      if((kind==='threads'||kind==='mentions')&&source.nextCursor)messages.push('输入会话名称可查找更早的会话。');
+      for(const error of loadErrors)messages.push(error+'。');
+      if((kind==='mentions')&&source.nextCursor)messages.push('输入会话名称可查找更早的会话。');
       view.render({label,kind,rows,messages});
       highlight();position();
     }catch(error){if(stamp===version){rows=[];view.text(label+'读取失败，重新输入可重试：'+(error as Error).message);}}

@@ -1,10 +1,12 @@
 import type {Manager} from '../../../lib/manager.mjs';
 import {browseFolders,createFolder,openFolderProject} from './project-folders';
 import {readSidebar,readSidebarActivity,sidebarAction} from './sidebar';
+import {fileSuggestions} from '../../../lib/file-suggestions.mjs';
 import {composerCatalog} from '../../../lib/composer.mjs';
 
 export function createWorkspaceService(manager:Manager) {
  return {
+  files:(cwd:string|null,query:string)=>fileSuggestions(manager,cwd,query),
   composer:(cwd:string|null,kind:string|null)=>composerCatalog(manager,cwd,kind),
   sidebar:(options:Record<string,string>)=>readSidebar(manager,options),
   activity:(options:Record<string,string>)=>readSidebarActivity(manager,options),

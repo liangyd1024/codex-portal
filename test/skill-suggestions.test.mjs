@@ -42,7 +42,7 @@ test('at completion matches the caret query but excludes emails and paths',()=>{
  assert.deepEqual(pluginQuery('请用 @ima 后续',7),{start:3,end:7,query:'ima',kind:'plugins'});
  assert.equal(pluginQuery('hello@example.com',17),null);
  assert.equal(pluginQuery('/path/@plugin',13),null);
- assert.equal(pluginQuery('@one/two',8),null);
+ assert.equal(pluginQuery('@one/two',8).query,'one/two');
  assert.equal(pluginQuery('@',1).query,'');
 });
 test('plugin completion uses native IDs, display names and enabled installed entries',()=>{
