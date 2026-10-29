@@ -984,7 +984,7 @@ function wireEvents() {
     readPreference:key=>localStorage.getItem(key),autoRefreshInput:()=>$('auto-refresh'),setAutoRefresh,
     stopAutoRefresh:()=>autoRefreshController.stop(),flushDrafts});
   installThreadSync({window,document,
-    canSync:()=>!newChatOpen&&(state.desktopMode?state.transport:connected())&&!state.status?.service?.releasing&&!!state.selectedId&&!state.busy.has('handoff:'+state.selectedId),
+    canSync:()=>!(state.desktopMode&&state.transport&&state.detail?.desktop?.liveEvents===true)&&!newChatOpen&&(state.desktopMode?state.transport:connected())&&!state.status?.service?.releasing&&!!state.selectedId&&!state.busy.has('handoff:'+state.selectedId),
     refresh:refreshSelected,resume:resumeWorkspace,
     onError:(error:unknown)=>{if((error as {code?:string})?.code==='READ_SUSPENDED')return;const message='自动同步暂未成功，将自动重试：'+messageOf(error);if(state.historyError!==message){state.historyError=message;recordError(error,'sync');renderThread();}},
   });

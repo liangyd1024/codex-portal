@@ -53,6 +53,8 @@ export async function readSidebarActivity(manager:Manager,options:Record<string,
     manager.requireConnected();
     if(manager.rpc!==rpc||manager.generation!==generation)throw new AppError('连接已变化，请重新读取侧栏状态。',409,'CONNECTION_CHANGED');
     if((manager.accountRevision||0)!==accountRevision)throw new AppError('账号已变化，请重新读取侧栏状态。',409,'ACCOUNT_CHANGED');
+    manager.desktopSidebarIds=[...new Set([...(manager.desktopSidebarIds||[]).filter(id=>ids.includes(id)),...(Array.isArray(data.data)?data.data:[]).filter((t:{activity?:{source?:string}})=>t.activity?.source==='desktop').map((t:{id:string})=>t.id)])];
+    manager.retention?.changed();
     return data;
   });
 }

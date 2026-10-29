@@ -23,6 +23,15 @@ return function handleEvent(event:{data:string;type?:string}) {
   let data:Envelope; try { data = JSON.parse(event.data); } catch { return; }
   const method = data.method || event.type!, p = data.params || {};
   deps.sideChat()?.event(method,p);
+  if(method==='manager/desktopChanged'){
+    scheduleListRefresh();
+    if(p.threadId===state.selectedId){
+      const desktop=state.detail?.desktop as {liveEvents?:boolean}|undefined;
+      if(desktop)desktop.liveEvents=p.ready===true;
+      scheduleDetailRefresh();
+    }
+    return;
+  }
   if(method==='account/updated'){
     const version=deps.accountVersion.next();
     state.listVersion++;createdThreads.clear();state.sidebar=null;state.threads=[];state.projects=[];state.models=[];state.threadCursor=null;

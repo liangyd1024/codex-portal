@@ -42,3 +42,10 @@ test('replayed events skip notifications and connection changes resume only afte
  f.emit('manager/status',{status:f.state.status});await settle();assert.equal(f.calls.filter(c=>c.name==='resume').length,1);
 });
 test('native goal resume updates the visible goal immediately without waiting for a detail reload',()=>{const f=fixture();f.state.detail.goal={status:'blocked'};const goal={status:'active',objective:'native',updatedAt:2};f.emit('thread/goal/updated',{threadId:'a',goal});assert.deepEqual(f.state.detail.goal,goal);f.emit('thread/goal/updated',{threadId:'other',goal:{status:'blocked'}});assert.equal(f.state.detail.goal.status,'active');f.emit('thread/goal/cleared',{threadId:'a'});assert.equal(f.state.detail.goal,null);});
+
+test('desktop subscription readiness restores polling on disconnect and ignores other selections',()=>{
+ const f=fixture();f.state.detail.desktop={liveEvents:false};
+ f.emit('manager/desktopChanged',{threadId:'a',ready:true});assert.equal(f.state.detail.desktop.liveEvents,true);assert.equal(f.calls.filter(x=>x.name==='detail').length,1);
+ f.emit('manager/desktopChanged',{threadId:'b',ready:false});assert.equal(f.state.detail.desktop.liveEvents,true);assert.equal(f.calls.filter(x=>x.name==='detail').length,1);
+ f.emit('manager/desktopChanged',{threadId:'a',ready:false});assert.equal(f.state.detail.desktop.liveEvents,false);assert.equal(f.calls.filter(x=>x.name==='detail').length,2);
+});
