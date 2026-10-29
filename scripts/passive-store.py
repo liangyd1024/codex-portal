@@ -241,6 +241,13 @@ def desktop_activity(identifiers, include_requests=False):
                 if status == 'active':
                     result[identifier]['activeTurnId'] = desktop_active_turn(state)
                 if include_requests:
+                    result[identifier]['messageReceipts'] = [
+                        {'messageId': item.get('clientId') or item.get('clientUserMessageId'),
+                         'turnId': turn.get('turnId') or turn.get('id')}
+                        for turn in turns for item in turn.get('items', [])
+                        if (item.get('type') == 'userMessage' or
+                            item.get('type') == 'steeringUserMessage' and item.get('status') == 'accepted')
+                        and (item.get('clientId') or item.get('clientUserMessageId'))]
                     result[identifier]['ownerClientId'] = owners[identifier]
                     result[identifier]['pendingRequests'] = [request for request in state.get('requests', [])
                         if isinstance(request, dict) and request.get('method') == 'item/tool/requestUserInput'

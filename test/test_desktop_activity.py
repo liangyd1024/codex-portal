@@ -70,6 +70,19 @@ class DesktopActivityTest(unittest.TestCase):
         data=json.dumps(request).encode();client.buffer=struct.pack('<I',len(data))+data
         self.assertEqual(self.observe(client)['test']['state'],'running')
         self.assertIn({'type':'client-discovery-response','requestId':'discovery','response':{'canHandle':False}},client.sent)
+    def test_live_message_receipts_require_native_message_ids(self):
+        turn = {'turnId': 'turn', 'items': [
+            {'type': 'userMessage', 'clientId': 'sent'},
+            {'type': 'steeringUserMessage', 'clientUserMessageId': 'steer', 'status': 'accepted'},
+            {'type': 'steeringUserMessage', 'clientUserMessageId': 'pending', 'status': 'pending'},
+            {'type': 'agentMessage', 'clientId': 'not-user'}, {'type': 'userMessage'}]}
+        extra = {'turns': [turn]}
+        self.assertNotIn('messageReceipts', self.observe(Client(extra=extra))['test'])
+        with patch('socket.socket', return_value=Client(extra=extra)):
+            result = store.desktop_activity(['test'], include_requests=True)['test']
+        self.assertEqual(result['messageReceipts'], [
+            {'messageId': 'sent', 'turnId': 'turn'}, {'messageId': 'steer', 'turnId': 'turn'}])
+
     def test_sidebar_question_flag_does_not_expose_request_contents(self):
         request = {'method': 'item/tool/requestUserInput', 'params': {'threadId': 'test', 'questions': [{'question': 'fixture'}]}}
         result = self.observe(Client(extra={'requests': [request]}))['test']

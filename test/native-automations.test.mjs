@@ -207,3 +207,16 @@ test('desktop delivery receipt reports the actual dispatch and survives duplicat
   assert.equal(Boolean(calls.find(c=>c.action==='send').steer),state==='running');
  }
 });
+
+test('live owner receipts confirm lost delivery before history flushes without replay',async()=>{
+ const {a,m,calls}=fixture();const original=a.call;
+ a.call=async(s,p)=>{if(p.action==='send'){calls.push(p);throw Error('lost');}return original(s,p);};
+ const request={threadId:id,messageId:mid,text:'hello'};
+ await assert.rejects(a.send(request),/lost/);
+ m.passive=async action=>action==='history'?{data:[]}:{thread:{id,activity:{state:'running',messageReceipts:[{messageId:tid,turnId:tid},{messageId:mid,turnId:'invalid'}]}}};
+ await assert.rejects(a.send(request),/尚未确认/);
+ m.passive=async action=>action==='history'?{data:[]}:{thread:{id,activity:{state:'running',messageReceipts:[{messageId:mid,turnId:tid}]}}};
+ assert.equal((await a.send(request)).turnId,tid);
+ assert.equal(calls.filter(p=>p.action==='send').length,1);
+ assert.equal(a.unconfirmed(),undefined);
+});

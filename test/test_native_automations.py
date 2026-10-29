@@ -119,7 +119,7 @@ class DesktopSessionTest(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self, *_a): pass
             def owner(self, _id): return 'owner'
-            def settings(self, *_a): return {}
+            def settings(self, *_a): raise AssertionError('ordinary sends must inherit settings without a read')
             def request(self, method, params, version, owner, mutation):
                 requests.append((method, params, version, owner, mutation))
                 return {'result': {}}

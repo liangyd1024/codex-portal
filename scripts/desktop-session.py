@@ -240,7 +240,8 @@ def run(payload):
         owner = desktop.owner(identifier)
         if action == 'answer':
             return answer_question(desktop, identifier, owner, payload)
-        settings = desktop.settings(identifier, owner)
+        # Ordinary sends inherit native settings; only explicit mode changes need them.
+        settings = desktop.settings(identifier, owner) if action in ('probe', 'settings') or payload.get('mode') is not None else {}
         if action == 'probe':
             return {'available': True, 'threadId': identifier, 'settings': settings, 'threadReferencesSupported': reference_capability(home, identifier),
                     'planSupported': isinstance(settings.get('settings', {}).get('model'), str)}
