@@ -64,16 +64,12 @@ export function installSkillSuggestions({input,api,context,select}:Options) {
         const needle=query.query,capability=context().threadReferencesSupported;
         const current=()=>stamp===version&&context().id===id&&context().cwd===cwd&&input.value===value&&input.selectionStart===caret;
         const groups=new Map<string,SuggestionEntry[]>(),errors=new Map<string,string>(),loading=new Set<string>();
-        const hints=()=>[
-          ...(!needle?['输入文件名或相对路径可搜索当前项目文件。']:[]),
-          ...(desktop&&capability!==true?[capability===false?'此会话未启用原生会话引用。请在 Codex 桌面新建会话后重试。':'尚未确认此会话的引用能力。可刷新会话或恢复桌面连接后重试；文件和其他能力仍可使用。']:[])
-        ];
         const publish=()=>{
           if(!current())return;
           const selected=rows[index],key=selected&&selected.mentionKind+':'+selected.path;
           rows=['files','threads','skills','plugins','apps'].flatMap(kind=>groups.get(kind)||[]);
           index=key?Math.max(0,rows.findIndex(e=>e.mentionKind+':'+e.path===key)):0;
-          const messages=[...hints(),...errors.values()];
+          const messages=[...errors.values()];
           if(loading.size)messages.push('正在读取'+[...loading].join('、')+'…');
           else if(!rows.length)messages.push('没有匹配结果。');
           view.render({label,kind,rows:[...rows],messages});highlight();position();
