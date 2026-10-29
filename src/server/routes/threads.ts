@@ -12,7 +12,7 @@ export function createThreadRoutes(manager:Manager,observe?:(id:string,turns:any
  const service=createThreadService(manager,sessionFor);
  const list:Route=async(_req,res,url)=>json(res,200,await service.list(Object.fromEntries(url.searchParams)));
  const references:Route=async(_req,res,url)=>json(res,200,await service.list({search:url.searchParams.get('search')||'',cursor:url.searchParams.get('cursor')}));
- const create:Route=async(_req,res,_url,data)=>json(res,201,await service.create(data));
+ const create:Route=async(_req,res,_url,data)=>{const detail=await service.create(data);if(detail.thread?.id)observe?.(detail.thread.id,detail.turns||[]);json(res,201,detail);};
  return {
   read(path:string,match:Match):Route|undefined {
    if(path==='/api/threads')return list;

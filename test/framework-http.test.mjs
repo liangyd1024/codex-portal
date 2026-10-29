@@ -1052,6 +1052,10 @@ test('ordinary thread detail registers background observation after push is enab
  try{
   const response=await fetch(f.base+'/api/push/subscribe',{method:'POST',headers:{'content-type':'application/json','x-csrf-token':f.token},body:JSON.stringify({subscription:{endpoint:'https://web.push.apple.com/fixture',keys:{p256dh:createPushKeys().publicKey,auth:Buffer.alloc(16,1).toString('base64url')}}})});
   assert.equal(response.status,200);
+  f.managers.get('a').newThread=async()=>({thread:{id:'new-notification-thread'},turns:[]});
+  assert.equal((await fetch(f.base+'/api/threads',{method:'POST',headers:{'content-type':'application/json','x-csrf-token':f.token},body:'{}'})).status,201);
+  const created=JSON.parse(await readFile(path.join(stateDir,'web-push.json'),'utf8'));
+  assert.equal(created.watches['a:new-notification-thread'].threadId,'new-notification-thread');
   assert.equal((await fetch(f.base+'/api/threads/fixture-thread')).status,200);
   const saved=JSON.parse(await readFile(path.join(stateDir,'web-push.json'),'utf8'));
   assert.equal(saved.watches['a:fixture-thread'].threadId,'fixture-thread');

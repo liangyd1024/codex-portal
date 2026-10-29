@@ -34,7 +34,8 @@ export function createDesktopRoutes(manager:Manager,automations:NativeAutomation
    const session=service.session(match[1]);
    const action=match[2];
    if(action==='queue-steer'||action==='queue-delete'||action==='queue-update')return async(_url,data,res)=>json(res,200,await session.queue(action.slice(6),data));
-   if(action==='message'||action==='interrupt'||action==='acknowledge'||action==='recover'||action==='question-answer'||action==='settings')return async(_url,data,res)=>json(res,200,await session[action](data));
+   if(action==='message')return async(_url,data,res)=>{observe?.(match[1],[]);json(res,200,await session.message(data));};
+   if(action==='interrupt'||action==='acknowledge'||action==='recover'||action==='question-answer'||action==='settings')return async(_url,data,res)=>json(res,200,await session[action](data));
   },
   automationWrite:(path:string)=>writes.get(path),
  };
