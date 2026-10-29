@@ -185,7 +185,7 @@ export class Sidebar {
   source(t:SidebarThread):string|null{return this.o.activitySource?this.o.activitySource(t):activitySource(t,{connected:this.o.connected(),webActive:(t.status as {type?:string}|undefined)?.type==='active'});}
   threadMenu(t:SidebarThread):MenuEntry[]{
     if(this.operations?.has(this.snapshot!.accountScope+':'+t.id))return [{label:'正在处理此会话…',disabled:true}];
-    if(t.archived)return [this.entry('恢复会话','restore',()=>this.run('restore',t))];
+    if(t.archived)return [this.entry('撤销归档','restore',()=>this.run('restore',t))];
     const entries=[this.entry('重命名','rename',()=>this.edit('rename',t,'重命名会话',t.name)),this.entry(t.isPinned?'取消置顶':'置顶','pin',()=>this.run('pin',t,{pinned:!t.isPinned})),this.entry('移动到项目','moveProject',()=>this.choose('moveProject',t)),this.entry('移动到分区','moveSection',()=>this.choose('moveSection',t)),this.entry(t.isUnread?'标记已读':'标记未读','read',()=>this.run('read',t,{read:!!t.isUnread}),{disabled:!this.o.connected()||!t.readRevision||!this.snapshot!.capabilities.read.supported,reason:this.snapshot!.capabilities.read.reason})];
     if(t.isPinned&&this.snapshot!.preferences.pinned==='manual'){
       const peers=this.snapshot!.data.filter(x=>x.sectionId===t.sectionId).sort((a,b)=>(a.sectionPosition??Infinity)-(b.sectionPosition??Infinity)||a.id.localeCompare(b.id));const index=peers.findIndex(x=>x.id===t.id);
@@ -239,18 +239,22 @@ export class Sidebar {
     if(action==='restore')this.archiving!.delete(key);
     const current=()=>this.snapshot!.accountScope===scope;
 
-    const label=action==='archive'?'正在归档会话…':action==='restore'?'正在恢复会话…':'正在更新…';
+    const label=action==='archive'?'正在归档会话…':action==='restore'?'正在撤销归档…':'正在更新…';
     this.progress.textContent=label;
     let started=false;
     const slow=setTimeout(()=>{if(!current())return;this.progress.textContent=started?'仍在等待目标机器…':'已排队，等待前面的操作完成…';},5000);
     let completed=false;
-    try{await this.enqueue(()=>{if(!current()||!this.o.connected())throw Error('连接或账号已变化，未执行排队操作。');started=true;this.progress.textContent=label;return this.o.api('/api/sidebar/actions',{method:'POST',body:{action,id:target?.id,expectedRevision:target?.revision,accountScope:scope,...extra}});});
+    try{const response=await this.enqueue(()=>{if(!current()||!this.o.connected())throw Error('连接或账号已变化，未执行排队操作。');started=true;this.progress.textContent=label;return this.o.api('/api/sidebar/actions',{method:'POST',body:{action,id:target?.id,expectedRevision:target?.revision,accountScope:scope,...extra}});});
       if(!current())return;
       completed=true;clearTimeout(slow);
+      // Native success is enough to offer undo, even if the following read fails.
+      if(action==='archive')this.undo(target!.id);
+      if(action==='restore'&&this.undoId===target!.id)this.undoView?.hide();
+      if((response as {desktopSyncPending?:boolean}|undefined)?.desktopSyncPending)this.o.toast('操作已完成，桌面列表同步稍有延迟；刷新后会继续同步。');
       this.progress.textContent='正在刷新列表…';
       await this.o.changed(action,target);
       if(!current())return;
-      if(action==='archive'){if(!this.snapshot!.archived&&!this.snapshot!.data?.some(t=>t.id===target!.id))this.archiving!.delete(key);this.undo(target!.id);}if(action==='restore'&&this.undoId===target!.id)this.undoView?.hide();
+      if(action==='archive'){if(!this.snapshot!.archived&&!this.snapshot!.data?.some(t=>t.id===target!.id))this.archiving!.delete(key);}
     }catch(caught){
       let error=caught as Error & {code?:string};
       // Show the outcome before another potentially slow remote read.
@@ -260,7 +264,7 @@ export class Sidebar {
       if(completed)error=new Error('操作已完成，但刷新失败：'+error.message,{cause:error});
       if(!propagate)this.o.toast(error.message,true);
       void this.o.refresh().catch(()=>{});
-      if(propagate)throw error;
+      if(propagate){if(completed&&action==='restore')this.o.toast(error.message,true);else throw error;}
     }
     finally{clearTimeout(slow);if(!current())this.archiving!.delete(key);this.operations.delete(key);this.pending=this.operations.size>0;this.setBusy(this.pending);this.progress.textContent=this.pending?'正在处理会话…':'正在更新…';if(dialog)dialog.dataset.busy='false';if(!this.dialog&&globalThis.document?.activeElement===globalThis.document?.body&&this.menuAnchor===anchor)this.focusAnchor();}
   }

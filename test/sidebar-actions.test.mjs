@@ -73,9 +73,9 @@ test('first-load identity failure rejects instead of manufacturing a successful 
  await assert.rejects(readSidebar(m),e=>e.code==='RPC_TIMEOUT');assert.equal(passiveReads,0);
 });
 
-test('archive notification failure reports persisted partial success and never retries the mutation',async()=>{
+test('archive notification failure preserves native success and never retries the mutation',async()=>{
  const {m,input,calls}=fixture();m.notifyDesktopArchive=async()=>{throw Error('offline');};
- await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='DESKTOP_SYNC_FAILED'&&e.message.includes('已归档'));
+ const result=await sidebarAction(m,input('archive'));assert.equal(result.ok,true);assert.equal(result.desktopSyncPending,true);
  assert.equal(calls.filter(([name])=>name==='thread/archive').length,1);assert.equal(m.sidebarMutation,false);
 });
 test('restore notifies desktop only after successful engine write',async()=>{
@@ -133,7 +133,7 @@ test('sidebar failure is visible and controls unlock before a stalled refresh co
  assert.ok(events.indexOf('目标响应超时')<events.indexOf('refresh'));assert.equal(ui.pending,false);assert.deepEqual(events.at(-1),['busy',false]);finish();
 });
 test('successful mutation stays silent before list refresh and distinguishes a refresh failure',async()=>{
- const events=[];const ui={render(){},enqueue:Sidebar.prototype.enqueue,pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(){},focusAnchor(){},o:{connected:()=>true,api:async()=>{},toast:message=>{events.push(message);return {remove(){}};},changed:async()=>{assert.ok(!events.includes('会话已归档'));throw Error('列表超时');},refresh:async()=>{}}};
+ const events=[];const ui={render(){},undo(){events.push('undo');},enqueue:Sidebar.prototype.enqueue,pending:false,snapshot:{accountScope:'a'},progress:{},setBusy(){},focusAnchor(){},o:{connected:()=>true,api:async()=>{},toast:message=>{events.push(message);return {remove(){}};},changed:async()=>{assert.ok(!events.includes('会话已归档'));throw Error('列表超时');},refresh:async()=>{}}};
  await Sidebar.prototype.run.call(ui,'archive',{id:'t'});
  assert.ok(events.includes('操作已完成，但刷新失败：列表超时'));assert.equal(ui.pending,false);
 });
@@ -289,4 +289,36 @@ test('sidebar dialog errors propagate once without a duplicate floating alert',a
  const next=queuedUI(async()=>{},async()=>{throw Error('列表不可用');});
  await assert.rejects(next.ui.run('rename',{id:'a'},{name:'new'},true),/操作已完成，但刷新失败：列表不可用/);
  assert.deepEqual(next.messages,[]);
+});
+
+test('restore rechecks connection and account inside the mutation and while paging',async()=>{
+ for(const kind of ['connection','account','pageAccount','cursor']){
+  const {m,input,calls,layout}=fixture();
+  if(kind==='connection'||kind==='account')m.withMutation=fn=>{if(kind==='connection')m.generation=1;else m.accountRevision=1;return fn();};
+  else {layout.data=[];layout.nextCursor='next';m.passive=async()=>({...structuredClone(layout),accountScope:kind==='pageAccount'?'other':'a'});}
+  await assert.rejects(sidebarAction(m,input('restore')),e=>['CONNECTION_CHANGED','ACCOUNT_CHANGED','SIDEBAR_CHANGED'].includes(e.code));
+  assert.ok(!calls.some(([name])=>name==='thread/unarchive'||name==='desktop-notify'));
+ }
+});
+test('restore timeout is reconciled and writer conflict never retries native mutation',async()=>{
+ for(const kind of ['confirmed','unknown','writer']){
+  const {m,input,calls}=fixture(),rpc=m.rpc.request,passive=m.passive;m.archiveSync=new ArchiveSync(m);
+  m.passive=async(action,p)=>action==='detail'?{thread:{archived:kind!=='confirmed'}}:passive(action,p);
+  m.rpc.request=async(method,p)=>{if(method==='thread/unarchive'){calls.push([method,p]);throw Object.assign(Error(kind==='writer'?'thread t already has an active writer':'timeout'),{code:kind==='writer'?'RPC_ERROR':'RPC_TIMEOUT'});}return rpc(method,p);};
+  if(kind==='confirmed')assert.equal((await sidebarAction(m,input('restore'))).result.confirmedFromSnapshot,true);
+  else await assert.rejects(sidebarAction(m,input('restore')),e=>e.code===(kind==='writer'?'THREAD_WRITER_CONFLICT':'OUTCOME_UNKNOWN'));
+  if(kind==='unknown')await assert.rejects(sidebarAction(m,input('restore')),e=>e.code==='OUTCOME_UNKNOWN');
+  assert.equal(calls.filter(([name])=>name==='thread/unarchive').length,1);
+  assert.equal(calls.filter(([name])=>name==='desktop-notify').length,kind==='confirmed'?1:0);
+ }
+});
+test('archive offers undo on native success despite desktop sync or refresh failure; restored success is not retryable',async()=>{
+ const {ui,messages}=queuedUI(async()=>({ok:true,desktopSyncPending:true}),async()=>{throw Error('列表失败');});
+ const undo=[];ui.undo=id=>undo.push(id);await ui.run('archive',{id:'a'});
+ assert.deepEqual(undo,['a']);assert.ok(messages.some(message=>message.includes('同步稍有延迟')));
+ let hidden=0;ui.undoId='a';ui.undoView={hide(){hidden++;}};
+ await ui.run('restore',{id:'a'},{},true);
+ assert.equal(hidden,1);assert.ok(messages.some(message=>message.includes('操作已完成，但刷新失败')));
+ const failed=queuedUI(async()=>{throw Object.assign(Error('占用'),{code:'THREAD_WRITER_CONFLICT'});});failed.ui.undo=()=>assert.fail('must not offer undo after rejection');
+ await failed.ui.run('archive',{id:'a'});
 });

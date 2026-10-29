@@ -67,9 +67,10 @@ export async function sidebarAction(manager:Manager,input:SidebarInput){
   manager.sidebarMutation=true;
   try{
     const rpc=manager.rpc!,generation=manager.generation,accountRevision=manager.accountRevision||0;
+    const sameContext=()=>manager.rpc===rpc&&manager.generation===generation&&(manager.accountRevision||0)===accountRevision;
     const checkArchiveContext=()=>{
       manager.requireWritable();
-      if(manager.rpc!==rpc||manager.generation!==generation||(manager.accountRevision||0)!==accountRevision)fail('检查期间连接或账号已变化，未执行归档。','CONNECTION_CHANGED',409);
+      if(!sameContext())fail('检查期间连接或账号已变化，未执行归档或撤销归档。','CONNECTION_CHANGED',409);
       if(manager.startingTurns.has(input.id)||manager.activeTurns.has(input.id))fail('会话正在运行，请结束后再归档。','THREAD_BUSY',409);
       if([...manager.requests?.values()||[],...manager.pendingQuestions?.entries.values()||[]].some(r=>r.threadId===input.id))fail('会话还有待处理请求，请处理后再归档。','THREAD_BUSY',409);
     };
@@ -79,7 +80,17 @@ export async function sidebarAction(manager:Manager,input:SidebarInput){
     const sectionAction=['renameSection','deleteSection'].includes(input.action);
     let target=sectionAction?snapshot.sections.find((s:SidebarItem)=>s.id===input.id):snapshot.data.find((t:SidebarItem)=>t.id===input.id);
     // Archived lists are paged; look up the requested page without trusting browser metadata.
-    if(input.action==='restore'&&!target){let cursor=snapshot.nextCursor;while(cursor&&!target){const page=await manager.passive('sidebar',{archived:true,cursor,accountId:manager.sidebarAccountId});target=page.data.find((t:SidebarItem)=>t.id===input.id);cursor=page.nextCursor;}}
+    if(input.action==='restore'&&!target){
+      let cursor=snapshot.nextCursor;const seen=new Set();
+      while(cursor&&!target){
+        checkArchiveContext();
+        if(seen.has(cursor))fail('归档列表分页异常，请刷新后重试。','SIDEBAR_CHANGED',409);seen.add(cursor);
+        const page=await manager.passive('sidebar',{archived:true,cursor,accountId:manager.sidebarAccountId});
+        checkArchiveContext();
+        if(page.accountScope!==input.accountScope)fail('目标账号已变化，请刷新后重试。','ACCOUNT_CHANGED',409);
+        target=page.data.find((t:SidebarItem)=>t.id===input.id);cursor=page.nextCursor;
+      }
+    }
     if(input.action!=='createSection'){
       if(!target)fail('项目或会话已变化，请刷新列表。','SIDEBAR_CHANGED',409);
       if(input.expectedRevision!==target!.revision)fail('桌面端已修改此项，请刷新后重新操作。','SIDEBAR_CHANGED',409);
@@ -119,7 +130,7 @@ export async function sidebarAction(manager:Manager,input:SidebarInput){
         checkArchiveContext();
         break;
       }
-      case 'restore':break;
+      case 'restore':checkArchiveContext();break;
       case 'pin':if(typeof input.pinned!=='boolean')fail('置顶参数无效。');p.sectionId=input.pinned?PINNED_SECTION:null;break;
       case 'moveSection':
         if(input.sectionId!==null&&!snapshot.sections.some((s:SidebarItem)=>s.id===input.sectionId))fail('分区不存在。');p.sectionId=input.sectionId;break;
@@ -142,22 +153,24 @@ export async function sidebarAction(manager:Manager,input:SidebarInput){
     // Prevent a pending automatic title job from overwriting the explicit user name.
     if(input.action==='rename'){const info=manager.autoTitles.get(input.id);if(info)info.manual=true;await manager.titleJobs?.get(input.id)?.catch(()=>{});}
     const archiveChange=['archive','restore'].includes(input.action);
-    if(archiveChange)manager.archiveSync?.start(input.id,input.action==='archive',input.accountScope);
-    try{result=await manager.withMutation(()=>{if(input.action==='archive')checkArchiveContext();return manager.rpc!.request(methods[input.action],p,{timeoutMs:10000});});}
+    const alreadyApplied=archiveChange&&await manager.archiveSync?.prepare(input.id,input.action==='archive',input.accountScope);
+    if(archiveChange){checkArchiveContext();manager.archiveSync?.start(input.id,input.action==='archive',input.accountScope);}
+    try{result=alreadyApplied?{confirmedFromSnapshot:true}:await manager.withMutation(()=>{if(archiveChange)checkArchiveContext();return manager.rpc!.request(methods[input.action],p,{timeoutMs:10000});});if(archiveChange)manager.archiveSync?.confirm(input.id);}
     catch(caught){const error=caught as Error & {code?:string};
       if(error.code==='RPC_TIMEOUT'||!manager.rpc?.connected){
         // Archive writes can persist before the engine's response times out.
         // Reconcile the target state without ever replaying the mutation.
-        const persisted=['archive','restore'].includes(input.action)
+        const persisted=archiveChange&&sameContext()
           ? await manager.passive('detail',{threadId:input.id}).catch(()=>null):null;
-        if(persisted?.thread?.archived===(input.action==='archive'))result={confirmedFromSnapshot:true};
+        if(sameContext()&&persisted?.thread?.archived===(input.action==='archive')){result={confirmedFromSnapshot:true};manager.archiveSync?.confirm(input.id);}
         else throw new AppError(archiveChange?'操作结果暂未确认；刷新或重连后会继续核对并同步桌面端，不会重复执行归档或恢复。':'操作结果未确认，请恢复连接并刷新列表核对；不会自动重复执行。',502,'OUTCOME_UNKNOWN');
       }else {
         if(archiveChange)manager.archiveSync?.cancel(input.id);
-        if(archiveChange&&/already has an active writer/i.test(error.message))throw new AppError('该会话仍由桌面端或另一入口管理，当前入口无法归档或恢复。请在持有会话的入口操作，网页会自动同步结果。',409,'THREAD_WRITER_CONFLICT');
+        if(archiveChange&&/already has an active writer/i.test(error.message))throw new AppError('原生引擎拒绝了本次操作：桌面端或另一入口仍持有此会话的写入权。请在该入口归档或撤销归档，或待其释放后重试。网页会同步实际状态。',409,'THREAD_WRITER_CONFLICT');
         throw error;
       }
     }finally{if(archiveChange)manager.archiveSync?.settle(input.id);}
+    if(archiveChange&&!sameContext())return {ok:true,result,desktopSyncPending:true};
     if(input.action==='rename'){manager.autoTitles.delete(input.id);manager.saveTitles();}
     if(input.action==='archive'){manager.controlled.delete(input.id);manager.subscriptions.delete(input.id);manager.saveSubscriptions();}
     manager.publish('manager/sidebarChanged',{action:input.action,threadId:sectionAction?null:input.id});
@@ -165,7 +178,10 @@ export async function sidebarAction(manager:Manager,input:SidebarInput){
       try{
         const synced=manager.archiveSync?await manager.archiveSync.deliver(input.id,input.accountScope):await manager.notifyDesktopArchive(input.id,input.action==='archive');
         if(synced===false)throw new Error('等待持久化');
-      }catch(caught){const error=caught as Error & {code?:string};throw new AppError('会话已'+(input.action==='archive'?'归档':'恢复')+'，桌面端同步暂未完成；刷新或重连后会自动重试通知，无需重复操作。',502,'DESKTOP_SYNC_FAILED');}
+      }catch(caught){
+        manager.record?.(caught,'归档通知同步');
+        return {ok:true,result,desktopSyncPending:true};
+      }
     }
     return {ok:true,result};
   }finally{manager.sidebarMutation=false;}

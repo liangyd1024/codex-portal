@@ -44,3 +44,46 @@ test('a newer opposite operation cannot be removed by an older notification comp
   f.setState(false);f.sync.settle('t');f.manager.notifyDesktopArchive=async(id,value)=>f.calls.push([id,value]);
   await f.sync.flush('a');assert.deepEqual(f.calls,[['t',false]]);
 });
+
+function prepareFixture(){
+ const notices=[];let archived=false;
+ const manager={controlled:new Map(),subscriptions:new Map(),saveSubscriptions(){},publish(){},
+  passive:async()=>({thread:{archived}}),notifyDesktopArchive:async(id,value)=>notices.push([id,value])};
+ return {manager,notices,set:value=>{archived=value;}};
+}
+test('unknown archive and unarchive survive restart and block both repeat and inverse writes',async()=>{
+ for(const desired of [true,false]){
+  const {manager,set}=prepareFixture();set(!desired);
+  const file=path.join(mkdtempSync(path.join(tmpdir(),'archive-sync-')),'state.json');
+  const original=new ArchiveSync(manager,file);original.start('target',desired,'account');original.settle('target');
+  const restarted=new ArchiveSync(manager,file);
+  for(const next of [desired,!desired])await assert.rejects(restarted.prepare('target',next,'account'),e=>e.code==='OUTCOME_UNKNOWN');
+  set(desired);
+  assert.equal(await restarted.prepare('target',desired,'account'),true);
+  assert.equal(await restarted.prepare('target',!desired,'account'),false);
+  assert.equal(restarted.pending.get('target').confirmed,true);
+ }
+});
+test('confirmed archive allows undo when the desktop notification is unavailable',async()=>{
+ const {manager,set}=prepareFixture();set(true);manager.notifyDesktopArchive=async()=>{throw Error('offline');};
+ const sync=new ArchiveSync(manager);sync.start('target',true,'account');sync.confirm('target');sync.settle('target');
+ await assert.rejects(sync.deliver('target','account'),/offline/);
+ assert.equal(await sync.prepare('target',false,'account'),false);
+ assert.equal(sync.pending.size,1);
+});
+test('inverse waits for a previous notification and delivery rejects stale connection reads',async()=>{
+ const {manager,set,notices}=prepareFixture();set(true);
+ const sync=new ArchiveSync(manager);sync.start('target',true,'account');sync.confirm('target');sync.settle('target');
+ let finish;manager.notifyDesktopArchive=()=>new Promise(resolve=>{finish=resolve;});
+ const delivery=sync.deliver('target','account');await new Promise(setImmediate);
+ let ready=false;const undo=sync.prepare('target',false,'account').then(()=>{ready=true;});
+ await new Promise(setImmediate);assert.equal(ready,false);finish();await Promise.all([delivery,undo]);
+ sync.start('target',true,'account');sync.settle('target');
+ manager.passive=async()=>{manager.generation=2;return {thread:{archived:true}};};
+ assert.equal(await sync.deliver('target','account'),false);assert.deepEqual(notices,[]);assert.equal(sync.pending.size,1);
+});
+test('pending operations cannot cross accounts or overwrite an in-flight write',async()=>{
+ const {manager}=prepareFixture(),sync=new ArchiveSync(manager);sync.start('target',true,'account');
+ await assert.rejects(sync.prepare('target',false,'other'),e=>e.code==='ACCOUNT_CHANGED');
+ await assert.rejects(sync.prepare('target',false,'account'),e=>e.code==='SIDEBAR_BUSY');
+});
