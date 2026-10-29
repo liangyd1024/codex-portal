@@ -230,6 +230,14 @@ def desktop_activity(identifiers, include_requests=False):
             if state.get('id') == identifier and status in ('active', 'idle'):
                 result[identifier] = {'source': 'desktop', 'state': 'running' if status == 'active' else 'idle', 'observedAt': int(time.time() * 1000),
                                       'needsAnswer': any(isinstance(request, dict) and request.get('method') == 'item/tool/requestUserInput' and request.get('params', {}).get('threadId') == identifier for request in state.get('requests', []))}
+                # Native completion can arrive before the history database flushes.
+                # Only the current canonical tail from the discovered owner counts.
+                turns = desktop_turns(state)
+                if status == 'idle' and turns:
+                    latest = turns[-1]
+                    turn_id = latest.get('turnId') or latest.get('id')
+                    if isinstance(turn_id, str) and latest.get('status') in ('completed', 'failed', 'interrupted'):
+                        result[identifier]['latestTurn'] = {'id': turn_id, 'status': latest['status']}
                 if status == 'active':
                     result[identifier]['activeTurnId'] = desktop_active_turn(state)
                 if include_requests:
@@ -273,6 +281,8 @@ def sidebar_activity(threads):
         for thread in threads:
             if thread['id'] in activity:
                 thread['activity'] = activity[thread['id']]
+                if thread['activity'].get('state') == 'idle' and thread['activity'].get('latestTurn'):
+                    thread['latestTurn'] = thread['activity']['latestTurn']
             elif thread['id'] in candidates:
                 thread['activity'] = {'state': 'unknown'}
     except (RuntimeError, sqlite3.Error):

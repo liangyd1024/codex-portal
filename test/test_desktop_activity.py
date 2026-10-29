@@ -146,6 +146,19 @@ class DesktopActivityTest(unittest.TestCase):
         self.assertEqual(detail['ownerClientId'],'test-owner')
         self.assertNotIn('pendingRequests', self.observe(Client(extra=extra))['test'])
 
+    def test_idle_owner_reports_only_current_canonical_terminal_turn(self):
+        history = {'entitiesByKey': {
+            'old': {'turnId': 'old', 'status': 'inProgress'},
+            'current': {'turnId': 'current', 'status': 'completed'}},
+            'islands': [{'entries': [{'value': 'current'}]}]}
+        extra = {'turnHistory': {'kind': 'canonical', 'history': history},
+                 'turns': [{'turnId': 'stale-legacy', 'status': 'failed'}]}
+        idle = self.observe(Client(status='idle', extra=extra))['test']
+        self.assertEqual(idle['latestTurn'], {'id': 'current', 'status': 'completed'})
+        self.assertNotIn('latestTurn', self.observe(Client(status='active', extra=extra))['test'])
+        history['islands'] = []
+        self.assertNotIn('latestTurn', self.observe(Client(status='idle', extra=extra))['test'])
+
 
 class CompletionSnapshotTest(unittest.TestCase):
     def test_latest_turn_status_is_read_without_items(self):
@@ -161,6 +174,12 @@ class CompletionSnapshotTest(unittest.TestCase):
         self.assertEqual(rows[0]['latestTurn'], {'id':'new','status':'failed'})
         self.assertEqual(rows[1]['latestTurn'], {'id':'last','status':'completed'})
         self.assertNotIn('latestTurn',rows[2])
+        live = {'chat': {'source': 'desktop', 'state': 'idle',
+                         'latestTurn': {'id': 'live-newest', 'status': 'completed'}}}
+        with patch.object(store, 'STORE', root), patch.object(store, 'desktop_activity', return_value=live):
+            store.sidebar_activity(rows)
+        self.assertEqual(rows[0]['latestTurn'], live['chat']['latestTurn'])
+
 
 
 class CliTurnsTest(unittest.TestCase):
