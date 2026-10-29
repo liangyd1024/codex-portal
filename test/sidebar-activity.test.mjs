@@ -71,3 +71,10 @@ test('completion summary rows show their project and cannot reorder pinned nativ
  const {c,raw,groups}=presentationFixture();c.completed=true;c.source=()=>null;raw.completionUnseen=true;raw.projectId='p';c.snapshot.projects=[{id:'p',name:'示例项目'}];
  const view=treePresentation(groups,c)[0].items[0];assert.equal(view.context,'示例项目 · 已完成，待查看');assert.equal(view.draggable,false);assert.equal(view.raw,raw);
 });
+
+test('CLI execution has a terminal icon and is counted in collapsed groups',()=>{
+ const {c,groups}=presentationFixture();c.source=()=> 'cli';c.isExpanded=()=>false;
+ const view=treePresentation(groups,c)[0];
+ assert.equal(view.items[0].badge.icon,'terminal');assert.equal(view.items[0].badge.title,'桌面端创建 · CLI正在运行');
+ assert.equal(view.badges[0].title,'1 个会话运行中（CLI 1）');
+});

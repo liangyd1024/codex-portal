@@ -536,3 +536,19 @@ test('unverified reference steering fails before authorizing or submitting',asyn
  await assert.rejects(manager.steer(id,{text:'引用',threads:['00000000-0000-0000-0000-000000000002']}),e=>e.code==='FEATURE_UNAVAILABLE');
  assert.equal(rpc.calls.some(c=>c.method==='turn/steer'),false);
 });
+
+test('cold detail and sidebar expose CLI activity without claiming the target',async t=>{
+ const id='00000000-0000-0000-0000-000000000001';
+ const {manager,rpc}=fixture(t);manager.host.binary='/fixture/codex';manager.controlled.set('source',{});
+ const command=`/fixture/codex exec resume ${id} --json`;
+ rpc.handlers['thread/backgroundTerminals/list']=async()=>({data:[{itemId:'cli-item',processId:'cli-process',command}]});
+ const passive=manager.passive;
+ manager.passive=async(action,payload)=>action==='cliTurns'?{data:[{threadId:id,status:'inProgress',startedAt:Math.floor(Date.now()/1000)}]}:action==='sidebarActivity'?{data:[{id}]}:passive(action,payload);
+ manager.onNotification({method:'item/started',params:{threadId:'source',item:{id:'cli-item',type:'commandExecution',command,status:'inProgress'}}});
+ const detail=await manager.detail(id,{},false,null,true);
+ assert.equal(detail.thread.activity.source,'cli');assert.equal(detail.controlled,false);
+ const {readSidebarActivity}=await import('../lib/sidebar.mjs');
+ assert.equal((await readSidebarActivity(manager,{ids:JSON.stringify([id])})).data[0].activity.source,'cli');
+ assert.deepEqual([...manager.controlled.keys()],['source']);
+ assert.equal(rpc.calls.some(call=>call.method==='thread/resume'),false);
+});

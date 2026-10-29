@@ -13,7 +13,7 @@ export function activitySummary(items:Item[],source:(thread:Thread)=>string|null
  const visit=(item:Item)=>{if(item.kind==='project'){item.children.forEach(visit);return;}if(needsAnswer?.(item.value.id)){waiting++;return;}const value=source(item.value);if(value)counts.set(value,(counts.get(value)||0)+1);else if(item.value.completionUnseen)completed++;};
  items.forEach(visit);const badges:Badge[]=[];
  if(waiting)badges.push({className:'activity-icon activity-question',title:waiting+' 个会话需要你回答',icon:'question',count:waiting});
- if(counts.size){const total=[...counts.values()].reduce((sum,count)=>sum+count,0);badges.push({className:'activity-icon activity-running activity-summary',title:total+' 个会话运行中（'+[counts.has('web')?'网页端 '+counts.get('web'):'',counts.has('desktop')?'桌面端 '+counts.get('desktop'):''].filter(Boolean).join('，')+'）',count:total});}
+ if(counts.size){const total=[...counts.values()].reduce((sum,count)=>sum+count,0);badges.push({className:'activity-icon activity-running activity-summary',title:total+' 个会话运行中（'+[counts.has('web')?'网页端 '+counts.get('web'):'',counts.has('desktop')?'桌面端 '+counts.get('desktop'):'',counts.has('cli')?'CLI '+counts.get('cli'):''].filter(Boolean).join('，')+'）',count:total});}
  if(completed)badges.push({className:'activity-icon activity-completed',title:completed+' 个会话已完成，待查看',icon:'check',count:completed});
  return badges;
 }
@@ -21,7 +21,7 @@ function threadBadge(thread:Thread,running:string|null,waiting:boolean):Badge{
  if(waiting)return {className:'activity-icon activity-question',title:'需要你回答',icon:'question'};
  if(!running&&thread.completionUnseen)return {className:'activity-icon activity-completed',title:'已完成，待查看',icon:'check'};
  const created=creationSource(thread),source=running||created;
- return {className:'activity-icon activity-'+source+(running?' activity-running':''),title:({web:'网页端创建',desktop:'桌面端创建',unknown:'创建来源未知'})[created]+(running?' · '+(running==='web'?'网页端':'桌面端')+'正在运行':''),icon:source==='desktop'?'monitor':source==='web'?'globe':'mark'};
+ return {className:'activity-icon activity-'+source+(running?' activity-running':''),title:({web:'网页端创建',desktop:'桌面端创建',unknown:'创建来源未知'})[created]+(running?' · '+(running==='cli'?'CLI':running==='web'?'网页端':'桌面端')+'正在运行':''),icon:source==='cli'?'terminal':source==='desktop'?'monitor':source==='web'?'globe':'mark'};
 }
 export interface ThreadView {kind:'thread';raw:Thread;name:string;time:string;context?:string;selected:boolean;unread:boolean;badge:Badge;menu:boolean;draggable:boolean}
 export interface ProjectView {kind:'project';raw:Project;expanded:boolean;badges:Badge[];children:ItemView[];createDisabled:boolean}

@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import pathlib
+import sqlite3
 import socket
 import struct
 import tempfile
@@ -160,3 +161,19 @@ class CompletionSnapshotTest(unittest.TestCase):
         self.assertEqual(rows[0]['latestTurn'], {'id':'new','status':'failed'})
         self.assertEqual(rows[1]['latestTurn'], {'id':'last','status':'completed'})
         self.assertNotIn('latestTurn',rows[2])
+
+
+class CliTurnsTest(unittest.TestCase):
+    def test_only_latest_requested_turn_is_read_without_modifying_store(self):
+        root = pathlib.Path(tempfile.mkdtemp(prefix='rcm-cli-turns-'))
+        identifier = '00000000-0000-0000-0000-000000000001'
+        database = root / 'thread_history_1.sqlite'
+        with sqlite3.connect(database) as db:
+            db.execute('CREATE TABLE thread_turns(thread_id TEXT,turn_id TEXT,status TEXT,started_at INTEGER,rollout_ordinal INTEGER)')
+            db.executemany('INSERT INTO thread_turns VALUES(?,?,?,?,?)', [(identifier,'old','inProgress',100,1),(identifier,'new','completed',200,2)])
+        before = database.read_bytes()
+        with patch.object(store, 'STORE', root):
+            self.assertEqual(store.read_cli_turns({'threadIds':[identifier]})['data'], [{'threadId':identifier,'id':'new','status':'completed','startedAt':200}])
+            for invalid in ['bad', ['bad'], [identifier]*201]:
+                with self.assertRaises(ValueError): store.read_cli_turns({'threadIds':invalid})
+        self.assertEqual(before, database.read_bytes())

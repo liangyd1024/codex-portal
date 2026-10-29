@@ -45,3 +45,9 @@ test('a temporary busy state during discovery defers native resume and permits a
  const pending=f.resolve();ready=false;finish({thread:{id:'a'},desktop:{available:false}});await pending;assert.deepEqual(f.calls,[]);
  ready=true;f.deps.desktop=async()=>f.desktop;assert.equal(await f.resolve(),f.desktop);
 });
+
+test('observed CLI activity never probes or resumes the target, but completion permits discovery',async()=>{
+ const f=fixture();f.detail.thread.activity={source:'cli',state:'running',observedAt:Date.now()};
+ assert.equal(await f.resolve(),f.detail);assert.deepEqual(f.calls,[]);
+ delete f.detail.thread.activity;await f.resolve();assert.deepEqual(f.calls,[['desktop','a']]);
+});

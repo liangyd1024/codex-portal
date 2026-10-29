@@ -3,14 +3,14 @@ export function activitySource(thread, {connected=true, webActive=false, now=Dat
   if(!connected)return null;
   if(webActive)return 'web';
   const activity=thread?.activity;
-  return activity?.state==='running'&&activity.source==='desktop'&&Number.isFinite(activity.observedAt)&&now-activity.observedAt>=0&&now-activity.observedAt<30000?'desktop':null;
+  return activity?.state==='running'&&['desktop','cli'].includes(activity.source)&&Number.isFinite(activity.observedAt)&&now-activity.observedAt>=0&&now-activity.observedAt<30000?activity.source:null;
 }
 export function activityIcon(source, icon) {
   const node=document.createElement('span');
   node.className='activity-icon activity-running activity-'+source;
-  node.title=source==='desktop'?'桌面运行中':'网页运行中';
+  node.title=source==='cli'?'CLI 运行中':source==='desktop'?'桌面运行中':'网页运行中';
   node.setAttribute('role','img');node.setAttribute('aria-label',node.title);
-  node.append(icon(source==='desktop'?'monitor':'globe'));
+  node.append(icon(source==='cli'?'terminal':source==='desktop'?'monitor':'globe'));
   return node;
 }
 
@@ -31,16 +31,16 @@ export function threadSourceIcon(thread, runningSource, icon, needsAnswer=false)
   const source=runningSource || created;
   const node=document.createElement('span');
   node.className='activity-icon activity-'+source+(runningSource?' activity-running':'');
-  node.title=({web:'网页端创建',desktop:'桌面端创建',unknown:'创建来源未知'})[created]+(runningSource?' · '+(runningSource==='web'?'网页端':'桌面端')+'正在运行':'');
+  node.title=({web:'网页端创建',desktop:'桌面端创建',unknown:'创建来源未知'})[created]+(runningSource?' · '+(runningSource==='cli'?'CLI':runningSource==='web'?'网页端':'桌面端')+'正在运行':'');
   node.setAttribute('role','img');node.setAttribute('aria-label',node.title);
-  node.append(icon(source==='desktop'?'monitor':source==='web'?'globe':'mark'));
+  node.append(icon(source==='cli'?'terminal':source==='desktop'?'monitor':source==='web'?'globe':'mark'));
   return node;
 }
 
 export function conversationActivity(thread, {connected=false, controlled=false, active=false, needsAnswer=false, background={state:'idle'}}={}) {
   if(connected&&needsAnswer)return {kind:'question',label:'需要你回答',detail:'请在下方选择或输入答案'};
   const source=activitySource(thread,{connected,webActive:controlled&&active});
-  if(source)return {kind:'turn',source,label:source==='desktop'?'桌面端正在运行':'正在运行',detail:'持续同步最新进展…'};
+  if(source)return {kind:'turn',source,label:source==='cli'?'CLI 正在运行':source==='desktop'?'桌面端正在运行':'正在运行',detail:'持续同步最新进展…'};
   if(controlled&&connected&&background.state==='running')return {kind:'background',label:'本轮已结束',detail:`${background.terminals?.length || 1} 个后台命令仍在运行`,terminals:background.terminals || []};
   if(controlled&&background.state==='unknown')return {kind:'unknown',label:'后台命令状态待确认',detail:''};
   return null;

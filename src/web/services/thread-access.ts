@@ -11,6 +11,8 @@ export function createThreadAccess(d:Dependencies){
  let attempted='',error='';
  async function resolve(id:string,detail:Detail,current:()=>boolean):Promise<Detail>{
   if(!current()||!d.ready()||detail.controlled||detail.recovering||detail.thread?.archived)return detail;
+  const activity=detail.thread?.activity as {source?:string;state?:string}|undefined;
+  if(activity?.source==='cli'&&activity.state==='running')return detail;
   if(detail.handoff&&detail.handoff.state!=='released')return detail;
   const key=d.key();
   if(attempted===key)return {...detail,accessError:error};

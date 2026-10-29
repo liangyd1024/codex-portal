@@ -1082,6 +1082,22 @@ def read_sidebar(payload):
         db.close()
 
 
+def read_cli_turns(payload):
+    identifiers = payload.get('threadIds', [])
+    if not isinstance(identifiers, list) or len(identifiers) > 200 or any(not isinstance(i, str) or not re.fullmatch(r'[a-fA-F0-9-]{36}', i) for i in identifiers):
+        raise ValueError('会话标识无效。')
+    db = connect_store('thread_history_1.sqlite')
+    try:
+        data = []
+        for identifier in identifiers:
+            row = db.execute('SELECT turn_id,status,started_at FROM thread_turns WHERE thread_id=? ORDER BY rollout_ordinal DESC LIMIT 1', [identifier]).fetchone()
+            if row:
+                data.append({'threadId': identifier, 'id': row['turn_id'], 'status': row['status'], 'startedAt': row['started_at']})
+        return {'data': data}
+    finally:
+        db.close()
+
+
 def read_sidebar_activity(payload):
     identifiers = payload.get('threadIds', [])
     if not isinstance(identifiers, list) or len(identifiers) > 200 or any(not isinstance(i, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,160}', i) for i in identifiers):
@@ -1097,7 +1113,7 @@ def main():
     if not isinstance(payload, dict):
         raise ValueError('PAYLOAD 必须是 JSON 对象。')
     action = payload.get('action')
-    handlers = {'goal': read_goal_snapshot, 'takeoverState': read_takeover_state, 'turnDirectory': read_turn_directory, 'toolItem': read_tool_item, 'sidebar': read_sidebar, 'sidebarActivity': read_sidebar_activity, 'sidebarMetadata': read_sidebar_metadata, 'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
+    handlers = {'cliTurns': read_cli_turns, 'goal': read_goal_snapshot, 'takeoverState': read_takeover_state, 'turnDirectory': read_turn_directory, 'toolItem': read_tool_item, 'sidebar': read_sidebar, 'sidebarActivity': read_sidebar_activity, 'sidebarMetadata': read_sidebar_metadata, 'notices':read_notices, 'threads': read_threads, 'detail': read_detail, 'history': read_history, 'image': read_image, 'outputs': read_outputs}
     if action not in handlers:
         raise ValueError('不支持的只读操作。')
     return handlers[action](payload)
