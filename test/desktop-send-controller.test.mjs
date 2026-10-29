@@ -47,3 +47,16 @@ test('desktop acceptance uses server delivery mode and suppresses notices for a 
 test('desktop running send defaults to native queue and alternate input steers',async()=>{
  for(const alternate of [false,true]){const f=fixture();f.setActive(true);const sending=f.send(alternate);assert.equal(f.calls[0].body.followUp,alternate?'steer':'queue');f.resolve({delivery:alternate?'steer':'queue'});await sending;assert.equal(f.toasts[0][0].includes(alternate?'引导':'排队'),true);}
 });
+
+test('review recovery stays hidden until an in-flight send has an uncertain result',async()=>{
+ const controller=readFileSync(new URL('../src/web/controller.ts',import.meta.url),'utf8');
+ const assignment=controller.match(/desktopView\.reviewHidden=([^;]+);/)[1];
+ const hidden=new Function('unconfirmed','posting','answering','return '+assignment);
+ const f=fixture(),sending=f.send();
+ assert.equal(hidden(f.sends['a/b']?.messageId,f.state.busy.has('message'),false),true);
+ f.reject(Object.assign(new Error('connection lost'),{status:503}));
+ await assert.rejects(sending,/connection lost/);
+ assert.equal(hidden(f.sends['a/b']?.messageId,f.state.busy.has('message'),false),false);
+ assert.equal(hidden(null,false,false),true);
+ assert.equal(hidden('pending',false,true),true);
+});
