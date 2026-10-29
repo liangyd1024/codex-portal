@@ -9,7 +9,7 @@ import type {installReactComposerDialog} from '../components/ComposerDialog';
 type Kind='skills'|'plugins'|'threads'|'files'|'apps';
 interface Reference {kind:Kind;key:string;token:string}
 interface Selection extends ModeSelection {skills:string[];plugins:string[];threads?:string[];apps?:string[];references?:Reference[];goalPending?:boolean;goalUncertain?:string;goalEdit?:{base:string;text:string;uncertain?:string};[field:string]:unknown}
-export interface ComposerContext {id:string|null;cwd?:string;ready:boolean;busy:boolean;active:boolean;draft?:boolean;desktop?:boolean;planSupported?:boolean;ephemeral?:boolean;threadReferencesSupported?:boolean;turns:NativeTurn[];goal?:NativeGoal|null;goalError?:unknown}
+export interface ComposerContext {id:string|null;cwd?:string;ready:boolean;busy:boolean;active:boolean;draft?:boolean;desktop?:boolean;planSupported?:boolean;ephemeral?:boolean;threadReferencesSupported?:boolean|null;turns:NativeTurn[];goal?:NativeGoal|null;goalError?:unknown}
 interface Options {modeChanged?:()=>void;host:string;api:<T=unknown>(path:string,options?:ApiOptions)=>Promise<T>;context:()=>ComposerContext;refresh:()=>Promise<unknown>;notify:(message:string,error?:boolean)=>unknown;implementPlan:(id:string,plan:{turnId:string;text:string})=>Promise<unknown>;input?:HTMLTextAreaElement;images:AttachmentButtonControl;prefix?:string}
 type Entry=Parameters<Parameters<typeof installReactComposerCatalog>[0]['insertReference']>[0];
 import {installGoalToolbar,installGoalEditor} from '../../../public/goal-toolbar.js';

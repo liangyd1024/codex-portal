@@ -51,3 +51,19 @@ test('plugin completion uses native IDs, display names and enabled installed ent
  assert.deepEqual(matchingPlugins([a,a,b,{...a,id:'off',enabled:false},{...a,id:'new',installed:false}],'ima').map(e=>e.id),[a.id]);
  assert.deepEqual(matchingPlugins([a,b],'').map(e=>e.id),[a.id,b.id]);
 });
+
+import {loadSuggestionSources} from '../src/web/services/skill-suggestions.ts';
+test('slow apps do not block ready skills, plugins, files or threads',async()=>{
+ let resolveApps;const apps=new Promise(resolve=>{resolveApps=resolve}),published=[];
+ const done=loadSuggestionSources(['apps','skills','files'],source=>source==='apps'?apps:Promise.resolve([source]),(source,result,error)=>published.push({source,result,error}));
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(published.map(e=>e.source),['skills','files']);
+ resolveApps(['app']);await done;
+ assert.deepEqual(published.at(-1),{source:'apps',result:['app'],error:null});
+});
+test('catalog failures settle independently and retain successful results',async()=>{
+ const published=[];
+ await loadSuggestionSources(['plugins','skills'],async source=>{if(source==='plugins')throw Error('offline');return ['skill'];},(source,result,error)=>published.push({source,result,error}));
+ assert.equal(published.find(e=>e.source==='plugins').error.message,'offline');
+ assert.deepEqual(published.find(e=>e.source==='skills').result,['skill']);
+});

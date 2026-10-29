@@ -12,16 +12,18 @@ ID = '00000000-0000-0000-0000-000000000001'
 REF = '00000000-0000-0000-0000-000000000002'
 
 class ThreadMentionsTest(unittest.TestCase):
-    def test_native_checkpoint_is_read_only_and_unknown_is_false(self):
+    def test_native_checkpoint_distinguishes_unknown_from_explicitly_unsupported(self):
         home = pathlib.Path(tempfile.mkdtemp(prefix='rcm-reference-'))
-        self.assertFalse(session.reference_capability(home, ID))
+        self.assertIsNone(session.reference_capability(home, ID))
         (home / '.codex').mkdir()
         file = home / '.codex/.codex-global-state.json'
         file.write_text(json.dumps({'electron-persisted-atom-state': {'thread-reference-capability:' + ID: True}}))
         before = file.read_bytes()
         self.assertTrue(session.reference_capability(home, ID))
-        self.assertFalse(session.reference_capability(home, REF))
+        self.assertIsNone(session.reference_capability(home, REF))
         self.assertEqual(before, file.read_bytes())
+        file.write_text(json.dumps({'electron-persisted-atom-state': {'thread-reference-capability:' + REF: False}}))
+        self.assertIs(session.reference_capability(home, REF), False)
 
     def test_native_reference_context_and_unavailable_capability(self):
         requests = []

@@ -22,7 +22,7 @@ function Suggestions({box,choose,store}:Instance){
   else if(selected.current.index!==content.index){const previous=selected.current;previous.nodes[previous.index]?.setAttribute('aria-selected','false');previous.nodes[content.index]?.setAttribute('aria-selected','true');previous.index=content.index;}
  },[box,content]);
  if(!v)return null;
- return createPortal(<Fragment key={v.revision}>{'text' in v?v.text:<><div className="skill-suggestions-heading">{v.label}</div>{rows}{v.messages.map((text,i)=><Fragment key={i}>{text}</Fragment>)}</>}</Fragment>,box);
+ return createPortal(<Fragment key={v.revision}>{'text' in v?v.text:<><div className="skill-suggestions-heading">{v.label}</div>{rows}{v.messages.map((text,i)=><div className="skill-suggestions-status" key={i}>{text}</div>)}</>}</Fragment>,box);
 }
 export function SkillSuggestions(){const instances=useStore(registry).instances;return <>{instances.map(instance=><Suggestions key={instance.id} {...instance}/>)}</>;}
 export function installReactSkillSuggestionsView({box,choose}:Pick<Instance,'box'|'choose'>){

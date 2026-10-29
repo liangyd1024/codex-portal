@@ -182,9 +182,10 @@ def reference_capability(home, identifier):
     """Read the same native capability checkpoint used by the desktop composer."""
     try:
         state = json.loads((home / '.codex/.codex-global-state.json').read_text())
-        return state.get('electron-persisted-atom-state', {}).get('thread-reference-capability:' + identifier) is True
+        value = state.get('electron-persisted-atom-state', {}).get('thread-reference-capability:' + identifier)
+        return value if isinstance(value, bool) else None
     except (OSError, ValueError, AttributeError):
-        return False
+        return None
 
 
 def run(payload):

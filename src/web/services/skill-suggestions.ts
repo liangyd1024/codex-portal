@@ -2,7 +2,7 @@ import type {ApiOptions} from './api';
 export interface SuggestionEntry {id?:string;path?:string;name?:string;title?:string;description?:string;shortDescription?:string;scope?:string;pluginId?:string;enabled?:boolean;installed?:boolean;archived?:boolean;ephemeral?:boolean;threadSource?:string;cwd?:string;mentionKind?:string;interface?:{displayName?:string;shortDescription?:string};skills?:SuggestionEntry[];errors?:unknown[];[field:string]:unknown}
 interface Query {start:number;end:number;query:string;kind?:string}
 interface Catalog {data?:SuggestionEntry[];error?:string;plugins?:Catalog;skills?:Catalog;apps?:Catalog;marketplaces?:{plugins?:SuggestionEntry[]}[];marketplaceLoadErrors?:unknown[];nextCursor?:string}
-interface Options {input:HTMLTextAreaElement;api:<T=unknown>(path:string,options?:ApiOptions)=>Promise<T>;context:()=>{id:string|null;cwd?:string;desktop?:boolean;ready:boolean;busy:boolean;threadReferencesSupported?:boolean};select:(entry:SuggestionEntry,range:Query,kind:'skills'|'plugins'|'threads'|'files'|'apps')=>unknown}
+interface Options {input:HTMLTextAreaElement;api:<T=unknown>(path:string,options?:ApiOptions)=>Promise<T>;context:()=>{id:string|null;cwd?:string;desktop?:boolean;ready:boolean;busy:boolean;threadReferencesSupported?:boolean|null};select:(entry:SuggestionEntry,range:Query,kind:'skills'|'plugins'|'threads'|'files'|'apps')=>unknown}
 interface ViewOptions {box:HTMLElement;choose:(entry:SuggestionEntry)=>void}
 interface View {text:(value:string)=>void;render:(content:{label:string;kind:string;rows:SuggestionEntry[];messages:string[]})=>void;highlight:(index:number)=>void}
 export function skillQuery(value:string, caret:number):Query|null {
@@ -61,34 +61,40 @@ export function installSkillSuggestions({input,api,context,select}:Options) {
       let source:Catalog,loadErrors:string[]=[];
       if(kind==='mentions'){
         await new Promise(resolve=>setTimeout(resolve,180));if(stamp!==version)return;
-        const pending=[desktop&&!context().threadReferencesSupported?Promise.resolve({data:[]} as Catalog):api<Catalog>((desktop?'/api/desktop/candidates':'/api/thread-references')+'?search='+encodeURIComponent(query.query)),query.query?api<Catalog>('/api/file-suggestions?cwd='+encodeURIComponent(cwd||'')+'&query='+encodeURIComponent(query.query)):Promise.resolve({data:[]} as Catalog),api<Catalog>('/api/composer?cwd='+encodeURIComponent(cwd!)+'&kind=mentions')];
-        const catalogRead=Promise.allSettled(pending.slice(2));
-        const reads=await Promise.allSettled(pending.slice(0,2));
-        if(stamp!==version||context().id!==id||context().cwd!==cwd||input.value!==value||input.selectionStart!==caret)return;
-        source=reads[0].status==='fulfilled'?reads[0].value:{data:[]};
-        if(reads[0].status==='rejected')loadErrors.push('会话读取失败：'+reads[0].reason.message);
-        rows=matchingThreads(source.data||[],id).map(e=>({...e,mentionKind:'threads'}));
-        if(reads[1].status==='fulfilled')rows.unshift(...(reads[1].value.data||[]));
-        else loadErrors.push('文件搜索暂不可用：'+reads[1].reason.message);
-        if(!query.query)loadErrors.push('输入文件名或相对路径可搜索当前项目文件');
-        if(desktop&&!context().threadReferencesSupported)loadErrors.push('此桌面会话尚未确认支持会话引用');
-        if(kind==='mentions'){
-          index=0;view.render({label,kind,rows:[...rows],messages:[...loadErrors,'正在读取技能、插件与应用…']});highlight();position();
-          const selectedPath=()=>rows[index]?.path;
-          const catalogs=await catalogRead;
-          if(stamp!==version||context().id!==id||context().cwd!==cwd||input.value!==value||input.selectionStart!==caret)return;
-          reads.push(...catalogs);
-          const keep=selectedPath();
-          const plugins=reads[2].status==='fulfilled'?reads[2].value.plugins:null;
-          if(reads[2].status==='rejected'||plugins?.error)loadErrors.push('插件目录暂不可用');
-          const catalog=reads[2].status==='fulfilled'?reads[2].value:null;
-          if(catalog?.skills?.error)loadErrors.push('技能目录暂不可用');
-          if(catalog?.apps?.error)loadErrors.push('应用目录暂不可用');
-          rows.push(...matchingSkills((catalog?.skills?.data||[]).flatMap(e=>e.skills||[]),query.query).map(e=>({...e,mentionKind:'skills'})));
-          rows.push(...matchingSkills((catalog?.apps?.data||[]).map(e=>({...e,path:e.id,enabled:e.isAccessible===true&&e.isEnabled===true})),query.query).map(e=>({...e,mentionKind:'apps'})));
-          if(plugins)rows.push(...matchingPlugins((plugins.marketplaces||[]).flatMap(e=>e.plugins||[]),query.query).map(e=>({...e,mentionKind:'plugins'})));
-          if(keep)index=Math.max(0,rows.findIndex(e=>e.path===keep));
-        }
+        const needle=query.query,capability=context().threadReferencesSupported;
+        const current=()=>stamp===version&&context().id===id&&context().cwd===cwd&&input.value===value&&input.selectionStart===caret;
+        const groups=new Map<string,SuggestionEntry[]>(),errors=new Map<string,string>(),loading=new Set<string>();
+        const hints=()=>[
+          ...(!needle?['输入文件名或相对路径可搜索当前项目文件。']:[]),
+          ...(desktop&&capability!==true?[capability===false?'此会话未启用原生会话引用。请在 Codex 桌面新建会话后重试。':'尚未确认此会话的引用能力。可刷新会话或恢复桌面连接后重试；文件和其他能力仍可使用。']:[])
+        ];
+        const publish=()=>{
+          if(!current())return;
+          const selected=rows[index],key=selected&&selected.mentionKind+':'+selected.path;
+          rows=['files','threads','skills','plugins','apps'].flatMap(kind=>groups.get(kind)||[]);
+          index=key?Math.max(0,rows.findIndex(e=>e.mentionKind+':'+e.path===key)):0;
+          const messages=[...hints(),...errors.values()];
+          if(loading.size)messages.push('正在读取'+[...loading].join('、')+'…');
+          else if(!rows.length)messages.push('没有匹配结果。');
+          view.render({label,kind,rows:[...rows],messages});highlight();position();
+        };
+        const sources:{kind:string;label:string;path:string;map:(c:Catalog)=>SuggestionEntry[]}[]=[
+          ...(!desktop||capability===true?[{kind:'threads',label:'会话',path:(desktop?'/api/desktop/candidates':'/api/thread-references')+'?search='+encodeURIComponent(needle),map:(c:Catalog)=>matchingThreads(c.data||[],id).map(e=>({...e,mentionKind:'threads'}))}]:[]),
+          ...(needle?[{kind:'files',label:'文件',path:'/api/file-suggestions?cwd='+encodeURIComponent(cwd||'')+'&query='+encodeURIComponent(needle),map:(c:Catalog)=>c.data||[]}]:[]),
+          ...(['skills','plugins','apps'] as const).map(kind=>({kind,label:({skills:'技能',plugins:'插件',apps:'应用'})[kind],path:'/api/composer?cwd='+encodeURIComponent(cwd||'')+'&kind='+kind,map:(c:Catalog)=>{
+            const catalog=c[kind];if(!catalog||catalog.error)throw Error(catalog?.error||'目录未返回');
+            const entries=kind==='skills'?matchingSkills((catalog.data||[]).flatMap(e=>e.skills||[]),needle):kind==='plugins'?matchingPlugins((catalog.marketplaces||[]).flatMap(e=>e.plugins||[]),needle):matchingSkills((catalog.data||[]).map(e=>({...e,path:e.id,enabled:e.isAccessible===true&&e.isEnabled===true})),needle);
+            return entries.map(e=>({...e,mentionKind:kind}));
+          }}))
+        ];
+        sources.forEach(s=>loading.add(s.label));publish();
+        await loadSuggestionSources(sources,async s=>s.map(await api<Catalog>(s.path,{timeout:12000})),(s,result,error)=>{
+          if(!current())return;
+          loading.delete(s.label);
+          if(error)errors.set(s.kind,s.label+'暂时无法读取，重新输入可重试。');else groups.set(s.kind,result!);
+          publish();
+        });
+        return;
       }else{
         const catalog=await api<Catalog>('/api/composer?cwd='+encodeURIComponent(cwd!)+'&kind='+kind);
         if(stamp!==version||context().id!==id||context().cwd!==cwd||input.value!==value||input.selectionStart!==caret)return;
@@ -99,7 +105,6 @@ export function installSkillSuggestions({input,api,context,select}:Options) {
       if(!rows.length)messages.push('没有匹配的可用'+label+'。');
       if((source.data||[]).some(e=>e.errors?.length)||source.marketplaceLoadErrors?.length)messages.push('部分目录未能读取，请重新输入以重试。');
       for(const error of loadErrors)messages.push(error+'。');
-      if((kind==='mentions')&&source.nextCursor)messages.push('输入会话名称可查找更早的会话。');
       view.render({label,kind,rows,messages});
       highlight();position();
     }catch(error){if(stamp===version){rows=[];view.text(label+'读取失败，重新输入可重试：'+(error as Error).message);}}
@@ -125,4 +130,9 @@ export function configureSkillSuggestionsView(installer:NonNullable<typeof sugge
 export function installSkillSuggestionsView(options:ViewOptions){
   if(!suggestionsViewInstaller)throw new Error('输入建议列表尚未初始化。');
   return suggestionsViewInstaller(options);
+}
+
+// Each source publishes independently; a slow or failed catalog never hides ready rows.
+export async function loadSuggestionSources<T,R>(sources:T[],read:(source:T)=>Promise<R>,publish:(source:T,result:R|undefined,error:unknown)=>void){
+  await Promise.all(sources.map(async source=>{try{const result=await read(source);publish(source,result,null);}catch(error){publish(source,undefined,error);}}));
 }
