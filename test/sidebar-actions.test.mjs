@@ -5,7 +5,7 @@ import {ArchiveSync} from '../lib/archive-sync.mjs';
 function fixture(){
  const calls=[];const t={id:'t',name:'Original',revision:'r',archived:false,readRevision:'rr',sectionId:null};
  const layout={data:[t],sections:[{id:'s',revision:'sr',name:'Section'}],projects:[{id:'p'}],accountScope:'a',accountLayoutAvailable:true,preferences:{pinned:'manual'}};
- const m={service:{protocolValidation:{policy:4,unsupportedMethods:[]}},requireConnected(){},requireWritable(){},autoTitles:new Map([['t',{}]]),controlled:new Map(),subscriptions:new Map(),startingTurns:new Set(),activeTurns:new Map(),async notifyDesktopArchive(id,archived){calls.push(['desktop-notify',{id,archived}]);},saveTitles(){},saveSubscriptions(){},publish(){},withMutation:fn=>fn(),passive:async(action)=>action==='sidebar'?structuredClone(layout):{data:[{status:'completed'}]},rpc:{connected:true,request:async(method,params)=>{calls.push([method,params]);if(method==='account/read')return {workspaceRouting:{chatgptAccountId:'account'}};if(method==='thread/read')return {thread:{status:{type:'notLoaded'}}};if(method.endsWith('/list'))return {data:[]};return {};}}};
+ const m={service:{protocolValidation:{policy:4,unsupportedMethods:[]}},requireConnected(){},requireWritable(){},autoTitles:new Map([['t',{}]]),controlled:new Map(),subscriptions:new Map(),startingTurns:new Set(),activeTurns:new Map(),async takeover(id){calls.push(['takeover',{threadId:id}]);this.controlled.set(id,{});},async notifyDesktopArchive(id,archived){calls.push(['desktop-notify',{id,archived}]);},saveTitles(){},saveSubscriptions(){},publish(){},withMutation:fn=>fn(),passive:async(action)=>action==='sidebar'?structuredClone(layout):{data:[{status:'completed'}]},rpc:{connected:true,request:async(method,params)=>{calls.push([method,params]);if(method==='account/read')return {workspaceRouting:{chatgptAccountId:'account'}};if(method==='thread/read')return {thread:{status:{type:'notLoaded'}}};if(method.endsWith('/list'))return {data:[]};return {};}}};
  return {m,calls,t,layout,input:(action,extra={})=>({action,id:'t',expectedRevision:'r',accountScope:'a',...extra})};
 }
 test('pin and rename use allowlisted engine writes and protect manual titles',async()=>{
@@ -171,12 +171,12 @@ function failedThreadFixture(turns=[{id:'failed-turn',status:'failed',completedA
  };
  return f;
 }
-test('native systemError archives terminal history once without resuming or retrying execution',async()=>{
+test('native systemError rechecks terminal history after takeover and archives once without executing a turn',async()=>{
  const {m,input,calls}=failedThreadFixture([{status:'failed'},{status:'interrupted'},{status:'completed'}]);
  await sidebarAction(m,input('archive'));
  assert.equal(calls.filter(([name])=>name==='thread/archive').length,1);
- assert.equal(calls.filter(([name])=>name==='thread/read').length,1);
- assert.equal(calls.filter(([name])=>name==='thread/turns/list').length,1);
+ assert.equal(calls.filter(([name])=>name==='thread/read').length,2);
+ assert.equal(calls.filter(([name])=>name==='thread/turns/list').length,2);
  assert.ok(!calls.some(([name])=>/resume|interrupt|start$/.test(name)));
  assert.equal(calls.at(-1)[0],'desktop-notify');
 });
@@ -321,4 +321,31 @@ test('archive offers undo on native success despite desktop sync or refresh fail
  assert.equal(hidden,1);assert.ok(messages.some(message=>message.includes('操作已完成，但刷新失败')));
  const failed=queuedUI(async()=>{throw Object.assign(Error('占用'),{code:'THREAD_WRITER_CONFLICT'});});failed.ui.undo=()=>assert.fail('must not offer undo after rejection');
  await failed.ui.run('archive',{id:'a'});
+});
+
+
+test('archive acquires native control before writing; already controlled threads skip resume',async()=>{
+ for(const owned of [false,true]){
+  const {m,input,calls}=fixture();if(owned)m.controlled.set('t',{});
+  await sidebarAction(m,input('archive'));
+  const resume=calls.findIndex(([n])=>n==='takeover'),archive=calls.findIndex(([n])=>n==='thread/archive');
+  assert.equal(resume>=0,!owned);if(!owned)assert.ok(archive>resume);
+ }
+});
+test('archive never writes after conflicting, unknown or unconfirmed takeover',async()=>{
+ for(const code of ['WRITER_CONFLICT','RPC_TIMEOUT','unconfirmed']){
+  const {m,input,calls}=fixture();m.takeover=async()=>{if(code!=='unconfirmed')throw Object.assign(Error(code),{code});};
+  await assert.rejects(sidebarAction(m,input('archive')),e=>e.code===(code==='unconfirmed'?'TAKEOVER_UNCONFIRMED':code));
+  assert.ok(!calls.some(([n])=>n==='thread/archive'||n==='desktop-notify'));
+  assert.equal(m.sidebarMutation,false);
+ }
+});
+test('archive checks activity again after takeover and does not interrupt newly running work',async()=>{
+ const {m,input,calls}=fixture();m.takeover=async()=>{m.controlled.set('t',{});m.activeTurns.set('t','new-turn');};
+ await assert.rejects(sidebarAction(m,input('archive')),e=>e.code==='THREAD_BUSY');
+ assert.ok(!calls.some(([n])=>n==='thread/archive'||n==='turn/interrupt'));
+});
+test('restore does not resume an archived thread',async()=>{
+ const {m,input,calls}=fixture();await sidebarAction(m,input('restore'));
+ assert.ok(!calls.some(([n])=>n==='takeover'));assert.ok(calls.some(([n])=>n==='thread/unarchive'));
 });
