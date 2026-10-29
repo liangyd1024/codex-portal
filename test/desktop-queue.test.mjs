@@ -33,3 +33,8 @@ test('definite IPC non-delivery restores only the removed native entry',async()=
  const {s,calls,queue}=fixture(),call=s.call;s.call=async(script,p)=>{if(p.action==='send')throw Object.assign(Error('not sent'),{code:'DESKTOP_NOT_SENT'});return call(script,p);};
  await assert.rejects(s.queue('steer',{queuedSubmissionId:'q'}),e=>e.code==='DESKTOP_NOT_SENT');assert.equal(queue.length,1);assert.equal(queue[0].clientUserMessageId,client);assert.equal(s.unconfirmed(),undefined);
 });
+
+test('queued evidence resolves a lost add but not an uncertain queue transfer',async()=>{
+ const {s}=fixture();s.state.submissions[client]={threadId:id,status:'unknown',delivery:'queue'};await s.detail();assert.equal(s.state.submissions[client].status,'accepted');
+ s.state.submissions[client]={threadId:id,status:'unknown',delivery:'steer'};await s.detail();assert.equal(s.state.submissions[client].status,'unknown');
+});
