@@ -60,3 +60,13 @@ test('review recovery stays hidden until an in-flight send has an uncertain resu
  assert.equal(hidden(null,false,false),true);
  assert.equal(hidden('pending',false,true),true);
 });
+
+test('transport failures retry once with the identical receipt and payload',async()=>{
+ const f=fixture(),sending=f.send();
+ f.reject(Object.assign(new Error('transport lost'),{status:503}));
+ await assert.rejects(sending,/transport lost/);
+ assert.equal(f.calls.length,2);
+ assert.deepEqual(f.calls[1],f.calls[0]);
+ assert.equal(f.sends['a/b'].messageId,'stable-uuid');
+ assert.equal(f.input.value,' 中文草稿 ');
+});
