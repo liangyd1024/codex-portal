@@ -78,3 +78,16 @@ test('CLI execution has a terminal icon and is counted in collapsed groups',()=>
  assert.equal(view.items[0].badge.icon,'terminal');assert.equal(view.items[0].badge.title,'桌面端创建 · CLI正在运行');
  assert.equal(view.badges[0].title,'1 个会话运行中（CLI 1）');
 });
+
+test('unknown creation source uses a dedicated icon independent of Portal branding',async()=>{
+ const {raw,c,groups}=presentationFixture();raw.originator='other';c.source=()=>null;
+ const badge=treePresentation(groups,c)[0].items[0].badge;
+ assert.equal(badge.title,'创建来源未知');assert.equal(badge.icon,'source-unknown');
+ const {threadSourceIcon}=await import('../public/activity.js');
+ const old=globalThis.document;globalThis.document={createElement:()=>({setAttribute(){},append(value){this.icon=value;}})};
+ try{assert.equal(threadSourceIcon(raw,null,x=>x).icon,badge.icon);}finally{globalThis.document=old;}
+ const {readFile}=await import('node:fs/promises');const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
+ const source=html.match(/<symbol id="i-source-unknown"[^]*?<\/symbol>/)?.[0];
+ assert.match(source,/data:image\/png;base64,/);assert.doesNotMatch(source,/icon-cp/);
+ assert.match(html,/<symbol id="i-mark"[^]*?icon-cp-192\.png/);
+});

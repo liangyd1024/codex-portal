@@ -21,7 +21,7 @@ function threadBadge(thread:Thread,running:string|null,waiting:boolean):Badge{
  if(waiting)return {className:'activity-icon activity-question',title:'需要你回答',icon:'question'};
  if(!running&&thread.completionUnseen)return {className:'activity-icon activity-completed',title:'已完成，待查看',icon:'check'};
  const created=creationSource(thread),source=running||created;
- return {className:'activity-icon activity-'+source+(running?' activity-running':''),title:({web:'网页端创建',desktop:'桌面端创建',unknown:'创建来源未知'})[created]+(running?' · '+(running==='cli'?'CLI':running==='web'?'网页端':'桌面端')+'正在运行':''),icon:source==='cli'?'terminal':source==='desktop'?'monitor':source==='web'?'globe':'mark'};
+ return {className:'activity-icon activity-'+source+(running?' activity-running':''),title:({web:'网页端创建',desktop:'桌面端创建',unknown:'创建来源未知'})[created]+(running?' · '+(running==='cli'?'CLI':running==='web'?'网页端':'桌面端')+'正在运行':''),icon:source==='cli'?'terminal':source==='desktop'?'monitor':source==='web'?'globe':'source-unknown'};
 }
 export interface ThreadView {kind:'thread';raw:Thread;name:string;time:string;context?:string;selected:boolean;unread:boolean;badge:Badge;menu:boolean;draggable:boolean}
 export interface ProjectView {kind:'project';raw:Project;expanded:boolean;badges:Badge[];children:ItemView[];createDisabled:boolean}

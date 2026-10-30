@@ -33,7 +33,7 @@ export function threadSourceIcon(thread, runningSource, icon, needsAnswer=false)
   node.className='activity-icon activity-'+source+(runningSource?' activity-running':'');
   node.title=({web:'网页端创建',desktop:'桌面端创建',unknown:'创建来源未知'})[created]+(runningSource?' · '+(runningSource==='cli'?'CLI':runningSource==='web'?'网页端':'桌面端')+'正在运行':'');
   node.setAttribute('role','img');node.setAttribute('aria-label',node.title);
-  node.append(icon(source==='cli'?'terminal':source==='desktop'?'monitor':source==='web'?'globe':'mark'));
+  node.append(icon(source==='cli'?'terminal':source==='desktop'?'monitor':source==='web'?'globe':'source-unknown'));
   return node;
 }
 
