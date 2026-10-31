@@ -20,3 +20,13 @@ test('desktop observer refuses ownership and releases its last view without stop
 test('frequent patches are coalesced and a disconnected stream invalidates readiness',async()=>{
  const f=fixture();try{f.message({type:'snapshot',revision:0,conversationState:{id}});for(let n=0;n<100;n++)f.message({type:'patches',baseRevision:n,revision:n+1,patches:[]});assert.equal(f.s.timers.size,1);await new Promise(r=>setTimeout(r,800));assert.equal(f.events.length,2);f.s.reset();assert.equal(f.events.at(-1).ready,false);assert.equal(f.s.ready(id),false);}finally{f.s.close();}
 });
+test('desktop goals retain null, update on patches and disappear on invalidation',()=>{
+ const f=fixture();try{
+ assert.equal(f.s.goal(id),undefined);
+ f.message({type:'snapshot',revision:0,conversationState:{id,threadGoal:{status:'active',objective:'test'}}});
+ const read=f.s.goal(id);read.goal.objective='mutated';assert.equal(f.s.goal(id).goal.objective,'test');
+ f.message({type:'patches',baseRevision:0,revision:1,patches:[{op:'replace',path:['threadGoal','status'],value:'paused'}]});assert.equal(f.s.goal(id).goal.status,'paused');
+ f.message({type:'patches',baseRevision:1,revision:2,patches:[{op:'replace',path:['threadGoal'],value:null}]});assert.deepEqual(f.s.goal(id),{goal:null,error:null});
+ f.message({type:'patches',baseRevision:9,revision:10,patches:[]});assert.equal(f.s.goal(id),undefined);
+ }finally{f.s.close();}
+});

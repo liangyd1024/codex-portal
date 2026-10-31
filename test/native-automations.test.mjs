@@ -234,3 +234,30 @@ test('bounded confirmation never accepts unrelated messages or an empty idle thr
  m.passive=async action=>action==='history'?{data:[]}:{thread:{id,activity:{state:'idle',messageReceipts:[{messageId:tid,turnId:tid}]}}};
  const waits=[];assert.equal(await a.confirmSend(mid,{wait:async ms=>waits.push(ms),delays:[0,1,2]}),false);assert.deepEqual(waits,[1,2]);assert.equal(a.state.submissions[mid].status,'unknown');
 });
+test('desktop detail reads persisted goals only when live goal is unknown',async()=>{
+ for(const goal of [{status:'active',objective:'test'},null]){
+  const {a,m}=fixture();let reads=0;const passive=m.passive;
+  m.passive=async(action,payload)=>{if(action==='goal'){reads++;return {goal};}return passive(action,payload);};
+  assert.deepEqual((await a.detail()).goal,goal);assert.equal(reads,1);
+  m.desktopStream={ready:()=>true,goal:()=>({goal:null,error:null})};
+  assert.equal((await a.detail()).goal,null);assert.equal(reads,1);
+ }
+});
+test('desktop goal read errors remain visible without breaking history or sends',async()=>{
+ const {a,m}=fixture(),passive=m.passive;
+ m.passive=async(action,payload)=>{if(action==='goal')throw Error('goal unavailable');return passive(action,payload);};
+ const detail=await a.detail();assert.equal(detail.goal,null);assert.equal(detail.goalError,'goal unavailable');assert.equal(detail.desktop.canSend,true);
+});
+test('live desktop goal supersedes a delayed stored read including clear and completion',async()=>{
+ for(const goal of [null,{status:'complete',objective:'test'}]){
+  const {a,m}=fixture(),passive=m.passive;let release;
+  m.passive=(action,payload)=>action==='goal'?new Promise(r=>release=r):passive(action,payload);
+  const pending=a.detail();m.desktopStream={ready:()=>true,goal:()=>({goal,error:null})};release({goal:{status:'active'}});
+  assert.deepEqual((await pending).goal,goal);
+ }
+});
+test('desktop stream lost during detail reads reports uncertainty instead of stale active goal',async()=>{
+ const {a,m}=fixture();let available=true;m.desktopStream={ready:()=>true,goal:()=>available?{goal:{status:'active'}}:undefined};
+ const pending=a.detail();available=false;const detail=await pending;
+ assert.equal(detail.goal,null);assert.match(detail.goalError,/连接已变化/);
+});
