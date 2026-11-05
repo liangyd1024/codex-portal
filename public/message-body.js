@@ -22,7 +22,7 @@ function appendInline(n, text, depth = 0, options = {}) {
   text = String(text);
   if (depth > 20) { n.append(document.createTextNode(text)); return; }
   // Raw HTML is always text; only explicitly allowed link schemes become links.
-  const pattern = /\\[!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~]|(`+)([^]*?)\1(?!`)|\*\*([^]*?)\*\*|__([^]*?)__|\[([^\]\n]+)\]\((<[^>\n]+>|(?:\\.|[^\s()\\]|\([^()\n]*\))+?)\)|\*([^*\n]+)\*|~~([^~\n]+)~~|&(?:#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi;
+  const pattern = /\\[!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~]|(`+)([^]*?)\1(?!`)|\*\*([^]*?)\*\*|__([^]*?)__|\[([^\]\n]+)\]\((<[^>\n]+>|(?:\\.|[^\s()\\]|\([^()\n]*\))+?)\)|\*([^*\n]+)\*|~~([^~\n]+)~~|(:codex-file-citation\{(?:[a-z_]+="(?:\\.|[^"\\\n])*"\s*)+\})|&(?:#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi;
   let last = 0;
   for (const m of text.matchAll(pattern)) {
     const image = m[5] !== undefined && m.index > last && text[m.index-1] === '!';
@@ -42,6 +42,21 @@ function appendInline(n, text, depth = 0, options = {}) {
       if (safe) { const link=el('a'); appendInline(link,m[5],depth+1,options); link.href=href; link.target='_blank'; link.rel='noopener noreferrer'; n.append(link); }
       else { appendInline(n,m[5],depth+1,options); n.append(document.createTextNode(' (' + href + ')')); }
     } else if (m[7] !== undefined || m[8] !== undefined) { const span=el(m[7] !== undefined?'em':'del'); appendInline(span,m[7] ?? m[8],depth+1,options); n.append(span); }
+    else if (m[9] !== undefined) {
+      const attrs=Object.create(null);
+      try {
+        for(const attr of token.matchAll(/([a-z_]+)=("(?:\\.|[^"\\\n])*")/g)) {
+          if(Object.hasOwn(attrs,attr[1]))throw new Error('Duplicate attribute');
+          attrs[attr[1]]=JSON.parse(attr[2]);
+        }
+        const path=attrs.path;
+        if(typeof path!=='string'||!path.startsWith('/')||path.startsWith('//')||/[\x00-\x1f]/.test(path))throw new Error('Invalid path');
+        const label=path.split('/').at(-1)||path;
+        const link=options.file?.(path,label);
+        if(link){link.textContent=label;n.append(link);}
+        else n.append(document.createTextNode(label));
+      } catch { n.append(document.createTextNode(token)); }
+    }
     else {
       const entity=token.slice(1,-1).toLowerCase(), named={amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",nbsp:'\u00a0'};
       const point=entity.startsWith('#x')?parseInt(entity.slice(2),16):entity.startsWith('#')?Number(entity.slice(1)):null;

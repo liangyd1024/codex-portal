@@ -43,8 +43,26 @@ def references(text):
             continue
         lines.append(line)
     pattern = r"\\[!\"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~]|(?P<ticks>`+)[\s\S]*?(?P=ticks)(?!`)|!?\[[^\]\n]+\]\((?P<href><[^>\n]+>|(?:\\.|[^\s()\\]|\([^()\n]*\))+?)\)"
-    refs = [match['href'] for match in re.finditer(pattern, '\n'.join(lines)) if match['href'] is not None]
-    return [re.sub(r'\\([!"#$%&\'()*+,\-./:;<=>?@[\]\\^_`{|}~])', r'\1', ref[1:-1] if ref.startswith('<') else ref) for ref in refs]
+    pattern += r'|(?P<citation>:codex-file-citation\{(?:[a-z_]+="(?:\\.|[^"\\\n])*"\s*)+\})'
+    citations = []
+    refs = []
+    for match in re.finditer(pattern, '\n'.join(lines)):
+        if match['href'] is not None:
+            refs.append(match['href'])
+        if match['citation'] is None:
+            continue
+        try:
+            attrs = {}
+            for attr in re.finditer(r'([a-z_]+)=("(?:\\.|[^"\\\n])*")', match['citation']):
+                if attr[1] in attrs:
+                    raise ValueError('Duplicate attribute')
+                attrs[attr[1]] = json.loads(attr[2])
+            path = attrs.get('path', '')
+            if path.startswith('/') and not path.startswith('//') and not any(ord(c) < 32 for c in path):
+                citations.append(path)
+        except ValueError:
+            pass
+    return [re.sub(r'\\([!"#$%&\'()*+,\-./:;<=>?@[\]\\^_`{|}~])', r'\1', ref[1:-1] if ref.startswith('<') else ref) for ref in refs] + citations
 
 
 

@@ -150,3 +150,19 @@ test('ordinary image links render inline while documents and code remain links o
  assert.equal(all(body,'A')[0].textContent,'文档');
  assert.deepEqual(calls,[{path:'/tmp/a b.png',explicit:false},{path:'/tmp/a.svg',explicit:false},{path:'/tmp/readme.md',explicit:false}]);
 });
+
+test('native file citations render filenames through scoped file links without interpreting code or invalid directives',()=>{
+ const path='/tmp/附件/报告 (1) 100%.xlsx';
+ const citation=':codex-file-citation{path='+JSON.stringify(path)+' artifact_kind="workbook" purpose="source"}';
+ const calls=[];const options={file:(reference,label)=>{calls.push({reference,label});return new Node('a');}};
+ const body=markdown('两份证据：\n\n'+citation+'\n\n'+citation,0,options);
+ assert.deepEqual(calls,[{reference:path,label:'报告 (1) 100%.xlsx'},{reference:path,label:'报告 (1) 100%.xlsx'}]);
+ assert.equal(all(body,'A').length,2);assert.ok(!body.textContent.includes('codex-file-citation'));
+ assert.equal(markdown(citation).textContent,'报告 (1) 100%.xlsx');
+ calls.length=0;
+ for(const text of ['`'+citation+'`','```text\n'+citation+'\n```','\\'+citation,':codex-file-citation{path="javascript:alert(1)"}',':codex-file-citation{path="//example.com/a"}',':codex-file-citation{path="/tmp/a" path="/tmp/b"}',':codex-file-citation{path="/tmp/unfinished'])markdown(text,0,options);
+ assert.equal(calls.length,0);
+ const special='/tmp/<b>"&.xlsx';
+ const rendered=markdown(':codex-file-citation{path='+JSON.stringify(special)+'}',0,options);
+ assert.equal(all(rendered,'A')[0].textContent,'<b>"&.xlsx');
+});

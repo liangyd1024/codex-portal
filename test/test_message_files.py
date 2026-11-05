@@ -21,6 +21,20 @@ class MessageFilesTest(unittest.TestCase):
         self.file = self.home/'中文 (样例) 100%.mp4';self.file.write_bytes(bytes(range(256))*8192)
         self.add('video',self.file)
 
+    def test_native_file_citation_scope(self):
+        citation = ':codex-file-citation{path=' + json.dumps(str(self.file)) + ' artifact_kind="workbook" purpose="source"}'
+        self.add('citation', self.file, citation)
+        result = reader.scoped_path({'threadId': 'thread', 'itemId': 'citation', 'reference': str(self.file)}, self.home)
+        self.assertIsNotNone(result)
+        self.assertEqual(reader.references(citation), [str(self.file)])
+        for text in ['`' + citation + '`', '```text\n' + citation + '\n```', '\\' + citation,
+                     ':codex-file-citation{path="//example.com/a"}',
+                     ':codex-file-citation{path="/tmp/a" path="/tmp/b"}',
+                     ':codex-file-citation{path="/tmp/incomplete']:
+            self.assertEqual(reader.references(text), [])
+        with self.assertRaises(reader.FileError):
+            reader.scoped_path({'threadId': 'thread', 'itemId': 'citation', 'reference': str(self.home / 'other.xlsx')}, self.home)
+
     def tearDown(self):
         self.db.close()
 
