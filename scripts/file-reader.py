@@ -10,6 +10,7 @@ import re
 import sqlite3
 import stat
 import sys
+import urllib.parse
 
 TEXT_LIMIT = 1024 * 1024
 TYPES = {
@@ -28,6 +29,32 @@ class FileError(Exception):
         self.retryable = retryable
 
 
+def local_reference(value):
+    try:
+        if value.startswith(('sandbox:', 'file:')) and re.search(r'%(?![0-9a-fA-F]{2})', value):
+            return None
+        if value.startswith('sandbox:'):
+            value = urllib.parse.unquote(value[8:], errors='strict')
+        elif value.startswith('file:'):
+            url = urllib.parse.urlsplit(value)
+            if url.netloc not in ('', 'localhost') or url.query:
+                return None
+            value = urllib.parse.unquote(url.path, errors='strict') + ('#' + url.fragment if url.fragment else '')
+    except (ValueError, UnicodeError):
+        return None
+    return value if value.startswith('/') and not value.startswith('//') and not any(ord(c) < 32 for c in value) else None
+
+
+def line_reference(path, start=None, end=None):
+    if start is None:
+        return path
+    if not re.fullmatch(r'[1-9]\d*', start) or int(start) > 9007199254740991:
+        raise ValueError('Invalid line')
+    if end is not None and (not re.fullmatch(r'[1-9]\d*', end) or int(end) > 9007199254740991 or int(end) < int(start)):
+        raise ValueError('Invalid range')
+    return path + '#L' + start + ('-L' + end if end is not None else '')
+
+
 def references(text):
     # Do not turn fenced/inline examples into file capabilities.
     lines = []
@@ -43,26 +70,39 @@ def references(text):
             continue
         lines.append(line)
     pattern = r"\\[!\"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~]|(?P<ticks>`+)[\s\S]*?(?P=ticks)(?!`)|!?\[[^\]\n]+\]\((?P<href><[^>\n]+>|(?:\\.|[^\s()\\]|\([^()\n]*\))+?)\)"
-    pattern += r'|(?P<citation>:codex-file-citation\{(?:[a-z_]+="(?:\\.|[^"\\\n])*"\s*)+\})'
+    attribute_value = r"\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'|[^\s\"'{}=]+"
+    attribute_source = r'([A-Za-z_]+)[ \t]*=[ \t]*(' + attribute_value + ')'
+    token_attributes = r'(?:[A-Za-z_]+)[ \t]*=[ \t]*(?:' + attribute_value + ')'
+    pattern += r'|(?P<citation>(?<!:):{1,2}(?:codex-file-citation|code-comment)\{(?:' + token_attributes + r'[ \t]*)+\})'
+    pattern += r'|【(?P<legacy>[^\n【】]+)†L(?P<start>\d+)(?:-L(?P<end>\d+))?】'
     citations = []
     refs = []
     for match in re.finditer(pattern, '\n'.join(lines)):
         if match['href'] is not None:
             refs.append(match['href'])
-        if match['citation'] is None:
-            continue
         try:
+            if match['legacy'] is not None:
+                path = local_reference(match['legacy'].strip())
+                if path:
+                    citations.append(line_reference(path, match['start'], match['end']))
+            if match['citation'] is None:
+                continue
             attrs = {}
-            for attr in re.finditer(r'([a-z_]+)=("(?:\\.|[^"\\\n])*")', match['citation']):
+            for attr in re.finditer(attribute_source, match['citation']):
                 if attr[1] in attrs:
                     raise ValueError('Duplicate attribute')
-                attrs[attr[1]] = json.loads(attr[2])
-            path = attrs.get('path', '')
-            if path.startswith('/') and not path.startswith('//') and not any(ord(c) < 32 for c in path):
-                citations.append(path)
+                value = attr[2]
+                attrs[attr[1]] = json.loads(value) if value.startswith(chr(34)) else re.sub(r"\\(['\\])", r'\1', value[1:-1]) if value.startswith(chr(39)) else value
+            comment = match['citation'].lstrip(':').startswith('code-comment{')
+            if comment and not all(attrs.get(key) for key in ('title', 'body', 'file')):
+                continue
+            path = local_reference(attrs.get('file' if comment else 'path', ''))
+            if path:
+                citations.append(line_reference(path, attrs.get('start' if comment else 'line_range_start'), attrs.get('end' if comment else 'line_range_end')))
         except ValueError:
             pass
-    return [re.sub(r'\\([!"#$%&\'()*+,\-./:;<=>?@[\]\\^_`{|}~])', r'\1', ref[1:-1] if ref.startswith('<') else ref) for ref in refs] + citations
+    refs = [re.sub(r'\\([!"#$%&\'()*+,\-./:;<=>?@[\]\\^_`{|}~])', r'\1', ref[1:-1] if ref.startswith('<') else ref) for ref in refs]
+    return [path for ref in refs if (path := local_reference(ref))] + citations
 
 
 
@@ -84,7 +124,7 @@ def scoped_path(payload, home):
             raise FileError('该消息未引用此文件。', 403)
     finally:
         db.close()
-    location = re.search(r'(?::(?P<line>\d+)(?::(?P<column>\d+))?|#L(?P<anchor>\d+)(?:C(?P<anchor_column>\d+))?)$', reference)
+    location = re.search(r'(?::(?P<line>\d+)(?::(?P<column>\d+))?(?:[-–]\d+(?::\d+)?)?|#L(?P<anchor>\d+)(?:C(?P<anchor_column>\d+))?(?:-L\d+(?:C\d+)?)?)$', reference)
     filename = reference[:location.start()] if location else reference
     # Exact names take precedence over code line suffixes.
     if pathlib.Path(reference).exists():

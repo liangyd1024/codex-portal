@@ -1,0 +1,34 @@
+[
+  {
+    "text": ":codex-file-citation{path=\"/tmp/report.ts\" line_range_start=\"12\" line_range_end=\"18\"}",
+    "reference": "/tmp/report.ts#L12-L18"
+  },
+  {
+    "text": "【/tmp/中文 report.ts†L12-L18】",
+    "reference": "/tmp/中文 report.ts#L12-L18"
+  },
+  {
+    "text": "[报告](sandbox:/tmp/report%20one.xlsx)",
+    "reference": "/tmp/report one.xlsx"
+  },
+  {
+    "text": "[报告](file:///tmp/report%20one.xlsx)",
+    "reference": "/tmp/report one.xlsx"
+  },
+  {
+    "text": "[代码](file://localhost/tmp/source.ts#L12-L18)",
+    "reference": "/tmp/source.ts#L12-L18"
+  },
+  {
+    "text": "[代码](/tmp/source.ts:12:3-18:9)",
+    "reference": "/tmp/source.ts:12:3-18:9"
+  },
+  {
+    "text": "::code-comment{title=\"[P2] 检查边界\" body=\"首行\\n次行 <script>示例</script>\" file=\"/tmp/source.ts\" start=\"12\" end=\"18\" priority=\"2\"}",
+    "reference": "/tmp/source.ts#L12-L18"
+  },
+  {
+    "text": "::code-comment{title='边界检查' body=说明 file='/tmp/source.ts' start=12 end=18 priority=2}",
+    "reference": "/tmp/source.ts#L12-L18"
+  }
+]

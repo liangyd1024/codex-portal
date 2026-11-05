@@ -1,3 +1,4 @@
+import {directiveSource,legacySource,localReference,nativeReference} from './native-references.js';
 import {enhanceMermaid} from './mermaid-view.js';
 import {copyText} from './feedback.js';
 function el(tag, cls, text) { const n=document.createElement(tag); if(cls)n.className=cls; if(text != null)n.textContent=text; return n; }
@@ -18,13 +19,14 @@ export function groupTurnItems(turn) {
   }
   return groups;
 }
+const inlinePattern = new RegExp(/\\[!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~]|(`+)([^]*?)\1(?!`)|\*\*([^]*?)\*\*|__([^]*?)__|\[([^\]\n]+)\]\((<[^>\n]+>|(?:\\.|[^\s()\\]|\([^()\n]*\))+?)\)|\*([^*\n]+)\*|~~([^~\n]+)~~/.source+'|('+directiveSource+'|'+legacySource+')'+/|&(?:#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/.source,'gi');
 function appendInline(n, text, depth = 0, options = {}) {
   text = String(text);
   if (depth > 20) { n.append(document.createTextNode(text)); return; }
   // Raw HTML is always text; only explicitly allowed link schemes become links.
-  const pattern = /\\[!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~]|(`+)([^]*?)\1(?!`)|\*\*([^]*?)\*\*|__([^]*?)__|\[([^\]\n]+)\]\((<[^>\n]+>|(?:\\.|[^\s()\\]|\([^()\n]*\))+?)\)|\*([^*\n]+)\*|~~([^~\n]+)~~|(:codex-file-citation\{(?:[a-z_]+="(?:\\.|[^"\\\n])*"\s*)+\})|&(?:#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi;
+
   let last = 0;
-  for (const m of text.matchAll(pattern)) {
+  for (const m of text.matchAll(inlinePattern)) {
     const image = m[5] !== undefined && m.index > last && text[m.index-1] === '!';
     if (m.index > last) n.append(document.createTextNode(text.slice(last,m.index-(image?1:0))));
     const token = m[0];
@@ -32,8 +34,11 @@ function appendInline(n, text, depth = 0, options = {}) {
     else if (m[1]) n.append(el('code','',m[2].replace(/\n/g,' ').replace(/^ (.*) $/,'$1')));
     else if (m[3] !== undefined || m[4] !== undefined) { const strong=el('strong'); appendInline(strong,m[3] ?? m[4],depth+1,options); n.append(strong); }
     else if (m[5] !== undefined) {
-      const href = m[6].replace(/^<|>$/g,'').replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/g,'$1');
-      const media=options.image?.(href,m[5],image);
+      const rawHref = m[6].replace(/^<|>$/g,'').replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/g,'$1');
+      const href=localReference(rawHref)||rawHref;
+      const thread=/^codex:\/\/threads\/([a-zA-Z0-9_-]+)$/.exec(href);
+      if(thread&&options.thread){const link=options.thread(thread[1],m[5]);link.textContent=m[5];n.append(link);last=m.index+token.length;continue;}
+      const media=options.image?.(href,m[5],image,rawHref);
       if(media){n.append(media);last=m.index+token.length;continue;}
       const file=options.file?.(href,m[5]);
       if(file){appendInline(file,m[5],depth+1,{});n.append(file);last=m.index+token.length;continue;}
@@ -43,19 +48,23 @@ function appendInline(n, text, depth = 0, options = {}) {
       else { appendInline(n,m[5],depth+1,options); n.append(document.createTextNode(' (' + href + ')')); }
     } else if (m[7] !== undefined || m[8] !== undefined) { const span=el(m[7] !== undefined?'em':'del'); appendInline(span,m[7] ?? m[8],depth+1,options); n.append(span); }
     else if (m[9] !== undefined) {
-      const attrs=Object.create(null);
       try {
-        for(const attr of token.matchAll(/([a-z_]+)=("(?:\\.|[^"\\\n])*")/g)) {
-          if(Object.hasOwn(attrs,attr[1]))throw new Error('Duplicate attribute');
-          attrs[attr[1]]=JSON.parse(attr[2]);
+        const ref=nativeReference(token);
+        if(!ref)throw Error('Unsupported reference');
+        if(ref.kind==='file'){
+          const label=ref.path.split('/').at(-1),link=options.file?.(ref.path,label);
+          if(link){link.textContent=label;n.append(link);}else n.append(document.createTextNode(label));
+        }else if(ref.kind==='annotation')n.append(el('span','',ref.label));
+        else if(ref.kind==='thread'){
+          const link=options.thread?.(ref.id,ref.label);
+          if(link){link.textContent=ref.label;n.append(link);}else n.append(document.createTextNode(ref.label+'：'+ref.id));
+        }else{
+          const card=el('span','native-code-comment');card.append(el('strong','',ref.title),el('span','',ref.body));
+          const label=ref.path?.split('/').at(-1)||ref.file,link=ref.path&&options.file?.(ref.path,label);
+          if(link){link.textContent=label;card.append(link);}else card.append(el('span','',label));
+          n.append(card);
         }
-        const path=attrs.path;
-        if(typeof path!=='string'||!path.startsWith('/')||path.startsWith('//')||/[\x00-\x1f]/.test(path))throw new Error('Invalid path');
-        const label=path.split('/').at(-1)||path;
-        const link=options.file?.(path,label);
-        if(link){link.textContent=label;n.append(link);}
-        else n.append(document.createTextNode(label));
-      } catch { n.append(document.createTextNode(token)); }
+      }catch{n.append(document.createTextNode(token));}
     }
     else {
       const entity=token.slice(1,-1).toLowerCase(), named={amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",nbsp:'\u00a0'};

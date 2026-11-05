@@ -166,3 +166,34 @@ test('native file citations render filenames through scoped file links without i
  const rendered=markdown(':codex-file-citation{path='+JSON.stringify(special)+'}',0,options);
  assert.equal(all(rendered,'A')[0].textContent,'<b>"&.xlsx');
 });
+
+
+test('verified native reference forms render and preserve file scopes',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const cases=JSON.parse(await readFile(new URL('./fixtures/native-references.json',import.meta.url),'utf8'));
+ for(const sample of cases){
+  const calls=[];const options={file:(path)=>{calls.push(path);return new Node('a');}};
+  const body=markdown(sample.text,0,options);
+  assert.deepEqual(calls,[sample.reference],sample.text);assert.equal(all(body,'A').length,1);
+  assert.equal(all(body,'SCRIPT').length,0);
+  for(const raw of ['`'+sample.text+'`','```text\n'+sample.text+'\n```']){calls.length=0;markdown(raw,0,options);assert.deepEqual(calls,[]);}
+ }
+});
+test('annotation and thread references are readable, unknown actions and invalid citations stay literal',()=>{
+ const calls=[];const options={thread:id=>{calls.push(id);return new Node('a');}};
+ assert.equal(markdown(':codex-annotation{index="2"}').textContent,'注释 2');
+ const body=markdown('::created-thread{threadId="thread-123"} [继续](codex://threads/thread-456)',0,options);
+ assert.deepEqual(calls,['thread-123','thread-456']);assert.equal(all(body,'A').length,2);
+ for(const raw of ['::created-thread{clientThreadId="pending"}','::archive-thread{reason="finished"}',':::created-thread{threadId="example"}',':codex-annotation{index="0"}',':codex-file-citation{path="/tmp/a" line_range_start="8" line_range_end="3"}','【/tmp/a†L0】'])assert.equal(markdown(raw).textContent,raw);
+});
+test('local URI aliases reject network hosts, control characters and invalid escapes',async()=>{
+ const {localReference}=await import('../public/native-references.js');
+ for(const raw of ['file://evil.example/tmp/a','sandbox://evil/a','file:///tmp/%00x','sandbox:/tmp/%ZZ','file:///tmp/a?q=1','/tmp/a\n'])assert.equal(localReference(raw),null,raw);
+ assert.equal(localReference('/tmp/100%.xlsx'),'/tmp/100%.xlsx');
+});
+
+test('escaped block directives stay text and cannot grant file links',()=>{
+ const calls=[];const text='\\::code-comment{title="标题" body="说明" file="/tmp/source.ts"}';
+ const body=markdown(text,0,{file:path=>{calls.push(path);return new Node('a');}});
+ assert.deepEqual(calls,[]);assert.equal(body.textContent,text.slice(1));
+});

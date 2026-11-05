@@ -652,3 +652,6 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .question-history>summary{min-height:44px;display:flex;align-items:center;cursor:pointer;border-radius:var(--control-radius)}
 .question-history>summary:hover{background:var(--control-hover-background,#f2f2f2)}
 .question-history>.secondary-button{min-width:44px;min-height:44px}
+
+.native-code-comment{display:block;border-left:2px solid var(--control-border-color);padding:8px 12px;margin:8px 0;overflow-wrap:anywhere}
+.native-code-comment>span,.native-code-comment>strong{display:block;white-space:pre-wrap}

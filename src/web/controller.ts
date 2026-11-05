@@ -495,10 +495,10 @@ function renderCommandOutput(item:NativeItem,{threadId=state.selectedId,refresh=
 function renderItem(item:NativeItem,{threadId=state.selectedId,side=false,refresh=renderMessages}={}) {
   const imageUrl=(options:Record<string,unknown>)=>itemImageUrl(threadId,item.id,{...options,host:targetHost});
   const fileContext={threadId,itemId:item.id,host:targetHost};
-  const bodyOptions={file:(path:string,label:string)=>fileLink(path,label,fileContext),image:(path:string,label:string,explicit:boolean)=>{
+  const bodyOptions={thread:(id:string,label:string)=>{const link=el('a','message-file-link',label);link.href='?'+new URLSearchParams({host:targetHost,thread:id});link.onclick=event=>{if(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;event.preventDefault();void selectThread(id);};return link;},file:(path:string,label:string)=>fileLink(path,label,fileContext),image:(path:string,label:string,explicit:boolean,rawPath=path)=>{
     const raster=isRasterImage(path);
     if(!raster&&!/\.svg$/i.test(path))return null;
-    if(path.startsWith('/')&&!path.startsWith('//'))return imageCard(explicit&&raster?imageUrl({reference:path}):itemFileUrl(threadId,item.id,path,targetHost),label||'回复图片');
+    if(path.startsWith('/')&&!path.startsWith('//'))return imageCard(explicit&&raster&&rawPath===path?imageUrl({reference:path}):itemFileUrl(threadId,item.id,path,targetHost),label||'回复图片');
     if(/^data:image\/(png|jpeg|webp|gif);base64,/.test(path))return imageCard(path,label||'回复图片');
     return null;
   }};

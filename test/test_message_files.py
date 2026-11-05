@@ -35,6 +35,23 @@ class MessageFilesTest(unittest.TestCase):
         with self.assertRaises(reader.FileError):
             reader.scoped_path({'threadId': 'thread', 'itemId': 'citation', 'reference': str(self.home / 'other.xlsx')}, self.home)
 
+    def test_native_reference_forms_and_ranges(self):
+        cases = json.loads((pathlib.Path(__file__).parent / 'fixtures/native-references.json').read_text())
+        for case in cases:
+            self.assertEqual(reader.references(case['text']), [case['reference']])
+            for text in ['`' + case['text'] + '`', '```text\n' + case['text'] + '\n```']:
+                self.assertEqual(reader.references(text), [])
+        for suffix in ['#L12-L18', ':12:3-18:9', '#L12C3-L18C9']:
+            reference = str(self.file) + suffix
+            self.add(suffix, self.file, '[代码](<' + reference + '>)')
+            path, position = reader.scoped_path({'threadId': 'thread', 'itemId': suffix, 'reference': reference}, self.home)
+            self.assertEqual(path, self.file)
+            self.assertEqual(position['line'], 12)
+        for raw in ['file://evil.example/tmp/a', 'sandbox://evil/a', 'file:///tmp/%00x', 'sandbox:/tmp/%ZZ', 'file:///tmp/a?q=1']:
+            self.assertIsNone(reader.local_reference(raw))
+        for raw in ['\\::code-comment{title="标题" body="说明" file="/tmp/source.ts"}', ':::codex-file-citation{path="/tmp/a"}', ':codex-file-citation{path="/tmp/a" line_range_start="8" line_range_end="3"}', '【/tmp/a†L0】']:
+            self.assertEqual(reader.references(raw), [])
+
     def tearDown(self):
         self.db.close()
 
