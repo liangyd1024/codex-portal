@@ -127,6 +127,7 @@
 .mobile-layout .question-option{margin-bottom:8px}
 .mobile-layout dialog{max-height:calc(var(--visual-height,100dvh) - 24px);width:min(440px,calc(100vw - 24px));max-width:calc(100vw - 24px);margin:0 auto;position:fixed;top:calc(var(--visual-top,0px) + var(--visual-height,100dvh)/2);transform:translateY(-50%);overflow:auto;overscroll-behavior:contain;scroll-padding:12px}
 .mobile-layout .dialog-form,.mobile-layout .sidebar-dialog{padding:16px}
+.mobile-layout dialog.image-viewer{height:calc(var(--visual-height,100dvh) - 24px);overflow:hidden;padding:0}
 .mobile-layout .dialog-selects{display:flex;flex-direction:column;gap:12px}
 .mobile-layout .dialog-actions,.mobile-layout .sidebar-dialog-actions{position:static;background:#fff;padding:12px 0;margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
 .mobile-layout .dialog-actions button,.mobile-layout .sidebar-dialog-actions button{flex:1}

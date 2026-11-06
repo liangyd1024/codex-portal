@@ -1,3 +1,4 @@
+import {openImageViewer} from './image-viewer.js';
 const node=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;};
 // Decode only the Portal/native reference envelope, keeping the user's @ tokens.
 // The stored message and the model's original input remain unchanged.
@@ -68,12 +69,6 @@ export function imageCard(src,alt='图片附件') {
     }else{status.textContent='图片暂时无法加载，请重试。';retry.hidden=false;}
   };
   retry.onclick=()=>{clearRetry();attempts=0;load();};
-  button.onclick=()=>{
-    const dialog=node('dialog','image-viewer'),close=node('button','image-viewer-close','关闭'),full=node('img'),download=node('a','image-download','打开原图');
-    dialog.setAttribute('aria-label',alt);close.type='button';full.alt=alt;full.src=image.src;download.href=image.src;download.target='_blank';download.rel='noopener noreferrer';
-    close.onclick=()=>dialog.close();dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
-    dialog.addEventListener('close',()=>{dialog.remove();if(button.isConnected)button.focus();},{once:true});
-    dialog.append(close,download,full);document.body.append(dialog);dialog.showModal();close.focus();
-  };
+  button.onclick=()=>openImageViewer(image,button);
   button.append(image);card.append(button,status,retry);image.src=src;return card;
 }
