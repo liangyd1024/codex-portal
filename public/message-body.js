@@ -38,7 +38,7 @@ function appendInline(n, text, depth = 0, options = {}) {
       const href=localReference(rawHref)||rawHref;
       const thread=/^codex:\/\/threads\/([a-zA-Z0-9_-]+)$/.exec(href);
       if(thread&&options.thread){const link=options.thread(thread[1],m[5]);link.textContent=m[5];n.append(link);last=m.index+token.length;continue;}
-      const media=options.image?.(href,m[5],image,rawHref);
+      const media=image ? options.image?.(href,m[5],true,rawHref) : null;
       if(media){n.append(media);last=m.index+token.length;continue;}
       const file=options.file?.(href,m[5]);
       if(file){appendInline(file,m[5],depth+1,{});n.append(file);last=m.index+token.length;continue;}

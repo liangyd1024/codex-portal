@@ -139,16 +139,15 @@ test('questions remain visible after commentary folds and can reopen from the tr
  assert.equal(questionHistory(msg('plain'),()=>{}),null);
 });
 
-test('ordinary image links render inline while documents and code remain links or literal text',()=>{
+test('image download links remain links and only explicit Markdown images render inline',()=>{
  const calls=[];
- const body=markdown('- **运行流程**：[查看 PNG](</tmp/a b.png>) · [SVG](/tmp/a.svg)\n- [文档](/tmp/readme.md)\n\n`[示例](/tmp/code.png)`\n\n```md\n[示例](/tmp/fence.png)\n```',0,{
+ const body=markdown('- **运行流程**：[查看 PNG](</tmp/a b.png>) · [SVG](/tmp/a.svg)\n- [文档](/tmp/readme.md)\n\n![流程图](</tmp/a b.png>)\n\n`[示例](/tmp/code.png)`\n\n```md\n[示例](/tmp/fence.png)\n```',0,{
   image:(path,label,explicit)=>{calls.push({path,explicit});return /\.(png|svg)$/.test(path)?new Node('img'):null;},
   file:()=>new Node('a')
  });
- assert.equal(all(body,'IMG').length,2);
- assert.equal(all(body,'A').length,1);
- assert.equal(all(body,'A')[0].textContent,'文档');
- assert.deepEqual(calls,[{path:'/tmp/a b.png',explicit:false},{path:'/tmp/a.svg',explicit:false},{path:'/tmp/readme.md',explicit:false}]);
+ assert.equal(all(body,'IMG').length,1);
+ assert.deepEqual(all(body,'A').map(node=>node.textContent),['查看 PNG','SVG','文档']);
+ assert.deepEqual(calls,[{path:'/tmp/a b.png',explicit:true}]);
 });
 
 test('native file citations render filenames through scoped file links without interpreting code or invalid directives',()=>{
