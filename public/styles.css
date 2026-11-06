@@ -399,7 +399,8 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 /* Message attachments stay with their text; original files are scoped to stored items. */
 .message-image{display:inline-flex;flex-direction:column;align-items:flex-start;max-width:100%;margin:8px 0;white-space:normal;vertical-align:top}
 .message-image-open{display:block;max-width:100%;padding:0;background:transparent;border-radius:10px;overflow:hidden;cursor:zoom-in}
-.message-image-open img{display:block;max-width:100%;max-height:360px;object-fit:contain}
+.message-image-open img{display:block;max-width:100%;height:auto;object-fit:contain}
+.user-bubble .message-image-open img{max-height:360px}
 .message-image-status{font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 .message-image-retry{font-size:13px;padding:6px 10px;margin-top:6px;border:1px solid currentColor;border-radius:6px;color:inherit;background:transparent}
 .message-image [hidden]{display:none!important}
@@ -415,7 +416,7 @@ body.resizing-layout{user-select:none;cursor:col-resize}body.resizing-sections{c
 .message-body .code-block code{white-space:inherit;overflow-wrap:normal}
 
 .code-block pre:focus-visible,.code-copy:focus-visible,.message-image button:focus-visible{outline:2px solid var(--focus-ring,#000);outline-offset:-2px}
-@media(max-width:700px){.code-copy,.message-image-retry{min-height:44px}.message-image-open img{max-height:300px}.image-viewer{padding:12px}.image-viewer-close{min-height:44px}}
+@media(max-width:700px){.code-copy,.message-image-retry{min-height:44px}.user-bubble .message-image-open img{max-height:300px}.image-viewer{padding:12px}.image-viewer-close{min-height:44px}}
 
 /* Shape distinguishes the entrance; the small pulse indicates live activity. */
 .activity-icon{display:inline-flex;align-items:center;justify-content:center;position:relative;width:22px;height:22px;flex:0 0 22px;border-radius:5px;color:#2563a6;background:#eaf2fb;vertical-align:middle}
